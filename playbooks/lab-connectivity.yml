@@ -37,6 +37,6 @@
     - name: Show Proxmox API version details
       ansible.builtin.debug:
         msg: >-
-          Connected to Proxmox host {{ proxmox_api_host }} (version {{ proxmox_version.json.version | default('unknown') }}).
+          Connected to Proxmox host {{ proxmox_api_host }} (version {{ proxmox_version.json.data.version | default('unknown') }}).
       when: proxmox_version.json is defined
       no_log: false
