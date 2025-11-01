@@ -5,7 +5,7 @@ proxmox_api_user: "{{ vault_proxmox_api_user }}"
 proxmox_api_token_id: "{{ vault_proxmox_api_token_id }}"
 proxmox_api_token_secret: "{{ vault_proxmox_api_token_secret }}"
 proxmox_default_node: "proxmox"
-proxmox_default_pool: "homelab"
+proxmox_default_pool: "ansible"
 proxmox_default_ostemplate: "local:/var/lib/vz/template/cache/debian-13-standard_13.1-2_amd64.tar.zst"
 proxmox_verify_ssl: false
 
