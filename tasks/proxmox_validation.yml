@@ -1,0 +1,37 @@
+---
+# Tasks to validate Proxmox API connectivity. Included dynamically to avoid
+# requiring the community.proxmox collection before bootstrap completes.
+- name: Ensure required API inputs are available
+  ansible.builtin.assert:
+    that:
+      - proxmox_api_host is defined
+      - proxmox_api_user is defined
+      - proxmox_api_token_id is defined
+      - proxmox_api_token_secret is defined
+      - proxmox_default_node is defined
+    fail_msg: "Missing Proxmox API configuration. Check group_vars/all/proxmox.yml and vault secrets."
+  tags:
+    - validation
+    - proxmox
+
+- name: Query LXC inventory on default node
+  community.proxmox.proxmox_lxc_info:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
+    node: "{{ proxmox_default_node }}"
+  register: proxmox_lxc_inventory
+  tags:
+    - validation
+    - proxmox
+
+- name: Summarize managed containers
+  ansible.builtin.debug:
+    msg: >-
+      Found {{ proxmox_lxc_inventory.resources | length | default(0) }} containers on node {{ proxmox_default_node }}.
+  when: proxmox_lxc_inventory is defined
+  tags:
+    - validation
+    - proxmox
