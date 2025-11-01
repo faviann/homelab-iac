@@ -25,13 +25,12 @@
   collections:
     - community.proxmox
   tags:
-    - always
     - validation
     - proxmox
   tasks:
     - name: Include Proxmox validation tasks
       ansible.builtin.include_tasks:
-        file: "{{ [playbook_dir, 'tasks', 'proxmox_validation.yml'] | path_join }}"
+        file: "{{ [playbook_dir, 'playbooks', 'tasks', 'proxmox_validation.yml'] | path_join }}"
       tags:
         - validation
         - proxmox
