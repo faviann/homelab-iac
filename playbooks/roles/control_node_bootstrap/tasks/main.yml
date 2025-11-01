@@ -24,7 +24,6 @@
   ansible.builtin.set_fact:
     control_node_pip_virtualenv: "{{ control_node_pip_virtualenv | default(([control_node_ansible_directory, 'venv'] | path_join), true) }}"
     control_node_pip_virtualenv_command: "{{ control_node_pip_virtualenv_command | default('python3 -m venv', true) }}"
-    control_node_pip_virtualenv_python: "{{ control_node_pip_virtualenv_python | default('python3', true) }}"
 
 - name: Ensure SSH directory exists
   ansible.builtin.file:
@@ -88,14 +87,17 @@
   when: not control_node_pip_requirements_stat.stat.exists
 
 - name: Install Python dependencies for control node
+  vars:
+    control_node_pip_use_virtualenv: "{{ (control_node_pip_executable | default('', true)) | length == 0 }}"
+    control_node_pip_virtualenv_python_required: "{{ control_node_pip_virtualenv_python is defined and (control_node_pip_virtualenv_python | default('', true)) | length > 0 and control_node_pip_virtualenv_command is defined and 'virtualenv' in control_node_pip_virtualenv_command }}"
   ansible.builtin.pip:
     requirements: "{{ control_node_pip_requirements }}"
     extra_args: "{{ control_node_pip_extra_args | default(omit, true) }}"
     executable: "{{ control_node_pip_executable | default(omit, true) }}"
-    virtualenv: "{{ control_node_pip_virtualenv if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
-    virtualenv_command: "{{ control_node_pip_virtualenv_command | default(omit, true) if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
-    virtualenv_python: "{{ control_node_pip_virtualenv_python | default(omit, true) if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
-    virtualenv_site_packages: "{{ control_node_pip_virtualenv_site_packages | default(omit, true) if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
+    virtualenv: "{{ control_node_pip_virtualenv if control_node_pip_use_virtualenv else omit }}"
+    virtualenv_command: "{{ control_node_pip_virtualenv_command | default(omit, true) if control_node_pip_use_virtualenv else omit }}"
+    virtualenv_python: "{{ control_node_pip_virtualenv_python if control_node_pip_use_virtualenv and control_node_pip_virtualenv_python_required else omit }}"
+    virtualenv_site_packages: "{{ control_node_pip_virtualenv_site_packages | default(omit, true) if control_node_pip_use_virtualenv else omit }}"
   become: "{{ control_node_pip_become }}"
 
 - name: Check collection requirements file
