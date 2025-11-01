@@ -1,0 +1,101 @@
+---
+- name: Determine control node home directory
+  ansible.builtin.set_fact:
+    control_node_home_dir: "{{ ansible_env.HOME | default(lookup('env', 'HOME')) }}"
+  when: control_node_home_dir is not defined
+
+- name: Determine project root directory
+  ansible.builtin.set_fact:
+    control_node_project_root: "{{ (playbook_dir | dirname) if (playbook_dir is defined) else lookup('env', 'PWD') }}"
+  when: control_node_project_root is not defined
+
+- name: Derive control node paths
+  ansible.builtin.set_fact:
+    control_node_ssh_directory: "{{ control_node_ssh_directory | default(([control_node_home_dir, '.ssh'] | path_join)) }}"
+    control_node_ansible_directory: "{{ control_node_ansible_directory | default(([control_node_home_dir, '.ansible'] | path_join)) }}"
+    control_node_ssh_private_key_path: "{{ control_node_ssh_private_key_path | default(([control_node_home_dir, '.ssh', 'proxmox_lxc'] | path_join)) }}"
+    control_node_ssh_public_key_path: "{{ control_node_ssh_public_key_path | default(([control_node_home_dir, '.ssh', 'proxmox_lxc.pub'] | path_join)) }}"
+    control_node_vault_password_file: "{{ control_node_vault_password_file | default(([control_node_home_dir, '.ansible', 'vault-pass.txt'] | path_join)) }}"
+    control_node_pip_requirements: "{{ control_node_pip_requirements | default(([control_node_project_root, 'requirements', 'pip.txt'] | path_join)) }}"
+    control_node_collection_requirements: "{{ control_node_collection_requirements | default(([control_node_project_root, 'collections', 'requirements.yml'] | path_join)) }}"
+
+- name: Ensure SSH directory exists
+  ansible.builtin.file:
+    path: "{{ control_node_ssh_directory }}"
+    state: directory
+    mode: "0700"
+
+- name: Generate control node SSH key pair
+  community.crypto.openssh_keypair:
+    path: "{{ control_node_ssh_private_key_path }}"
+    type: "{{ control_node_ssh_key_type | default('rsa') }}"
+    size: "{{ control_node_ssh_key_size | default(4096) }}"
+    comment: "{{ control_node_ssh_key_comment | default('ansible-control') }}"
+    mode: "0600"
+    public_key_mode: "0644"
+    regenerate: never
+  register: control_node_keypair
+
+- name: Ensure Ansible data directory exists
+  ansible.builtin.file:
+    path: "{{ control_node_ansible_directory }}"
+    state: directory
+    mode: "0700"
+
+- name: Verify vault password file presence
+  ansible.builtin.stat:
+    path: "{{ control_node_vault_password_file }}"
+  register: control_node_vault_pass_stat
+
+- name: Fail when vault password file is missing
+  ansible.builtin.fail:
+    msg: "Vault password file {{ control_node_vault_password_file }} is required before running playbooks."
+  when: not control_node_vault_pass_stat.stat.exists
+
+- name: Install required system packages
+  ansible.builtin.package:
+    name: "{{ control_node_packages }}"
+    state: present
+  become: "{{ control_node_package_become }}"
+  when: control_node_packages | length > 0
+
+- name: Check pip requirements file
+  ansible.builtin.stat:
+    path: "{{ control_node_pip_requirements }}"
+  register: control_node_pip_requirements_stat
+
+- name: Fail when pip requirements file is missing
+  ansible.builtin.fail:
+    msg: "Pip requirements file {{ control_node_pip_requirements }} is missing."
+  when: not control_node_pip_requirements_stat.stat.exists
+
+- name: Install Python dependencies for control node
+  ansible.builtin.pip:
+    requirements: "{{ control_node_pip_requirements }}"
+    extra_args: "{{ control_node_pip_extra_args }}"
+    executable: "{{ control_node_pip_executable | default(omit) }}"
+  become: "{{ control_node_pip_become }}"
+
+- name: Check collection requirements file
+  ansible.builtin.stat:
+    path: "{{ control_node_collection_requirements }}"
+  register: control_node_collection_requirements_stat
+
+- name: Fail when collection requirements file is missing
+  ansible.builtin.fail:
+    msg: "Ansible collection requirements file {{ control_node_collection_requirements }} is missing."
+  when: not control_node_collection_requirements_stat.stat.exists
+
+- name: Install required Ansible collections
+  ansible.builtin.command:
+    cmd: >-
+      ansible-galaxy collection install -r "{{ control_node_collection_requirements }}"
+      {{ '--force' if control_node_collection_force else '' }}
+      {{ control_node_collection_install_options }}
+    chdir: "{{ control_node_project_root }}"
+  register: control_node_galaxy_install
+  changed_when: false
+
+- name: Show location of generated public key
+  ansible.builtin.debug:
+    msg: "Control node SSH public key available at {{ control_node_ssh_public_key_path }}"
