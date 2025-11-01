@@ -68,13 +68,13 @@
   when: proxmox_lxc_spec.start_on_create | default(false) | bool
   community.proxmox.proxmox:
     api_host: "{{ proxmox_api_host }}"
-    api_port: {{ proxmox_api_port | default(omit) }}
+    api_port: "{{ proxmox_api_port | default(omit) }}"
     api_user: "{{ proxmox_api_user }}"
     api_token_id: "{{ proxmox_api_token_id }}"
     api_token_secret: "{{ proxmox_api_token_secret }}"
-    validate_certs: {{ proxmox_verify_ssl | default(true) | bool }}
+    validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
     node: "{{ proxmox_lxc_spec.node }}"
-    vmid: {{ proxmox_lxc_spec.vmid }}
+    vmid: "{{ proxmox_lxc_spec.vmid }}"
     state: started
   delegate_to: "{{ proxmox_api_delegate_host }}"
   become: false
