@@ -85,4 +85,3 @@
     msg: >-
       Container {{ proxmox_lxc_spec.hostname }} (vmid {{ proxmox_lxc_spec.vmid }}) ensured {{ proxmox_lxc_spec.state | default('present') }}.
   when: proxmox_lxc_result is defined and proxmox_lxc_result.changed
-*** End of File
