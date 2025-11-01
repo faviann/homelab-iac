@@ -33,9 +33,14 @@
     size: "{{ control_node_ssh_key_size | default(4096) }}"
     comment: "{{ control_node_ssh_key_comment | default('ansible-control') }}"
     mode: "0600"
-    public_key_mode: "0644"
     regenerate: never
   register: control_node_keypair
+
+- name: Ensure control node SSH public key permissions
+  ansible.builtin.file:
+    path: "{{ control_node_ssh_public_key_path }}"
+    state: file
+    mode: "0644"
 
 - name: Ensure Ansible data directory exists
   ansible.builtin.file:
