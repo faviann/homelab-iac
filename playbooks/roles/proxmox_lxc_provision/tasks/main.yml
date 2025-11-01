@@ -23,13 +23,13 @@
 - name: Ensure LXC container exists
   community.proxmox.proxmox:
     api_host: "{{ proxmox_api_host }}"
-    api_port: {{ proxmox_api_port | default(omit) }}
+    api_port: "{{ proxmox_api_port | default(omit) }}"
     api_user: "{{ proxmox_api_user }}"
     api_token_id: "{{ proxmox_api_token_id }}"
     api_token_secret: "{{ proxmox_api_token_secret }}"
-    validate_certs: {{ proxmox_verify_ssl | default(true) }}
+    validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
     node: "{{ proxmox_lxc_spec.node }}"
-    vmid: {{ proxmox_lxc_spec.vmid }}
+    vmid: "{{ proxmox_lxc_spec.vmid }}"
     hostname: "{{ proxmox_lxc_spec.hostname }}"
     ostemplate: "{{ proxmox_lxc_spec.ostemplate }}"
     pool: "{{ proxmox_lxc_spec.pool | default(omit) }}"
@@ -38,41 +38,41 @@
     description: "{{ proxmox_lxc_spec.description | default(omit) }}"
     storage: "{{ proxmox_lxc_spec.storage | default(omit) }}"
     disk: "{{ proxmox_lxc_spec.disk | default(omit) }}"
-    disk_volume: {{ proxmox_lxc_spec.disk_volume | default(omit) }}
-    cores: {{ proxmox_lxc_spec.cores | default(omit) }}
-    cpus: {{ proxmox_lxc_spec.cpus | default(omit) }}
-    cpuunits: {{ proxmox_lxc_spec.cpuunits | default(omit) }}
-    memory: {{ proxmox_lxc_spec.memory | default(omit) }}
-    swap: {{ proxmox_lxc_spec.swap | default(omit) }}
-    netif: {{ proxmox_lxc_spec.netif | default(omit) }}
-    features: {{ proxmox_lxc_spec.features | default(omit) }}
-    unprivileged: {{ proxmox_lxc_spec.unprivileged | default(omit) }}
-    onboot: {{ proxmox_lxc_spec.onboot | default(omit) }}
+    disk_volume: "{{ proxmox_lxc_spec.disk_volume | default(omit) }}"
+    cores: "{{ proxmox_lxc_spec.cores | default(omit) }}"
+    cpus: "{{ proxmox_lxc_spec.cpus | default(omit) }}"
+    cpuunits: "{{ proxmox_lxc_spec.cpuunits | default(omit) }}"
+    memory: "{{ proxmox_lxc_spec.memory | default(omit) }}"
+    swap: "{{ proxmox_lxc_spec.swap | default(omit) }}"
+    netif: "{{ proxmox_lxc_spec.netif | default(omit) }}"
+    features: "{{ proxmox_lxc_spec.features | default(omit) }}"
+    unprivileged: "{{ proxmox_lxc_spec.unprivileged | default(omit) }}"
+    onboot: "{{ proxmox_lxc_spec.onboot | default(omit) }}"
     timezone: "{{ proxmox_lxc_spec.timezone | default(omit) }}"
     nameserver: "{{ proxmox_lxc_spec.nameserver | default(omit) }}"
     searchdomain: "{{ proxmox_lxc_spec.searchdomain | default(omit) }}"
-    mounts: {{ proxmox_lxc_spec.mounts | default(omit) }}
-    mount_volumes: {{ proxmox_lxc_spec.mount_volumes | default(omit) }}
+    mounts: "{{ proxmox_lxc_spec.mounts | default(omit) }}"
+    mount_volumes: "{{ proxmox_lxc_spec.mount_volumes | default(omit) }}"
     startup: "{{ proxmox_lxc_spec.startup | default(omit) }}"
-    tags: {{ proxmox_lxc_spec.tags | default(omit) }}
-    timeout: {{ proxmox_lxc_spec.timeout | default(omit) }}
+    tags: "{{ proxmox_lxc_spec.tags | default(omit) }}"
+    timeout: "{{ proxmox_lxc_spec.timeout | default(omit) }}"
     ostype: "{{ proxmox_lxc_spec.ostype | default(omit) }}"
     state: "{{ proxmox_lxc_spec.state | default('present') }}"
-    update: {{ proxmox_lxc_spec.update | bool }}
+    update: "{{ proxmox_lxc_spec.update | default(false) | bool }}"
   register: proxmox_lxc_result
   delegate_to: "{{ proxmox_api_delegate_host }}"
   become: false
   no_log: true
 
 - name: Start LXC when requested
-  when: proxmox_lxc_spec.start_on_create | default(false)
+  when: proxmox_lxc_spec.start_on_create | default(false) | bool
   community.proxmox.proxmox:
     api_host: "{{ proxmox_api_host }}"
     api_port: {{ proxmox_api_port | default(omit) }}
     api_user: "{{ proxmox_api_user }}"
     api_token_id: "{{ proxmox_api_token_id }}"
     api_token_secret: "{{ proxmox_api_token_secret }}"
-    validate_certs: {{ proxmox_verify_ssl | default(true) }}
+    validate_certs: {{ proxmox_verify_ssl | default(true) | bool }}
     node: "{{ proxmox_lxc_spec.node }}"
     vmid: {{ proxmox_lxc_spec.vmid }}
     state: started
