@@ -47,7 +47,7 @@
         api_user: "{{ proxmox_api_user }}"
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        validate_certs: {{ proxmox_verify_ssl | default(true) }}
+        validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
         node: "{{ proxmox_default_node }}"
       register: proxmox_lxc_inventory
       tags:
@@ -124,7 +124,7 @@
     - configure
     - in_guest
   vars:
-    lxc_guest_configuration_enabled: {{ hostvars[inventory_hostname].lxc_guest_configuration_enabled | default(false) }}
+    lxc_guest_configuration_enabled: "{{ hostvars[inventory_hostname].lxc_guest_configuration_enabled | default(false) | bool }}"
   tasks:
     - name: Placeholder for guest configuration roles
       ansible.builtin.debug:
