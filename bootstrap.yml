@@ -1,0 +1,39 @@
+---
+# Bootstrap playbook for initial control node setup
+# Run this first to set up your Ansible control node environment
+#
+# Usage: ansible-playbook bootstrap.yml
+#
+# This playbook:
+# - Creates a Python virtual environment at ~/.ansible-venv
+# - Installs Python dependencies from requirements/pip.txt
+# - Installs Ansible collections from collections/requirements.yml
+#
+# Re-run this playbook whenever dependencies change.
+
+- name: Bootstrap Ansible control node
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  collections:
+    - community.general
+    - community.crypto
+
+  tasks:
+    - name: Display bootstrap start message
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Starting control node bootstrap
+          ========================================
+
+          This will:
+          - Create virtual environment at ~/.ansible-venv
+          - Install Python dependencies
+          - Install Ansible collections
+
+          This may take a few minutes...
+
+    - name: Bootstrap control node environment
+      ansible.builtin.include_role:
+        name: control_node_bootstrap

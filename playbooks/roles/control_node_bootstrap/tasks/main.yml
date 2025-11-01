@@ -1,0 +1,69 @@
+---
+# Tasks for control_node_bootstrap role
+# Sets up the Ansible control node environment
+
+- name: Check if python3-venv is available
+  ansible.builtin.command:
+    cmd: "{{ python_executable }} -m venv --help"
+  register: venv_check
+  changed_when: false
+  failed_when: false
+
+- name: Ensure python3-venv is installed
+  ansible.builtin.package:
+    name: python3-venv
+    state: present
+  become: true
+  when: venv_check.rc != 0
+
+- name: Check if virtual environment exists
+  ansible.builtin.stat:
+    path: "{{ venv_path }}/bin/activate"
+  register: venv_stat
+
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: "{{ python_executable }} -m venv {{ venv_path }}"
+  when: not venv_stat.stat.exists
+  register: venv_created
+
+- name: Upgrade pip in virtual environment
+  ansible.builtin.pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ venv_path }}"
+    virtualenv_command: "{{ python_executable }} -m venv"
+
+- name: Install Python dependencies from requirements
+  ansible.builtin.pip:
+    requirements: "{{ pip_requirements_file }}"
+    virtualenv: "{{ venv_path }}"
+    virtualenv_command: "{{ python_executable }} -m venv"
+
+- name: Check if collections are already installed
+  ansible.builtin.command:
+    cmd: "{{ venv_path }}/bin/ansible-galaxy collection list community.proxmox"
+  register: collection_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Ansible collections from requirements
+  ansible.builtin.command:
+    cmd: "{{ venv_path }}/bin/ansible-galaxy collection install -r {{ collections_requirements_file }} --force"
+  when: collection_check.rc != 0
+  environment:
+    PATH: "{{ venv_path }}/bin:{{ ansible_env.PATH }}"
+
+- name: Display bootstrap completion message
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      Bootstrap completed successfully!
+      ========================================
+
+      Virtual environment created at: {{ venv_path }}
+
+      To activate the environment, run:
+        source {{ venv_path }}/bin/activate
+
+      You can now run site.yml playbooks.

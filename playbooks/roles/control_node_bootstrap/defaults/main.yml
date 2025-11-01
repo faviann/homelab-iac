@@ -1,0 +1,12 @@
+---
+# Default variables for control_node_bootstrap role
+
+# Virtual environment path
+venv_path: "{{ ansible_env.HOME }}/.ansible-venv"
+
+# Requirements files
+pip_requirements_file: "{{ playbook_dir }}/requirements/pip.txt"
+collections_requirements_file: "{{ playbook_dir }}/collections/requirements.yml"
+
+# Python executable to use
+python_executable: "python3"

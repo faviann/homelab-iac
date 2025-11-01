@@ -1,0 +1,98 @@
+---
+# Main site orchestration playbook
+# Run this after bootstrap.yml to execute infrastructure tasks
+#
+# Usage:
+#   ansible-playbook site.yml                    # Full run
+#   ansible-playbook site.yml --tags validation  # Run validation only
+#   ansible-playbook site.yml --tags provision   # Run provisioning only
+#
+# Prerequisites:
+#   1. Run bootstrap.yml first to set up the control node
+#   2. Activate the virtual environment: source ~/.ansible-venv/bin/activate
+#   3. Configure vault credentials and inventory
+
+- name: Preflight checks
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  tags:
+    - always
+
+  tasks:
+    - name: Check if bootstrap has been completed
+      ansible.builtin.stat:
+        path: "{{ ansible_env.HOME }}/.ansible-venv/bin/activate"
+      register: venv_check
+      failed_when: not venv_check.stat.exists
+
+    - name: Verify virtualenv exists
+      ansible.builtin.assert:
+        that:
+          - venv_check.stat.exists
+        fail_msg: |
+          ========================================
+          ERROR: Bootstrap not completed!
+          ========================================
+
+          The virtual environment does not exist at ~/.ansible-venv
+
+          Please run the bootstrap playbook first:
+            ansible-playbook bootstrap.yml
+
+          Then activate the environment:
+            source ~/.ansible-venv/bin/activate
+
+          Then run this playbook again.
+        success_msg: "Bootstrap check passed - virtual environment exists"
+
+    - name: Check if Ansible collections are installed
+      ansible.builtin.command:
+        cmd: "{{ ansible_env.HOME }}/.ansible-venv/bin/ansible-galaxy collection list community.proxmox"
+      register: collection_check
+      changed_when: false
+      failed_when: false
+
+    - name: Verify collections are installed
+      ansible.builtin.assert:
+        that:
+          - collection_check.rc == 0
+        fail_msg: |
+          ========================================
+          ERROR: Required collections not found!
+          ========================================
+
+          The community.proxmox collection is not installed.
+
+          Please run the bootstrap playbook:
+            ansible-playbook bootstrap.yml
+        success_msg: "Bootstrap check passed - required collections installed"
+
+    - name: Display preflight success
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Preflight checks passed!
+          ========================================
+
+          Proceeding with infrastructure operations...
+
+- name: Lab connectivity validation
+  ansible.builtin.import_playbook: playbooks/lab-connectivity.yml
+  tags:
+    - validation
+    - connectivity
+
+- name: Proxmox API validation
+  ansible.builtin.import_playbook: playbooks/proxmox_api_check.yml
+  tags:
+    - validation
+    - proxmox
+
+# Additional playbooks can be added here for provisioning, configuration, etc.
+# Example:
+# - name: Provision LXC containers
+#   ansible.builtin.import_playbook: playbooks/provision_lxc_example.yml
+#   tags:
+#     - provision
+#     - lxc

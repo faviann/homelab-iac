@@ -41,31 +41,39 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
 
 ## Quick Start
 
-### 1. Prepare a Python virtual environment
+### First-Time Setup
+
+#### 1. Run the bootstrap playbook
+
+The bootstrap playbook automates the initial setup of your Ansible control node environment. It creates a Python virtual environment, installs dependencies, and sets up Ansible collections.
 
 ```bash
+# Install python3-venv if not already available
 sudo apt update
 sudo apt install -y python3-venv python3-pip
-python3 -m venv ~/.ansible-venv
+
+# Run the bootstrap playbook (uses system Python/Ansible)
+ansible-playbook bootstrap.yml
+```
+
+The bootstrap playbook will:
+- Create a Python virtual environment at `~/.ansible-venv`
+- Install Python dependencies from `requirements/pip.txt`
+- Install Ansible collections from `collections/requirements.yml`
+
+> **Note**: Re-run `bootstrap.yml` whenever dependencies change or if you need to refresh your environment.
+
+#### 2. Activate the virtual environment
+
+After bootstrap completes, activate the environment for all subsequent operations:
+
+```bash
 source ~/.ansible-venv/bin/activate
-python -m pip install --upgrade pip
 ```
 
 > Reactivate the environment for future sessions with: `source ~/.ansible-venv/bin/activate`
 
-### 2. Install Python dependencies (inside the venv)
-
-```bash
-python -m pip install -r requirements/pip.txt
-```
-
-### 3. Install Ansible collections (inside the venv)
-
-```bash
-ansible-galaxy collection install -r collections/requirements.yml
-```
-
-### 4. Configure API credentials
+#### 3. Configure API credentials
 
 Create your vault file and vault password file. The password file should **not** be committed to version control.
 
@@ -80,21 +88,43 @@ echo "your-strong-passphrase" > ~/.ansible/vault-pass.txt
 chmod 600 ~/.ansible/vault-pass.txt
 ```
 
-### 5. Run connectivity checks
+### Running Playbooks
 
-Validate SSH reachability to managed hosts and Proxmox API access:
+After completing the first-time setup, you can run the main site orchestration or individual playbooks.
+
+#### Run validation checks
+
+The site playbook includes preflight checks and orchestrates all infrastructure operations:
 
 ```bash
-ansible-playbook playbooks/lab-connectivity.yml
+# Ensure virtual environment is activated
+source ~/.ansible-venv/bin/activate
+
+# Run validation checks only
+ansible-playbook site.yml --tags validation
 ```
 
-The output confirms which hosts respond to `ansible.builtin.ping` and the Proxmox API version detected.
+This validates SSH reachability to managed hosts and Proxmox API access.
 
-### 6. Provision example LXC
-
-Review and customize variables in `playbooks/provision_lxc_example.yml`, then provision:
+#### Run full site playbook
 
 ```bash
+# Run all plays (includes validation and any configured provisioning)
+ansible-playbook site.yml
+```
+
+#### Run individual playbooks
+
+You can also run individual playbooks directly:
+
+```bash
+# Connectivity validation
+ansible-playbook playbooks/lab-connectivity.yml
+
+# Proxmox API check
+ansible-playbook playbooks/proxmox_api_check.yml
+
+# Provision example LXC
 ansible-playbook playbooks/provision_lxc_example.yml
 ```
 
@@ -102,6 +132,8 @@ ansible-playbook playbooks/provision_lxc_example.yml
 
 ```
 .
+├── bootstrap.yml                  # Initial control node setup (run first)
+├── site.yml                       # Main orchestration playbook
 ├── collections/
 │   └── requirements.yml          # Ansible collection dependencies
 ├── requirements/
@@ -115,6 +147,8 @@ ansible-playbook playbooks/provision_lxc_example.yml
 │   └── host_vars/                # Host-specific variables
 │       └── jellyfin_lxc.yml      # Example host variables
 ├── playbooks/
+│   ├── roles/
+│   │   └── control_node_bootstrap/ # Bootstrap role for control node setup
 │   ├── lab-connectivity.yml      # SSH + Proxmox API connectivity checks
 │   ├── proxmox_api_check.yml     # API connectivity test
 │   └── provision_lxc_example.yml # Example LXC provisioning
@@ -173,6 +207,25 @@ The `inventory/hosts.yml` defines two groups:
 
 ## Example Playbooks
 
+### Using site.yml (Recommended)
+
+The `site.yml` playbook orchestrates all infrastructure operations with built-in preflight checks:
+
+```bash
+# Run all validation checks
+ansible-playbook site.yml --tags validation
+
+# Run connectivity checks only
+ansible-playbook site.yml --tags connectivity
+
+# Run full site playbook
+ansible-playbook site.yml
+```
+
+### Running Individual Playbooks
+
+You can also run playbooks directly:
+
 #### Connectivity validation
 
 ```bash
@@ -181,7 +234,7 @@ ansible-playbook playbooks/lab-connectivity.yml
 
 Runs SSH ping checks against managed hosts and calls the Proxmox `/api2/json/version` endpoint using your API token.
 
-### Check API Connectivity
+#### Check API Connectivity
 
 ```bash
 ansible-playbook playbooks/proxmox_api_check.yml
@@ -189,7 +242,7 @@ ansible-playbook playbooks/proxmox_api_check.yml
 
 Lists all LXC containers on the default node.
 
-### Provision LXC Container
+#### Provision LXC Container
 
 ```bash
 ansible-playbook playbooks/provision_lxc_example.yml
