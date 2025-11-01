@@ -17,9 +17,9 @@
     control_node_ssh_public_key_path: "{{ control_node_ssh_public_key_path | default(([control_node_home_dir, '.ssh', 'proxmox_lxc.pub'] | path_join)) }}"
     control_node_vault_password_file: "{{ control_node_vault_password_file | default(([control_node_home_dir, '.ansible', 'vault-pass.txt'] | path_join)) }}"
     control_node_pip_requirements: "{{ control_node_pip_requirements | default(([control_node_project_root, 'requirements', 'pip.txt'] | path_join)) }}"
-    control_node_pip_virtualenv: "{{ control_node_pip_virtualenv | default(([control_node_ansible_directory, 'venv'] | path_join)) }}"
-    control_node_pip_virtualenv_command: "{{ control_node_pip_virtualenv_command | default('python3 -m venv') }}"
-    control_node_pip_virtualenv_python: "{{ control_node_pip_virtualenv_python | default('python3') }}"
+    control_node_pip_virtualenv: "{{ control_node_pip_virtualenv | default(([control_node_ansible_directory, 'venv'] | path_join), true) }}"
+    control_node_pip_virtualenv_command: "{{ control_node_pip_virtualenv_command | default('python3 -m venv', true) }}"
+    control_node_pip_virtualenv_python: "{{ control_node_pip_virtualenv_python | default('python3', true) }}"
     control_node_collection_requirements: "{{ control_node_collection_requirements | default(([control_node_project_root, 'collections', 'requirements.yml'] | path_join)) }}"
     control_node_collection_install_path: "{{ control_node_collection_install_path | default(([control_node_project_root, 'collections'] | path_join)) }}"
 
@@ -88,11 +88,11 @@
   ansible.builtin.pip:
     requirements: "{{ control_node_pip_requirements }}"
     extra_args: "{{ control_node_pip_extra_args | default(omit, true) }}"
-    executable: "{{ control_node_pip_executable | default(omit) }}"
-    virtualenv: "{{ control_node_pip_virtualenv }}"
-    virtualenv_command: "{{ control_node_pip_virtualenv_command | default(omit, true) }}"
-    virtualenv_python: "{{ control_node_pip_virtualenv_python | default(omit, true) }}"
-    virtualenv_site_packages: "{{ control_node_pip_virtualenv_site_packages }}"
+    executable: "{{ control_node_pip_executable | default(omit, true) }}"
+    virtualenv: "{{ control_node_pip_virtualenv if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
+    virtualenv_command: "{{ control_node_pip_virtualenv_command | default(omit, true) if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
+    virtualenv_python: "{{ control_node_pip_virtualenv_python | default(omit, true) if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
+    virtualenv_site_packages: "{{ control_node_pip_virtualenv_site_packages | default(omit, true) if (control_node_pip_executable | default('', true) | length == 0) else omit }}"
   become: "{{ control_node_pip_become }}"
 
 - name: Check collection requirements file
