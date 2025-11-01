@@ -30,7 +30,8 @@
 - name: Upgrade pip in virtual environment
   ansible.builtin.pip:
     name: pip
-    state: latest
+    state: present
+    extra_args: "--upgrade"
     virtualenv: "{{ venv_path }}"
     virtualenv_command: "{{ python_executable }} -m venv"
 
@@ -49,7 +50,7 @@
 
 - name: Install Ansible collections from requirements
   ansible.builtin.command:
-    cmd: "{{ venv_path }}/bin/ansible-galaxy collection install -r {{ collections_requirements_file }} --force"
+    cmd: "{{ venv_path }}/bin/ansible-galaxy collection install -r {{ collections_requirements_file }}"
   when: collection_check.rc != 0
   environment:
     PATH: "{{ venv_path }}/bin:{{ ansible_env.PATH }}"

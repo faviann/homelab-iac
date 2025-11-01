@@ -4,7 +4,8 @@
 # Virtual environment path
 venv_path: "{{ ansible_env.HOME }}/.ansible-venv"
 
-# Requirements files
+# Requirements files (relative to repository root)
+# Note: This role expects to be called from bootstrap.yml at the repository root
 pip_requirements_file: "{{ playbook_dir }}/requirements/pip.txt"
 collections_requirements_file: "{{ playbook_dir }}/collections/requirements.yml"
 

@@ -24,7 +24,6 @@
       ansible.builtin.stat:
         path: "{{ ansible_env.HOME }}/.ansible-venv/bin/activate"
       register: venv_check
-      failed_when: not venv_check.stat.exists
 
     - name: Verify virtualenv exists
       ansible.builtin.assert:
