@@ -1,34 +1,64 @@
 ---
-- name: Validate context before applying idmap
+- name: Evaluate post host preparation requirements
+  ansible.builtin.set_fact:
+    proxmox_lxc_apply_idmap: "{{ (proxmox_lxc_idmap_effective | default([])) | length > 0 }}"
+    proxmox_lxc_apply_nvidia_runtime: "{{ configure_nvidia_runtime | default(false) | bool }}"
+
+- name: Validate context before applying post host preparation
   ansible.builtin.assert:
     that:
       - proxmox_lxc_spec is defined
       - proxmox_lxc_spec.vmid is defined
   fail_msg: "proxmox_lxc_spec with vmid is required for post host preparation"
-  when: proxmox_lxc_idmap_effective | default([]) | length > 0
+  when:
+    - proxmox_lxc_apply_idmap or proxmox_lxc_apply_nvidia_runtime
 
-- name: Apply UID/GID mappings to LXC configuration when requested
-  when: proxmox_lxc_idmap_effective | default([]) | length > 0
-  block:
-    - name: Determine LXC configuration file path
-      ansible.builtin.set_fact:
-        proxmox_lxc_config_path: "/etc/pve/lxc/{{ proxmox_lxc_spec.vmid }}.conf"
+- name: Determine LXC configuration file path
+  ansible.builtin.set_fact:
+    proxmox_lxc_config_path: "/etc/pve/lxc/{{ proxmox_lxc_spec.vmid }}.conf"
+  when:
+    - proxmox_lxc_spec is defined
+    - proxmox_lxc_spec.vmid is defined
+    - proxmox_lxc_apply_idmap or proxmox_lxc_apply_nvidia_runtime
 
-    - name: Check if LXC configuration exists on Proxmox host
-      ansible.builtin.stat:
-        path: "{{ proxmox_lxc_config_path }}"
-      delegate_to: "{{ proxmox_host_prep_delegate }}"
-      become: true
-      register: proxmox_lxc_config_stat
+- name: Check if LXC configuration exists on Proxmox host
+  ansible.builtin.stat:
+    path: "{{ proxmox_lxc_config_path }}"
+  delegate_to: "{{ proxmox_host_prep_delegate }}"
+  become: true
+  register: proxmox_lxc_config_stat
+  when: proxmox_lxc_config_path is defined
 
-    - name: Ensure UID/GID mappings are present
-      ansible.builtin.blockinfile:
-        path: "{{ proxmox_lxc_config_path }}"
-        marker: "# {mark} Ansible managed idmap"
-        block: |-
-          {% for mapping in proxmox_lxc_idmap_effective %}
-          lxc.idmap = {{ mapping }}
-          {% endfor %}
-      delegate_to: "{{ proxmox_host_prep_delegate }}"
-      become: true
-      when: proxmox_lxc_config_stat.stat.exists
+- name: Ensure UID/GID mappings are present
+  ansible.builtin.blockinfile:
+    path: "{{ proxmox_lxc_config_path }}"
+    marker: "# {mark} Ansible managed idmap"
+    block: |-
+      {% for mapping in proxmox_lxc_idmap_effective %}
+      lxc.idmap = {{ mapping }}
+      {% endfor %}
+  delegate_to: "{{ proxmox_host_prep_delegate }}"
+  become: true
+  when:
+    - proxmox_lxc_apply_idmap
+    - proxmox_lxc_config_path is defined
+    - proxmox_lxc_config_stat is defined
+    - proxmox_lxc_config_stat.stat.exists
+
+- name: Manage NVIDIA runtime configuration block
+  ansible.builtin.blockinfile:
+    path: "{{ proxmox_lxc_config_path }}"
+    marker: "# {mark} Ansible managed NVIDIA runtime"
+    block: |-
+      lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'
+      lxc.environment: NVIDIA_VISIBLE_DEVICES=all
+      lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+      lxc.hook.mount: /usr/share/lxc/hooks/nvidia
+    state: "{{ 'present' if proxmox_lxc_apply_nvidia_runtime else 'absent' }}"
+    create: false
+  delegate_to: "{{ proxmox_host_prep_delegate }}"
+  become: true
+  when:
+    - proxmox_lxc_config_path is defined
+    - proxmox_lxc_config_stat is defined
+    - proxmox_lxc_config_stat.stat.exists
