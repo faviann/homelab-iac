@@ -1,6 +1,5 @@
----
-# Tasks to validate Proxmox API connectivity. Included dynamically to avoid
-# requiring the community.proxmox collection before bootstrap completes.
+# Tasks to validate Proxmox API connectivity. Included dynamically so validation
+# logic can be reused from multiple playbooks while keeping tag scoping precise.
 - name: Ensure required API inputs are available
   ansible.builtin.assert:
     that:

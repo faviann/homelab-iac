@@ -1,0 +1,17 @@
+---
+# Bootstrap playbook for preparing the Ansible control node on localhost.
+- name: Bootstrap Ansible control node
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  tags:
+    - always
+    - bootstrap
+  collections:
+    - community.crypto
+  vars:
+    control_node_project_root: "{{ playbook_dir }}"
+    control_node_pip_requirements: "{{ [playbook_dir, 'requirements', 'pip.txt'] | path_join }}"
+    control_node_collection_requirements: "{{ [playbook_dir, 'collections', 'requirements.yml'] | path_join }}"
+  roles:
+    - control_node_bootstrap

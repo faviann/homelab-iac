@@ -21,10 +21,8 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 ## Prerequisites
 
 - **Controller**: Debian LTS (recommended as an unprivileged LXC or your workstation)
-- **Python**: 3.10+ with `python3-venv` and `pip` available
-- **Ansible**: ansible-core 2.19 / Ansible 12 (installed inside a virtual environment)
-- **Python packages**: Installed from `requirements/pip.txt`
-- **Ansible collections**: Installed from `collections/requirements.yml`
+- **Python**: 3.10+ with `python3-venv` and `pip` available (used by the bootstrap playbook)
+- **Ansible dependencies**: Installed via `ansible-playbook bootstrap.yml`, which creates the controller virtual environment and pulls in `requirements/pip.txt` and `collections/requirements.yml`
 - **Network**: Controller must reach the Proxmox API (HTTPS port 8006)
 - **Proxmox**: API token with LXC management permissions
 
@@ -39,64 +37,23 @@ These defaults are configured for the target homelab:
 
 Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variables, or playbook vars as needed for your environment.
 
-## Quick Start
+## First-Time Setup
 
-### 1. Prepare a Python virtual environment
+1. **Bootstrap the controller dependencies.**
 
-```bash
-sudo apt update
-sudo apt install -y python3-venv python3-pip
-python3 -m venv ~/.ansible-venv
-source ~/.ansible-venv/bin/activate
-python -m pip install --upgrade pip
-```
+   ```bash
+   ansible-playbook bootstrap.yml
+   ```
 
-> Reactivate the environment for future sessions with: `source ~/.ansible-venv/bin/activate`
+   This play creates the controller virtual environment under `~/.ansible/venv`, installs Python packages from `requirements/pip.txt`, downloads collections from `collections/requirements.yml`, and prepares SSH material. Re-run this play whenever those dependency files change or you upgrade Ansible components.
 
-### 2. Install Python dependencies (inside the venv)
+2. **Run the orchestration with `site.yml`.**
 
-```bash
-python -m pip install -r requirements/pip.txt
-```
+   ```bash
+   ansible-playbook -i inventory/hosts.yml site.yml --tags validation
+   ```
 
-### 3. Install Ansible collections (inside the venv)
-
-```bash
-ansible-galaxy collection install -r collections/requirements.yml
-```
-
-### 4. Configure API credentials
-
-Create your vault file and vault password file. The password file should **not** be committed to version control.
-
-```bash
-# Create and edit the vault file from the example
-cp inventory/group_vars/all/vault.example.yml inventory/group_vars/all/vault.yml
-$EDITOR inventory/group_vars/all/vault.yml  # Add your Proxmox API token secret
-ansible-vault encrypt inventory/group_vars/all/vault.yml
-
-# Create the vault password file
-echo "your-strong-passphrase" > ~/.ansible/vault-pass.txt
-chmod 600 ~/.ansible/vault-pass.txt
-```
-
-### 5. Run connectivity checks
-
-Validate SSH reachability to managed hosts and Proxmox API access:
-
-```bash
-ansible-playbook playbooks/lab-connectivity.yml
-```
-
-The output confirms which hosts respond to `ansible.builtin.ping` and the Proxmox API version detected.
-
-### 6. Provision example LXC
-
-Review and customize variables in `playbooks/provision_lxc_example.yml`, then provision:
-
-```bash
-ansible-playbook playbooks/provision_lxc_example.yml
-```
+   Use `--tags validation` to smoke-test connectivity, or omit `--tags` for a full run once your inventory and vault secrets are configured (see the [Configuration](#configuration) section). The playbook includes a preflight check that fails fast if bootstrap prerequisites are missing.
 
 ## Repository Structure
 
@@ -231,12 +188,12 @@ Customize variables in the playbook as needed.
 ### Module not found
 
 - Verify collections installed: `ansible-galaxy collection list | grep proxmox`
-- Reinstall if needed: `ansible-galaxy collection install -r collections/requirements.yml --force`
+- Re-run `ansible-playbook bootstrap.yml` to reinstall collections after updating dependency files
 
 ### Python import errors
 
 - Verify Python packages: `python3 -m pip list | grep -E "proxmoxer|requests"`
-- Reinstall if needed: `python3 -m pip install --user -r requirements/pip.txt --force-reinstall`
+- Re-run `ansible-playbook bootstrap.yml` to rebuild the controller virtual environment if packages drift
 
 ## Migration from Legacy Implementation
 
