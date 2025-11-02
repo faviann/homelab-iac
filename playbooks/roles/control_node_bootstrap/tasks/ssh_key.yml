@@ -1,4 +1,9 @@
 ---
+- name: Check if SSH key already exists
+  ansible.builtin.stat:
+    path: "{{ control_node_ssh_private_key_path }}"
+  register: ssh_key_stat
+
 - name: Generate control node SSH key pair
   community.crypto.openssh_keypair:
     path: "{{ control_node_ssh_private_key_path }}"
@@ -8,13 +13,15 @@
     mode: "0600"
     regenerate: never
   register: control_node_keypair
+  when: not ssh_key_stat.stat.exists
 
 - name: Ensure control node SSH public key permissions
   ansible.builtin.file:
     path: "{{ control_node_ssh_public_key_path }}"
     state: file
     mode: "0644"
-
+  when: control_node_keypair is changed
+  
 - name: Show location of generated public key
   ansible.builtin.debug:
     msg: "Control node SSH public key available at {{ control_node_ssh_public_key_path }}"
