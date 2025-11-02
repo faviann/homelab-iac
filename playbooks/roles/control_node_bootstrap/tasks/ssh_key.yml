@@ -1,0 +1,20 @@
+---
+- name: Generate control node SSH key pair
+  community.crypto.openssh_keypair:
+    path: "{{ control_node_ssh_private_key_path }}"
+    type: "{{ control_node_ssh_key_type | default('rsa') }}"
+    size: "{{ control_node_ssh_key_size | default(4096) }}"
+    comment: "{{ control_node_ssh_key_comment | default('ansible-control') }}"
+    mode: "0600"
+    regenerate: never
+  register: control_node_keypair
+
+- name: Ensure control node SSH public key permissions
+  ansible.builtin.file:
+    path: "{{ control_node_ssh_public_key_path }}"
+    state: file
+    mode: "0644"
+
+- name: Show location of generated public key
+  ansible.builtin.debug:
+    msg: "Control node SSH public key available at {{ control_node_ssh_public_key_path }}"

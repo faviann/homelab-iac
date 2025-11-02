@@ -31,6 +31,12 @@
     state: directory
     mode: "0700"
 
+- name: Ensure Ansible data directory exists
+  ansible.builtin.file:
+    path: "{{ control_node_ansible_directory }}"
+    state: directory
+    mode: "0700"
+
 - name: Ensure collection install directory exists
   ansible.builtin.file:
     path: "{{ control_node_collection_install_path }}"
@@ -58,27 +64,8 @@
   register: control_node_galaxy_install
   changed_when: false
 
-- name: Generate control node SSH key pair
-  community.crypto.openssh_keypair:
-    path: "{{ control_node_ssh_private_key_path }}"
-    type: "{{ control_node_ssh_key_type | default('rsa') }}"
-    size: "{{ control_node_ssh_key_size | default(4096) }}"
-    comment: "{{ control_node_ssh_key_comment | default('ansible-control') }}"
-    mode: "0600"
-    regenerate: never
-  register: control_node_keypair
-
-- name: Ensure control node SSH public key permissions
-  ansible.builtin.file:
-    path: "{{ control_node_ssh_public_key_path }}"
-    state: file
-    mode: "0644"
-
-- name: Ensure Ansible data directory exists
-  ansible.builtin.file:
-    path: "{{ control_node_ansible_directory }}"
-    state: directory
-    mode: "0700"
+- name: Include control node SSH tasks
+  ansible.builtin.include_tasks: ssh_key.yml
 
 - name: Verify vault password file presence
   ansible.builtin.stat:
@@ -120,7 +107,3 @@
     virtualenv_python: "{{ control_node_pip_virtualenv_python if control_node_pip_use_virtualenv and control_node_pip_virtualenv_python_required else omit }}"
     virtualenv_site_packages: "{{ control_node_pip_virtualenv_site_packages | default(omit, true) if control_node_pip_use_virtualenv else omit }}"
   become: "{{ control_node_pip_become }}"
-
-- name: Show location of generated public key
-  ansible.builtin.debug:
-    msg: "Control node SSH public key available at {{ control_node_ssh_public_key_path }}"
