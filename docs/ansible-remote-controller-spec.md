@@ -45,7 +45,7 @@ Run all Ansible playbooks from a remote controller (Ubuntu LTS unprivileged LXC 
 - group_vars/all/proxmox.yml (non-secret API vars)
 - group_vars/all/vault.example.yml (unencrypted template; user will create and encrypt vault.yml locally)
 - playbooks/proxmox_api_check.yml (LXC info from API)
-- playbooks/provision_lxc_example.yml (idempotent LXC provisioning skeleton using provided defaults)
+  - playbooks/lxc-provision.yml (inventory-driven LXC provisioning using tier/capability defaults)
 - docs/remote-controller-setup.md (setup and usage)
 - .gitignore (ignore local vault password files)
 

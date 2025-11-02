@@ -74,7 +74,7 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
 ├── playbooks/
 │   ├── lab-connectivity.yml      # SSH + Proxmox API connectivity checks
 │   ├── proxmox_api_check.yml     # API connectivity test
-│   └── provision_lxc_example.yml # Example LXC provisioning
+│   └── lxc-provision.yml         # Inventory-driven LXC provisioning
 ├── docs/
 │   ├── remote-controller-setup.md        # Detailed setup guide
 │   └── ansible-remote-controller-spec.md # Technical specification
@@ -146,21 +146,13 @@ ansible-playbook playbooks/proxmox_api_check.yml
 
 Lists all LXC containers on the default node.
 
-### Provision LXC Container
+### Provision Inventory-Defined LXCs
 
 ```bash
-ansible-playbook playbooks/provision_lxc_example.yml
+ansible-playbook -i inventory/hosts.yml site.yml --tags provision
 ```
 
-Creates an LXC container with:
-- VMID: 123
-- Hostname: app-01
-- Template: debian-13-standard_13.1-2_amd64.tar.zst
-- Storage: local-zfs
-- Network: vmbr1 with DHCP
-- Features: nesting enabled, unprivileged
-
-Customize variables in the playbook as needed.
+Builds the effective LXC specs from tier and capability group variables, ensures each container exists through the `proxmox_lxc_provision` role, and applies host-side preparation tasks when enabled. Edit inventory group and host vars to tailor resources and features.
 
 ## TLS Certificate Verification
 
