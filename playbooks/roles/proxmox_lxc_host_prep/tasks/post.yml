@@ -1,8 +1,14 @@
 ---
 - name: Evaluate post host preparation requirements
+  vars:
+    proxmox_lxc_apply_idmap_calculated: "{{ ((proxmox_lxc_idmap_effective | default([])) | length > 0) | bool }}"
+    proxmox_lxc_apply_nvidia_runtime_calculated: "{{ (configure_nvidia_runtime | default(false)) | bool }}"
+    proxmox_lxc_apply_wireguard_runtime_calculated: "{{ (wireguard_kernel_module_access | default(false)) | bool }}"
   ansible.builtin.set_fact:
-    proxmox_lxc_apply_idmap: "{{ (proxmox_lxc_idmap_effective | default([])) | length > 0 }}"
-    proxmox_lxc_apply_nvidia_runtime: "{{ configure_nvidia_runtime | default(false) | bool }}"
+    proxmox_lxc_apply_idmap: "{{ proxmox_lxc_apply_idmap_calculated }}"
+    proxmox_lxc_apply_nvidia_runtime: "{{ proxmox_lxc_apply_nvidia_runtime_calculated }}"
+    proxmox_lxc_apply_wireguard_runtime: "{{ proxmox_lxc_apply_wireguard_runtime_calculated }}"
+    proxmox_lxc_apply_post_changes: "{{ (proxmox_lxc_apply_idmap_calculated or proxmox_lxc_apply_nvidia_runtime_calculated or proxmox_lxc_apply_wireguard_runtime_calculated) | bool }}"
 
 - name: Validate context before applying post host preparation
   ansible.builtin.assert:
@@ -11,7 +17,7 @@
       - proxmox_lxc_spec.vmid is defined
   fail_msg: "proxmox_lxc_spec with vmid is required for post host preparation"
   when:
-    - proxmox_lxc_apply_idmap or proxmox_lxc_apply_nvidia_runtime
+    - proxmox_lxc_apply_post_changes
 
 - name: Determine LXC configuration file path
   ansible.builtin.set_fact:
@@ -19,7 +25,7 @@
   when:
     - proxmox_lxc_spec is defined
     - proxmox_lxc_spec.vmid is defined
-    - proxmox_lxc_apply_idmap or proxmox_lxc_apply_nvidia_runtime
+    - proxmox_lxc_apply_post_changes
 
 - name: Check if LXC configuration exists on Proxmox host
   ansible.builtin.stat:
@@ -41,6 +47,21 @@
   become: true
   when:
     - proxmox_lxc_apply_idmap
+    - proxmox_lxc_config_path is defined
+    - proxmox_lxc_config_stat is defined
+    - proxmox_lxc_config_stat.stat.exists
+
+- name: Manage WireGuard tun device configuration
+  ansible.builtin.blockinfile:
+    path: "{{ proxmox_lxc_config_path }}"
+    marker: "# {mark} Ansible managed WireGuard tun"
+    block: |-
+      lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+    state: "{{ 'present' if proxmox_lxc_apply_wireguard_runtime else 'absent' }}"
+    create: false
+  delegate_to: "{{ proxmox_host_prep_delegate }}"
+  become: true
+  when:
     - proxmox_lxc_config_path is defined
     - proxmox_lxc_config_stat is defined
     - proxmox_lxc_config_stat.stat.exists
