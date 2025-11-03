@@ -46,13 +46,6 @@
         success_msg: Bootstrap prerequisites detected.
       run_once: true
 
-    - name: Set Python interpreter to use virtualenv
-      ansible.builtin.set_fact:
-        ansible_python_interpreter: "{{ [control_node_pip_virtualenv, 'bin', 'python'] | path_join }}"
-      delegate_to: localhost
-      delegate_facts: true
-      run_once: true
-
 - name: Validate Proxmox API connectivity
   hosts: proxmox_api
   gather_facts: false
