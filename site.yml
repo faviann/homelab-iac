@@ -71,7 +71,7 @@
     - provision
     - host_prep
     - lxc
-  pre_tasks:
+  tasks:
     - name: Build effective LXC specification
       ansible.builtin.include_role:
         name: proxmox_lxc_provision
@@ -98,14 +98,12 @@
         - host_prep
         - provision
 
-  tasks:
     - name: Provision LXC container
       ansible.builtin.include_role:
         name: proxmox_lxc_provision
       tags:
         - provision
 
-  post_tasks:
     - name: Apply post-provision host adjustments
       ansible.builtin.include_role:
         name: proxmox_lxc_host_prep
