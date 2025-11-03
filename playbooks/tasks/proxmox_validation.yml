@@ -18,7 +18,7 @@
     url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/nodes/{{ proxmox_default_node }}/lxc"
     method: GET
     headers:
-                   # "PVEAPIToken=API_TOKEN_ID=API_TOKEN_SECRET"
+      # The syntax of PVEAPIToken=API_TOKEN_ID=API_TOKEN_SECRET
       Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
     validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
     status_code: 200
@@ -45,7 +45,7 @@
   ansible.builtin.set_fact:
     proxmox_defined_lxcs: "{{ groups['lxcs'] | default([]) }}"
     proxmox_existing_lxcs: "{{ (proxmox_lxc_inventory_response.json.data | default([])) | map(attribute='name') | list }}"
-  cacheable: true
+    cacheable: true
   when:
     - proxmox_lxc_inventory_response.json is defined
     - proxmox_lxc_inventory_response.json.data is defined
@@ -56,7 +56,7 @@
 - name: Identify statically defined LXCs missing in Proxmox
   ansible.builtin.set_fact:
     proxmox_missing_lxcs: "{{ (proxmox_defined_lxcs | default([])) | difference(proxmox_existing_lxcs | default([])) }}"
-  cacheable: true
+    cacheable: true
   when: proxmox_defined_lxcs is defined
   tags:
     - validation
