@@ -58,7 +58,7 @@
     timeout: "{{ proxmox_lxc_spec.timeout | default(omit) }}"
     ostype: "{{ proxmox_lxc_spec.ostype | default(omit) }}"
     state: "{{ proxmox_lxc_spec.state | default('present') }}"
-    update: "{{ proxmox_lxc_spec.update | default(false) | bool }}"
+    update: "{{ proxmox_lxc_spec['update'] | default(false) | bool }}"
   register: proxmox_lxc_result
   delegate_to: "{{ proxmox_api_delegate_host }}"
   become: false
