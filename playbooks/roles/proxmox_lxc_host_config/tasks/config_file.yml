@@ -23,17 +23,35 @@
     path: "{{ _lxc_config_file }}"
     marker: "# {mark} Ansible managed: UID/GID mappings"
     block: |-
-      {% for mapping in proxmox_lxc_idmap_effective %}
+      {% for mapping in proxmox_lxc_idmap %}
       lxc.idmap = {{ mapping }}
       {% endfor %}
     create: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
   when:
-    - proxmox_lxc_idmap_effective is defined
-    - proxmox_lxc_idmap_effective | length > 0
+    - proxmox_lxc_idmap is defined
+    - proxmox_lxc_idmap | length > 0
   tags:
     - idmap
+
+- name: Apply bind mount points
+  ansible.builtin.blockinfile:
+    path: "{{ _lxc_config_file }}"
+    marker: "# {mark} Ansible managed: Bind mounts"
+    block: |-
+      {% for mount_key, mount_value in (proxmox_lxc_bind_mounts | default({})).items() %}
+      {{ mount_key }}: {{ mount_value }}
+      {% endfor %}
+    create: false
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  when:
+    - proxmox_lxc_bind_mounts is defined
+    - proxmox_lxc_bind_mounts | length > 0
+  tags:
+    - bind_mounts
+    - mounts
 
 - name: Apply WireGuard tun device access
   ansible.builtin.blockinfile:

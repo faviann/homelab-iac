@@ -17,10 +17,13 @@ proxmox_master_lxc_storage: local-zfs
 proxmox_master_shared_size: "256G"
 proxmox_master_shared_mountpoint: "/shared"
 
-proxmox_default_mounts:
+# Volume mount handled via Proxmox API
+proxmox_default_api_mounts:
   mp0: >-
-    {{ proxmox_compose_host_base }},mp={{
-    proxmox_master_shared_mountpoint }}
+    {{ proxmox_compose_host_base }},mp={{proxmox_master_shared_mountpoint }}
+
+# Bind mounts requiring config file editing (API restriction)
+proxmox_default_bind_mounts:
   mp1: "/conf,mp=/conf,ro=1"
   mp2: "/ephemeral,mp=/ephemeral"
   mp3: "/tank,mp=/data"
