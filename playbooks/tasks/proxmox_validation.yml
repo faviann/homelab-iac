@@ -18,7 +18,8 @@
     url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/nodes/{{ proxmox_default_node }}/lxc"
     method: GET
     headers:
-      Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+                   # "PVEAPIToken=API_TOKEN_ID=API_TOKEN_SECRET"
+      Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
     validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
     status_code: 200
   register: proxmox_lxc_inventory_response
@@ -40,20 +41,46 @@
     - validation
     - proxmox
 
-- name: Check that all statically defined LXCs exist in Proxmox
-  vars:
-    defined_lxcs: "{{ groups['lxcs'] | default([]) }}"
-    existing_lxcs: "{{ (proxmox_lxc_inventory_response.json.data | default([])) | map(attribute='name') | list }}"
-  ansible.builtin.assert:
-    that:
-      - item in existing_lxcs
-    success_msg: "LXC {{ item }} exists in Proxmox"
-    fail_msg: "LXC {{ item }} is missing in Proxmox"
-  loop: "{{ defined_lxcs }}"
+- name: Capture defined and existing LXC names
+  ansible.builtin.set_fact:
+    proxmox_defined_lxcs: "{{ groups['lxcs'] | default([]) }}"
+    proxmox_existing_lxcs: "{{ (proxmox_lxc_inventory_response.json.data | default([])) | map(attribute='name') | list }}"
+  cacheable: true
   when:
     - proxmox_lxc_inventory_response.json is defined
     - proxmox_lxc_inventory_response.json.data is defined
-    - defined_lxcs | length > 0
+  tags:
+    - validation
+    - proxmox
+
+- name: Identify statically defined LXCs missing in Proxmox
+  ansible.builtin.set_fact:
+    proxmox_missing_lxcs: "{{ (proxmox_defined_lxcs | default([])) | difference(proxmox_existing_lxcs | default([])) }}"
+  cacheable: true
+  when: proxmox_defined_lxcs is defined
+  tags:
+    - validation
+    - proxmox
+
+- name: Warn when statically defined LXCs are absent in Proxmox
+  ansible.builtin.debug:
+    msg: "The following LXCs are missing in Proxmox: {{ proxmox_missing_lxcs }}"
+    warn: true
+  when:
+    - proxmox_missing_lxcs | default([]) | length > 0
+  tags:
+    - validation
+    - proxmox
+
+- name: Assert all statically defined LXCs exist in Proxmox when enforcement enabled
+  ansible.builtin.assert:
+    that:
+      - proxmox_missing_lxcs | default([]) | length == 0
+    success_msg: "All statically defined LXCs are present in Proxmox"
+    fail_msg: "Missing LXCs in Proxmox: {{ proxmox_missing_lxcs }}"
+  when:
+    - proxmox_missing_lxcs is defined
+    - (proxmox_validation_enforce_existing | default(false)) | bool
   tags:
     - validation
     - proxmox
