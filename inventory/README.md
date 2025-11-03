@@ -216,9 +216,13 @@ For the `media` host, variables resolve in this order:
 
        - keyctl=1
 
-     docker_user: dockeruser
+  docker_user: dockeruser
 
-     ```
+  ```
+
+  IMPORTANT: LXC feature flags and API permissions
+
+  The example above shows `lxc_features` (for example `nesting=1` and `keyctl=1`). Changing those feature flags via the Proxmox API is restricted and requires API calls authenticated as the local Proxmox root user (`root@pam`). If you include `lxc_features` in your group or host variables and expect automation to apply them, supply a `root@pam` API token. If you cannot or do not want to use a `root@pam` token, omit `lxc_features` from your specs and apply those flags manually on the Proxmox host to avoid 403 permission errors.
 
    - From `group_vars/cap_gpu/vars.yml`:
 

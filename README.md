@@ -26,6 +26,8 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 - **Network**: Controller must reach the Proxmox API (HTTPS port 8006)
 - **Proxmox**: API token with LXC management permissions
 
+IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
+
 ### Proxmox Environment Defaults
 
 These defaults are configured for the target homelab:
@@ -121,12 +123,14 @@ The `inventory/hosts.yml` defines two groups:
 
 ## Creating API Tokens in Proxmox
 
-1. Log into Proxmox web UI as `root@pam` or privileged user
-2. Navigate to **Datacenter → Permissions → API Tokens**
-3. Create a new token: `ansible@pve!controller`
-4. Grant appropriate permissions (PVEVMAdmin role on relevant nodes/resources)
-5. Copy the token secret immediately (shown only once)
-6. Add the secret to your `vault.yml` file
+1. Log into Proxmox web UI as `root@pam` or another privileged administrative user.
+2. Navigate to **Datacenter → Permissions → API Tokens**.
+3. Create a new token (example: `ansible@pve!controller`).
+   - If you will be changing LXC feature flags (for example `nesting=1` or `keyctl=1`), create the token for `root@pam` (for example: `root@pam!ansible-controller`) because changing those feature flags is restricted to the `root@pam` account and other users/tokens will receive a 403 permission error when attempting those changes.
+   - If your automation does not modify feature flags, prefer a least-privilege service account (e.g., `ansible@pve`) with the minimal role required.
+4. Grant appropriate permissions (for `root@pam` tokens this is already privileged; for service accounts grant only the roles needed, e.g., `PVEVMAdmin` on the target node/resource).
+5. Copy the token secret immediately (shown only once).
+6. Add the secret to your `vault.yml` file.
 
 ## Example Playbooks
 
