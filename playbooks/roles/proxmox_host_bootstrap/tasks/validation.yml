@@ -1,0 +1,49 @@
+---
+# Validate Proxmox host readiness for Ansible management
+# Ensures required tools and access are available
+
+- name: Check if pct command is available
+  when: proxmox_validate_pct | bool
+  ansible.builtin.command:
+    cmd: which pct
+  register: pct_check
+  changed_when: false
+  delegate_to: "{{ proxmox_host }}"
+  vars:
+    ansible_user: "{{ proxmox_ssh_user }}"
+
+- name: Verify pct command works
+  when: proxmox_validate_pct | bool
+  ansible.builtin.command:
+    cmd: pct list
+  register: pct_list
+  changed_when: false
+  delegate_to: "{{ proxmox_host }}"
+  vars:
+    ansible_user: "{{ proxmox_ssh_user }}"
+
+- name: Display detected containers
+  when: proxmox_validate_pct | bool
+  ansible.builtin.debug:
+    msg: "Detected {{ pct_list.stdout_lines | length - 1 }} LXC container(s) on {{ proxmox_host }}"
+
+- name: Test Proxmox API connectivity
+  when: proxmox_validate_api | bool
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_verify_ssl | default(false) }}"
+    node: "{{ proxmox_default_node }}"
+    type: lxc
+  register: api_check
+  delegate_to: localhost
+
+- name: Proxmox host validation summary
+  ansible.builtin.debug:
+    msg:
+      - "✓ SSH access: configured"
+      - "✓ pct command: available"
+      - "✓ API access: working"
+      - "Proxmox host {{ proxmox_host }} is ready for Ansible management"

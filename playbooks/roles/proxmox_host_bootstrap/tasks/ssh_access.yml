@@ -1,0 +1,89 @@
+---
+# Automatic SSH access setup for Proxmox host
+# Auto-detects if SSH key auth works; prompts for password only if needed
+
+- name: Ensure SSH key exists on control node
+  ansible.builtin.stat:
+    path: "{{ proxmox_ssh_key_public }}"
+  register: ssh_pubkey_stat
+  failed_when: not ssh_pubkey_stat.stat.exists
+  delegate_to: localhost
+
+- name: Test SSH connectivity to Proxmox host
+  ansible.builtin.wait_for:
+    host: "{{ proxmox_host }}"
+    port: "{{ proxmox_ssh_port }}"
+    timeout: "{{ proxmox_ssh_connect_timeout }}"
+  register: ssh_port_check
+  ignore_errors: true
+  delegate_to: localhost
+
+- name: Fail if Proxmox host is unreachable
+  ansible.builtin.fail:
+    msg: "Cannot reach {{ proxmox_host }}:{{ proxmox_ssh_port }}. Check network connectivity and firewall rules."
+  when: ssh_port_check.failed
+
+- name: Test if SSH key authentication already works
+  ansible.builtin.command:
+    cmd: >-
+      ssh -o BatchMode=yes
+          -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
+          -o StrictHostKeyChecking=accept-new
+          {{ proxmox_ssh_user }}@{{ proxmox_host }}
+          'true'
+  register: ssh_key_test
+  failed_when: false
+  changed_when: false
+  delegate_to: localhost
+
+- name: SSH key authentication status
+  ansible.builtin.debug:
+    msg: >-
+      SSH key auth {{ 'already configured' if ssh_key_test.rc == 0 else 'not configured - will prompt for password' }}
+
+- name: Configure SSH key authentication (interactive)
+  when: ssh_key_test.rc != 0
+  block:
+    - name: Prompt for Proxmox root password
+      ansible.builtin.pause:
+        prompt: |
+          
+          ╔════════════════════════════════════════════════════════════════════╗
+          ║  SSH Key Authentication Setup Required                            ║
+          ╚════════════════════════════════════════════════════════════════════╝
+          
+          SSH key authentication to {{ proxmox_host }} is not configured.
+          
+          Please enter the root password to automatically add your SSH key.
+          This prompt will not appear on subsequent runs.
+          
+          Password for root@{{ proxmox_host }}
+        echo: false
+      register: proxmox_root_password
+      delegate_to: localhost
+
+    - name: Add SSH public key to Proxmox authorized_keys
+      ansible.builtin.authorized_key:
+        user: "{{ proxmox_ssh_user }}"
+        key: "{{ lookup('file', proxmox_ssh_key_public) }}"
+        state: present
+        comment: "Ansible control node (added {{ ansible_date_time.iso8601 }})"
+      delegate_to: "{{ proxmox_host }}"
+      vars:
+        ansible_user: "{{ proxmox_ssh_user }}"
+        ansible_password: "{{ proxmox_root_password.user_input }}"
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+
+    - name: Verify SSH key authentication now works
+      ansible.builtin.command:
+        cmd: >-
+          ssh -o BatchMode=yes
+              -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
+              {{ proxmox_ssh_user }}@{{ proxmox_host }}
+              'true'
+      changed_when: false
+      delegate_to: localhost
+
+    - name: SSH key authentication configured successfully
+      ansible.builtin.debug:
+        msg: "✓ SSH key authentication to {{ proxmox_host }} is now configured"

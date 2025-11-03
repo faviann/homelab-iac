@@ -220,9 +220,9 @@ For the `media` host, variables resolve in this order:
 
   ```
 
-  IMPORTANT: LXC feature flags and API permissions
+  IMPORTANT: LXC feature flags and host delegation
 
-  The example above shows `lxc_features` (for example `nesting=1` and `keyctl=1`). Changing those feature flags via the Proxmox API is restricted and requires API calls authenticated as the local Proxmox root user (`root@pam`). If you include `lxc_features` in your group or host variables and expect automation to apply them, supply a `root@pam` API token. If you cannot or do not want to use a `root@pam` token, omit `lxc_features` from your specs and apply those flags manually on the Proxmox host to avoid 403 permission errors.
+  The example above shows `lxc_features` (for example `nesting=1` and `keyctl=1`). These flags cannot be applied through the Proxmox API by non-root accounts, so the provisioning role delegates to the Proxmox host and runs `pct set` as root to keep things idempotent. Ensure the inventory entry referenced by `proxmox_host_delegate` allows Ansible to connect (SSH) and escalate to root. If host delegation is disabled, you must apply these feature flags manually.
 
    - From `group_vars/cap_gpu/vars.yml`:
 

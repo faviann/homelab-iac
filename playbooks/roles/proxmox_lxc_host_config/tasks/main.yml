@@ -1,0 +1,25 @@
+---
+# Orchestrates host-side LXC configuration tasks
+# These operations require direct SSH access to the Proxmox host
+
+- name: Validate required context
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_spec is defined
+      - proxmox_lxc_spec.hostname is defined
+      - proxmox_lxc_spec.vmid is defined
+    fail_msg: "proxmox_lxc_spec with hostname and vmid is required"
+
+- name: Apply LXC config file modifications
+  ansible.builtin.include_tasks: config_file.yml
+  tags:
+    - config_file
+    - idmap
+    - gpu
+    - wireguard
+
+- name: Apply LXC feature flags via pct
+  ansible.builtin.include_tasks: features.yml
+  when: lxc_features is defined and lxc_features | length > 0
+  tags:
+    - features

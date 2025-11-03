@@ -28,6 +28,8 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
+**Note**: This repository now automatically handles restricted feature flags (like `keyctl=1`) by applying them via `pct` commands directly on the Proxmox host after API-based provisioning. The automation will prompt for the Proxmox root password on first run to configure SSH access, then all subsequent operations are passwordless.
+
 ### Proxmox Environment Defaults
 
 These defaults are configured for the target homelab:
@@ -49,13 +51,27 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
 
    This play creates the controller virtual environment under `~/.ansible/venv`, installs Python packages from `requirements/pip.txt`, downloads collections from `collections/requirements.yml`, and prepares SSH material. Re-run this play whenever those dependency files change or you upgrade Ansible components.
 
-2. **Run the orchestration with `site.yml`.**
+2. **Configure secrets and inventory.**
+
+   Create and encrypt `inventory/group_vars/all/vault.yml` with your Proxmox API credentials (see [Configuration](#configuration) section below).
+
+3. **Run the orchestration with `site.yml`.**
 
    ```bash
-   ansible-playbook -i inventory/hosts.yml site.yml --tags validation
+   ansible-playbook -i inventory/hosts.yml site.yml
    ```
 
-   Use `--tags validation` to smoke-test connectivity, or omit `--tags` for a full run once your inventory and vault secrets are configured (see the [Configuration](#configuration) section). The playbook includes a preflight check that fails fast if bootstrap prerequisites are missing.
+   On first run, the playbook will:
+   - Verify bootstrap prerequisites
+   - **Automatically detect if SSH access to the Proxmox host is configured**
+   - **Prompt for the Proxmox root password only if needed** to add your SSH key
+   - Validate API connectivity
+   - Provision LXC containers
+   - Apply host-side configuration (including restricted feature flags via `pct` commands)
+
+   Subsequent runs will use passwordless SSH and skip the interactive prompt.
+
+   Use `--tags validation` to test connectivity without provisioning, or `--tags provision` to only provision containers.
 
 ## Repository Structure
 
@@ -127,10 +143,29 @@ The `inventory/hosts.yml` defines two groups:
 2. Navigate to **Datacenter → Permissions → API Tokens**.
 3. Create a new token (example: `ansible@pve!controller`).
    - If you will be changing LXC feature flags (for example `nesting=1` or `keyctl=1`), create the token for `root@pam` (for example: `root@pam!ansible-controller`) because changing those feature flags is restricted to the `root@pam` account and other users/tokens will receive a 403 permission error when attempting those changes.
+   - **Note**: With the new `proxmox_host_bootstrap` role, restricted features like `keyctl=1` are now applied via SSH and `pct` commands directly on the Proxmox host, so you can use a less-privileged API token (e.g., `ansible@pve`) for API operations. The automation handles restricted features separately.
    - If your automation does not modify feature flags, prefer a least-privilege service account (e.g., `ansible@pve`) with the minimal role required.
 4. Grant appropriate permissions (for `root@pam` tokens this is already privileged; for service accounts grant only the roles needed, e.g., `PVEVMAdmin` on the target node/resource).
 5. Copy the token secret immediately (shown only once).
 6. Add the secret to your `vault.yml` file.
+
+## SSH Access to Proxmox Host
+
+The automation requires SSH access to the Proxmox host to apply certain configuration that cannot be done via API (such as restricted LXC feature flags like `keyctl=1`).
+
+**Automatic Setup**: On first run of `site.yml`, the `proxmox_host_bootstrap` role will:
+1. Check if your SSH key already works for `root@proxmox`
+2. If not, prompt you for the Proxmox root password
+3. Automatically add your SSH public key to the Proxmox host
+4. Verify the connection works
+
+**Manual Setup** (optional): If you prefer to configure SSH access manually:
+```bash
+# Copy your public key to Proxmox
+ssh-copy-id -i ~/.ssh/ansible_ed25519.pub root@proxmox.internal.faviann.com
+```
+
+After initial setup, all subsequent playbook runs will use passwordless SSH authentication.
 
 ## Example Playbooks
 

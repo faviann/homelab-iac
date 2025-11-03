@@ -20,6 +20,11 @@
     fail_msg: >-
       Missing required Proxmox settings. Check group_vars/all/proxmox.yml and host_vars/{{ inventory_hostname }}.yml
 
+# Note: LXC feature flags (from lxc_features variable) are NOT set via this API call.
+# They are applied separately via the proxmox_lxc_host_prep role using pct commands,
+# because some features (like keyctl) cannot be set through the Proxmox API.
+# See playbooks/roles/proxmox_lxc_host_prep/tasks/features.yml for implementation.
+
 - name: Ensure LXC container exists
   community.proxmox.proxmox:
     api_host: "{{ proxmox_api_host }}"

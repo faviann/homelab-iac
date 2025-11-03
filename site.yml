@@ -46,6 +46,16 @@
         success_msg: Bootstrap prerequisites detected.
       run_once: true
 
+- name: Bootstrap Proxmox host SSH access
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags:
+    - always
+    - bootstrap
+  roles:
+    - proxmox_host_bootstrap
+
 - name: Validate Proxmox API connectivity
   hosts: proxmox_api
   gather_facts: false
@@ -69,7 +79,7 @@
     - community.proxmox
   tags:
     - provision
-    - host_prep
+    - host_config
     - lxc
   tasks:
     - name: Build effective LXC specification
@@ -84,41 +94,24 @@
         - provision
         - spec
 
-    - name: Prepare Proxmox host before provisioning
-      ansible.builtin.include_role:
-        name: proxmox_lxc_host_prep
-        apply:
-          tags:
-            - host_prep
-            - provision
-          delegate_to: localhost
-          delegate_facts: true
-          connection: local
-      vars:
-        proxmox_lxc_host_prep_phase: pre
-      when: proxmox_lxc_host_prep_enabled | default(true)
-      tags:
-        - host_prep
-        - provision
-
     - name: Provision LXC container
       ansible.builtin.include_role:
         name: proxmox_lxc_provision
       tags:
         - provision
 
-    - name: Apply post-provision host adjustments
+    - name: Apply host-side container configuration
       ansible.builtin.include_role:
-        name: proxmox_lxc_host_prep
+        name: proxmox_lxc_host_config
         apply:
           tags:
-            - host_prep
+            - host_config
             - provision
-      vars:
-        proxmox_lxc_host_prep_phase: post
-      when: proxmox_lxc_host_prep_enabled | default(true)
+          delegate_to: "{{ proxmox_api_host }}"
+          become: true
+      when: proxmox_lxc_host_config_enabled | default(true)
       tags:
-        - host_prep
+        - host_config
         - provision
 
 - name: Configure services inside provisioned containers
