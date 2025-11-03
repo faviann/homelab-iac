@@ -4,7 +4,7 @@
     that:
       - proxmox_lxc_spec is defined
       - proxmox_lxc_spec.hostname is defined
-  fail_msg: "proxmox_lxc_spec is required before running host preparation tasks"
+    fail_msg: "proxmox_lxc_spec is required before running host preparation tasks"
 
 - name: Build list of bind source paths on Proxmox host
   ansible.builtin.set_fact:
