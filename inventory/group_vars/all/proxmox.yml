@@ -32,7 +32,7 @@ proxmox_default_mount_volumes:
     storage: "{{ proxmox_shared_storage }}"
     volume: "{{ proxmox_shared_volume_name }}"
     mountpoint: "{{ proxmox_shared_mount_point }}"
-    size: "{{ proxmox_shared_volume_size }}"
+    size: 256  # Must be integer, using literal instead of variable reference
 
 # Bind mounts requiring config file editing (API restriction)
 proxmox_default_bind_mounts:
