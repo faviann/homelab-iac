@@ -98,8 +98,10 @@
         - host_prep
         - provision
 
-  roles:
-    - role: proxmox_lxc_provision
+  tasks:
+    - name: Provision LXC container
+      ansible.builtin.include_role:
+        name: proxmox_lxc_provision
       tags:
         - provision
 
