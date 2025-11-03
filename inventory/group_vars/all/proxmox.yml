@@ -22,7 +22,7 @@ proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zs
 # ==============================================================================
 proxmox_shared_storage: "local-zfs"
 proxmox_shared_volume_path: "/rpool/data/subvol-200-disk-1"
-proxmox_shared_volume_size: "256G"
+proxmox_shared_volume_size: 256  # Size in GiB (integer required by mount_volumes)
 proxmox_shared_mount_point: "/shared"
 
 # Existing volume mount handled via Proxmox API mount_volumes parameter
