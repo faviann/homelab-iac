@@ -80,7 +80,7 @@
 
 - name: Determine effective mount_volumes configuration (existing storage volumes)
   ansible.builtin.set_fact:
-    proxmox_lxc_mount_volumes: "{{ proxmox_default_mount_volumes | default({}) | combine(proxmox_lxc_mount_volumes_overrides | default({}), recursive=True) }}"
+    proxmox_lxc_mount_volumes: "{{ (proxmox_default_mount_volumes | default([])) + (proxmox_lxc_mount_volumes_overrides | default([])) }}"
 
 - name: Determine effective bind mount configuration (host path mounts requiring config file)
   ansible.builtin.set_fact:

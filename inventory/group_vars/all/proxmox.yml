@@ -26,8 +26,13 @@ proxmox_shared_volume_size: "256G"
 proxmox_shared_mount_point: "/shared"
 
 # Existing volume mount handled via Proxmox API mount_volumes parameter
+# mount_volumes expects a list of dictionaries, not a dict
 proxmox_default_mount_volumes:
-  mp0: "{{ proxmox_shared_storage }}:{{ proxmox_shared_volume_path }},mp={{ proxmox_shared_mount_point }},size={{ proxmox_shared_volume_size }}"
+  - id: mp0
+    storage: "{{ proxmox_shared_storage }}"
+    volume: "{{ proxmox_shared_volume_path }}"
+    mountpoint: "{{ proxmox_shared_mount_point }}"
+    size: "{{ proxmox_shared_volume_size }}"
 
 # Bind mounts requiring config file editing (API restriction)
 proxmox_default_bind_mounts:
