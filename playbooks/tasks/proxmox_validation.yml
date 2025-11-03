@@ -14,14 +14,16 @@
     - proxmox
 
 - name: Query LXC inventory on default node
-  community.proxmox.proxmox_lxc_info:
-    api_host: "{{ proxmox_api_host }}"
-    api_user: "{{ proxmox_api_user }}"
-    api_token_id: "{{ proxmox_api_token_id }}"
-    api_token_secret: "{{ proxmox_api_token_secret }}"
+  ansible.builtin.uri:
+    url: "https://{{ proxmox_api_host }}/api2/json/nodes/{{ proxmox_default_node }}/lxc"
+    method: GET
+    headers:
+      Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
     validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
-    node: "{{ proxmox_default_node }}"
-  register: proxmox_lxc_inventory
+    status_code: 200
+  register: proxmox_lxc_inventory_response
+  changed_when: false
+  no_log: true
   tags:
     - validation
     - proxmox
@@ -29,8 +31,29 @@
 - name: Summarize managed containers
   ansible.builtin.debug:
     msg: >-
-      Found {{ proxmox_lxc_inventory.resources | length | default(0) }} containers on node {{ proxmox_default_node }}.
-  when: proxmox_lxc_inventory is defined
+      Found {{ proxmox_lxc_inventory_response.json.data | length | default(0) }} containers on node {{ proxmox_default_node }}.
+  when:
+    - proxmox_lxc_inventory_response is defined
+    - proxmox_lxc_inventory_response.json is defined
+    - proxmox_lxc_inventory_response.json.data is defined
+  tags:
+    - validation
+    - proxmox
+
+- name: Check that all statically defined LXCs exist in Proxmox
+  vars:
+    defined_lxcs: "{{ groups['lxcs'] | default([]) }}"
+    existing_lxcs: "{{ (proxmox_lxc_inventory_response.json.data | default([])) | map(attribute='name') | list }}"
+  ansible.builtin.assert:
+    that:
+      - item in existing_lxcs
+    success_msg: "LXC {{ item }} exists in Proxmox"
+    fail_msg: "LXC {{ item }} is missing in Proxmox"
+  loop: "{{ defined_lxcs }}"
+  when:
+    - proxmox_lxc_inventory_response.json is defined
+    - proxmox_lxc_inventory_response.json.data is defined
+    - defined_lxcs | length > 0
   tags:
     - validation
     - proxmox
