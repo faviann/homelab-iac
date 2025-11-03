@@ -75,23 +75,23 @@
 
 # ==============================================================================
 # PHASE 3: Mount Point Configuration
-# Splits mounts into API-compatible (volume) and bind mounts (config file)
+# Splits mounts into mount_volumes (existing volumes) and bind mounts (config file)
 # ==============================================================================
 
-- name: Determine effective API mount configuration (volume-based mounts)
+- name: Determine effective mount_volumes configuration (existing storage volumes)
   ansible.builtin.set_fact:
-    proxmox_lxc_api_mounts: "{{ proxmox_default_api_mounts | default({}) | combine(proxmox_lxc_api_mounts_overrides | default({}), recursive=True) }}"
+    proxmox_lxc_mount_volumes: "{{ proxmox_default_mount_volumes | default({}) | combine(proxmox_lxc_mount_volumes_overrides | default({}), recursive=True) }}"
 
 - name: Determine effective bind mount configuration (host path mounts requiring config file)
   ansible.builtin.set_fact:
     proxmox_lxc_bind_mounts: "{{ proxmox_default_bind_mounts | default({}) | combine(proxmox_lxc_bind_mounts_overrides | default({}), recursive=True) }}"
 
-- name: Attach API mounts to spec (passed to Proxmox API during creation)
+- name: Attach mount_volumes to spec (passed to Proxmox API during creation)
   ansible.builtin.set_fact:
-    proxmox_lxc_spec: "{{ proxmox_lxc_spec | combine({'mounts': proxmox_lxc_api_mounts}, recursive=True) }}"
+    proxmox_lxc_spec: "{{ proxmox_lxc_spec | combine({'mount_volumes': proxmox_lxc_mount_volumes}, recursive=True) }}"
   when:
-    - proxmox_lxc_api_mounts is defined
-    - proxmox_lxc_api_mounts | length > 0
+    - proxmox_lxc_mount_volumes is defined
+    - proxmox_lxc_mount_volumes | length > 0
 
 # ==============================================================================
 # PHASE 4: ID Mapping Configuration

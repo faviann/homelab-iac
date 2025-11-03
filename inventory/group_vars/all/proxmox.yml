@@ -1,26 +1,33 @@
 ---
+# ==============================================================================
+# Proxmox API Connection Settings
+# ==============================================================================
 proxmox_api_host: "proxmox.internal.faviann.com"
 proxmox_api_port: 8006
 proxmox_api_user: "{{ vault_proxmox_api_user }}"
 proxmox_api_token_id: "{{ vault_proxmox_api_token_id }}"
 proxmox_api_token_secret: "{{ vault_proxmox_api_token_secret }}"
-proxmox_default_node: "proxmox"
-proxmox_default_pool: "ansible_pool"
-# NOTE: Changed from 'local:' to 'local-zfs:' to avoid permission issues
-# Ensure the template exists in local-zfs storage or token has permissions on 'local' storage
-proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst"
 proxmox_verify_ssl: false
 
-# Shared storage and host prep defaults used when provisioning new LXCs.
-proxmox_master_lxc_vmid: 200
-proxmox_master_lxc_storage: local-zfs
-proxmox_master_shared_size: "256G"
-proxmox_master_shared_mountpoint: "/shared"
+# ==============================================================================
+# Default LXC Provisioning Settings
+# ==============================================================================
+proxmox_default_node: "proxmox"
+proxmox_default_pool: "ansible_pool"
+proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst"
 
-# Volume mount handled via Proxmox API
-proxmox_default_api_mounts:
-  mp0: >-
-    {{ proxmox_compose_host_base }},mp={{proxmox_master_shared_mountpoint }}
+# ==============================================================================
+# Shared Storage Configuration
+# Used for mounting a shared volume across multiple LXC containers
+# ==============================================================================
+proxmox_shared_storage: "local-zfs"
+proxmox_shared_volume_path: "/rpool/data/subvol-200-disk-1"
+proxmox_shared_volume_size: "256G"
+proxmox_shared_mount_point: "/shared"
+
+# Existing volume mount handled via Proxmox API mount_volumes parameter
+proxmox_default_mount_volumes:
+  mp0: "{{ proxmox_shared_storage }}:{{ proxmox_shared_volume_path }},mp={{ proxmox_shared_mount_point }},size={{ proxmox_shared_volume_size }}"
 
 # Bind mounts requiring config file editing (API restriction)
 proxmox_default_bind_mounts:
@@ -28,6 +35,9 @@ proxmox_default_bind_mounts:
   mp2: "/ephemeral,mp=/ephemeral"
   mp3: "/tank,mp=/data"
 
+# ==============================================================================
+# UID/GID Mapping for Unprivileged Containers
+# ==============================================================================
 proxmox_default_idmap:
   - "u 0 100000 1000"
   - "g 0 100000 1000"
@@ -36,6 +46,9 @@ proxmox_default_idmap:
   - "u 1001 101001 64535"
   - "g 1001 101001 64535"
 
+# ==============================================================================
+# Global LXC Container Defaults
+# ==============================================================================
 proxmox_lxc_global_defaults:
   state: present
   update: false
@@ -48,11 +61,9 @@ proxmox_lxc_global_defaults:
   tags:
     - ansible
 
+# ==============================================================================
+# Host Configuration Settings
+# ==============================================================================
 proxmox_lxc_host_prep_enabled: true
 proxmox_host_delegate: "{{ proxmox_api_host }}"
 proxmox_host_delegate_user: root
-proxmox_compose_template_source: "{{ playbook_dir | default('.') }}/files/lxc-compose"
-proxmox_compose_host_base: "/rpool/data/subvol-{{ proxmox_master_lxc_vmid }}-disk-1"
-proxmox_compose_owner: 1001
-proxmox_compose_group: 1001
-proxmox_compose_dir_mode: "0750"
