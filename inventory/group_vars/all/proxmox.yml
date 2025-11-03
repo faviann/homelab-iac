@@ -22,6 +22,7 @@ proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zs
 # ==============================================================================
 proxmox_shared_storage: "local-zfs"
 proxmox_shared_volume_name: "subvol-200-disk-1"  # Volume name in storage (not filesystem path)
+proxmox_shared_volume_size: 256  # Size in GiB (required when using storage parameter)
 proxmox_shared_mount_point: "/shared"
 
 # Existing volume mount handled via Proxmox API mount_volumes parameter
@@ -31,6 +32,7 @@ proxmox_default_mount_volumes:
     storage: "{{ proxmox_shared_storage }}"
     volume: "{{ proxmox_shared_volume_name }}"
     mountpoint: "{{ proxmox_shared_mount_point }}"
+    size: "{{ proxmox_shared_volume_size }}"
 
 # Bind mounts requiring config file editing (API restriction)
 proxmox_default_bind_mounts:
