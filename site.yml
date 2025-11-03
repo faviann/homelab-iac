@@ -91,6 +91,9 @@
           tags:
             - host_prep
             - provision
+          delegate_to: localhost
+          delegate_facts: true
+          connection: local
       vars:
         proxmox_lxc_host_prep_phase: pre
       when: proxmox_lxc_host_prep_enabled | default(true)
