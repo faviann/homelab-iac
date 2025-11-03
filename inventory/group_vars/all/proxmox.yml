@@ -20,7 +20,7 @@ proxmox_master_shared_mountpoint: "/shared"
 proxmox_default_mounts:
   mp0: >-
     {{ proxmox_master_lxc_storage }}:subvol-{{ proxmox_master_lxc_vmid }}-disk-1,mp={{
-    proxmox_master_shared_mountpoint }},size={{ proxmox_master_shared_size }}
+    proxmox_master_shared_mountpoint }}
   mp1: "/conf,mp=/conf,ro=1"
   mp2: "/ephemeral,mp=/ephemeral"
   mp3: "/tank,mp=/data"
