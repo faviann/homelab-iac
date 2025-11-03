@@ -6,7 +6,9 @@ proxmox_api_token_id: "{{ vault_proxmox_api_token_id }}"
 proxmox_api_token_secret: "{{ vault_proxmox_api_token_secret }}"
 proxmox_default_node: "proxmox"
 proxmox_default_pool: "ansible"
-proxmox_default_ostemplate: "local:/var/lib/vz/template/cache/debian-13-standard_13.1-2_amd64.tar.zst"
+# NOTE: Changed from 'local:' to 'local-zfs:' to avoid permission issues
+# Ensure the template exists in local-zfs storage or token has permissions on 'local' storage
+proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst"
 proxmox_verify_ssl: false
 
 # Shared storage and host prep defaults used when provisioning new LXCs.
