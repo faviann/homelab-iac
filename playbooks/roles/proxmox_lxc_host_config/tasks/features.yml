@@ -5,7 +5,7 @@
 # rather than splitting between API and SSH
 
 - name: Get current container features configuration
-  ansible.builtin.command:
+  ansible.builtin.shell:
     cmd: "pct config {{ proxmox_lxc_spec.vmid }} | grep -E '^features:' || echo 'features: '"
   register: _current_features
   changed_when: false
