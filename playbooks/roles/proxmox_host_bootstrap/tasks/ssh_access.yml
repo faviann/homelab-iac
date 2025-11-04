@@ -133,18 +133,6 @@
         ansible_password: "{{ proxmox_root_password.user_input }}"
         ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
 
-    - name: Display key comparison
-      ansible.builtin.debug:
-        msg: |
-          ========================================
-          KEY FINGERPRINT COMPARISON
-          ========================================
-          Local public key file:  {{ pubkey_file_fingerprint.stdout }}
-          Local private key:      {{ private_key_fingerprint.stdout }}
-          Key in authorized_keys: {{ remote_key_fingerprint.stdout }}
-          
-          ❌ KEYS {{ 'MATCH' if pubkey_file_fingerprint.stdout == private_key_fingerprint.stdout and pubkey_file_fingerprint.stdout.split()[1] in remote_key_fingerprint.stdout else 'DO NOT MATCH!' }}
-
     - name: Check SSH directory and file permissions on Proxmox host
       ansible.builtin.stat:
         path: "{{ item }}"
@@ -220,6 +208,19 @@
           - local_key_fingerprint.stdout == private_key_fingerprint.stdout
         fail_msg: "Public and private keys do not match! This is a critical error."
         success_msg: "Public and private keys match correctly."
+
+    - name: Display comprehensive key comparison
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          KEY FINGERPRINT COMPARISON
+          ========================================
+          Local public key file:  {{ pubkey_file_fingerprint.stdout }}
+          Local private key:      {{ private_key_fingerprint.stdout }}
+          Key in authorized_keys: {{ remote_key_fingerprint.stdout | default('ERROR: Could not read') }}
+          
+          Local keys match: {{ 'YES ✓' if pubkey_file_fingerprint.stdout == private_key_fingerprint.stdout else 'NO ✗' }}
+          Remote key matches: {{ 'YES ✓' if pubkey_file_fingerprint.stdout.split()[1] in (remote_key_fingerprint.stdout | default('')) else 'NO ✗' }}
 
     - name: Test SSH with verbose output to diagnose the issue
       ansible.builtin.command:
