@@ -26,7 +26,8 @@
 - name: Test if SSH key authentication already works
   ansible.builtin.command:
     cmd: >-
-      ssh -o BatchMode=yes
+      ssh -i {{ proxmox_ssh_key_private }}
+          -o BatchMode=yes
           -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
           -o StrictHostKeyChecking=accept-new
           {{ proxmox_ssh_user }}@{{ proxmox_host }}
@@ -77,7 +78,8 @@
     - name: Verify SSH key authentication now works
       ansible.builtin.command:
         cmd: >-
-          ssh -o BatchMode=yes
+          ssh -i {{ proxmox_ssh_key_private }}
+              -o BatchMode=yes
               -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
               {{ proxmox_ssh_user }}@{{ proxmox_host }}
               'true'
