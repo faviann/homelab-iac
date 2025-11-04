@@ -188,22 +188,6 @@
       ansible.builtin.debug:
         var: ssh_verbose_result
 
-    - name: Check Proxmox SSH server configuration
-      ansible.builtin.command:
-        cmd: grep -E "^(PubkeyAuthentication|AuthorizedKeysFile)" /etc/ssh/sshd_config
-      delegate_to: "{{ proxmox_host }}"
-      vars:
-        ansible_user: "{{ proxmox_ssh_user }}"
-        ansible_password: "{{ proxmox_root_password.user_input }}"
-        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
-      register: sshd_config_check
-      changed_when: false
-      failed_when: false
-
-    - name: Display SSH server config
-      ansible.builtin.debug:
-        var: sshd_config_check.stdout_lines
-
     - name: Verify SSH key authentication now works
       ansible.builtin.command:
         cmd: >-

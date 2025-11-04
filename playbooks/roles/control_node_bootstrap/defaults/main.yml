@@ -11,6 +11,6 @@ control_node_pip_virtualenv_python: null
 control_node_pip_virtualenv_site_packages: false
 control_node_collection_force: false
 control_node_collection_install_options: ""
-control_node_ssh_key_type: rsa
-control_node_ssh_key_size: 4096
+control_node_ssh_key_type: ed25519
+control_node_ssh_key_size: null  # ed25519 has fixed size, no size parameter needed
 control_node_ssh_key_comment: ansible-control

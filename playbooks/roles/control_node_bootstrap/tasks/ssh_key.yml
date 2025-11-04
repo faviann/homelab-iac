@@ -4,11 +4,41 @@
     path: "{{ control_node_ssh_private_key_path }}"
   register: ssh_key_stat
 
+- name: Check if old RSA key exists (to warn about migration)
+  ansible.builtin.stat:
+    path: "{{ control_node_ssh_private_key_path }}"
+  register: existing_key_stat
+  when: ssh_key_stat.stat.exists
+
+- name: Detect key type of existing key
+  ansible.builtin.command:
+    cmd: ssh-keygen -lf {{ control_node_ssh_private_key_path }}
+  register: existing_key_type
+  changed_when: false
+  failed_when: false
+  when: ssh_key_stat.stat.exists
+
+- name: Warn if RSA key exists and needs manual migration
+  ansible.builtin.debug:
+    msg: |
+      ⚠️  WARNING: Existing RSA key detected at {{ control_node_ssh_private_key_path }}
+      
+      For better security, consider regenerating with ed25519:
+      1. Remove the old key: rm {{ control_node_ssh_private_key_path }}*
+      2. Re-run this playbook to generate a new ed25519 key
+      3. Re-run proxmox_host_bootstrap to add the new key to Proxmox
+      
+      Current key: {{ existing_key_type.stdout | default('unknown') }}
+  when: 
+    - ssh_key_stat.stat.exists
+    - existing_key_type.stdout is defined
+    - "'RSA' in existing_key_type.stdout"
+
 - name: Generate control node SSH key pair
   community.crypto.openssh_keypair:
     path: "{{ control_node_ssh_private_key_path }}"
-    type: "{{ control_node_ssh_key_type | default('rsa') }}"
-    size: "{{ control_node_ssh_key_size | default(4096) }}"
+    type: "{{ control_node_ssh_key_type | default('ed25519') }}"
+    size: "{{ control_node_ssh_key_size | default(omit) }}"
     comment: "{{ control_node_ssh_key_comment | default('ansible-control') }}"
     mode: "0600"
     regenerate: never
