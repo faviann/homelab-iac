@@ -8,8 +8,8 @@ proxmox_ssh_user: root
 
 # SSH key configuration - references control_node_bootstrap variables for DRY
 # These paths should match what control_node_bootstrap generates
-proxmox_ssh_key_private: "{{ control_node_ssh_private_key_path | default(ansible_env.HOME + '/.ssh/proxmox_lxc') }}"
-proxmox_ssh_key_public: "{{ control_node_ssh_public_key_path | default(ansible_env.HOME + '/.ssh/proxmox_lxc.pub') }}"
+proxmox_ssh_key_private: "{{ control_node_ssh_private_key_path | default(lookup('env', 'HOME') + '/.ssh/proxmox_lxc') }}"
+proxmox_ssh_key_public: "{{ control_node_ssh_public_key_path | default(lookup('env', 'HOME') + '/.ssh/proxmox_lxc.pub') }}"
 
 # Connection timeouts
 proxmox_ssh_connect_timeout: 5
