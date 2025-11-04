@@ -70,9 +70,18 @@
       register: ssh_pubkey_content
       delegate_to: localhost
 
+    - name: Get ACTUAL fingerprint of the public key file being added
+      ansible.builtin.command:
+        cmd: ssh-keygen -lf {{ proxmox_ssh_key_public }}
+      register: pubkey_file_fingerprint
+      changed_when: false
+      delegate_to: localhost
+
     - name: Display public key being added (for debugging)
       ansible.builtin.debug:
-        msg: "Adding public key: {{ (ssh_pubkey_content.content | b64decode).split()[0:2] | join(' ') }}"
+        msg: |
+          Public key: {{ (ssh_pubkey_content.content | b64decode).split()[0:2] | join(' ') }}
+          Fingerprint: {{ pubkey_file_fingerprint.stdout }}
 
     - name: Add SSH public key to Proxmox authorized_keys
       ansible.builtin.authorized_key:
@@ -110,6 +119,31 @@
     - name: Display authorized_keys content
       ansible.builtin.debug:
         var: authorized_keys_content.stdout_lines
+
+    - name: Get fingerprint of key in authorized_keys on Proxmox
+      ansible.builtin.shell:
+        cmd: |
+          grep "ansible-control" /root/.ssh/authorized_keys | tail -1 | ssh-keygen -lf -
+      register: remote_key_fingerprint
+      changed_when: false
+      failed_when: false
+      delegate_to: "{{ proxmox_host }}"
+      vars:
+        ansible_user: "{{ proxmox_ssh_user }}"
+        ansible_password: "{{ proxmox_root_password.user_input }}"
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+
+    - name: Display key comparison
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          KEY FINGERPRINT COMPARISON
+          ========================================
+          Local public key file:  {{ pubkey_file_fingerprint.stdout }}
+          Local private key:      {{ private_key_fingerprint.stdout }}
+          Key in authorized_keys: {{ remote_key_fingerprint.stdout }}
+          
+          ❌ KEYS {{ 'MATCH' if pubkey_file_fingerprint.stdout == private_key_fingerprint.stdout and pubkey_file_fingerprint.stdout.split()[1] in remote_key_fingerprint.stdout else 'DO NOT MATCH!' }}
 
     - name: Check SSH directory and file permissions on Proxmox host
       ansible.builtin.stat:
@@ -151,6 +185,24 @@
       ansible.builtin.debug:
         var: local_key_fingerprint.stdout
 
+    - name: Display actual public key content from file
+      ansible.builtin.command:
+        cmd: cat {{ proxmox_ssh_key_public }}
+      register: actual_pubkey_content
+      changed_when: false
+      delegate_to: localhost
+
+    - name: Show what public key is actually in the file
+      ansible.builtin.debug:
+        msg: "Public key file contains: {{ actual_pubkey_content.stdout }}"
+
+    - name: Compare with what we're trying to add
+      ansible.builtin.debug:
+        msg: |
+          Key from file:     {{ actual_pubkey_content.stdout.split()[0:2] | join(' ') }}
+          Key being added:   {{ (ssh_pubkey_content.content | b64decode).split()[0:2] | join(' ') }}
+          Match: {{ actual_pubkey_content.stdout.split()[0:2] | join(' ') == (ssh_pubkey_content.content | b64decode).split()[0:2] | join(' ') }}
+
     - name: Get fingerprint of private key
       ansible.builtin.command:
         cmd: ssh-keygen -lf {{ proxmox_ssh_key_private }}
@@ -177,6 +229,7 @@
               -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
               -o StrictHostKeyChecking=accept-new
               -o IdentitiesOnly=yes
+              -o IdentityAgent=none
               {{ proxmox_ssh_user }}@{{ proxmox_host }}
               echo SSH_TEST_SUCCESS
       register: ssh_verbose_result
