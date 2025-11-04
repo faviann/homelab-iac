@@ -8,12 +8,15 @@
     cmd: which pct
   register: pct_check
   changed_when: false
+  failed_when: false
   delegate_to: "{{ proxmox_host }}"
   vars:
     ansible_user: "{{ proxmox_ssh_user }}"
 
 - name: Verify pct command works
-  when: proxmox_validate_pct | bool
+  when:
+    - proxmox_validate_pct | bool
+    - pct_check.rc == 0
   ansible.builtin.command:
     cmd: pct list
   register: pct_list
@@ -23,7 +26,10 @@
     ansible_user: "{{ proxmox_ssh_user }}"
 
 - name: Display detected containers
-  when: proxmox_validate_pct | bool
+  when:
+    - proxmox_validate_pct | bool
+    - pct_check.rc == 0
+    - pct_list is defined
   ansible.builtin.debug:
     msg: "Detected {{ pct_list.stdout_lines | length - 1 }} LXC container(s) on {{ proxmox_host }}"
 
