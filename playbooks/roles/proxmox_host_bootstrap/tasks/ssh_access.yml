@@ -63,6 +63,16 @@
       register: proxmox_root_password
       delegate_to: localhost
 
+    - name: Read SSH public key content
+      ansible.builtin.slurp:
+        src: "{{ proxmox_ssh_key_public }}"
+      register: ssh_pubkey_content
+      delegate_to: localhost
+
+    - name: Display public key being added (for debugging)
+      ansible.builtin.debug:
+        msg: "Adding public key: {{ (ssh_pubkey_content.content | b64decode).split()[0:2] | join(' ') }}"
+
     - name: Add SSH public key to Proxmox authorized_keys
       ansible.builtin.authorized_key:
         user: "{{ proxmox_ssh_user }}"
@@ -74,6 +84,50 @@
         ansible_user: "{{ proxmox_ssh_user }}"
         ansible_password: "{{ proxmox_root_password.user_input }}"
         ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+      register: authorized_key_result
+
+    - name: Display authorized_key result
+      ansible.builtin.debug:
+        var: authorized_key_result
+
+    - name: Fail if authorized_key module failed
+      ansible.builtin.fail:
+        msg: "Failed to add SSH key to Proxmox host. Check if password authentication is enabled on the Proxmox host."
+      when: authorized_key_result.failed | default(false)
+
+    - name: Manually verify key was added to authorized_keys on Proxmox host
+      ansible.builtin.command:
+        cmd: cat /root/.ssh/authorized_keys
+      delegate_to: "{{ proxmox_host }}"
+      vars:
+        ansible_user: "{{ proxmox_ssh_user }}"
+        ansible_password: "{{ proxmox_root_password.user_input }}"
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+      register: authorized_keys_content
+      changed_when: false
+
+    - name: Display authorized_keys content
+      ansible.builtin.debug:
+        var: authorized_keys_content.stdout_lines
+
+    - name: Check SSH directory and file permissions on Proxmox host
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /root/.ssh
+        - /root/.ssh/authorized_keys
+      delegate_to: "{{ proxmox_host }}"
+      vars:
+        ansible_user: "{{ proxmox_ssh_user }}"
+        ansible_password: "{{ proxmox_root_password.user_input }}"
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+      register: ssh_permissions
+
+    - name: Display SSH permissions
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: mode={{ item.stat.mode }}, owner={{ item.stat.pw_name }}"
+      loop: "{{ ssh_permissions.results }}"
+      when: item.stat.exists
 
     - name: Verify SSH key authentication now works
       ansible.builtin.command:
@@ -81,10 +135,26 @@
           ssh -i {{ proxmox_ssh_key_private }}
               -o BatchMode=yes
               -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
+              -o StrictHostKeyChecking=accept-new
               {{ proxmox_ssh_user }}@{{ proxmox_host }}
               'true'
       changed_when: false
       delegate_to: localhost
+
+    - name: If verification failed, run verbose SSH test for debugging
+      ansible.builtin.command:
+        cmd: >-
+          ssh -vvv -i {{ proxmox_ssh_key_private }}
+              -o BatchMode=yes
+              -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
+              -o StrictHostKeyChecking=accept-new
+              {{ proxmox_ssh_user }}@{{ proxmox_host }}
+              'true'
+      changed_when: false
+      delegate_to: localhost
+      register: ssh_verbose_test
+      failed_when: false
+      when: false  # Set to true if you need to debug
 
     - name: SSH key authentication configured successfully
       ansible.builtin.debug:
