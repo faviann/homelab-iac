@@ -30,8 +30,9 @@
           -o BatchMode=yes
           -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
           -o StrictHostKeyChecking=accept-new
+          -o IdentitiesOnly=yes
           {{ proxmox_ssh_user }}@{{ proxmox_host }}
-          'true'
+          true
   register: ssh_key_test
   failed_when: false
   changed_when: false
@@ -129,6 +130,80 @@
       loop: "{{ ssh_permissions.results }}"
       when: item.stat.exists
 
+    - name: Check local SSH private key permissions
+      ansible.builtin.stat:
+        path: "{{ proxmox_ssh_key_private }}"
+      register: local_private_key_stat
+      delegate_to: localhost
+
+    - name: Display local private key permissions
+      ansible.builtin.debug:
+        msg: "Local private key {{ proxmox_ssh_key_private }}: mode={{ local_private_key_stat.stat.mode }}, exists={{ local_private_key_stat.stat.exists }}"
+
+    - name: Get fingerprint of local public key
+      ansible.builtin.command:
+        cmd: ssh-keygen -lf {{ proxmox_ssh_key_public }}
+      register: local_key_fingerprint
+      changed_when: false
+      delegate_to: localhost
+
+    - name: Display local key fingerprint
+      ansible.builtin.debug:
+        var: local_key_fingerprint.stdout
+
+    - name: Get fingerprint of private key
+      ansible.builtin.command:
+        cmd: ssh-keygen -lf {{ proxmox_ssh_key_private }}
+      register: private_key_fingerprint
+      changed_when: false
+      delegate_to: localhost
+
+    - name: Display private key fingerprint
+      ansible.builtin.debug:
+        var: private_key_fingerprint.stdout
+
+    - name: Verify keys match
+      ansible.builtin.assert:
+        that:
+          - local_key_fingerprint.stdout == private_key_fingerprint.stdout
+        fail_msg: "Public and private keys do not match! This is a critical error."
+        success_msg: "Public and private keys match correctly."
+
+    - name: Test SSH with verbose output to diagnose the issue
+      ansible.builtin.command:
+        cmd: >-
+          ssh -vvv -i {{ proxmox_ssh_key_private }}
+              -o BatchMode=yes
+              -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
+              -o StrictHostKeyChecking=accept-new
+              -o IdentitiesOnly=yes
+              {{ proxmox_ssh_user }}@{{ proxmox_host }}
+              echo SSH_TEST_SUCCESS
+      register: ssh_verbose_result
+      failed_when: false
+      changed_when: false
+      delegate_to: localhost
+
+    - name: Display verbose SSH output
+      ansible.builtin.debug:
+        var: ssh_verbose_result
+
+    - name: Check Proxmox SSH server configuration
+      ansible.builtin.command:
+        cmd: grep -E "^(PubkeyAuthentication|AuthorizedKeysFile)" /etc/ssh/sshd_config
+      delegate_to: "{{ proxmox_host }}"
+      vars:
+        ansible_user: "{{ proxmox_ssh_user }}"
+        ansible_password: "{{ proxmox_root_password.user_input }}"
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+      register: sshd_config_check
+      changed_when: false
+      failed_when: false
+
+    - name: Display SSH server config
+      ansible.builtin.debug:
+        var: sshd_config_check.stdout_lines
+
     - name: Verify SSH key authentication now works
       ansible.builtin.command:
         cmd: >-
@@ -136,8 +211,9 @@
               -o BatchMode=yes
               -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
               -o StrictHostKeyChecking=accept-new
+              -o IdentitiesOnly=yes
               {{ proxmox_ssh_user }}@{{ proxmox_host }}
-              'true'
+              true
       changed_when: false
       delegate_to: localhost
 
@@ -148,8 +224,9 @@
               -o BatchMode=yes
               -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
               -o StrictHostKeyChecking=accept-new
+              -o IdentitiesOnly=yes
               {{ proxmox_ssh_user }}@{{ proxmox_host }}
-              'true'
+              true
       changed_when: false
       delegate_to: localhost
       register: ssh_verbose_test
