@@ -16,8 +16,7 @@
   ansible.builtin.set_fact:
     _current_features_list: >-
       {{
-        (_current_features.stdout | regex_replace('^features:\\s*', ''))
-        .split(',')
+        ((_current_features.stdout | regex_replace('^features:\\s*', '') | trim).split(',') if (_current_features.stdout | regex_replace('^features:\\s*', '') | trim) else [])
         | map('trim')
         | select()
         | list
@@ -28,6 +27,8 @@
     _target_features_list: >-
       {{
         (_current_features_list + (lxc_features | default([])))
+        | reject('match', '^features:.*')
+        | select()
         | unique
         | sort
         | list
