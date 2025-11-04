@@ -65,7 +65,7 @@
 
 - name: Restart container to apply feature changes
   ansible.builtin.command:
-    cmd: "pct restart {{ proxmox_lxc_spec.vmid }}"
+    cmd: "pct reboot {{ proxmox_lxc_spec.vmid }}"
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
   when:
