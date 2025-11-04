@@ -120,18 +120,18 @@
       ansible.builtin.debug:
         var: authorized_keys_content.stdout_lines
 
-    - name: Get fingerprint of key in authorized_keys on Proxmox
+    - name: Extract just the Ansible control key from authorized_keys
+      ansible.builtin.set_fact:
+        ansible_key_from_remote: "{{ authorized_keys_content.stdout_lines | select('search', 'Ansible control node') | list | last }}"
+
+    - name: Get fingerprint of key in authorized_keys
       ansible.builtin.shell:
         cmd: |
-          grep "ansible-control" /root/.ssh/authorized_keys | tail -1 | ssh-keygen -lf -
+          echo "{{ ansible_key_from_remote }}" | ssh-keygen -lf -
       register: remote_key_fingerprint
       changed_when: false
       failed_when: false
-      delegate_to: "{{ proxmox_host }}"
-      vars:
-        ansible_user: "{{ proxmox_ssh_user }}"
-        ansible_password: "{{ proxmox_root_password.user_input }}"
-        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+      delegate_to: localhost
 
     - name: Check SSH directory and file permissions on Proxmox host
       ansible.builtin.stat:
