@@ -22,8 +22,8 @@
 
 # Note: Some LXC settings cannot be applied via the Proxmox API (even with root@pam):
 # - Feature flags (like keyctl=1): Applied via pct commands in proxmox_lxc_host_config/tasks/features.yml
-# - Bind mounts (host paths starting with /): Applied via config file edits in proxmox_lxc_host_config/tasks/config_file.yml
-# Existing storage volumes are mounted via the mount_volumes parameter below.
+# - All mount points: Applied via config file edits in proxmox_lxc_host_config/tasks/config_file.yml
+#   This includes both bind mounts and shared storage volumes (to allow sharing across containers)
 
 - name: Ensure LXC container exists
   community.proxmox.proxmox:

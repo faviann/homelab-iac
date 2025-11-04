@@ -18,24 +18,16 @@ proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zs
 
 # ==============================================================================
 # Shared Storage Configuration
-# Used for mounting a shared volume across multiple LXC containers
+# The shared volume is mounted to all containers via bind mount (not mount_volumes)
+# because the volume is owned by container 200 and shared across containers
 # ==============================================================================
-proxmox_shared_storage: "local-zfs"
-proxmox_shared_volume_name: "subvol-200-disk-1"  # Volume name in storage (not filesystem path)
-proxmox_shared_volume_size: 256  # Size in GiB (required when using storage parameter)
+proxmox_shared_volume_path: "/rpool/data/subvol-200-disk-1"
 proxmox_shared_mount_point: "/shared"
 
-# Existing volume mount handled via Proxmox API mount_volumes parameter
-# mount_volumes expects a list of dictionaries, not a dict
-proxmox_default_mount_volumes:
-  - id: mp0
-    storage: "{{ proxmox_shared_storage }}"
-    volume: "{{ proxmox_shared_volume_name }}"
-    mountpoint: "{{ proxmox_shared_mount_point }}"
-    size: 256  # Must be integer, using literal instead of variable reference
-
 # Bind mounts requiring config file editing (API restriction)
+# mp0 is the shared volume from container 200
 proxmox_default_bind_mounts:
+  mp0: "{{ proxmox_shared_volume_path }},mp={{ proxmox_shared_mount_point }}"
   mp1: "/conf,mp=/conf,ro=1"
   mp2: "/ephemeral,mp=/ephemeral"
   mp3: "/tank,mp=/data"
