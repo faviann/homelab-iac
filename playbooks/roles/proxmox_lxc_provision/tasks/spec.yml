@@ -57,7 +57,7 @@
 
 - name: Include disk defaults
   ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'disk': 'local-lvm:' + (lxc_disk | string)}) }}"
+    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'disk': (proxmox_default_storage | default('local-zfs')) + ':' + (lxc_disk | string)}) }}"
 
 - name: Include network defaults
   ansible.builtin.set_fact:
