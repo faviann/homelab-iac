@@ -62,6 +62,12 @@
     dump: '0'
     passno: '0'
 
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+    system: true
+
 - name: Create Docker user
   ansible.builtin.user:
     name: "{{ lxc_internal_docker_user }}"

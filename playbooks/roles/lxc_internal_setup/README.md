@@ -11,6 +11,7 @@ This role is part of the Proxmox LXC lifecycle automation and runs after:
 It performs internal configuration tasks that cannot be done from the Proxmox host, such as:
 - System package updates
 - Journald log rotation configuration
+- Docker installation (for containers in `cap_docker` group)
 - Docker environment setup (for containers in `cap_docker` group)
 - Container reboot
 
@@ -20,6 +21,9 @@ It performs internal configuration tasks that cannot be done from the Proxmox ho
 - **Target OS**: Debian 12+ (containers)
 - **Collections**: 
   - `ansible.posix` (for mount module)
+  - `community.docker` (installed via collections/requirements.yml)
+- **Roles**:
+  - `geerlingguy.docker` (installed via collections/requirements.yml)
 - **SSH Access**: Control node SSH key must be injected into containers (done by `proxmox_lxc_provision`)
 - **Network**: Containers must be resolvable via DNS (`{hostname}.faviann.vms`)
 
@@ -51,6 +55,18 @@ lxc_internal_journald_max_file_size: "20M"
 ### Docker Configuration (cap_docker group only)
 
 ```yaml
+# Docker installation (uses geerlingguy.docker role)
+lxc_internal_docker_install_compose_plugin: true
+lxc_internal_docker_compose_package: docker-compose-plugin
+lxc_internal_docker_compose_package_state: present
+
+# Docker daemon options
+lxc_internal_docker_daemon_options:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+
 # Shared storage path inside container (source for bind mount)
 lxc_internal_shared_mount_source: "/shared/{{ inventory_hostname }}"
 
@@ -92,7 +108,7 @@ This role expects:
 - Containers to be provisioned and started
 - SSH key injected during provisioning
 - Host-side configuration completed (bind mounts, idmaps, features)
-- For `cap_docker` containers: Docker already installed (handled by separate role/provisioning)
+- For `cap_docker` containers: Docker will be installed automatically via geerlingguy.docker role
 
 ## Example Playbook
 
@@ -130,8 +146,14 @@ This role expects:
 # Run only system updates
 ansible-playbook site.yml --tags system_update
 
-# Run only Docker setup
+# Run only Docker installation
+ansible-playbook site.yml --tags docker_install
+
+# Run only Docker setup (without reinstalling Docker)
 ansible-playbook site.yml --tags docker_setup
+
+# Run all Docker tasks (install + setup)
+ansible-playbook site.yml --tags docker
 
 # Skip reboot
 ansible-playbook site.yml --skip-tags reboot
@@ -203,16 +225,24 @@ services:
 - Configures log size limits
 - Restarts systemd-journald service
 
-### 3. Docker Setup (`tasks/docker_setup.yml`) - cap_docker only
+### 3. Docker Installation (`tasks/docker_install.yml`) - cap_docker only
+- Installs Docker using geerlingguy.docker role
+- Installs Docker Compose plugin
+- Configures Docker daemon options (logging)
+- Starts and enables Docker service
+- Verifies Docker and Docker Compose installation
+
+### 4. Docker Setup (`tasks/docker_setup.yml`) - cap_docker only
 - Copies template files to shared directory
 - Templates Jinja2 files
 - Creates bind mount for Docker config
 - Adds fstab entry for persistence
+- Ensures docker group exists
 - Creates dockeruser with proper groups
 - Configures passwordless sudo for dockeruser
 - Starts Dockge (if compose file exists)
 
-### 4. Reboot (`tasks/reboot.yml`)
+### 5. Reboot (`tasks/reboot.yml`)
 - Reboots the container
 - Waits for container to come back online
 - Gathers facts after reboot
@@ -262,8 +292,9 @@ The role is fully idempotent and safe to run multiple times:
 - `updates` - Alias for system_update
 - `journald` - Journald configuration
 - `logging` - Alias for journald
-- `docker` - All Docker-related tasks
-- `docker_setup` - Alias for docker
+- `docker` - All Docker-related tasks (installation + setup)
+- `docker_install` - Docker installation only
+- `docker_setup` - Docker environment setup only
 - `reboot` - Container reboot
 
 ## Handlers
@@ -298,7 +329,11 @@ The role includes error handling for:
 
 4. **Internal Setup** (`site.yml` - configure phase) ← **This Role**
    - Runs inside containers via SSH
-   - Configures OS and applications
+   - Updates system packages
+   - Configures journald
+   - Installs Docker (cap_docker only)
+   - Configures Docker environment (cap_docker only)
+   - Reboots containers
 
 ### Group Membership
 
@@ -332,9 +367,23 @@ Variables are inherited from:
 
 **Solutions**:
 - Verify Dockge compose file exists in `templates/files/dockge/`
-- Check Docker is installed in container
-- Verify dockeruser exists and is in docker group
+- Check Docker is installed: `docker --version`
+- Verify Docker service is running: `systemctl status docker`
+- Verify dockeruser exists and is in docker group: `id dockeruser`
 - Check compose file syntax: `docker compose config`
+- Check Docker daemon logs: `journalctl -u docker`
+
+### Docker installation fails
+
+**Problem**: Docker installation errors
+
+**Solutions**:
+- Verify container has internet access: `ping 8.8.8.8`
+- Check apt repositories are accessible
+- Verify LXC features are enabled: `pct config <vmid> | grep features`
+  - Should include `nesting=1` and `keyctl=1`
+- Check role output for specific error messages
+- Try manual Docker installation to identify issue
 
 ### Bind mount fails
 

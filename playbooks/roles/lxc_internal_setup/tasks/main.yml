@@ -29,6 +29,13 @@
     - journald
     - logging
 
+- name: Install Docker
+  ansible.builtin.import_tasks: docker_install.yml
+  when: "'cap_docker' in group_names"
+  tags:
+    - docker
+    - docker_install
+
 - name: Setup Docker environment
   ansible.builtin.import_tasks: docker_setup.yml
   when: "'cap_docker' in group_names"

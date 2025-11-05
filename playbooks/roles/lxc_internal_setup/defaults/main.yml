@@ -26,6 +26,18 @@ lxc_internal_journald_max_file_size: "20M"
 # ==============================================================================
 # Docker Configuration (for cap_docker group)
 # ==============================================================================
+# Docker installation (uses geerlingguy.docker role)
+lxc_internal_docker_install_compose_plugin: true
+lxc_internal_docker_compose_package: docker-compose-plugin
+lxc_internal_docker_compose_package_state: present
+
+# Docker daemon options
+lxc_internal_docker_daemon_options:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+
 # Shared storage path inside container (source for bind mount)
 lxc_internal_shared_mount_source: "/shared/{{ inventory_hostname }}"
 
