@@ -2,55 +2,44 @@
 
 Run these playbooks from an Ubuntu LTS LXC (unprivileged) or your dev machine.
 
-## 1) Install Ansible 2.19 on Ubuntu LTS
+## 1) Bootstrap the controller
 ```bash
-sudo apt update
-sudo apt install -y software-properties-common
-sudo add-apt-repository --yes --update ppa:ansible/ansible
-sudo apt install -y ansible
-ansible --version   # ansible-core 2.19.x
+ansible-playbook bootstrap.yml
 ```
+This play creates the controller virtual environment under `~/.ansible/venv`, installs Python dependencies from `requirements/pip.txt`, fetches collections from `collections/requirements.yml`, and generates the SSH key material used by other plays. Re-run it whenever you change dependency files or upgrade Ansible components.
 
-## 2) Install Python deps and collections
+## 2) Configure Proxmox API credentials with Ansible Vault
 ```bash
-python3 -m pip install --user -r requirements/pip.txt
-ansible-galaxy collection install -r collections/requirements.yml
+cp inventory/group_vars/all/vault.example.yml inventory/group_vars/all/vault.yml
+$EDITOR inventory/group_vars/all/vault.yml   # put your token secret
+ansible-vault encrypt inventory/group_vars/all/vault.yml
 ```
-
-## 3) Configure Proxmox API credentials with Ansible Vault
-```bash
-cp group_vars/all/vault.example.yml group_vars/all/vault.yml
-$EDITOR group_vars/all/vault.yml   # put your token secret
-ansible-vault encrypt group_vars/all/vault.yml
-```
-Optional local vault password file (do NOT commit):
+Optional local vault password file (do **not** commit):
 ```bash
 echo "your-strong-passphrase" > ~/.ansible/vault-pass.txt
 chmod 600 ~/.ansible/vault-pass.txt
 ```
 
-Set non-secret vars in `group_vars/all/proxmox.yml`:
-- `proxmox_api_host` (default set to proxmox.vms)
+Set non-secret vars in `inventory/group_vars/all/proxmox.yml`:
+- `proxmox_api_host`
 - `proxmox_api_token_id`
-- `proxmox_verify_ssl` (false for now)
-- `proxmox_default_node` (default proxmox.vms)
+- `proxmox_verify_ssl` (false by default for homelab self-signed certs)
+- `proxmox_default_node`
 
-## 4) Inventory
-Edit `inventory/hosts.yml` as needed. The `proxmox_api` group is for API tasks (runs locally on the controller). Add your containers to `lxcs` for post-provision SSH config if you want to manage them after creation.
+## 3) Inventory
+Edit `inventory/hosts.yml` as needed. The `proxmox_api` group is for API tasks (runs locally on the controller). Add your containers to `lxcs` for post-provision SSH configuration if you want to manage them after creation.
 
-## 5) Test connectivity and LXC discovery
+## 4) Validate connectivity
 ```bash
-ansible-playbook -i inventory/hosts.yml playbooks/proxmox_api_check.yml \
-  --vault-password-file ~/.ansible/vault-pass.txt
+ansible-playbook -i inventory/hosts.yml site.yml --tags validation
 ```
-You should see an LXC list from node `proxmox.vms`.
+The `validation` tag performs API checks using the same collections and virtual environment installed by bootstrap. The playbook includes a preflight assertion that fails fast if bootstrap prerequisites are missing.
 
-## 6) Provision an example LXC
-Adjust variables in `playbooks/provision_lxc_example.yml` (node name, template, storage, VMID, network), then:
+## 5) Run provisioning or full orchestration
 ```bash
-ansible-playbook -i inventory/hosts.yml playbooks/provision_lxc_example.yml \
-  --vault-password-file ~/.ansible/vault-pass.txt
+ansible-playbook -i inventory/hosts.yml site.yml
 ```
+Apply tags such as `--tags provision`, `--tags host_prep`, or `--tags configure` to target specific phases. Example, fully provision and configure LXCs in one run by omitting `--tags`.
 
 ## TLS verification (TODO/future hardening)
 - Current default: `proxmox_verify_ssl: false` for self-signed certs.

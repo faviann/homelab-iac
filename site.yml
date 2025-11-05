@@ -1,0 +1,132 @@
+---
+# Top-level playbook orchestrating Proxmox LXC lifecycle operations.
+# Run everything:           ansible-playbook -i inventory/hosts.yml site.yml
+# Run specific phases only: ansible-playbook ... --tags validation|provision|host_prep|configure
+
+- name: Verify control node has been bootstrapped
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags:
+    - always
+  vars:
+    control_node_home_dir: "{{ lookup('env', 'HOME') }}"
+    control_node_ansible_directory: "{{ [control_node_home_dir, '.ansible'] | path_join }}"
+    control_node_pip_virtualenv: "{{ [control_node_ansible_directory, 'venv'] | path_join }}"
+    control_node_collection_install_path: "{{ [playbook_dir, 'collections'] | path_join }}"
+    control_node_required_collections:
+      - community.proxmox
+  tasks:
+    - name: Check for control node virtual environment
+      ansible.builtin.stat:
+        path: "{{ control_node_pip_virtualenv }}"
+      register: control_node_virtualenv_stat
+      run_once: true
+
+    - name: Check for required Ansible collections
+      ansible.builtin.stat:
+        path: "{{ [control_node_collection_install_path, 'ansible_collections', item | replace('.', '/')] | path_join }}"
+      loop: "{{ control_node_required_collections }}"
+      register: control_node_collection_stats
+      run_once: true
+
+    - name: Detect missing bootstrap artifacts
+      ansible.builtin.set_fact:
+        control_node_missing_collections: "{{ control_node_collection_stats.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
+      run_once: true
+
+    - name: Assert bootstrap prerequisites are present
+      ansible.builtin.assert:
+        that:
+          - control_node_virtualenv_stat.stat.exists
+          - control_node_missing_collections | length == 0
+        fail_msg: >-
+          Bootstrap prerequisites are missing. Run `ansible-playbook bootstrap.yml` to install the
+          control node virtualenv and dependencies. Missing collections: {{ control_node_missing_collections }}.
+        success_msg: Bootstrap prerequisites detected.
+      run_once: true
+
+- name: Bootstrap Proxmox host SSH access
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags:
+    - always
+    - bootstrap
+  roles:
+    - proxmox_host_bootstrap
+
+- name: Validate Proxmox API connectivity
+  hosts: proxmox_api
+  gather_facts: false
+  collections:
+    - community.proxmox
+  tags:
+    - validation
+    - proxmox
+  tasks:
+    - name: Include Proxmox validation tasks
+      ansible.builtin.include_tasks:
+        file: "{{ [playbook_dir, 'playbooks', 'tasks', 'proxmox_validation.yml'] | path_join }}"
+      tags:
+        - validation
+        - proxmox
+
+- name: Ensure LXC containers exist and host-side prep is applied
+  hosts: lxcs
+  gather_facts: false
+  collections:
+    - community.proxmox
+  tags:
+    - provision
+    - host_config
+    - lxc
+  tasks:
+    - name: Build effective LXC specification
+      ansible.builtin.include_role:
+        name: proxmox_lxc_provision
+        tasks_from: spec
+        apply:
+          tags:
+            - provision
+            - spec
+      tags:
+        - provision
+        - spec
+
+    - name: Provision LXC container
+      ansible.builtin.include_role:
+        name: proxmox_lxc_provision
+      tags:
+        - provision
+
+    - name: Apply host-side container configuration
+      ansible.builtin.include_role:
+        name: proxmox_lxc_host_config
+        apply:
+          tags:
+            - host_config
+            - provision
+          delegate_to: "{{ proxmox_api_host }}"
+          become: true
+      when: proxmox_lxc_host_config_enabled | default(true)
+      tags:
+        - host_config
+        - provision
+
+- name: Configure services inside provisioned containers
+  hosts: service_agents
+  gather_facts: false
+  tags:
+    - configure
+    - in_guest
+  vars:
+    lxc_guest_configuration_enabled: "{{ hostvars[inventory_hostname].lxc_guest_configuration_enabled | default(false) | bool }}"
+  tasks:
+    - name: Placeholder for guest configuration roles
+      ansible.builtin.debug:
+        msg: "Configure in-container services for {{ inventory_hostname }}. Attach roles here."
+      when: lxc_guest_configuration_enabled | bool
+      tags:
+        - configure
+        - in_guest

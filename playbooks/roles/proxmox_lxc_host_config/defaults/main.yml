@@ -1,0 +1,6 @@
+---
+# Default variables for proxmox_lxc_host_config role
+# Applies host-side LXC configuration that cannot be done via API
+
+# Delegation target for host-side operations
+proxmox_host_config_delegate: "{{ proxmox_host_delegate | default(proxmox_api_host) }}"

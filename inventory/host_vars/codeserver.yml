@@ -1,0 +1,17 @@
+---
+# Host-specific configuration for codeserver
+# Inherits from: tier_small, cap_docker, cap_service_agents
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 301
+  hostname: codeserver
+  description: "VSCode server for remote development managed via Ansible"
+  tags:
+    - ansible
+    - development
+    - codeserver
+
+# Application-specific variables
+codeserver_version: latest
+codeserver_extensions_path: /conf/vscode/extensions

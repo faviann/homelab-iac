@@ -21,82 +21,57 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 ## Prerequisites
 
 - **Controller**: Debian LTS (recommended as an unprivileged LXC or your workstation)
-- **Python**: 3.10+ with `python3-venv` and `pip` available
-- **Ansible**: ansible-core 2.19 / Ansible 12 (installed inside a virtual environment)
-- **Python packages**: Installed from `requirements/pip.txt`
-- **Ansible collections**: Installed from `collections/requirements.yml`
+- **Python**: 3.10+ with `python3-venv` and `pip` available (used by the bootstrap playbook)
+- **Ansible dependencies**: Installed via `ansible-playbook bootstrap.yml`, which creates the controller virtual environment and pulls in `requirements/pip.txt` and `collections/requirements.yml`
 - **Network**: Controller must reach the Proxmox API (HTTPS port 8006)
 - **Proxmox**: API token with LXC management permissions
+
+IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
+
+**Note**: This repository now automatically handles restricted feature flags (like `keyctl=1`) by applying them via `pct` commands directly on the Proxmox host after API-based provisioning. The automation will prompt for the Proxmox root password on first run to configure SSH access, then all subsequent operations are passwordless.
 
 ### Proxmox Environment Defaults
 
 These defaults are configured for the target homelab:
 
-- **API host**: `proxmox.lan`
+- **API host**: `proxmox.internal.faviann.com`
 - **Node name**: `proxmox`
 - **Network bridge**: `vmbr1`
 - **Default template**: `local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst`
 
 Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variables, or playbook vars as needed for your environment.
 
-## Quick Start
+## First-Time Setup
 
-### 1. Prepare a Python virtual environment
+1. **Bootstrap the controller dependencies.**
 
-```bash
-sudo apt update
-sudo apt install -y python3-venv python3-pip
-python3 -m venv ~/.ansible-venv
-source ~/.ansible-venv/bin/activate
-python -m pip install --upgrade pip
-```
+   ```bash
+   ansible-playbook bootstrap.yml
+   ```
 
-> Reactivate the environment for future sessions with: `source ~/.ansible-venv/bin/activate`
+   This play creates the controller virtual environment under `~/.ansible/venv`, installs Python packages from `requirements/pip.txt`, downloads collections from `collections/requirements.yml`, and prepares SSH material. Re-run this play whenever those dependency files change or you upgrade Ansible components.
 
-### 2. Install Python dependencies (inside the venv)
+2. **Configure secrets and inventory.**
 
-```bash
-python -m pip install -r requirements/pip.txt
-```
+   Create and encrypt `inventory/group_vars/all/vault.yml` with your Proxmox API credentials (see [Configuration](#configuration) section below).
 
-### 3. Install Ansible collections (inside the venv)
+3. **Run the orchestration with `site.yml`.**
 
-```bash
-ansible-galaxy collection install -r collections/requirements.yml
-```
+   ```bash
+   ansible-playbook -i inventory/hosts.yml site.yml
+   ```
 
-### 4. Configure API credentials
+   On first run, the playbook will:
+   - Verify bootstrap prerequisites
+   - **Automatically detect if SSH access to the Proxmox host is configured**
+   - **Prompt for the Proxmox root password only if needed** to add your SSH key
+   - Validate API connectivity
+   - Provision LXC containers
+   - Apply host-side configuration (including restricted feature flags via `pct` commands)
 
-Create your vault file and vault password file. The password file should **not** be committed to version control.
+   Subsequent runs will use passwordless SSH and skip the interactive prompt.
 
-```bash
-# Create and edit the vault file from the example
-cp inventory/group_vars/all/vault.example.yml inventory/group_vars/all/vault.yml
-$EDITOR inventory/group_vars/all/vault.yml  # Add your Proxmox API token secret
-ansible-vault encrypt inventory/group_vars/all/vault.yml
-
-# Create the vault password file
-echo "your-strong-passphrase" > ~/.ansible/vault-pass.txt
-chmod 600 ~/.ansible/vault-pass.txt
-```
-
-### 5. Run connectivity checks
-
-Validate SSH reachability to managed hosts and Proxmox API access:
-
-```bash
-ansible-playbook playbooks/lab-connectivity.yml
-```
-
-The output confirms which hosts respond to `ansible.builtin.ping` and the Proxmox API version detected.
-
-### 6. Provision example LXC
-
-Review and customize variables in `playbooks/provision_lxc_example.yml`, then provision:
-
-```bash
-ansible-playbook playbooks/provision_lxc_example.yml
-```
+   Use `--tags validation` to test connectivity without provisioning, or `--tags provision` to only provision containers.
 
 ## Repository Structure
 
@@ -117,7 +92,7 @@ ansible-playbook playbooks/provision_lxc_example.yml
 ├── playbooks/
 │   ├── lab-connectivity.yml      # SSH + Proxmox API connectivity checks
 │   ├── proxmox_api_check.yml     # API connectivity test
-│   └── provision_lxc_example.yml # Example LXC provisioning
+│   └── lxc-provision.yml         # Inventory-driven LXC provisioning
 ├── docs/
 │   ├── remote-controller-setup.md        # Detailed setup guide
 │   └── ansible-remote-controller-spec.md # Technical specification
@@ -136,7 +111,7 @@ ansible-playbook playbooks/provision_lxc_example.yml
 Edit `inventory/group_vars/all/proxmox.yml` to configure your environment:
 
 ```yaml
-proxmox_api_host: "proxmox.lan"           # Proxmox hostname or IP
+proxmox_api_host: "proxmox.internal.faviann.com"           # Proxmox hostname or IP
 proxmox_api_port: 8006                     # API port (default 8006)
 proxmox_api_token_id: "ansible@pve!controller"  # API token ID
 proxmox_default_node: "proxmox"           # Default node for operations
@@ -164,12 +139,33 @@ The `inventory/hosts.yml` defines two groups:
 
 ## Creating API Tokens in Proxmox
 
-1. Log into Proxmox web UI as `root@pam` or privileged user
-2. Navigate to **Datacenter → Permissions → API Tokens**
-3. Create a new token: `ansible@pve!controller`
-4. Grant appropriate permissions (PVEVMAdmin role on relevant nodes/resources)
-5. Copy the token secret immediately (shown only once)
-6. Add the secret to your `vault.yml` file
+1. Log into Proxmox web UI as `root@pam` or another privileged administrative user.
+2. Navigate to **Datacenter → Permissions → API Tokens**.
+3. Create a new token (example: `ansible@pve!controller`).
+   - If you will be changing LXC feature flags (for example `nesting=1` or `keyctl=1`), create the token for `root@pam` (for example: `root@pam!ansible-controller`) because changing those feature flags is restricted to the `root@pam` account and other users/tokens will receive a 403 permission error when attempting those changes.
+   - **Note**: With the new `proxmox_host_bootstrap` role, restricted features like `keyctl=1` are now applied via SSH and `pct` commands directly on the Proxmox host, so you can use a less-privileged API token (e.g., `ansible@pve`) for API operations. The automation handles restricted features separately.
+   - If your automation does not modify feature flags, prefer a least-privilege service account (e.g., `ansible@pve`) with the minimal role required.
+4. Grant appropriate permissions (for `root@pam` tokens this is already privileged; for service accounts grant only the roles needed, e.g., `PVEVMAdmin` on the target node/resource).
+5. Copy the token secret immediately (shown only once).
+6. Add the secret to your `vault.yml` file.
+
+## SSH Access to Proxmox Host
+
+The automation requires SSH access to the Proxmox host to apply certain configuration that cannot be done via API (such as restricted LXC feature flags like `keyctl=1`).
+
+**Automatic Setup**: On first run of `site.yml`, the `proxmox_host_bootstrap` role will:
+1. Check if your SSH key already works for `root@proxmox`
+2. If not, prompt you for the Proxmox root password
+3. Automatically add your SSH public key to the Proxmox host
+4. Verify the connection works
+
+**Manual Setup** (optional): If you prefer to configure SSH access manually:
+```bash
+# Copy your public key to Proxmox
+ssh-copy-id -i ~/.ssh/ansible_ed25519.pub root@proxmox.internal.faviann.com
+```
+
+After initial setup, all subsequent playbook runs will use passwordless SSH authentication.
 
 ## Example Playbooks
 
@@ -189,21 +185,13 @@ ansible-playbook playbooks/proxmox_api_check.yml
 
 Lists all LXC containers on the default node.
 
-### Provision LXC Container
+### Provision Inventory-Defined LXCs
 
 ```bash
-ansible-playbook playbooks/provision_lxc_example.yml
+ansible-playbook -i inventory/hosts.yml site.yml --tags provision
 ```
 
-Creates an LXC container with:
-- VMID: 123
-- Hostname: app-01
-- Template: debian-13-standard_13.1-2_amd64.tar.zst
-- Storage: local-zfs
-- Network: vmbr1 with DHCP
-- Features: nesting enabled, unprivileged
-
-Customize variables in the playbook as needed.
+Builds the effective LXC specs from tier and capability group variables, ensures each container exists through the `proxmox_lxc_provision` role, and applies host-side preparation tasks when enabled. Edit inventory group and host vars to tailor resources and features.
 
 ## TLS Certificate Verification
 
@@ -218,7 +206,7 @@ Customize variables in the playbook as needed.
 
 ### Cannot reach Proxmox API
 
-- Verify controller can reach Proxmox host: `curl -k https://proxmox.lan:8006`
+- Verify controller can reach Proxmox host: `curl -k https://proxmox.internal.faviann.com:8006`
 - Check firewall rules allow HTTPS (port 8006)
 - Verify VPN/network connectivity
 
@@ -231,12 +219,12 @@ Customize variables in the playbook as needed.
 ### Module not found
 
 - Verify collections installed: `ansible-galaxy collection list | grep proxmox`
-- Reinstall if needed: `ansible-galaxy collection install -r collections/requirements.yml --force`
+- Re-run `ansible-playbook bootstrap.yml` to reinstall collections after updating dependency files
 
 ### Python import errors
 
 - Verify Python packages: `python3 -m pip list | grep -E "proxmoxer|requests"`
-- Reinstall if needed: `python3 -m pip install --user -r requirements/pip.txt --force-reinstall`
+- Re-run `ansible-playbook bootstrap.yml` to rebuild the controller virtual environment if packages drift
 
 ## Migration from Legacy Implementation
 

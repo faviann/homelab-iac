@@ -1,0 +1,23 @@
+---
+# Host-specific configuration for jellyfin
+# Inherits from: tier_large, cap_docker, cap_gpu
+# Note: jellyfin is NOT in cap_service_agents as it doesn't need traefik tooling
+
+# EXAMPLE: Resource override - jellyfin needs extra RAM beyond tier_large default
+# This demonstrates how to handle exceptions via host_vars
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 304
+  hostname: jellyfin
+  description: "Jellyfin media server with transcoding managed via Ansible"
+  tags:
+    - ansible
+    - jellyfin
+    - media-server
+    - gpu
+
+# Jellyfin-specific configuration
+jellyfin_version: latest
+jellyfin_transcode_path: /data/jellyfin/transcode
+jellyfin_cache_path: /data/jellyfin/cache

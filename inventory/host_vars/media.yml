@@ -1,0 +1,13 @@
+---
+# Host-specific configuration for media
+# Inherits from: tier_medium, cap_docker, cap_gpu, cap_service_agents
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 303
+  hostname: media
+  description: "Media processing and management service managed via Ansible"
+  tags:
+    - ansible
+    - media
+    - gpu

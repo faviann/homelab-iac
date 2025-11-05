@@ -1,0 +1,15 @@
+---
+# Main orchestration for Proxmox host bootstrap
+# Ensures the Ansible control node can manage the Proxmox host via SSH
+
+- name: Include SSH access setup tasks
+  ansible.builtin.import_tasks: ssh_access.yml
+  tags:
+    - proxmox_bootstrap
+    - ssh_setup
+
+- name: Include Proxmox validation tasks
+  ansible.builtin.import_tasks: validation.yml
+  tags:
+    - proxmox_bootstrap
+    - validation

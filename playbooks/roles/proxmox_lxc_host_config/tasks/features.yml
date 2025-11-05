@@ -1,0 +1,93 @@
+---
+# Apply ALL LXC feature flags via pct command
+# Some features (like keyctl) cannot be set via Proxmox API even with root@pam
+# To keep feature management simple and consistent, we apply ALL features via pct
+# rather than splitting between API and SSH
+
+- name: Get current container features configuration
+  ansible.builtin.shell:
+    cmd: "pct config {{ proxmox_lxc_spec.vmid }} | grep -E '^features:' || echo 'features: '"
+  register: _current_features
+  changed_when: false
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+
+- name: Parse current features into list
+  ansible.builtin.set_fact:
+    _current_features_list: >-
+      {{
+        ((_current_features.stdout | regex_replace('^features:\\s*', '') | trim).split(',') if (_current_features.stdout | regex_replace('^features:\\s*', '') | trim) else [])
+        | map('trim')
+        | select()
+        | list
+      }}
+
+- name: Build target features list
+  ansible.builtin.set_fact:
+    _target_features_list: >-
+      {{
+        (_current_features_list + (lxc_features | default([])))
+        | reject('match', '^features:.*')
+        | select()
+        | unique
+        | sort
+        | list
+      }}
+
+- name: Build features string for pct command
+  ansible.builtin.set_fact:
+    _target_features_string: "{{ _target_features_list | join(',') }}"
+
+- name: Display features operation
+  ansible.builtin.debug:
+    msg:
+      - "Container VMID: {{ proxmox_lxc_spec.vmid }}"
+      - "Current features: {{ _current_features_list | join(',') if _current_features_list | length > 0 else '(none)' }}"
+      - "Target features: {{ _target_features_string }}"
+
+- name: Apply feature flags via pct set
+  ansible.builtin.command:
+    cmd: "pct set {{ proxmox_lxc_spec.vmid }} -features {{ _target_features_string }}"
+  register: _pct_set_result
+  changed_when: _pct_set_result.rc == 0
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  when: _target_features_string != (_current_features_list | join(','))
+
+- name: Check container runtime status
+  ansible.builtin.command:
+    cmd: "pct status {{ proxmox_lxc_spec.vmid }}"
+  register: _container_status
+  changed_when: false
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  when: _pct_set_result is changed
+
+- name: Restart container to apply feature changes
+  ansible.builtin.command:
+    cmd: "pct reboot {{ proxmox_lxc_spec.vmid }}"
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  when:
+    - _pct_set_result is changed
+    - _container_status is defined
+    - "'running' in _container_status.stdout"
+  register: _container_restart
+
+- name: Feature changes applied (restart required)
+  ansible.builtin.debug:
+    msg: "⚠ Container {{ proxmox_lxc_spec.vmid }} feature changes applied. Start the container to activate them."
+  when:
+    - _pct_set_result is changed
+    - _container_status is defined
+    - "'running' not in _container_status.stdout"
+
+- name: Feature changes applied and activated
+  ansible.builtin.debug:
+    msg: "✓ Applied features to container {{ proxmox_lxc_spec.vmid }}: {{ _target_features_string }}{{ ' (container restarted)' if _container_restart is changed else '' }}"
+  when: _pct_set_result is changed
+
+- name: Features already in sync
+  ansible.builtin.debug:
+    msg: "✓ Container {{ proxmox_lxc_spec.vmid }} features already configured correctly"
+  when: _pct_set_result is not changed

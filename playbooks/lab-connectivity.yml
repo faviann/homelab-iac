@@ -28,7 +28,7 @@
         url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port }}/api2/json/version"
         method: GET
         headers:
-          Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
         validate_certs: "{{ proxmox_verify_ssl }}"
         timeout: 15
       register: proxmox_version
@@ -37,6 +37,6 @@
     - name: Show Proxmox API version details
       ansible.builtin.debug:
         msg: >-
-          Connected to Proxmox host {{ proxmox_api_host }} (version {{ proxmox_version.json.version | default('unknown') }}).
+          Connected to Proxmox host {{ proxmox_api_host }} (version {{ proxmox_version.json.data.version | default('unknown') }}).
       when: proxmox_version.json is defined
       no_log: false

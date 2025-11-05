@@ -1,0 +1,119 @@
+---
+# ==============================================================================
+# PHASE 1: Static Configuration Layering
+# Merges base configuration from least to most specific precedence
+# ==============================================================================
+
+- name: Assemble LXC spec layers (lowest to highest precedence)
+  ansible.builtin.set_fact:
+    proxmox_lxc_spec_layers: >-
+      {{
+        [
+          proxmox_lxc_defaults | default({}),
+          proxmox_lxc_global_defaults | default({}),
+          proxmox_lxc_group_defaults | default({}),
+          proxmox_lxc_capability_defaults | default({}),
+          proxmox_lxc_overrides | default({}),
+          proxmox_lxc | default({})
+        ]
+      }}
+
+- name: Merge LXC spec layers into single base definition
+  ansible.builtin.set_fact:
+    proxmox_lxc_spec: "{{ proxmox_lxc_spec | default({}) | combine(item, recursive=True) }}"
+  loop: "{{ proxmox_lxc_spec_layers }}"
+
+# ==============================================================================
+# PHASE 2: Dynamic Tier-Based Configuration
+# Adds resource allocations based on tier group membership (tiny/small/medium/large)
+# ==============================================================================
+
+- name: Initialize dynamic defaults from tier and capability data
+  ansible.builtin.set_fact:
+    proxmox_lxc_dynamic_defaults: {}
+
+- name: Ensure tier variables are defined
+  ansible.builtin.assert:
+    that:
+      - lxc_cores is defined
+      - lxc_memory is defined
+      - lxc_swap is defined
+      - lxc_disk is defined
+      - lxc_network_bridge is defined
+    fail_msg: >-
+      Missing tier variables required to build the LXC specification. Check tier group vars for cores, memory, swap, disk, and network bridge.
+
+- name: Include CPU core defaults
+  ansible.builtin.set_fact:
+    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'cores': (lxc_cores | int)}) }}"
+
+- name: Include memory defaults
+  ansible.builtin.set_fact:
+    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'memory': (lxc_memory | int)}) }}"
+
+- name: Include swap defaults
+  ansible.builtin.set_fact:
+    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'swap': (lxc_swap | int)}) }}"
+
+- name: Include disk defaults
+  ansible.builtin.set_fact:
+    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'disk': (proxmox_default_storage | default('local-zfs')) + ':' + (lxc_disk | string)}) }}"
+
+- name: Include network defaults
+  ansible.builtin.set_fact:
+    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'netif': {'net0': 'name=eth0,bridge=' + (lxc_network_bridge) + ',firewall=0,ip=dhcp,ip6=auto,type=veth'}}, recursive=True) }}"
+
+- name: Include feature defaults (will be applied via host_prep, not API)
+  ansible.builtin.set_fact:
+    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'features': []}, recursive=True) }}"
+  when: lxc_features is defined
+
+- name: Merge dynamic defaults into spec
+  ansible.builtin.set_fact:
+    proxmox_lxc_spec: "{{ proxmox_lxc_spec | combine(proxmox_lxc_dynamic_defaults, recursive=True) }}"
+  when: proxmox_lxc_dynamic_defaults | length > 0
+
+# ==============================================================================
+# PHASE 3: Mount Point Configuration
+# All mounts are bind mounts (config file) - no mount_volumes via API
+# ==============================================================================
+
+- name: Determine effective bind mount configuration (host path mounts requiring config file)
+  ansible.builtin.set_fact:
+    proxmox_lxc_bind_mounts: "{{ proxmox_default_bind_mounts | default({}) | combine(proxmox_lxc_bind_mounts_overrides | default({}), recursive=True) }}"
+
+# ==============================================================================
+# PHASE 4: ID Mapping Configuration
+# Sets up UID/GID mappings for unprivileged containers
+# ==============================================================================
+
+- name: Determine effective idmap entries
+  ansible.builtin.set_fact:
+    proxmox_lxc_idmap: "{{ proxmox_lxc_idmap_overrides | default(proxmox_default_idmap, true) }}"
+
+# ==============================================================================
+# PHASE 5: Security and SSH Configuration
+# Applies security hardening and injects SSH keys
+# ==============================================================================
+
+- name: Enforce key-only root authentication when requested
+  ansible.builtin.set_fact:
+    proxmox_lxc_spec: "{{ (proxmox_lxc_spec | dict2items | rejectattr('key', 'equalto', 'password') | list) | items2dict }}"
+  when: proxmox_lxc_disable_root_password | bool
+
+- name: Load control node SSH public key when requested
+  ansible.builtin.set_fact:
+    proxmox_lxc_controller_pubkey_content: "{{ lookup('ansible.builtin.file', proxmox_lxc_controller_pubkey_path, errors='ignore') }}"
+  when:
+    - proxmox_lxc_controller_pubkey_enabled | bool
+    - proxmox_lxc_spec.pubkey is not defined
+    - proxmox_lxc_controller_pubkey_path | default('') | length > 0
+
+- name: Inject control node SSH public key into LXC spec
+  ansible.builtin.set_fact:
+    proxmox_lxc_spec: "{{ proxmox_lxc_spec | combine({'pubkey': proxmox_lxc_controller_pubkey_content}, recursive=True) }}"
+  when:
+    - proxmox_lxc_controller_pubkey_enabled | bool
+    - proxmox_lxc_spec.pubkey is not defined
+    - proxmox_lxc_controller_pubkey_content is defined
+    - proxmox_lxc_controller_pubkey_content | length > 0
