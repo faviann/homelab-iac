@@ -1,0 +1,21 @@
+---
+# Dockge Docker Compose Configuration
+# This is an example - replace with your actual Dockge configuration
+
+services:
+  dockge:
+    image: louislam/dockge:1
+    container_name: dockge
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      - /opt/stacks:/opt/stacks
+    environment:
+      - DOCKGE_STACKS_DIR=/opt/stacks
+
+# NOTE: Customize this file with your actual Dockge configuration
+# You can use Jinja2 templating by renaming to compose.yml.j2
+# Example: {{ inventory_hostname }}, {{ ansible_host }}, etc.

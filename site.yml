@@ -114,19 +114,11 @@
         - host_config
         - provision
 
-- name: Configure services inside provisioned containers
-  hosts: service_agents
+- name: Configure LXC containers internally
+  hosts: lxcs
   gather_facts: false
   tags:
     - configure
-    - in_guest
-  vars:
-    lxc_guest_configuration_enabled: "{{ hostvars[inventory_hostname].lxc_guest_configuration_enabled | default(false) | bool }}"
-  tasks:
-    - name: Placeholder for guest configuration roles
-      ansible.builtin.debug:
-        msg: "Configure in-container services for {{ inventory_hostname }}. Attach roles here."
-      when: lxc_guest_configuration_enabled | bool
-      tags:
-        - configure
-        - in_guest
+    - lxc_internal
+  roles:
+    - lxc_internal_setup

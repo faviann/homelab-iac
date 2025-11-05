@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+# Docker bind mount for {{ inventory_hostname }}
+# Managed by Ansible role: lxc_internal_setup
+{{ lxc_internal_shared_mount_source }} {{ lxc_internal_root_docker_conf_path }} none bind 0 0

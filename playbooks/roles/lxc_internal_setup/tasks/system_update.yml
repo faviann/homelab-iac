@@ -1,0 +1,22 @@
+---
+# System update tasks
+# Updates apt cache and upgrades all packages
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ lxc_internal_apt_cache_valid_time }}"
+  when: lxc_internal_apt_update_cache | bool
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: true
+    autoclean: true
+  register: _apt_upgrade_result
+  when: lxc_internal_apt_upgrade | bool
+
+- name: Display upgrade result
+  ansible.builtin.debug:
+    msg: "Upgraded {{ _apt_upgrade_result.changed | default(false) | ternary('packages', 'no packages') }}"
+  when: lxc_internal_apt_upgrade | bool

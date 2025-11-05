@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# Journald configuration for {{ inventory_hostname }}
+# Managed by Ansible role: lxc_internal_setup
+
+[Journal]
+SystemMaxUse={{ lxc_internal_journald_max_use }}
+SystemMaxFileSize={{ lxc_internal_journald_max_file_size }}

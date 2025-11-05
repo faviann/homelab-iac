@@ -52,7 +52,7 @@ proxmox_lxc_global_defaults:
   update: false
   unprivileged: true
   onboot: true
-  start_on_create: true
+  start_on_create: true  # Start containers after creation to enable SSH access
   pool: "{{ proxmox_default_pool }}"
   ostemplate: "{{ proxmox_default_ostemplate }}"
   node: "{{ proxmox_default_node }}"
