@@ -6,4 +6,8 @@
 # This assumes DNS resolves {hostname}.faviann.vms for all LXC containers
 ansible_host: "{{ inventory_hostname }}.faviann.vms"
 
+# SSH connection settings for LXC containers
+ansible_user: root
+ansible_connection: ssh
+
 proxmox_lxc_group_defaults: {}
