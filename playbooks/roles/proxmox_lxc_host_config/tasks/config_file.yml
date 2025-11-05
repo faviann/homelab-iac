@@ -18,15 +18,11 @@
     msg: "LXC configuration file {{ _lxc_config_file }} not found. Ensure container is created first."
   when: not _lxc_config_stat.stat.exists
 
-- name: Apply UID/GID ID mappings
-  ansible.builtin.blockinfile:
+- name: Remove all existing UID/GID ID mappings
+  ansible.builtin.lineinfile:
     path: "{{ _lxc_config_file }}"
-    marker: "# {mark} Ansible managed: UID/GID mappings"
-    block: |-
-      {% for mapping in proxmox_lxc_idmap %}
-      lxc.idmap = {{ mapping }}
-      {% endfor %}
-    create: false
+    regexp: '^lxc\.idmap:'
+    state: absent
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
   when:
@@ -35,15 +31,26 @@
   tags:
     - idmap
 
-- name: Apply bind mount points
-  ansible.builtin.blockinfile:
+- name: Apply UID/GID ID mappings
+  ansible.builtin.lineinfile:
     path: "{{ _lxc_config_file }}"
-    marker: "# {mark} Ansible managed: Bind mounts"
-    block: |-
-      {% for mount_key, mount_value in (proxmox_lxc_bind_mounts | default({})).items() %}
-      {{ mount_key }}: {{ mount_value }}
-      {% endfor %}
+    line: "lxc.idmap: {{ item }}"
+    insertafter: '^unprivileged:'
     create: false
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  loop: "{{ proxmox_lxc_idmap }}"
+  when:
+    - proxmox_lxc_idmap is defined
+    - proxmox_lxc_idmap | length > 0
+  tags:
+    - idmap
+
+- name: Remove all existing bind mount points
+  ansible.builtin.lineinfile:
+    path: "{{ _lxc_config_file }}"
+    regexp: '^lxc\.mount\.entry:'
+    state: absent
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
   when:
@@ -53,12 +60,27 @@
     - bind_mounts
     - mounts
 
-- name: Apply WireGuard tun device access
-  ansible.builtin.blockinfile:
+- name: Apply bind mount points
+  ansible.builtin.lineinfile:
     path: "{{ _lxc_config_file }}"
-    marker: "# {mark} Ansible managed: WireGuard tun device"
-    block: |-
-      lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+    line: "{{ item.key }}: {{ item.value }}"
+    insertafter: '^rootfs:'
+    create: false
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  loop: "{{ proxmox_lxc_bind_mounts | dict2items }}"
+  when:
+    - proxmox_lxc_bind_mounts is defined
+    - proxmox_lxc_bind_mounts | length > 0
+  tags:
+    - bind_mounts
+    - mounts
+
+- name: Apply WireGuard tun device access
+  ansible.builtin.lineinfile:
+    path: "{{ _lxc_config_file }}"
+    regexp: '^lxc\.mount\.entry:.*dev/net/tun'
+    line: "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
     state: "{{ 'present' if (wireguard_kernel_module_access | default(false) | bool) else 'absent' }}"
     create: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
@@ -66,19 +88,37 @@
   tags:
     - wireguard
 
-- name: Apply NVIDIA GPU runtime configuration
-  ansible.builtin.blockinfile:
+- name: Remove existing NVIDIA GPU runtime configuration
+  ansible.builtin.lineinfile:
     path: "{{ _lxc_config_file }}"
-    marker: "# {mark} Ansible managed: NVIDIA GPU runtime"
-    block: |-
-      lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'
-      lxc.environment: NVIDIA_VISIBLE_DEVICES=all
-      lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
-      lxc.hook.mount: /usr/share/lxc/hooks/nvidia
-    state: "{{ 'present' if (configure_nvidia_runtime | default(false) | bool) else 'absent' }}"
+    regexp: "{{ item }}"
+    state: absent
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  loop:
+    - '^lxc\.hook\.pre-start:.*nvidia-modprobe'
+    - '^lxc\.environment:.*NVIDIA_VISIBLE_DEVICES'
+    - '^lxc\.environment:.*NVIDIA_DRIVER_CAPABILITIES'
+    - '^lxc\.hook\.mount:.*nvidia'
+  when: not (configure_nvidia_runtime | default(false) | bool)
+  tags:
+    - gpu
+    - nvidia
+
+- name: Apply NVIDIA GPU runtime configuration
+  ansible.builtin.lineinfile:
+    path: "{{ _lxc_config_file }}"
+    line: "{{ item }}"
+    insertafter: EOF
     create: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
+  loop:
+    - "lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'"
+    - "lxc.environment: NVIDIA_VISIBLE_DEVICES=all"
+    - "lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
+    - "lxc.hook.mount: /usr/share/lxc/hooks/nvidia"
+  when: configure_nvidia_runtime | default(false) | bool
   tags:
     - gpu
     - nvidia
