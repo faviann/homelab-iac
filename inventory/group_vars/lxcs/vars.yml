@@ -1,7 +1,9 @@
 ---
 # Shared defaults for all LXC containers managed by Ansible.
 # Individual hosts override values via proxmox_lxc_overrides in host_vars.
-proxmox_lxc_group_defaults: {}
 
-# SSH connection target - construct FQDN from hostname
-ansible_host: "{{ proxmox_lxc_overrides.hostname }}.faviann.vms"
+# Dynamically build ansible_host from inventory hostname + DNS suffix
+# This assumes DNS resolves {hostname}.faviann.vms for all LXC containers
+ansible_host: "{{ inventory_hostname }}.faviann.vms"
+
+proxmox_lxc_group_defaults: {}
