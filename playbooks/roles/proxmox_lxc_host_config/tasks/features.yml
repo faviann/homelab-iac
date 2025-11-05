@@ -74,6 +74,13 @@
     - "'running' in _container_status.stdout"
   register: _container_restart
 
+- name: Wait for container to complete reboot
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: "Waiting for container {{ proxmox_lxc_spec.vmid }} to complete reboot and start SSH service"
+  when: _container_restart is changed
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+
 - name: Feature changes applied (restart required)
   ansible.builtin.debug:
     msg: "⚠ Container {{ proxmox_lxc_spec.vmid }} feature changes applied. Start the container to activate them."
