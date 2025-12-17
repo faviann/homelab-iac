@@ -114,7 +114,8 @@ inventory/
 
 │   │   ├── proxmox.yml             # Proxmox API and infrastructure config
 
-│   │   └── vault.yml               # Encrypted secrets (API tokens)
+│   │   ├── vault.yml               # Encrypted secrets (API tokens)
+│   │   └── vault.yml.example       # Template for vault.yml (safe to commit)
 
 │   │
 

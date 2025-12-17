@@ -1,6 +1,8 @@
 # Remote Controller Setup and Usage (LXC-only)
 
-Run these playbooks from an Ubuntu LTS LXC (unprivileged) or your dev machine.
+Run these playbooks from the Ubuntu LTS LXC control node (unprivileged). Do not run them from the dev machine.
+
+If you're using an IDE agent (Copilot/Codex), follow the repo contract in `AGENTS.md`.
 
 ## 1) Bootstrap the controller
 ```bash
@@ -10,7 +12,7 @@ This play creates the controller virtual environment under `~/.ansible/venv`, in
 
 ## 2) Configure Proxmox API credentials with Ansible Vault
 ```bash
-cp inventory/group_vars/all/vault.example.yml inventory/group_vars/all/vault.yml
+cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
 $EDITOR inventory/group_vars/all/vault.yml   # put your token secret
 ansible-vault encrypt inventory/group_vars/all/vault.yml
 ```
