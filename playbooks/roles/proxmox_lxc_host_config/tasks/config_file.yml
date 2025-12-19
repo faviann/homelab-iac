@@ -49,7 +49,7 @@
 - name: Remove all existing bind mount points
   ansible.builtin.lineinfile:
     path: "{{ _lxc_config_file }}"
-    regexp: '^lxc\.mount\.entry:'
+    regexp: '^mp\d+:'
     state: absent
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
