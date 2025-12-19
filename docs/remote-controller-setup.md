@@ -31,13 +31,21 @@ Set non-secret vars in `inventory/group_vars/all/proxmox.yml`:
 ## 3) Inventory
 Edit `inventory/hosts.yml` as needed. The `proxmox_api` group is for API tasks (runs locally on the controller). Add your containers to `lxcs` for post-provision SSH configuration if you want to manage them after creation.
 
-## 4) Validate connectivity
+## 4) Pull latest repository changes
+Before running any playbooks, ensure you have the latest changes from the repository:
+```bash
+cd ~/ServerManagementScripts
+git pull
+```
+This prevents running outdated playbooks and ensures all recent bug fixes and features are applied.
+
+## 5) Validate connectivity
 ```bash
 ansible-playbook -i inventory/hosts.yml site.yml --tags validation
 ```
 The `validation` tag performs API checks using the same collections and virtual environment installed by bootstrap. The playbook includes a preflight assertion that fails fast if bootstrap prerequisites are missing.
 
-## 5) Run provisioning or full orchestration
+## 6) Run provisioning or full orchestration
 ```bash
 ansible-playbook -i inventory/hosts.yml site.yml
 ```

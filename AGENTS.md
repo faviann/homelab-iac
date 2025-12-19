@@ -40,6 +40,7 @@ Host ansible.faviann.vms
 - Proxmox API host is set in `inventory/group_vars/all/proxmox.yml` (`proxmox_api_host`).
 
 ## Quick reference (venv-first)
+- **Pull latest changes**: `cd ~/ServerManagementScripts && git pull`
 - Activate venv: `source ~/.ansible/venv/bin/activate`
 - Bootstrap: `ansible-playbook bootstrap.yml`
 - Validate: `ansible-playbook -i inventory/hosts.yml site.yml --tags validation`
@@ -90,6 +91,12 @@ ansible --version
 ```
 
 **When to use**: Place this before running any `ansible` or `ansible-playbook` commands, especially in new shell sessions, remote SSH connections, or automation scripts.
+
+**IMPORTANT**: Always run `git pull` before executing ansible commands to ensure you are using the latest playbooks and configurations:
+```bash
+cd ~/ServerManagementScripts
+git pull
+```
 
 ## Security rules
 - Do not commit or paste: `~/.ansible/vault-pass.txt`, any private key (`~/.ssh/proxmox_lxc`), or token secrets (keep them in encrypted `vault.yml` only).
