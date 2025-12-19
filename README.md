@@ -4,15 +4,15 @@ Ansible automation for managing Proxmox LXC containers via API from a remote con
 
 ## Overview
 
-This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. All playbooks run from a **remote controller** (Ubuntu LTS unprivileged LXC or your development machine) - no shell access to the Proxmox host is required.
+This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. All playbooks run from the **Proxmox LXC control node** (unprivileged Debian/Ubuntu LTS). Do not run Ansible from your dev machine.
 
 ### Key Features
 
-- ✅ **Remote API-driven**: Manage Proxmox via API from a controller
-- ✅ **LXC-only**: Focused exclusively on LXC container management (no VMs)
-- ✅ **Secure**: API token authentication stored in Ansible Vault
-- ✅ **Static Inventory**: Version-controlled configuration
-- ✅ **Idempotent**: Safe to run multiple times
+- **Remote API-driven**: Manage Proxmox via API from a controller
+- **LXC-only**: Focused exclusively on LXC container management (no VMs)
+- **Secure**: API token authentication stored in Ansible Vault
+- **Static Inventory**: Version-controlled configuration
+- **Idempotent**: Safe to run multiple times
 
 ### LXC-Only Scope
 
@@ -20,7 +20,7 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 
 ## Prerequisites
 
-- **Controller**: Debian LTS (recommended as an unprivileged LXC or your workstation)
+- **Controller**: Debian/Ubuntu LTS on the Proxmox LXC control node (unprivileged; do not run from a workstation)
 - **Python**: 3.10+ with `python3-venv` and `pip` available (used by the bootstrap playbook)
 - **Ansible dependencies**: Installed via `ansible-playbook bootstrap.yml`, which creates the controller virtual environment and pulls in `requirements/pip.txt` and `collections/requirements.yml`
 - **Network**: Controller must reach the Proxmox API (HTTPS port 8006)
@@ -77,32 +77,49 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
 
 ```
 .
-├── collections/
-│   └── requirements.yml          # Ansible collection dependencies
-├── requirements/
-│   └── pip.txt                   # Python package dependencies
-├── inventory/
-│   ├── hosts.yml                 # Static inventory file
-│   ├── group_vars/               # Group-specific variables
-│   │   └── all/
-│   │       ├── proxmox.yml       # Non-secret Proxmox configuration
-│   │       └── vault.yml         # Encrypted secrets
-│   └── host_vars/                # Host-specific variables
-│       └── jellyfin_lxc.yml      # Example host variables
-├── playbooks/
-│   ├── lab-connectivity.yml      # SSH + Proxmox API connectivity checks
-│   ├── proxmox_api_check.yml     # API connectivity test
-│   └── lxc-provision.yml         # Inventory-driven LXC provisioning
-├── docs/
-│   ├── remote-controller-setup.md        # Detailed setup guide
-│   └── ansible-remote-controller-spec.md # Technical specification
-└── archive/                      # Deprecated on-host implementation
+|-- ansible.cfg
+|-- bootstrap.yml
+|-- collections/
+|   `-- requirements.yml               # Ansible collection dependencies
+|-- docs/
+|   |-- inventory-structure-guide.md
+|   |-- inventory-visualization.md
+|   |-- proxmox-host-ssh-automation.md
+|   |-- remote-controller-setup.md
+|   `-- reference/
+|       `-- agent-control-node-reference.md
+|-- inventory/
+|   |-- hosts.yml                      # Static inventory file
+|   |-- group_vars/
+|   |   `-- all/
+|   |       |-- proxmox.yml            # Non-secret Proxmox configuration
+|   |       |-- vault.yml              # Encrypted secrets
+|   |       `-- vault.yml.example      # Template for vault
+|   `-- host_vars/                     # Host-specific variables
+|       |-- codeserver.yml
+|       |-- frontend.yml
+|       |-- gatekeeper.yml
+|       |-- jellyfin.yml
+|       `-- media.yml
+|-- playbooks/
+|   |-- lab-connectivity.yml           # SSH + Proxmox API connectivity checks
+|   |-- proxmox_api_check.yml          # API connectivity test
+|   |-- lxc-provision.yml              # Inventory-driven LXC provisioning
+|   `-- tasks/
+|       `-- proxmox_validation.yml
+|-- requirements/
+|   `-- pip.txt                        # Python package dependencies
+|-- site.yml                           # Top-level orchestration playbook
+`-- .ansible-lint
 ```
 
 ## Documentation
 
-- **[docs/remote-controller-setup.md](docs/remote-controller-setup.md)** - Complete setup and usage guide
-- **[docs/ansible-remote-controller-spec.md](docs/ansible-remote-controller-spec.md)** - Architecture and technical specification
+- **docs/reference/agent-control-node-reference.md** - Control node reference for agents
+- **docs/remote-controller-setup.md** - Setup and usage guide
+- **docs/proxmox-host-ssh-automation.md** - Host-side SSH automation details
+- **docs/inventory-structure-guide.md** - Inventory design and best practices
+- **docs/inventory-visualization.md** - Inventory group relationships
 
 ## Configuration
 
@@ -140,7 +157,7 @@ The `inventory/hosts.yml` defines two groups:
 ## Creating API Tokens in Proxmox
 
 1. Log into Proxmox web UI as `root@pam` or another privileged administrative user.
-2. Navigate to **Datacenter → Permissions → API Tokens**.
+2. Navigate to **Datacenter -> Permissions -> API Tokens**.
 3. Create a new token (example: `ansible@pve!controller`).
    - If you will be changing LXC feature flags (for example `nesting=1` or `keyctl=1`), create the token for `root@pam` (for example: `root@pam!ansible-controller`) because changing those feature flags is restricted to the `root@pam` account and other users/tokens will receive a 403 permission error when attempting those changes.
    - **Note**: With the new `proxmox_host_bootstrap` role, restricted features like `keyctl=1` are now applied via SSH and `pct` commands directly on the Proxmox host, so you can use a less-privileged API token (e.g., `ansible@pve`) for API operations. The automation handles restricted features separately.
