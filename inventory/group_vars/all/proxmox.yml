@@ -19,16 +19,16 @@ proxmox_default_ostemplate: "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zs
 
 # ==============================================================================
 # Shared Storage Configuration
-# The shared volume is mounted to all containers via bind mount (not mount_volumes)
+# The shared volume is mounted to all containers via config file (not mount_volumes)
 # because the volume is owned by container 200 and shared across containers
 # ==============================================================================
-proxmox_shared_volume_path: "/rpool/data/subvol-200-disk-1"
+proxmox_shared_volume_path: "local-zfs:subvol-200-disk-1"
 proxmox_shared_mount_point: "/shared"
 
 # Bind mounts requiring config file editing (API restriction)
 # mp0 is the shared volume from container 200
 proxmox_default_bind_mounts:
-  mp0: "{{ proxmox_shared_volume_path }},mp={{ proxmox_shared_mount_point }}"
+  mp0: "{{ proxmox_shared_volume_path }},mp={{ proxmox_shared_mount_point }},size=256G"
   mp1: "/conf,mp=/conf,ro=1"
   mp2: "/ephemeral,mp=/ephemeral"
   mp3: "/tank,mp=/data"
