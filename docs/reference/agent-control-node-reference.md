@@ -13,6 +13,24 @@ Information-only reference for agents operating this repository from the Proxmox
 - Host key behavior is relaxed: Ansible `host_key_checking = False`; Proxmox SSH uses `StrictHostKeyChecking=accept-new`.
 - Never request or emit secrets (API token secret, vault password, private keys).
 
+## Controller SSH Access
+- User/host: `root@ansible.faviann.vms`.
+- First-connect trust: `StrictHostKeyChecking=accept-new`.
+- Client `~/.ssh/config` example:
+
+```
+Host ansible.faviann.vms
+    HostName ansible.faviann.vms
+    User root
+    IdentityFile ~/.ssh/proxmox_lxc
+    IdentitiesOnly yes
+    StrictHostKeyChecking accept-new
+```
+
+- Quick verify from client:
+  - `ssh ansible.faviann.vms 'hostname && whoami'`
+  - Then on controller: `cd ~/ServerManagementScripts`
+
 ## Controller Paths and Tooling
 - Repo root: cloned on the controller (`ansible.cfg` lives here).
 - Virtualenv: `~/.ansible/venv` (created by `bootstrap.yml`).
@@ -54,13 +72,54 @@ Information-only reference for agents operating this repository from the Proxmox
   - `playbooks/proxmox_api_check.yml`: list LXCs via API.
   - `playbooks/lxc-provision.yml`: provision LXCs with pre/post host prep.
 
-## Command Reference (run on controller)
-- Bootstrap dependencies: `ansible-playbook bootstrap.yml`
+## Command Reference (run on controller, venv-first)
+- Activate venv: `source ~/.ansible/venv/bin/activate`
+- Bootstrap: `ansible-playbook bootstrap.yml`
 - Full orchestration: `ansible-playbook -i inventory/hosts.yml site.yml`
 - Validation only: `ansible-playbook -i inventory/hosts.yml site.yml --tags validation`
 - Provision only: `ansible-playbook -i inventory/hosts.yml site.yml --tags provision`
 - Host config only: `ansible-playbook -i inventory/hosts.yml site.yml --tags host_config`
 - Connectivity check: `ansible-playbook playbooks/lab-connectivity.yml`
+
+### Minimal Smoke Test (venv-first)
+- Activate venv: `source ~/.ansible/venv/bin/activate`
+- Confirm Ansible available: `ansible --version`
+- Ping `gatekeeper` from inventory: `ansible -i inventory/hosts.yml gatekeeper -m ping`
+
+## First-time Setup (Controller, venv-only)
+If `ansible` is not present, create and seed the controller venv:
+
+```
+python3 -m venv ~/.ansible/venv
+source ~/.ansible/venv/bin/activate
+python3 -m pip install --upgrade pip
+pip install ansible
+pip install -r ~/ServerManagementScripts/requirements/pip.txt
+```
+
+Then bootstrap the repo environment:
+
+```
+cd ~/ServerManagementScripts
+source ~/.ansible/venv/bin/activate
+ansible --version
+ansible-playbook bootstrap.yml
+```
+
+Venv guard (copy-paste):
+
+```
+if [ -x "$HOME/.ansible/venv/bin/ansible" ]; then
+  . "$HOME/.ansible/venv/bin/activate"
+else
+  python3 -m venv "$HOME/.ansible/venv"
+  . "$HOME/.ansible/venv/bin/activate"
+  python3 -m pip install --upgrade pip
+  pip install ansible
+  pip install -r "$HOME/ServerManagementScripts/requirements/pip.txt"
+fi
+ansible --version
+```
 
 ## Safety Rules
 - Do not commit or echo: `~/.ansible/vault-pass.txt`, private keys (`~/.ssh/proxmox_lxc`), token secrets.
