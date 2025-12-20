@@ -1,77 +1,70 @@
-# Agent Operating Instructions (Controller LXC)
+# Agent Operating Instructions
 
-Operate this repository **only** from the Proxmox LXC control node. Reference: `docs/reference/agent-control-node-reference.md`.
+**Project Type**: Ansible infrastructure-as-code (IaC)  
+**Purpose**: Automate Proxmox LXC provisioning, configuration, and service deployments  
+**Architecture**: Controller-based (all operations run from `ansible.faviann.vms` LXC)
 
 ## Non-negotiables
 - SSH into the controller LXC and run Ansible there (not from your dev machine).
 - Connect to the controller as `root@ansible.faviann.vms` over SSH (VS Code Remote SSH or plain shell).
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys).
+- Always run `git pull` before executing ansible commands.
 
-## Controller SSH Access
-- Preferred user/host: `root@ansible.faviann.vms`.
-- Host key policy: `StrictHostKeyChecking=accept-new` (first connect will trust and cache).
-- Recommended `~/.ssh/config` entry on your client:
+## Controller Access
+**SSH details**: See [docs/reference/agent-control-node-reference.md](docs/reference/agent-control-node-reference.md) for full SSH config and connection instructions.
 
-```
-Host ansible.faviann.vms
-		HostName ansible.faviann.vms
-		User root
-		IdentityFile ~/.ssh/proxmox_lxc
-		IdentitiesOnly yes
-		StrictHostKeyChecking accept-new
-```
+## Standard Paths
 
-- Quick connection tests:
-	- Plain SSH: `ssh ansible.faviann.vms 'hostname && whoami'`
-	- VS Code Remote SSH: select target `ansible.faviann.vms` (uses the above config).
+| Item | Location |
+|------|----------|
+| Repo root | `~/ServerManagementScripts` |
+| SSH key (private) | `~/.ssh/proxmox_lxc` |
+| Vault password | `~/.ansible/vault-pass.txt` (do not commit) |
+| Vaulted secrets | `inventory/group_vars/all/vault.yml` (encrypted) |
+| Fact cache | `.ansible/cache/` |
 
-## Standard locations (controller)
-- Repo workspace and `ansible.cfg`: repository root.
-- SSH key: `~/.ssh/proxmox_lxc` (private) and `~/.ssh/proxmox_lxc.pub` (public).
-- Vault password file (do not commit): `~/.ansible/vault-pass.txt`.
-- Vaulted secrets file (encrypted): `inventory/group_vars/all/vault.yml` (template: `.example`).
+## Inventory Structure
 
-## Host key behavior
-- Ansible disables strict host key checking (`host_key_checking = False` in `ansible.cfg`).
-- Proxmox SSH uses `StrictHostKeyChecking=accept-new` (see `inventory/group_vars/all/proxmox.yml`).
+| Type | Groups | Purpose |
+|------|--------|---------|
+| **Tiers** | `tier_tiny`, `tier_small`, `tier_medium`, `tier_large` | Resource allocation (mutually exclusive) |
+| **Capabilities** | `cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_service_agents` | Feature flags (compositional) |
+| **Special** | `proxmox_api`, `lxcs` | API controller + all LXC targets |
 
-## Host naming convention
-- LXCs resolve as `{{ inventory_hostname }}.faviann.vms` in the `lxcs` group.
-- Proxmox API host is set in `inventory/group_vars/all/proxmox.yml` (`proxmox_api_host`).
+**Naming**: LXCs resolve as `{{ inventory_hostname }}.faviann.vms`
 
-## Quick reference (venv-first)
-- **Pull latest changes**: `cd ~/ServerManagementScripts && git pull`
-- Activate venv: `source ~/.ansible/venv/bin/activate`
-- Bootstrap: `ansible-playbook bootstrap.yml`
-- Validate: `ansible-playbook -i inventory/hosts.yml site.yml --tags validation`
-- Full run: `ansible-playbook -i inventory/hosts.yml site.yml`
+## Variable Precedence
 
-### Smoke test (controller)
-- Activate venv: `source ~/.ansible/venv/bin/activate`
-- Check Ansible present: `ansible --version`
-- Ping a target from inventory: `ansible -i inventory/hosts.yml gatekeeper -m ping`
+Variables merge in this order (later overrides earlier):
+1. Role defaults (`roles/*/defaults/main.yml`)
+2. Global vars (`inventory/group_vars/all/*.yml`)
+3. Tier vars (`inventory/group_vars/tier_*/*.yml`)
+4. Capability vars (`inventory/group_vars/cap_*/*.yml`)
+5. Host vars (`inventory/host_vars/*.yml`)
 
-### First-time setup (venv-only)
-Run these on the controller as `root`:
+## Playbook Tags
 
-```
-# Ensure system prerequisites exist
-command -v python3 >/dev/null || (echo "python3 missing" && exit 1)
-python3 -m venv ~/.ansible/venv
-source ~/.ansible/venv/bin/activate
-python3 -m pip install --upgrade pip
-pip install ansible
-pip install -r ~/ServerManagementScripts/requirements/pip.txt
-```
+| Tag | Runs | Use Case |
+|-----|------|----------|
+| `validation` | API connectivity checks | Pre-flight validation |
+| `provision` | LXC creation via Proxmox API | Initial deployment |
+| `host_config` | Proxmox host-side config (pct) | Feature flags, bind mounts |
+| `configure` | In-LXC setup tasks | Docker, system updates, services |
 
-Then initialize from the repo:
+## Common Commands
 
-```
-cd ~/ServerManagementScripts
-source ~/.ansible/venv/bin/activate
-ansible --version
-ansible-playbook bootstrap.yml
-```
+| Command | Purpose | When to Use |
+|---------|---------|-------------|
+| `ansible-playbook bootstrap.yml` | Setup controller environment | First-time or after clean install |
+| `ansible-playbook site.yml` | Full orchestration run | Deploy/update all LXCs |
+| `ansible-playbook site.yml --tags validation` | API connectivity only | Pre-flight check |
+| `ansible-playbook site.yml --limit gatekeeper` | Target specific host(s) | Test changes on one LXC |
+| `ansible-playbook site.yml --check` | Dry run (no changes) | Preview what would change |
+| `ansible-playbook site.yml -vvv` | Verbose debug output | Troubleshoot failures |
+| `ansible -i inventory/hosts.yml lxcs -m ping` | Test connectivity | Verify SSH access |
+| `ansible-inventory -i inventory/hosts.yml --list` | Show computed variables | Debug variable precedence |
+
+**First-time setup**: See [docs/remote-controller-setup.md](docs/remote-controller-setup.md) for complete venv installation instructions.
 
 ### Venv guard (idempotent one-liner for agents)
 
@@ -90,13 +83,14 @@ fi
 ansible --version
 ```
 
-**When to use**: Place this before running any `ansible` or `ansible-playbook` commands, especially in new shell sessions, remote SSH connections, or automation scripts.
+## Troubleshooting Quick Hits
 
-**IMPORTANT**: Always run `git pull` before executing ansible commands to ensure you are using the latest playbooks and configurations:
-```bash
-cd ~/ServerManagementScripts
-git pull
-```
+- **Venv missing**: Run `ansible-playbook bootstrap.yml`
+- **Permission denied**: Check `~/.ansible/vault-pass.txt` exists
+- **SSH fails**: Verify controller pubkey in target LXC `~/.ssh/authorized_keys`
+- **API 403 (restricted features)**: Use `pct` on Proxmox host (see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md))
+- **Variable not applied**: Check precedence with `ansible-inventory -i inventory/hosts.yml --list`
+- **Stale facts**: Clear cache at `.ansible/cache/`
 
 ## Security rules
 - Do not commit or paste: `~/.ansible/vault-pass.txt`, any private key (`~/.ssh/proxmox_lxc`), or token secrets (keep them in encrypted `vault.yml` only).
@@ -112,3 +106,10 @@ Keep roles small, composable, and configurable.
 - Avoid hardcoded hostnames/paths/creds; inject via vars.
 - Declare dependencies in `meta/main.yml`; document required vars.
 - Ensure idempotency; use `assert` to fail fast on missing inputs.
+
+## Related Documentation
+
+- Full reference: [docs/reference/agent-control-node-reference.md](docs/reference/agent-control-node-reference.md)
+- Inventory guide: [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md)
+- SSH automation: [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md)
+- Initial setup: [docs/remote-controller-setup.md](docs/remote-controller-setup.md)
