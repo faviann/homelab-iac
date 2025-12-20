@@ -22,17 +22,7 @@
 
 - name: Build inventory VMID to hostnames mapping
   ansible.builtin.set_fact:
-    inventory_vmid_map: >-
-      {% set vmid_dict = {} %}
-      {% for host in groups['lxcs'] | default([]) %}
-      {%   set vmid = hostvars[host].proxmox_lxc_overrides.vmid | string %}
-      {%   if vmid in vmid_dict %}
-      {%     set _ = vmid_dict[vmid].append(host) %}
-      {%   else %}
-      {%     set _ = vmid_dict.update({vmid: [host]}) %}
-      {%   endif %}
-      {% endfor %}
-      {{ vmid_dict }}
+    inventory_vmid_map: "{% set vmid_dict = {} %}{% for host in groups['lxcs'] | default([]) %}{% set vmid = hostvars[host].proxmox_lxc_overrides.vmid | string %}{% if vmid in vmid_dict %}{% set _ = vmid_dict[vmid].append(host) %}{% else %}{% set _ = vmid_dict.update({vmid: [host]}) %}{% endif %}{% endfor %}{{ vmid_dict }}"
   tags:
     - validation
     - proxmox
