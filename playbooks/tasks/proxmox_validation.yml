@@ -30,11 +30,13 @@
 - name: Detect duplicate VMIDs across inventory
   ansible.builtin.set_fact:
     inventory_duplicate_vmids: >-
-      {{
-        inventory_vmid_map | dict2items
-        | selectattr('value', 'length', 'gt', 1)
-        | list
-      }}
+      {%- set duplicates = [] -%}
+      {%- for item in inventory_vmid_map | dict2items -%}
+        {%- if item.value | length > 1 -%}
+          {%- set _ = duplicates.append(item) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ duplicates }}
   tags:
     - validation
     - proxmox
