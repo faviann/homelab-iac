@@ -1,10 +1,10 @@
 ---
-# Host-specific configuration for the reverse proxy
+# Host-specific configuration for the download and seeding service
 # Inherits from: tier_medium, cap_docker
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
-  vmid: 300
+  vmid: 301
   hostname: seedpod
   description: "Download and seeding service managed via Ansible"
   tags:

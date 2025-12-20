@@ -146,3 +146,150 @@
   tags:
     - validation
     - proxmox
+
+# ============================================================================
+# Phase 3: VMID/Name Mismatch Detection
+# ============================================================================
+
+- name: Build Proxmox VMID to name lookup map
+  ansible.builtin.set_fact:
+    proxmox_vmid_to_name: >-
+      {% set lookup = {} %}
+      {% for container in proxmox_lxc_inventory_response.json.data | default([]) %}
+      {%   set _ = lookup.update({container.vmid | string: container.name | string}) %}
+      {% endfor %}
+      {{ lookup }}
+  tags:
+    - validation
+    - proxmox
+
+- name: Build Proxmox name to VMID lookup map
+  ansible.builtin.set_fact:
+    proxmox_name_to_vmid: >-
+      {% set lookup = {} %}
+      {% for container in proxmox_lxc_inventory_response.json.data | default([]) %}
+      {%   set _ = lookup.update({container.name | string: container.vmid | string}) %}
+      {% endfor %}
+      {{ lookup }}
+  tags:
+    - validation
+    - proxmox
+
+- name: Compare inventory expectations with Proxmox reality
+  ansible.builtin.set_fact:
+    lxc_validation_results: >-
+      {% set results = {} %}
+      {% for host in groups['lxcs'] | default([]) %}
+      {%   set expected_vmid = hostvars[host].proxmox_lxc_overrides.vmid | string %}
+      {%   set expected_name = hostvars[host].proxmox_lxc_overrides.hostname | default(host) | string %}
+      {%   set actual_name_for_vmid = proxmox_vmid_to_name.get(expected_vmid, None) %}
+      {%   set actual_vmid_for_name = proxmox_name_to_vmid.get(expected_name, None) %}
+      {%   set result = {'status': 'ok', 'type': 'unknown', 'inventory': {'vmid': expected_vmid, 'name': expected_name}, 'proxmox': {}, 'message': '', 'remediation': []} %}
+      {%   if actual_name_for_vmid is none and actual_vmid_for_name is none %}
+      {%     set _ = result.update({'type': 'absent_ok', 'message': 'Container does not exist in Proxmox (will be created)'}) %}
+      {%   elif actual_name_for_vmid == expected_name and actual_vmid_for_name == expected_vmid %}
+      {%     set _ = result.update({'type': 'match_ok', 'message': 'VMID and name match Proxmox state'}) %}
+      {%     set _ = result['proxmox'].update({'vmid': expected_vmid, 'name': expected_name}) %}
+      {%   elif actual_name_for_vmid is not none and actual_name_for_vmid != expected_name and actual_vmid_for_name is none %}
+      {%     set _ = result.update({'status': 'mismatch', 'type': 'id_match_name_mismatch'}) %}
+      {%     set _ = result.update({'message': "Host '" + host + "': Inventory expects [vmid=" + expected_vmid + ", name=" + expected_name + "], but Proxmox shows [vmid=" + expected_vmid + ", name=" + actual_name_for_vmid + "] - ID match, name mismatch"}) %}
+      {%     set _ = result['proxmox'].update({'vmid': expected_vmid, 'name': actual_name_for_vmid}) %}
+      {%     set _ = result['remediation'].append('Fix inventory name in inventory/host_vars/' + host + '.yml to match Proxmox: ' + actual_name_for_vmid) %}
+      {%     set _ = result['remediation'].append('OR rename container in Proxmox: pct set ' + expected_vmid + ' -hostname ' + expected_name) %}
+      {%     set _ = result['remediation'].append('OR destroy conflicting container: pct destroy ' + expected_vmid) %}
+      {%   elif actual_vmid_for_name is not none and actual_vmid_for_name != expected_vmid and actual_name_for_vmid is none %}
+      {%     set _ = result.update({'status': 'mismatch', 'type': 'name_match_id_mismatch'}) %}
+      {%     set _ = result.update({'message': "Host '" + host + "': Inventory expects [vmid=" + expected_vmid + ", name=" + expected_name + "], but Proxmox shows [vmid=" + actual_vmid_for_name + ", name=" + expected_name + "] - Name match, ID mismatch"}) %}
+      {%     set _ = result['proxmox'].update({'vmid': actual_vmid_for_name, 'name': expected_name}) %}
+      {%     set _ = result['remediation'].append('Fix inventory VMID in inventory/host_vars/' + host + '.yml to match Proxmox: ' + actual_vmid_for_name) %}
+      {%     set _ = result['remediation'].append('OR destroy conflicting container: pct destroy ' + actual_vmid_for_name) %}
+      {%   elif actual_name_for_vmid is not none and actual_vmid_for_name is not none and (actual_name_for_vmid != expected_name or actual_vmid_for_name != expected_vmid) %}
+      {%     set _ = result.update({'status': 'mismatch', 'type': 'cross_mismatch'}) %}
+      {%     set _ = result.update({'message': "Host '" + host + "': Inventory expects [vmid=" + expected_vmid + ", name=" + expected_name + "], but Proxmox shows [vmid=" + expected_vmid + " has name=" + actual_name_for_vmid + ", name=" + expected_name + " has vmid=" + actual_vmid_for_name + "] - Cross-mismatch"}) %}
+      {%     set _ = result['proxmox'].update({'vmid': expected_vmid, 'name': actual_name_for_vmid, 'name_owner_vmid': actual_vmid_for_name, 'vmid_owner_name': actual_name_for_vmid}) %}
+      {%     set _ = result['remediation'].append('Fix inventory VMID/name in inventory/host_vars/' + host + '.yml to match one of the Proxmox containers') %}
+      {%     set _ = result['remediation'].append('OR destroy one container: pct destroy ' + expected_vmid + ' (or ' + actual_vmid_for_name + ')') %}
+      {%     set _ = result['remediation'].append('OR rename one container: pct set ' + expected_vmid + ' -hostname ' + expected_name) %}
+      {%   endif %}
+      {%   set _ = results.update({host: result}) %}
+      {% endfor %}
+      {{ results }}
+  tags:
+    - validation
+    - proxmox
+
+- name: Build list of hosts with validation failures
+  ansible.builtin.set_fact:
+    lxc_validation_failed_hosts: >-
+      {{
+        lxc_validation_results | dict2items
+        | selectattr('value.status', 'equalto', 'mismatch')
+        | map(attribute='key')
+        | list
+      }}
+  tags:
+    - validation
+    - proxmox
+
+- name: Display VMID/name mismatch conflicts
+  ansible.builtin.debug:
+    msg: |
+      {% if lxc_validation_failed_hosts | length > 0 %}
+      ========================================
+      VMID/NAME CONFLICTS DETECTED
+      ========================================
+      {% for host in lxc_validation_failed_hosts %}
+      
+      {{ lxc_validation_results[host].message }}
+      Remediation options:
+      {% for rem in lxc_validation_results[host].remediation %}
+        - {{ rem }}
+      {% endfor %}
+      {% endfor %}
+      ========================================
+      {% else %}
+      All inventory LXC identities match Proxmox state (or containers do not yet exist).
+      {% endif %}
+  tags:
+    - validation
+    - proxmox
+
+- name: Report validation summary
+  ansible.builtin.debug:
+    msg: |
+      Validation Summary:
+        Total managed LXCs: {{ groups['lxcs'] | default([]) | length }}
+        Eligible for operations: {{ (groups['lxcs'] | default([]) | length) - (lxc_validation_failed_hosts | length) }}
+        Skipped due to conflicts: {{ lxc_validation_failed_hosts | length }}
+      {% if lxc_validation_failed_hosts | length > 0 %}
+        Conflicting hosts: {{ lxc_validation_failed_hosts | join(', ') }}
+      {% endif %}
+  tags:
+    - validation
+    - proxmox
+
+- name: Fail in strict mode if any mismatches exist
+  ansible.builtin.fail:
+    msg: |
+      STRICT MODE: VMID/name validation failed for {{ lxc_validation_failed_hosts | length }} host(s).
+      
+      Conflicting hosts: {{ lxc_validation_failed_hosts | join(', ') }}
+      
+      Review the conflicts above and resolve them before proceeding.
+      To allow playbook to continue with non-conflicting hosts, set proxmox_validation_strict: false in inventory/group_vars/all/proxmox.yml
+  when:
+    - proxmox_validation_strict | default(false) | bool
+    - lxc_validation_failed_hosts | length > 0
+  tags:
+    - validation
+    - proxmox
+
+- name: Propagate validation results to all LXC hosts for skip logic
+  ansible.builtin.add_host:
+    name: "{{ item }}"
+    lxc_validation_failed_hosts: "{{ lxc_validation_failed_hosts }}"
+    lxc_validation_results: "{{ lxc_validation_results }}"
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  tags:
+    - validation
+    - proxmox

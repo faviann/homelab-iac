@@ -199,6 +199,82 @@ proxmox_lxc_overrides:
 
 Variables in `group_vars/` should represent sensible defaults, not host-specific values. Host-specific tweaks belong in `proxmox_lxc_overrides`.
 
+### 4. Ensure Unique VMIDs
+
+Each LXC must have a unique VMID across the entire inventory. The validation system will detect and block duplicate VMID assignments before any provisioning occurs.
+
+```yaml
+# BAD - duplicate VMID
+gatekeeper:
+  proxmox_lxc_overrides:
+    vmid: 300  # ❌ Already used by another host
+
+# GOOD - unique VMID
+gatekeeper:
+  proxmox_lxc_overrides:
+    vmid: 300  # ✓ Unique across inventory
+```
+
+## Validation and Safety
+
+### VMID/Name Mismatch Detection
+
+The playbook includes automated validation to prevent configuration drift and accidental overwrites:
+
+**Pre-Provisioning Checks:**
+1. **Inventory duplicate VMID detection** - Blocks runs if multiple hosts claim the same VMID
+2. **Proxmox state comparison** - Compares inventory expectations against actual Proxmox containers
+3. **Strict name matching** - Container names must match exactly (no automatic FQDN normalization)
+
+**Detected Conflicts:**
+- **ID match, name mismatch**: VMID exists in Proxmox with different container name
+- **Name match, ID mismatch**: Container name exists with different VMID
+- **Cross-mismatch**: Both VMID and name exist but point to different containers
+
+**Behavior Modes:**
+
+```yaml
+# inventory/group_vars/all/proxmox.yml
+proxmox_validation_strict: false  # Default: skip conflicting hosts, continue with others
+proxmox_validation_strict: true   # Alternative: abort entire playbook on any conflict
+```
+
+**Default (non-strict) mode:**
+- Conflicting hosts are **skipped** in provision, host_config, and configure phases
+- Other hosts proceed normally
+- Summary shows eligible vs skipped host counts
+
+**Strict mode:**
+- **Entire playbook aborts** before provisioning if any conflicts exist
+- Use when you need guaranteed all-or-nothing deployment
+
+**Error Messages:**
+
+Conflicts include detailed remediation guidance:
+```
+Host 'gatekeeper': Inventory expects [vmid=300, name=gatekeeper], 
+but Proxmox shows [vmid=300, name=oldserver] - ID match, name mismatch
+
+Remediation options:
+  - Fix inventory name in inventory/host_vars/gatekeeper.yml to match Proxmox: oldserver
+  - OR rename container in Proxmox: pct set 300 -hostname gatekeeper
+  - OR destroy conflicting container: pct destroy 300
+```
+
+**Validation Execution:**
+
+Validation runs automatically (tagged with `always`) before any provisioning work:
+```bash
+# Run only validation (pre-flight check)
+ansible-playbook site.yml --tags validation
+
+# Full run (validation runs first automatically)
+ansible-playbook site.yml
+
+# Provision specific hosts (validation still runs first)
+ansible-playbook site.yml --limit gatekeeper --tags provision
+```
+
 ### 4. Override Only What You Need
 
 Leave CPU, memory, disk, network, and mount settings out of host_vars unless they genuinely differ. The provisioning role builds those from tier and capability groups automatically.

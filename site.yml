@@ -62,6 +62,7 @@
   collections:
     - community.proxmox
   tags:
+    - always
     - validation
     - proxmox
   tasks:
@@ -69,6 +70,7 @@
       ansible.builtin.include_tasks:
         file: "{{ [playbook_dir, 'playbooks', 'tasks', 'proxmox_validation.yml'] | path_join }}"
       tags:
+        - always
         - validation
         - proxmox
 
@@ -97,6 +99,7 @@
     - name: Provision LXC container
       ansible.builtin.include_role:
         name: proxmox_lxc_provision
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
       tags:
         - provision
 
@@ -109,7 +112,9 @@
             - provision
           delegate_to: "{{ proxmox_api_host }}"
           become: true
-      when: proxmox_lxc_host_config_enabled | default(true)
+      when:
+        - proxmox_lxc_host_config_enabled | default(true)
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
       tags:
         - host_config
         - provision
@@ -120,5 +125,8 @@
   tags:
     - configure
     - lxc_internal
-  roles:
-    - lxc_internal_setup
+  tasks:
+    - name: Run internal LXC setup
+      ansible.builtin.include_role:
+        name: lxc_internal_setup
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
