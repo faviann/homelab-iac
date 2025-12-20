@@ -1,5 +1,76 @@
 # Tasks to validate Proxmox API connectivity. Included dynamically so validation
 # logic can be reused from multiple playbooks while keeping tag scoping precise.
+
+# ============================================================================
+# Phase 1: Inventory-Internal Validation (Pre-API)
+# ============================================================================
+
+- name: Ensure all LXC hosts have defined VMIDs
+  ansible.builtin.assert:
+    that:
+      - hostvars[item].proxmox_lxc_overrides is defined
+      - hostvars[item].proxmox_lxc_overrides.vmid is defined
+      - hostvars[item].proxmox_lxc_overrides.vmid | string | length > 0
+    fail_msg: >-
+      Host '{{ item }}' is missing proxmox_lxc_overrides.vmid in inventory/host_vars/{{ item }}.yml.
+      All LXC hosts in the 'lxcs' group must define a unique VMID.
+    quiet: true
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  tags:
+    - validation
+    - proxmox
+
+- name: Build inventory VMID to hostnames mapping
+  ansible.builtin.set_fact:
+    inventory_vmid_map: >-
+      {% set vmid_dict = {} %}
+      {% for host in groups['lxcs'] | default([]) %}
+      {%   set vmid = hostvars[host].proxmox_lxc_overrides.vmid | string %}
+      {%   if vmid in vmid_dict %}
+      {%     set _ = vmid_dict[vmid].append(host) %}
+      {%   else %}
+      {%     set _ = vmid_dict.update({vmid: [host]}) %}
+      {%   endif %}
+      {% endfor %}
+      {{ vmid_dict }}
+  tags:
+    - validation
+    - proxmox
+
+- name: Detect duplicate VMIDs across inventory
+  ansible.builtin.set_fact:
+    inventory_duplicate_vmids: >-
+      {{
+        inventory_vmid_map | dict2items
+        | selectattr('value', 'length', 'gt', 1)
+        | list
+      }}
+  tags:
+    - validation
+    - proxmox
+
+- name: Fail if duplicate VMIDs exist in inventory
+  ansible.builtin.fail:
+    msg: |
+      CRITICAL: Duplicate VMID assignments detected in inventory!
+      
+      The following VMIDs are assigned to multiple hosts:
+      {% for dup in inventory_duplicate_vmids %}
+      VMID {{ dup.key }} assigned to: {{ dup.value | join(', ') }}
+      {% endfor %}
+      
+      Fix these conflicts in inventory/host_vars/*.yml before proceeding.
+      Each VMID must be unique across all LXC hosts.
+  when:
+    - inventory_duplicate_vmids | length > 0
+  tags:
+    - validation
+    - proxmox
+
+# ============================================================================
+# Phase 2: Proxmox API Validation
+# ============================================================================
+
 - name: Ensure required API inputs are available
   ansible.builtin.assert:
     that:
