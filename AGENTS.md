@@ -101,3 +101,14 @@ git pull
 ## Security rules
 - Do not commit or paste: `~/.ansible/vault-pass.txt`, any private key (`~/.ssh/proxmox_lxc`), or token secrets (keep them in encrypted `vault.yml` only).
 - Use placeholders like `<REPLACE_ME>` in docs or examples that mention secrets.
+
+## Role Design Guidelines (IaC)
+
+Keep roles small, composable, and configurable.
+
+- One role = one concern; split config, deploy, firewall, certs, etc.
+- Prefer extension via variables/defaults over task edits.
+- Keep variable names consistent across interchangeable roles.
+- Avoid hardcoded hostnames/paths/creds; inject via vars.
+- Declare dependencies in `meta/main.yml`; document required vars.
+- Ensure idempotency; use `assert` to fail fast on missing inputs.
