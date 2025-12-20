@@ -2,6 +2,26 @@
 
 Ansible automation for managing Proxmox LXC containers via API from a remote controller.
 
+## Quick Start (New Workstation)
+
+**One-command automated setup:**
+
+```bash
+git clone https://github.com/faviann/ServerManagementScripts.git
+cd ServerManagementScripts
+./setup.sh
+```
+
+The `setup.sh` script will:
+- ✅ Install system prerequisites (python3-venv, pip, sshpass)
+- ✅ Generate or prompt for vault password
+- ✅ Create isolated Python virtual environment
+- ✅ Install Ansible and dependencies
+- ✅ Generate SSH keys
+- ✅ Set up vault configuration
+
+**Manual setup:** See [detailed instructions below](#first-time-setup) or [MIGRATION.md](MIGRATION.md).
+
 ## Overview
 
 This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. All playbooks run from the **Proxmox LXC control node** (unprivileged Debian/Ubuntu LTS). Do not run Ansible from your dev machine.
@@ -20,11 +40,33 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 
 ## Prerequisites
 
-- **Controller**: Debian/Ubuntu LTS on the Proxmox LXC control node (unprivileged; do not run from a workstation)
-- **Python**: 3.10+ with `python3-venv` and `pip` available (used by the bootstrap playbook)
-- **Ansible dependencies**: Installed via `ansible-playbook bootstrap.yml`, which creates the controller virtual environment and pulls in `requirements/pip.txt` and `collections/requirements.yml`
-- **Network**: Controller must reach the Proxmox API (HTTPS port 8006)
+### System Requirements
+
+- **Operating System**: Debian/Ubuntu Linux (tested on Ubuntu 24.04 LTS)
+- **Python**: 3.10+ 
+- **Network**: Must reach Proxmox API (HTTPS port 8006)
 - **Proxmox**: API token with LXC management permissions
+
+### Required System Packages (Install First)
+
+Before running bootstrap, install these packages:
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv python3-pip sshpass
+```
+
+**Package purposes:**
+- `python3-venv` - Creates isolated Python environments
+- `python3-pip` - Python package installer
+- `sshpass` - Required for initial SSH key distribution to Proxmox host
+
+### Ansible Dependencies
+
+Installed automatically via `ansible-playbook bootstrap.yml`:
+- Ansible core and collections (from `requirements/pip.txt` and `collections/requirements.yml`)
+- Python libraries for Proxmox API communication
+- SSH key generation utilities
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
@@ -43,25 +85,85 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
 
 ## First-Time Setup
 
-1. **Bootstrap the controller dependencies.**
+### Automated Setup (Recommended)
+
+Run the automated setup script:
+
+```bash
+./setup.sh
+```
+
+This handles all prerequisites, creates the virtual environment, generates vault passwords, and prepares the project for use.
+
+### Manual Setup
+
+If you prefer manual setup or need to troubleshoot:
+
+1. **Install system prerequisites:**
+
+   ```bash
+   sudo apt update
+   sudo apt install -y python3-venv python3-pip sshpass
+   ```
+
+2. **Create vault password file:**
+
+   ```bash
+   # Option 1: Generate secure random password
+   openssl rand -base64 32 | tr -d "=+/" | cut -c1-32 > .ansible/vault-pass.txt
+   chmod 600 .ansible/vault-pass.txt
+   
+   # Option 2: Use your own password
+   echo "your-passphrase" > .ansible/vault-pass.txt
+   chmod 600 .ansible/vault-pass.txt
+   ```
+
+3. **Create and activate virtual environment:**
+
+   ```bash
+   python3 -m venv .ansible/venv
+   source .ansible/venv/bin/activate
+   pip install --upgrade pip
+   pip install ansible
+   ```
+
+4. **Run bootstrap:**
 
    ```bash
    ansible-playbook bootstrap.yml
    ```
 
-   This play creates the controller virtual environment under `.ansible/venv`, installs Python packages from `requirements/pip.txt`, downloads collections from `collections/requirements.yml`, and prepares SSH material. Re-run this play whenever those dependency files change or you upgrade Ansible components.
+   This creates SSH keys, installs collections, and prepares Python dependencies.
 
-2. **Configure secrets and inventory.**
-
-   Create and encrypt `inventory/group_vars/all/vault.yml` with your Proxmox API credentials (see [Configuration](#configuration) section below).
-
-3. **Run the orchestration with `site.yml`.**
+5. **Configure secrets:**
 
    ```bash
-   ansible-playbook -i inventory/hosts.yml site.yml
+   cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
+   # Edit vault.yml with your Proxmox API token secret
+   ansible-vault encrypt inventory/group_vars/all/vault.yml
    ```
 
-   On first run, the playbook will:
+### After Setup
+
+Activate the environment:
+
+### After Setup
+
+Activate the environment:
+
+```bash
+source activate-env.sh
+```
+
+Test connectivity:
+
+```bash
+ansible-playbook site.yml --tags validation
+```
+
+## Usage
+
+### Running Playbooks
    - Verify bootstrap prerequisites
    - **Automatically detect if SSH access to the Proxmox host is configured**
    - **Prompt for the Proxmox root password only if needed** to add your SSH key

@@ -3,6 +3,7 @@ control_node_packages:
   - python3-venv
   - sshpass  # Required for initial SSH key setup to Proxmox hosts
 control_node_package_become: true
+control_node_skip_system_packages: true  # Skip by default; pre-install packages on workstation
 control_node_pip_become: false
 control_node_pip_extra_args: null
 control_node_pip_executable: null

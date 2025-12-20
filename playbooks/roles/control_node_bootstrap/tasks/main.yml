@@ -1,7 +1,7 @@
 ---
 - name: Determine control node home directory
   ansible.builtin.set_fact:
-    control_node_home_dir: "{{ ansible_env.HOME | default(lookup('env', 'HOME')) }}"
+    control_node_home_dir: "{{ ansible_facts['env']['HOME'] | default(lookup('env', 'HOME')) }}"
   when: control_node_home_dir is not defined
 
 - name: Determine project root directory
@@ -82,7 +82,9 @@
     name: "{{ control_node_packages }}"
     state: present
   become: "{{ control_node_package_become }}"
-  when: control_node_packages | length > 0
+  when:
+    - control_node_packages | length > 0
+    - not control_node_skip_system_packages
 
 - name: Check pip requirements file
   ansible.builtin.stat:

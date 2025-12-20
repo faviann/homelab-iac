@@ -60,31 +60,54 @@ The project is now **fully portable** - all Ansible artifacts are stored within 
 
 ### Fresh setup on a new workstation:
 
-1. **Clone the repository**:
+**Automated (Recommended):**
+
+```bash
+git clone <your-repo-url> ServerManagementScripts
+cd ServerManagementScripts
+./setup.sh
+```
+
+The setup script handles everything automatically, including:
+- Installing system prerequisites
+- Generating/configuring vault password
+- Creating Python virtual environment
+- Running bootstrap
+- Setting up vault configuration
+
+**Manual Setup:**
+
+1. **Install system prerequisites**:
+   ```bash
+   sudo apt update
+   sudo apt install -y python3-venv python3-pip sshpass
+   ```
+
+2. **Clone the repository**:
    ```bash
    git clone <your-repo-url> ServerManagementScripts
    cd ServerManagementScripts
    ```
 
-2. **Create vault password file**:
+3. **Create vault password file**:
    ```bash
    echo "your-vault-passphrase" > .ansible/vault-pass.txt
    chmod 600 .ansible/vault-pass.txt
    ```
 
-3. **Run bootstrap** (creates venv and SSH keys):
+4. **Run bootstrap** (creates venv and SSH keys):
    ```bash
    ansible-playbook bootstrap.yml
    ```
 
-4. **Configure vault secrets**:
+5. **Configure vault secrets**:
    ```bash
    cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
    # Edit vault.yml with your Proxmox API token secret
    ansible-vault encrypt inventory/group_vars/all/vault.yml
    ```
 
-5. **Test connectivity**:
+6. **Test connectivity**:
    ```bash
    source activate-env.sh
    ansible-playbook site.yml --tags validation

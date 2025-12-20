@@ -4,6 +4,7 @@
   hosts: localhost
   connection: local
   gather_facts: true
+  become: false  # Run as regular user; system packages must be pre-installed
   tags:
     - always
     - bootstrap
