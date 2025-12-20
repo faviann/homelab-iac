@@ -20,31 +20,38 @@
     - validation
     - proxmox
 
-- name: Build inventory VMID to hostnames mapping
+- name: Initialize inventory VMID mapping (vmid -> hosts)
   ansible.builtin.set_fact:
-    inventory_vmid_map: >-
-      {% set vmid_dict = {} %}
-      {% for host in groups['lxcs'] | default([]) %}
-      {%   set vmid = hostvars[host].proxmox_lxc_overrides.vmid | string %}
-      {%   if vmid in vmid_dict %}
-      {%     set _ = vmid_dict[vmid].append(host) %}
-      {%   else %}
-      {%     set _ = vmid_dict.update({vmid: [host]}) %}
-      {%   endif %}
-      {% endfor %}
-      {{ vmid_dict }}
+    inventory_vmid_map: {}
+  tags:
+    - validation
+    - proxmox
+
+- name: Build inventory VMID mapping (vmid -> hosts)
+  ansible.builtin.set_fact:
+    inventory_vmid_map: "{{ inventory_vmid_map | combine({vmid: (inventory_vmid_map[vmid] | default([])) + [item]}) }}"
+  vars:
+    vmid: "{{ hostvars[item].proxmox_lxc_overrides.vmid | string }}"
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  tags:
+    - validation
+    - proxmox
+
+- name: Validate inventory VMID mapping type
+  ansible.builtin.assert:
+    that:
+      - inventory_vmid_map is mapping
+    fail_msg: >-
+      Internal validation error: inventory_vmid_map must be a dictionary but got
+      {{ inventory_vmid_map | type_debug }}. This usually indicates a templating/rendering issue.
+    quiet: true
   tags:
     - validation
     - proxmox
 
 - name: Detect duplicate VMIDs across inventory
   ansible.builtin.set_fact:
-    inventory_duplicate_vmids: >-
-      {{
-        inventory_vmid_map | dict2items
-        | selectattr('value', 'length', 'gt', 1)
-        | list
-      }}
+    inventory_duplicate_vmids: "{{ inventory_vmid_map | dict2items | selectattr('value', 'length', 'gt', 1) | list }}"
   tags:
     - validation
     - proxmox
@@ -56,7 +63,7 @@
       
       The following VMIDs are assigned to multiple hosts:
       {% for dup in inventory_duplicate_vmids %}
-      VMID {{ dup.key }} assigned to: {{ dup.value | join(', ') }}
+      VMID {{ dup.key }} assigned to: {{ dup.value | map('regex_replace', '^(.*)$', '\\1 (inventory/host_vars/\\1.yml)') | join(', ') }}
       {% endfor %}
       
       Fix these conflicts in inventory/host_vars/*.yml before proceeding.
