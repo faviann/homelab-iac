@@ -11,18 +11,18 @@
 
 - name: Derive control node paths
   ansible.builtin.set_fact:
-    control_node_ssh_directory: "{{ control_node_ssh_directory | default(([control_node_home_dir, '.ssh'] | path_join)) }}"
-    control_node_ansible_directory: "{{ control_node_ansible_directory | default(([control_node_home_dir, '.ansible'] | path_join)) }}"
-    control_node_ssh_private_key_path: "{{ control_node_ssh_private_key_path | default(([control_node_home_dir, '.ssh', 'proxmox_lxc'] | path_join)) }}"
-    control_node_ssh_public_key_path: "{{ control_node_ssh_public_key_path | default(([control_node_home_dir, '.ssh', 'proxmox_lxc.pub'] | path_join)) }}"
-    control_node_vault_password_file: "{{ control_node_vault_password_file | default(([control_node_home_dir, '.ansible', 'vault-pass.txt'] | path_join)) }}"
+    control_node_ssh_directory: "{{ control_node_ssh_directory | default(([control_node_project_root, '.ansible', 'ssh'] | path_join)) }}"
+    control_node_ansible_directory: "{{ control_node_ansible_directory | default(([control_node_project_root, '.ansible'] | path_join)) }}"
+    control_node_ssh_private_key_path: "{{ control_node_ssh_private_key_path | default(([control_node_project_root, '.ansible', 'ssh', 'proxmox_lxc'] | path_join)) }}"
+    control_node_ssh_public_key_path: "{{ control_node_ssh_public_key_path | default(([control_node_project_root, '.ansible', 'ssh', 'proxmox_lxc.pub'] | path_join)) }}"
+    control_node_vault_password_file: "{{ control_node_vault_password_file | default(([control_node_project_root, '.ansible', 'vault-pass.txt'] | path_join)) }}"
     control_node_pip_requirements: "{{ control_node_pip_requirements | default(([control_node_project_root, 'requirements', 'pip.txt'] | path_join)) }}"
     control_node_collection_requirements: "{{ control_node_collection_requirements | default(([control_node_project_root, 'collections', 'requirements.yml'] | path_join)) }}"
     control_node_collection_install_path: "{{ control_node_collection_install_path | default(([control_node_project_root, 'collections'] | path_join)) }}"
 
 - name: Derive control node Python tooling paths
   ansible.builtin.set_fact:
-    control_node_pip_virtualenv: "{{ control_node_pip_virtualenv | default(([control_node_ansible_directory, 'venv'] | path_join), true) }}"
+    control_node_pip_virtualenv: "{{ control_node_pip_virtualenv | default(([control_node_project_root, '.ansible', 'venv'] | path_join), true) }}"
     control_node_pip_virtualenv_command: "{{ control_node_pip_virtualenv_command | default('python3 -m venv', true) }}"
 
 - name: Ensure SSH directory exists

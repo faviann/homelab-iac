@@ -22,7 +22,7 @@ Information-only reference for agents operating this repository from the Proxmox
 Host ansible.faviann.vms
     HostName ansible.faviann.vms
     User root
-    IdentityFile ~/.ssh/proxmox_lxc
+    IdentityFile ~/ServerManagementScripts/.ansible/ssh/proxmox_lxc
     IdentitiesOnly yes
     StrictHostKeyChecking accept-new
 ```
@@ -33,12 +33,12 @@ Host ansible.faviann.vms
 
 ## Controller Paths and Tooling
 - Repo root: cloned on the controller (`ansible.cfg` lives here).
-- Virtualenv: `~/.ansible/venv` (created by `bootstrap.yml`).
+- Virtualenv: `.ansible/venv` (project-relative, created by `bootstrap.yml`).
 - Collections install path: `collections/` (see `collections/requirements.yml`).
 - Python requirements: `requirements/pip.txt`.
-- SSH key for Ansible: `~/.ssh/proxmox_lxc` (private) and `~/.ssh/proxmox_lxc.pub` (public).
-- Vault password file (do not commit): `~/.ansible/vault-pass.txt`.
-- Ansible config highlights: `host_key_checking = False`, `private_key_file = ~/.ssh/proxmox_lxc`, `vault_password_file = ~/.ansible/vault-pass.txt`, fact cache under `.ansible/cache`.
+- SSH key for Ansible: `.ansible/ssh/proxmox_lxc` (private) and `.ansible/ssh/proxmox_lxc.pub` (public, project-relative).
+- Vault password file (do not commit): `.ansible/vault-pass.txt` (project-relative).
+- Ansible config highlights: `host_key_checking = False`, `private_key_file = .ansible/ssh/proxmox_lxc`, `vault_password_file = .ansible/vault-pass.txt`, fact cache under `.ansible/cache`.
 
 ## Inventory and Naming
 - Inventory file: `inventory/hosts.yml`.
@@ -73,7 +73,7 @@ Host ansible.faviann.vms
   - `playbooks/lxc-provision.yml`: provision LXCs with pre/post host prep.
 
 ## Command Reference (run on controller, venv-first)
-- Activate venv: `source ~/.ansible/venv/bin/activate`
+- Activate venv: `source .ansible/venv/bin/activate`
 - Bootstrap: `ansible-playbook bootstrap.yml`
 - Full orchestration: `ansible-playbook -i inventory/hosts.yml site.yml`
 - Validation only: `ansible-playbook -i inventory/hosts.yml site.yml --tags validation`
@@ -82,7 +82,7 @@ Host ansible.faviann.vms
 - Connectivity check: `ansible-playbook playbooks/lab-connectivity.yml`
 
 ### Minimal Smoke Test (venv-first)
-- Activate venv: `source ~/.ansible/venv/bin/activate`
+- Activate venv: `source .ansible/venv/bin/activate`
 - Confirm Ansible available: `ansible --version`
 - Ping `gatekeeper` from inventory: `ansible -i inventory/hosts.yml gatekeeper -m ping`
 
@@ -90,18 +90,18 @@ Host ansible.faviann.vms
 If `ansible` is not present, create and seed the controller venv:
 
 ```
-python3 -m venv ~/.ansible/venv
-source ~/.ansible/venv/bin/activate
+python3 -m venv .ansible/venv
+source .ansible/venv/bin/activate
 python3 -m pip install --upgrade pip
 pip install ansible
-pip install -r ~/ServerManagementScripts/requirements/pip.txt
+pip install -r requirements/pip.txt
 ```
 
 Then bootstrap the repo environment:
 
 ```
 cd ~/ServerManagementScripts
-source ~/.ansible/venv/bin/activate
+source .ansible/venv/bin/activate
 ansible --version
 ansible-playbook bootstrap.yml
 ```
@@ -109,20 +109,22 @@ ansible-playbook bootstrap.yml
 Venv guard (copy-paste):
 
 ```
-if [ -x "$HOME/.ansible/venv/bin/ansible" ]; then
-  . "$HOME/.ansible/venv/bin/activate"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$PWD}")" && pwd)"
+if [ -x "$PROJECT_ROOT/.ansible/venv/bin/ansible" ]; then
+  . "$PROJECT_ROOT/.ansible/venv/bin/activate"
 else
-  python3 -m venv "$HOME/.ansible/venv"
-  . "$HOME/.ansible/venv/bin/activate"
+  cd "$PROJECT_ROOT"
+  python3 -m venv ".ansible/venv"
+  . ".ansible/venv/bin/activate"
   python3 -m pip install --upgrade pip
   pip install ansible
-  pip install -r "$HOME/ServerManagementScripts/requirements/pip.txt"
+  pip install -r "requirements/pip.txt"
 fi
 ansible --version
 ```
 
 ## Safety Rules
-- Do not commit or echo: `~/.ansible/vault-pass.txt`, private keys (`~/.ssh/proxmox_lxc`), token secrets.
+- Do not commit or echo: `.ansible/vault-pass.txt`, private keys (`.ansible/ssh/proxmox_lxc`), token secrets.
 - Keep Ansible runs on the controller; do not reset hosts or modify user-provided files outside writable scope.
 - Use placeholders like `<REPLACE_ME>` in docs/examples that mention secrets.
 

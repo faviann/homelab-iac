@@ -8,7 +8,7 @@ If you're using an IDE agent (Copilot/Codex), follow the repo contract in `AGENT
 ```bash
 ansible-playbook bootstrap.yml
 ```
-This play creates the controller virtual environment under `~/.ansible/venv`, installs Python dependencies from `requirements/pip.txt`, fetches collections from `collections/requirements.yml`, and generates the SSH key material used by other plays. Re-run it whenever you change dependency files or upgrade Ansible components.
+This play creates the controller virtual environment under `.ansible/venv`, installs Python dependencies from `requirements/pip.txt`, fetches collections from `collections/requirements.yml`, and generates the SSH key material used by other plays. Re-run it whenever you change dependency files or upgrade Ansible components.
 
 ## 2) Configure Proxmox API credentials with Ansible Vault
 ```bash
@@ -18,8 +18,8 @@ ansible-vault encrypt inventory/group_vars/all/vault.yml
 ```
 Optional local vault password file (do **not** commit):
 ```bash
-echo "your-strong-passphrase" > ~/.ansible/vault-pass.txt
-chmod 600 ~/.ansible/vault-pass.txt
+echo "your-strong-passphrase" > .ansible/vault-pass.txt
+chmod 600 .ansible/vault-pass.txt
 ```
 
 Set non-secret vars in `inventory/group_vars/all/proxmox.yml`:
@@ -34,7 +34,7 @@ Edit `inventory/hosts.yml` as needed. The `proxmox_api` group is for API tasks (
 ## 4) Pull latest repository changes
 Before running any playbooks, ensure you have the latest changes from the repository:
 ```bash
-cd ~/ServerManagementScripts
+cd /path/to/ServerManagementScripts  # or wherever you cloned the repo
 git pull
 ```
 This prevents running outdated playbooks and ensures all recent bug fixes and features are applied.

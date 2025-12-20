@@ -15,6 +15,13 @@ vault-pass.txt
 
 # Fact cache
 /tmp/ansible_facts/
+.ansible/cache/
+
+# Local control node artifacts (portable project setup)
+.ansible/venv/
+.ansible/vault-pass.txt
+.ansible/ssh/
+.ansible/cp/
 
 # Backup files
 *.bak

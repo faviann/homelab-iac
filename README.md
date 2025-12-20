@@ -49,7 +49,7 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
    ansible-playbook bootstrap.yml
    ```
 
-   This play creates the controller virtual environment under `~/.ansible/venv`, installs Python packages from `requirements/pip.txt`, downloads collections from `collections/requirements.yml`, and prepares SSH material. Re-run this play whenever those dependency files change or you upgrade Ansible components.
+   This play creates the controller virtual environment under `.ansible/venv`, installs Python packages from `requirements/pip.txt`, downloads collections from `collections/requirements.yml`, and prepares SSH material. Re-run this play whenever those dependency files change or you upgrade Ansible components.
 
 2. **Configure secrets and inventory.**
 
@@ -179,7 +179,7 @@ The automation requires SSH access to the Proxmox host to apply certain configur
 **Manual Setup** (optional): If you prefer to configure SSH access manually:
 ```bash
 # Copy your public key to Proxmox
-ssh-copy-id -i ~/.ssh/proxmox_lxc.pub root@proxmox.internal.faviann.com
+ssh-copy-id -i .ansible/ssh/proxmox_lxc.pub root@proxmox.internal.faviann.com
 ```
 
 After initial setup, all subsequent playbook runs will use passwordless SSH authentication.

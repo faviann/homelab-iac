@@ -358,7 +358,7 @@ Variables are inherited from:
 **Solutions**:
 - Verify container is running: `pct status <vmid>`
 - Check SSH key was injected during provisioning
-- Test manual SSH: `ssh -i ~/.ssh/proxmox_lxc root@{hostname}.faviann.vms`
+- Test manual SSH: `ssh -i .ansible/ssh/proxmox_lxc root@{hostname}.faviann.vms`
 - Verify DNS resolution: `ping {hostname}.faviann.vms`
 
 ### Docker compose fails to start
