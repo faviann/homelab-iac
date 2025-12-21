@@ -1,0 +1,128 @@
+---
+# Playbook to add control node SSH key to existing LXC containers
+# This does NOT delete containers - it only adds the SSH public key to authorized_keys
+#
+# Usage:
+#   ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
+#   ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit gatekeeper
+
+- name: Add SSH keys to existing LXC containers via Proxmox host
+  hosts: lxcs
+  gather_facts: false
+  tags:
+    - ssh_setup
+    - bootstrap
+
+  vars:
+    control_node_ssh_public_key_path: "{{ playbook_dir }}/../.ansible/ssh/proxmox_lxc.pub"
+
+  tasks:
+    - name: Load control node SSH public key
+      ansible.builtin.set_fact:
+        control_node_ssh_pubkey: "{{ lookup('file', control_node_ssh_public_key_path) }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Ensure container VMID is defined
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_overrides is defined
+          - proxmox_lxc_overrides.vmid is defined
+        fail_msg: "VMID not defined for {{ inventory_hostname }}"
+
+    - name: Check if container exists on Proxmox
+      ansible.builtin.command:
+        cmd: "pct status {{ proxmox_lxc_overrides.vmid }}"
+      register: container_status
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: Skip non-existent containers
+      ansible.builtin.debug:
+        msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist - skipping"
+      when: container_status.rc != 0
+
+    - name: Create .ssh directory in container
+      ansible.builtin.command:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- mkdir -p /root/.ssh"
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
+      when: container_status.rc == 0
+      changed_when: true
+
+    - name: Set .ssh directory permissions
+      ansible.builtin.command:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 700 /root/.ssh"
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
+      when: container_status.rc == 0
+      changed_when: false
+
+    - name: Check if SSH key already exists in authorized_keys
+      ansible.builtin.shell:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -qF '{{ control_node_ssh_pubkey }}' /root/.ssh/authorized_keys 2>/dev/null"
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
+      register: key_exists
+      when: container_status.rc == 0
+      changed_when: false
+      failed_when: false
+
+    - name: Add SSH public key to authorized_keys (idempotent)
+      ansible.builtin.shell:
+        cmd: |
+          pct exec {{ proxmox_lxc_overrides.vmid }} -- bash -c "echo '{{ control_node_ssh_pubkey }}' >> /root/.ssh/authorized_keys"
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
+      when:
+        - container_status.rc == 0
+        - key_exists.rc != 0
+      changed_when: true
+
+    - name: Set authorized_keys permissions
+      ansible.builtin.command:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 600 /root/.ssh/authorized_keys"
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
+      when: container_status.rc == 0
+      changed_when: false
+
+    - name: Verify SSH key is present
+      ansible.builtin.shell:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -c '{{ control_node_ssh_pubkey }}' /root/.ssh/authorized_keys"
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
+      register: key_verify
+      when: container_status.rc == 0
+      changed_when: false
+      failed_when: key_verify.stdout == "0"
+
+    - name: Report SSH key installation status
+      ansible.builtin.debug:
+        msg: "SSH key successfully installed on {{ inventory_hostname }} (VMID {{ proxmox_lxc_overrides.vmid }})"
+      when: container_status.rc == 0
+
+- name: Test SSH connectivity to updated containers
+  hosts: lxcs
+  gather_facts: false
+  tags:
+    - verify
+    - ssh_test
+
+  tasks:
+    - name: Test SSH connection with new key
+      ansible.builtin.ping:
+      register: ping_result
+      ignore_errors: true
+
+    - name: Report SSH connectivity status
+      ansible.builtin.debug:
+        msg: "✓ SSH connection successful to {{ inventory_hostname }}"
+      when: ping_result is succeeded
+
+    - name: Report SSH connectivity failure
+      ansible.builtin.debug:
+        msg: "✗ SSH connection failed to {{ inventory_hostname }} - manual intervention may be needed"
+      when: ping_result is failed
