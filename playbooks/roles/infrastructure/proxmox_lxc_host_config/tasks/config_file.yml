@@ -1,6 +1,7 @@
 ---
 # Apply LXC configuration file modifications
 # These settings cannot be set via the Proxmox API and require direct file editing
+# Modular structure: Each feature is handled by a separate task file for maintainability
 
 - name: Determine LXC configuration file path
   ansible.builtin.set_fact:
@@ -18,57 +19,16 @@
     msg: "LXC configuration file {{ _lxc_config_file }} not found. Ensure container is created first."
   when: not _lxc_config_stat.stat.exists
 
-- name: Remove all existing UID/GID ID mappings
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    regexp: '^lxc\.idmap:'
-    state: absent
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
-  when:
-    - proxmox_lxc_idmap is defined
-    - proxmox_lxc_idmap | length > 0
-  tags:
-    - idmap
-
 - name: Apply UID/GID ID mappings
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    line: "lxc.idmap: {{ item }}"
-    insertafter: '^unprivileged:'
-    create: false
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
-  loop: "{{ proxmox_lxc_idmap }}"
+  ansible.builtin.include_tasks: config_file_idmap.yml
   when:
     - proxmox_lxc_idmap is defined
     - proxmox_lxc_idmap | length > 0
   tags:
     - idmap
-
-- name: Remove all existing bind mount points
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    regexp: '^mp\d+:'
-    state: absent
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
-  when:
-    - proxmox_lxc_bind_mounts is defined
-    - proxmox_lxc_bind_mounts | length > 0
-  tags:
-    - bind_mounts
-    - mounts
 
 - name: Apply bind mount points
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    line: "{{ item.key }}: {{ item.value }}"
-    insertafter: '^rootfs:'
-    create: false
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
-  loop: "{{ proxmox_lxc_bind_mounts | dict2items }}"
+  ansible.builtin.include_tasks: config_file_bind_mounts.yml
   when:
     - proxmox_lxc_bind_mounts is defined
     - proxmox_lxc_bind_mounts | length > 0
@@ -76,49 +36,13 @@
     - bind_mounts
     - mounts
 
-- name: Apply WireGuard tun device access
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    regexp: '^lxc\.mount\.entry:.*dev/net/tun'
-    line: "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
-    state: "{{ 'present' if (wireguard_kernel_module_access | default(false) | bool) else 'absent' }}"
-    create: false
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
+- name: Apply WireGuard configuration
+  ansible.builtin.include_tasks: config_file_wireguard.yml
   tags:
     - wireguard
 
-- name: Remove existing NVIDIA GPU runtime configuration
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    regexp: "{{ item }}"
-    state: absent
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
-  loop:
-    - '^lxc\.hook\.pre-start:.*nvidia-modprobe'
-    - '^lxc\.environment:.*NVIDIA_VISIBLE_DEVICES'
-    - '^lxc\.environment:.*NVIDIA_DRIVER_CAPABILITIES'
-    - '^lxc\.hook\.mount:.*nvidia'
-  when: not (configure_nvidia_runtime | default(false) | bool)
-  tags:
-    - gpu
-    - nvidia
-
-- name: Apply NVIDIA GPU runtime configuration
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    line: "{{ item }}"
-    insertafter: EOF
-    create: false
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
-  loop:
-    - "lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'"
-    - "lxc.environment: NVIDIA_VISIBLE_DEVICES=all"
-    - "lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
-    - "lxc.hook.mount: /usr/share/lxc/hooks/nvidia"
-  when: configure_nvidia_runtime | default(false) | bool
+- name: Apply NVIDIA GPU configuration
+  ansible.builtin.include_tasks: config_file_nvidia.yml
   tags:
     - gpu
     - nvidia

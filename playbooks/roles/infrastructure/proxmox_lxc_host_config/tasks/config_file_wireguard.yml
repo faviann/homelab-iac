@@ -1,0 +1,13 @@
+---
+# Apply WireGuard tun device access configuration
+# Already idempotent via state: present/absent with regexp matching
+
+- name: Apply WireGuard tun device access
+  ansible.builtin.lineinfile:
+    path: "{{ _lxc_config_file }}"
+    regexp: '^lxc\.mount\.entry:.*dev/net/tun'
+    line: "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
+    state: "{{ 'present' if (wireguard_kernel_module_access | default(false) | bool) else 'absent' }}"
+    create: false
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true

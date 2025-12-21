@@ -1,0 +1,37 @@
+---
+# Apply UID/GID ID mapping configuration
+# Idempotent: Only updates if mappings differ from current state
+
+- name: Get current UID/GID ID mappings
+  ansible.builtin.shell: |
+    grep '^lxc\.idmap:' {{ _lxc_config_file }} | sed 's/^lxc\.idmap:\s*//' | sort
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  register: _current_idmap
+  changed_when: false
+  failed_when: false
+
+- name: Determine desired ID mappings (sorted)
+  ansible.builtin.set_fact:
+    _desired_idmap: "{{ proxmox_lxc_idmap | sort | join('\n') }}"
+
+- name: Update ID mappings only if different
+  when: _current_idmap.stdout != _desired_idmap
+  block:
+    - name: Remove all existing UID/GID ID mappings
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        regexp: '^lxc\.idmap:'
+        state: absent
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: true
+
+    - name: Apply UID/GID ID mappings
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        line: "lxc.idmap: {{ item }}"
+        insertafter: '^unprivileged:'
+        create: false
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: true
+      loop: "{{ proxmox_lxc_idmap }}"

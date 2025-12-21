@@ -1,0 +1,37 @@
+---
+# Apply bind mount configuration
+# Idempotent: Only updates if mounts differ from current state
+
+- name: Get current bind mounts
+  ansible.builtin.shell: |
+    grep '^mp[0-9]\+:' {{ _lxc_config_file }} | sort
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  register: _current_mounts
+  changed_when: false
+  failed_when: false
+
+- name: Determine desired bind mounts (sorted)
+  ansible.builtin.set_fact:
+    _desired_mounts: "{{ proxmox_lxc_bind_mounts | dict2items | map(attribute='key') | zip(proxmox_lxc_bind_mounts | dict2items | map(attribute='value')) | map('join', ': ') | list | sort | join('\n') }}"
+
+- name: Update bind mounts only if different
+  when: _current_mounts.stdout != _desired_mounts
+  block:
+    - name: Remove all existing bind mount points
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        regexp: '^mp\d+:'
+        state: absent
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: true
+
+    - name: Apply bind mount points
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        line: "{{ item.key }}: {{ item.value }}"
+        insertafter: '^rootfs:'
+        create: false
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: true
+      loop: "{{ proxmox_lxc_bind_mounts | dict2items }}"
