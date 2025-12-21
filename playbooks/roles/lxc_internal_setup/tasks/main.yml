@@ -8,7 +8,7 @@
 
 - name: Ensure container is accessible via SSH
   ansible.builtin.wait_for_connection:
-    timeout: 60
+    timeout: 15
   register: _connection_check
   retries: 3
   delay: 10

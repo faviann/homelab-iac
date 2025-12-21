@@ -71,6 +71,7 @@ Variables merge in this order (later overrides earlier):
 | `ansible-playbook site.yml -vvv` | Verbose debug output | Troubleshoot failures |
 | `ansible -i inventory/hosts.yml lxcs -m ping` | Test connectivity | Verify SSH access |
 | `ansible-inventory -i inventory/hosts.yml --list` | Show computed variables | Debug variable precedence |
+| `ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml` | Manually add SSH keys to LXCs | Only if site.yml SSH step fails |
 
 **First-time setup**: See [docs/remote-controller-setup.md](docs/remote-controller-setup.md) for complete venv installation instructions.
 
@@ -96,9 +97,10 @@ ansible --version
 
 ## Troubleshooting Quick Hits
 
+- **"Permission denied (publickey)" on LXCs**: SSH key injection runs automatically in site.yml. If it fails, check `.ansible/ssh/proxmox_lxc.pub` exists and run `ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml` manually
 - **Venv missing**: Run `ansible-playbook bootstrap.yml` from project root
-- **Permission denied**: Check `.ansible/vault-pass.txt` exists in project directory
-- **SSH fails**: Verify controller pubkey (`.ansible/ssh/proxmox_lxc.pub`) in target LXC `~/.ssh/authorized_keys`
+- **Permission denied (vault)**: Check `.ansible/vault-pass.txt` exists in project directory
+- **SSH fails after automatic key addition**: Verify controller pubkey (`.ansible/ssh/proxmox_lxc.pub`) in target LXC `~/.ssh/authorized_keys` via `pct exec <vmid> -- cat /root/.ssh/authorized_keys`
 - **API 403 (restricted features)**: Use `pct` on Proxmox host (see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md))
 - **Variable not applied**: Check precedence with `ansible-inventory -i inventory/hosts.yml --list`
 - **Stale facts**: Clear cache at `.ansible/cache/`

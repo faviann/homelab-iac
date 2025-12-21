@@ -109,6 +109,91 @@
         - proxmox_lxc_host_config_enabled | default(true)
         - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
 
+- name: Ensure SSH keys are installed in LXC containers
+  hosts: lxcs
+  gather_facts: false
+  tags:
+    - always
+    - ssh_setup
+  vars:
+    control_node_ssh_public_key_path: "{{ playbook_dir }}/.ansible/ssh/proxmox_lxc.pub"
+  tasks:
+    - name: Load control node SSH public key
+      ansible.builtin.set_fact:
+        control_node_ssh_pubkey: "{{ lookup('file', control_node_ssh_public_key_path) }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Check if container exists on Proxmox
+      ansible.builtin.command:
+        cmd: "pct status {{ proxmox_lxc_overrides.vmid }}"
+      register: container_status
+      delegate_to: "{{ proxmox_api_host }}"
+      vars:
+        ansible_user: root
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+    - name: Create .ssh directory in container
+      ansible.builtin.command:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- mkdir -p /root/.ssh"
+      delegate_to: "{{ proxmox_api_host }}"
+      vars:
+        ansible_user: root
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - container_status.rc == 0
+      changed_when: true
+
+    - name: Set .ssh directory permissions
+      ansible.builtin.command:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 700 /root/.ssh"
+      delegate_to: "{{ proxmox_api_host }}"
+      vars:
+        ansible_user: root
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - container_status.rc == 0
+      changed_when: false
+
+    - name: Check if SSH key already exists in authorized_keys
+      ansible.builtin.shell:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -qF '{{ control_node_ssh_pubkey }}' /root/.ssh/authorized_keys 2>/dev/null"
+      delegate_to: "{{ proxmox_api_host }}"
+      vars:
+        ansible_user: root
+      register: key_exists
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - container_status.rc == 0
+      changed_when: false
+      failed_when: false
+
+    - name: Add SSH public key to authorized_keys (idempotent)
+      ansible.builtin.shell:
+        cmd: |
+          pct exec {{ proxmox_lxc_overrides.vmid }} -- bash -c "echo '{{ control_node_ssh_pubkey }}' >> /root/.ssh/authorized_keys"
+      delegate_to: "{{ proxmox_api_host }}"
+      vars:
+        ansible_user: root
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - container_status.rc == 0
+        - key_exists.rc != 0
+      changed_when: true
+
+    - name: Set authorized_keys permissions
+      ansible.builtin.command:
+        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 600 /root/.ssh/authorized_keys"
+      delegate_to: "{{ proxmox_api_host }}"
+      vars:
+        ansible_user: root
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - container_status.rc == 0
+      changed_when: false
+
 - name: Configure LXC containers internally
   hosts: lxcs
   gather_facts: false
