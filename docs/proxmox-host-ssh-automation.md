@@ -24,7 +24,7 @@ The Proxmox API returns `403 Forbidden: Permission check failed (changing featur
    - Adds SSH public key to Proxmox authorized_keys
    - Validates the connection
 
-2. **`proxmox_lxc_host_prep` role**: Applies host-side configuration
+2. **`proxmox_lxc_host_config` role**: Applies host-side configuration
    - Applies restricted feature flags via `pct set` commands
    - Modifies LXC config files for GPU, WireGuard, etc.
    - Idempotent operations with proper change detection
@@ -32,7 +32,7 @@ The Proxmox API returns `403 Forbidden: Permission check failed (changing featur
 3. **`proxmox_lxc_provision` role**: Filters API-incompatible features
    - Removes `keyctl=1` and similar restricted features before API call
    - Allows `nesting=1` (API-compatible) to pass through
-   - Defers restricted features to host_prep role
+   - Defers restricted features to host_config role
 
 ### Workflow
 
@@ -152,7 +152,7 @@ lxc_features:
 
 ### Idempotency
 
-The `proxmox_lxc_host_prep/tasks/features.yml` task:
+The `proxmox_lxc_host_config/tasks/features.yml` task:
 1. Reads current features with `pct config <vmid>`
 2. Merges with desired features from inventory
 3. Only runs `pct set` if changes are needed
@@ -217,7 +217,7 @@ journalctl -u ssh -f  # Watch for denials while connecting
 ```yaml
 - name: Apply post-provision host adjustments
   ansible.builtin.include_role:
-    name: proxmox_lxc_host_prep
+    name: proxmox_lxc_host_config
     apply:
       delegate_to: "{{ proxmox_api_host }}"
       become: true  # ← Required
@@ -238,8 +238,8 @@ ssh root@proxmox pct config 300 | grep features
 
 **Common causes**:
 - `lxc_features` not defined in inventory
-- `proxmox_lxc_host_prep_enabled` set to false
-- Host prep role not included in playbook
+- `proxmox_lxc_host_config_enabled` set to false
+- Host config role not included in playbook
 
 ## Future Enhancements
 

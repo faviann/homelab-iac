@@ -57,7 +57,7 @@ Host ansible.faviann.vms
   - SSL verification: `proxmox_verify_ssl: false` (self-signed by default)
   - Shared bind mounts: `mp0` `/rpool/data/subvol-200-disk-1` -> `/shared`; `mp1` `/conf` -> `/conf` (ro); `mp2` `/ephemeral` -> `/ephemeral`; `mp3` `/tank` -> `/data`
   - ID mapping for unprivileged LXCs defined under `proxmox_default_idmap`
-  - Host prep toggle: `proxmox_lxc_host_prep_enabled: true`; delegate host/user: `proxmox_api_host`, `root`
+  - Host config toggle: `proxmox_lxc_host_config_enabled: true`; delegate host/user: `proxmox_api_host`, `root`
 - Secrets: `inventory/group_vars/all/vault.yml` (create from `.example` and encrypt with `ansible-vault`). Never commit plaintext secrets or vault password files.
 
 ## Playbooks and Tags (reference)

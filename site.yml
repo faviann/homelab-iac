@@ -7,12 +7,12 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  become: false  # Run as regular user
   tags:
     - always
   vars:
-    control_node_home_dir: "{{ lookup('env', 'HOME') }}"
-    control_node_ansible_directory: "{{ [control_node_home_dir, '.ansible'] | path_join }}"
-    control_node_pip_virtualenv: "{{ [control_node_ansible_directory, 'venv'] | path_join }}"
+    control_node_project_root: "{{ playbook_dir }}"
+    control_node_pip_virtualenv: "{{ [playbook_dir, '.ansible', 'venv'] | path_join }}"
     control_node_collection_install_path: "{{ [playbook_dir, 'collections'] | path_join }}"
     control_node_required_collections:
       - community.proxmox
@@ -50,6 +50,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  become: false  # Run as regular user
   tags:
     - always
     - bootstrap
@@ -74,50 +75,36 @@
         - validation
         - proxmox
 
-- name: Ensure LXC containers exist and host-side prep is applied
+- name: Ensure LXC containers exist
   hosts: lxcs
   gather_facts: false
   collections:
     - community.proxmox
   tags:
     - provision
-    - host_config
     - lxc
-  tasks:
-    - name: Build effective LXC specification
-      ansible.builtin.include_role:
-        name: proxmox_lxc_provision
-        tasks_from: spec
-        apply:
-          tags:
-            - provision
-            - spec
-      tags:
-        - provision
-        - spec
-
-    - name: Provision LXC container
-      ansible.builtin.include_role:
-        name: proxmox_lxc_provision
+  roles:
+    - role: proxmox_lxc_provision
       when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
-      tags:
-        - provision
 
-    - name: Apply host-side container configuration
+- name: Apply host-side container configuration
+  hosts: lxcs
+  gather_facts: false
+  tags:
+    - host_config
+    - provision
+  tasks:
+    - name: Apply Proxmox host configuration for LXC
       ansible.builtin.include_role:
         name: proxmox_lxc_host_config
-        apply:
-          tags:
-            - host_config
-            - provision
-          delegate_to: "{{ proxmox_api_host }}"
-          become: true
+      vars:
+        ansible_host: "{{ proxmox_api_host }}"
+        ansible_user: root
+      delegate_to: "{{ proxmox_api_host }}"
+      become: true
       when:
         - proxmox_lxc_host_config_enabled | default(true)
         - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
-      tags:
-        - host_config
-        - provision
 
 - name: Configure LXC containers internally
   hosts: lxcs
