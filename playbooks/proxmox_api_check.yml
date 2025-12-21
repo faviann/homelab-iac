@@ -4,20 +4,39 @@
   connection: local
   gather_facts: false
 
-  vars:
-    _proxmox_auth:
-      api_host: "{{ proxmox_api_host }}"
-      api_token_id: "{{ proxmox_api_token_id }}"
-      api_token_secret: "{{ proxmox_api_token_secret }}"
-      validate_certs: "{{ proxmox_verify_ssl }}"
-
   tasks:
-    - name: Get LXC containers on default node
-      community.proxmox.proxmox_lxc_info:
-        <<: "{{ _proxmox_auth }}"
-        node: "{{ proxmox_default_node }}"
-      register: _lxcs
+    - name: Query Proxmox API for node status
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/nodes/{{ proxmox_default_node }}/status"
+        method: GET
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_verify_ssl | default(false) }}"
+        status_code: 200
+      register: node_status
+      no_log: true
 
-    - name: Show LXC list
+    - name: Query Proxmox API for LXC containers
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/nodes/{{ proxmox_default_node }}/lxc"
+        method: GET
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_verify_ssl | default(false) }}"
+        status_code: 200
+      register: lxc_list
+      no_log: true
+
+    - name: Show node status
       ansible.builtin.debug:
-        var: _lxcs
+        msg: "Node {{ proxmox_default_node }} is {{ node_status.json.data.status | default('unknown') }}"
+
+    - name: Show LXC containers
+      ansible.builtin.debug:
+        msg: "Found {{ lxc_list.json.data | length }} LXC container(s) on node {{ proxmox_default_node }}"
+      when: lxc_list.json.data is defined
+
+    - name: List LXC containers
+      ansible.builtin.debug:
+        var: lxc_list.json.data
+      when: lxc_list.json.data is defined

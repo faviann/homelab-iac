@@ -15,10 +15,18 @@ cd ServerManagementScripts
 The `setup.sh` script will:
 - ✅ Install system prerequisites (python3-venv, pip, sshpass)
 - ✅ Generate or prompt for vault password
+- ✅ Prompt for Proxmox API credentials (user, token ID, token secret)
 - ✅ Create isolated Python virtual environment
 - ✅ Install Ansible and dependencies
 - ✅ Generate SSH keys
-- ✅ Set up vault configuration
+- ✅ Create and encrypt vault.yml with your credentials
+
+**After setup, validate your credentials:**
+
+```bash
+source activate-env.sh
+ansible-playbook playbooks/validate-credentials.yml
+```
 
 **Manual setup:** See [detailed instructions below](#first-time-setup) or [MIGRATION.md](MIGRATION.md).
 
@@ -93,7 +101,7 @@ Run the automated setup script:
 ./setup.sh
 ```
 
-This handles all prerequisites, creates the virtual environment, generates vault passwords, and prepares the project for use.
+This handles all prerequisites, creates the virtual environment, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use.
 
 ### Manual Setup
 
@@ -135,17 +143,37 @@ If you prefer manual setup or need to troubleshoot:
 
    This creates SSH keys, installs collections, and prepares Python dependencies.
 
-5. **Configure secrets:**
+5. **Configure Proxmox API credentials:**
+
+   Run the interactive configuration script:
+
+   ```bash
+   ./configure-vault.sh
+   ```
+
+   Or manually create and encrypt vault:
 
    ```bash
    cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
-   # Edit vault.yml with your Proxmox API token secret
+   # Edit vault.yml with your actual credentials
    ansible-vault encrypt inventory/group_vars/all/vault.yml
    ```
 
-### After Setup
+   **To generate a Proxmox API token:**
+   - Log into Proxmox web interface
+   - Navigate to: **Datacenter → Permissions → API Tokens**
+   - Click "Add" and configure:
+     - **User**: Select your user (e.g., `root@pam`)
+     - **Token ID**: Name it (e.g., `ansible-automation`)
+     - **Privilege Separation**: Uncheck (to inherit user permissions)
+   - Copy the token secret (UUID) - shown only once!
 
-Activate the environment:
+6. **Validate credentials:**
+
+   ```bash
+   source activate-env.sh
+   ansible-playbook playbooks/validate-credentials.yml
+   ```
 
 ### After Setup
 
@@ -158,6 +186,8 @@ source activate-env.sh
 Test connectivity:
 
 ```bash
+ansible-playbook playbooks/validate-credentials.yml
+# Or test full site validation
 ansible-playbook site.yml --tags validation
 ```
 

@@ -9,9 +9,10 @@
     - name: Apply Proxmox host-side configuration
       ansible.builtin.include_role:
         name: proxmox_lxc_host_config
+        apply:
+          delegate_to: "{{ proxmox_api_host }}"
+          become: true
       vars:
         ansible_host: "{{ proxmox_api_host }}"
         ansible_user: root
-      delegate_to: "{{ proxmox_api_host }}"
-      become: true
       when: proxmox_lxc_host_config_enabled | default(true)

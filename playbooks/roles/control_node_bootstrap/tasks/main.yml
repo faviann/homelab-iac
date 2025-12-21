@@ -77,6 +77,36 @@
     msg: "Vault password file {{ control_node_vault_password_file }} is required before running playbooks."
   when: not control_node_vault_pass_stat.stat.exists
 
+- name: Check if vault.yml exists
+  ansible.builtin.stat:
+    path: "{{ [control_node_project_root, 'inventory', 'group_vars', 'all', 'vault.yml'] | path_join }}"
+  register: control_node_vault_file_stat
+
+- name: Check if vault.yml is encrypted
+  ansible.builtin.command:
+    cmd: head -n1 "{{ [control_node_project_root, 'inventory', 'group_vars', 'all', 'vault.yml'] | path_join }}"
+  register: control_node_vault_file_header
+  changed_when: false
+  failed_when: false
+  when: control_node_vault_file_stat.stat.exists
+
+- name: Warn if vault.yml doesn't exist
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: vault.yml not found. Run ./setup.sh or ./configure-vault.sh to configure Proxmox API credentials.
+      The playbooks will fail without valid API credentials.
+  when: not control_node_vault_file_stat.stat.exists
+
+- name: Warn if vault.yml is not encrypted
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: vault.yml exists but is NOT encrypted. This is a security risk!
+      Encrypt it with: ansible-vault encrypt inventory/group_vars/all/vault.yml
+  when:
+    - control_node_vault_file_stat.stat.exists
+    - control_node_vault_file_header.stdout is defined
+    - "'$ANSIBLE_VAULT' not in control_node_vault_file_header.stdout"
+
 - name: Install required system packages
   ansible.builtin.package:
     name: "{{ control_node_packages }}"

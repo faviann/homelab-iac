@@ -1,3 +1,37 @@
+---
+# Proxmox API authentication details
+#
+# This file contains sensitive credentials and should be encrypted with ansible-vault.
+# DO NOT commit this file unencrypted to version control.
+#
+# Setup instructions:
+#   1. Run ./setup.sh for guided credential configuration (recommended)
+#   OR
+#   2. Copy this file to vault.yml and replace the values below
+#   3. Encrypt with: ansible-vault encrypt inventory/group_vars/all/vault.yml
+#
+# To update credentials later:
+#   Run ./configure-vault.sh for guided reconfiguration
+#
+# To create a Proxmox API token:
+#   1. Log into Proxmox web interface
+#   2. Navigate to: Datacenter → Permissions → API Tokens
+#   3. Click "Add" and fill in:
+#      - User: Select your user (e.g., root@pam)
+#      - Token ID: Give it a name (e.g., ansible-automation)
+#      - Privilege Separation: Uncheck (to inherit user permissions)
+#   4. Copy the token secret (UUID) - it's only shown once!
+#
+# Required format:
+#   vault_proxmox_api_user: username@realm
+#     Examples: root@pam, ansible@pve
+#   
+#   vault_proxmox_api_token_id: token-name
+#     The name you gave the token when creating it
+#   
+#   vault_proxmox_api_token_secret: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+#     The UUID shown when the token was created
+
+vault_proxmox_api_user: "REPLACE_WITH_YOUR_API_USER"
 vault_proxmox_api_token_id: "REPLACE_WITH_YOUR_TOKEN_ID"
 vault_proxmox_api_token_secret: "REPLACE_WITH_YOUR_TOKEN_SECRET"
-vault_proxmox_api_user: "REPLACE_WITH_YOUR_API_USER"

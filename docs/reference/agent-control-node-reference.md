@@ -1,39 +1,27 @@
 # Control Node Reference (Agents)
 
-Information-only reference for agents operating this repository from the Proxmox LXC control node.
+Information-only reference for agents operating this repository from any Linux workstation.
 
 ## Audience and Scope
-- Audience: agents with shell access to the controller LXC (typically via VS Code Remote SSH).
-- Scope: controller-side usage only (Ansible runs locally on the controller against the Proxmox API and hosts in inventory).
+- Audience: agents running Ansible from their local Linux workstation.
+- Scope: Workstation-based execution (Ansible runs locally against the Proxmox API and managed LXC hosts).
 - Out of scope: troubleshooting guides, narrative tutorials, or Proxmox host provisioning details.
 
 ## Operating Model
-- Run everything on the controller LXC; do not run Ansible from your dev machine.
-- Editor context is assumed to be attached to the controller over SSH.
+- Run everything from your local Linux workstation (portable setup).
+- All artifacts are project-relative (portable across workstations).
 - Host key behavior is relaxed: Ansible `host_key_checking = False`; Proxmox SSH uses `StrictHostKeyChecking=accept-new`.
 - Never request or emit secrets (API token secret, vault password, private keys).
 
-## Controller SSH Access
-- User/host: `root@ansible.faviann.vms`.
-- First-connect trust: `StrictHostKeyChecking=accept-new`.
-- Client `~/.ssh/config` example:
+## Workstation Setup
+- Clone repository to any location on your Linux workstation.
+- Run `./setup.sh` for automated setup or follow manual steps in README.md.
+- Activate environment: `source activate-env.sh` before running playbooks.
+- All dependencies install in project-local `.ansible/venv/` directory.
 
-```
-Host ansible.faviann.vms
-    HostName ansible.faviann.vms
-    User root
-    IdentityFile ~/ServerManagementScripts/.ansible/ssh/proxmox_lxc
-    IdentitiesOnly yes
-    StrictHostKeyChecking accept-new
-```
-
-- Quick verify from client:
-  - `ssh ansible.faviann.vms 'hostname && whoami'`
-  - Then on controller: `cd ~/ServerManagementScripts`
-
-## Controller Paths and Tooling
-- Repo root: cloned on the controller (`ansible.cfg` lives here).
-- Virtualenv: `.ansible/venv` (project-relative, created by `bootstrap.yml`).
+## Workstation Paths and Tooling
+- Repo root: cloned anywhere on your workstation (`ansible.cfg` lives here).
+- Virtualenv: `.ansible/venv` (project-relative, created by `bootstrap.yml` or `setup.sh`).
 - Collections install path: `collections/` (see `collections/requirements.yml`).
 - Python requirements: `requirements/pip.txt`.
 - SSH key for Ansible: `.ansible/ssh/proxmox_lxc` (private) and `.ansible/ssh/proxmox_lxc.pub` (public, project-relative).
@@ -42,7 +30,7 @@ Host ansible.faviann.vms
 
 ## Inventory and Naming
 - Inventory file: `inventory/hosts.yml`.
-- Groups: `proxmox_api` (controller, `ansible_connection: local`), `lxcs` (managed containers), resource tiers (`tier_tiny|small|medium|large`), capability groups (`cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_service_agents`).
+- Groups: `proxmox_api` (local API operations, `ansible_connection: local`), `lxcs` (managed containers), resource tiers (`tier_tiny|small|medium|large`), capability groups (`cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_service_agents`).
 - Host naming convention for LXCs: `{{ inventory_hostname }}.faviann.vms` (see `inventory/group_vars/all/proxmox.yml`).
 
 ## Configuration Reference (non-secret)

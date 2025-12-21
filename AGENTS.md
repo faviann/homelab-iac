@@ -2,16 +2,19 @@
 
 **Project Type**: Ansible infrastructure-as-code (IaC)  
 **Purpose**: Automate Proxmox LXC provisioning, configuration, and service deployments  
-**Architecture**: Controller-based (all operations run from `ansible.faviann.vms` LXC)
+**Architecture**: Portable workstation-based (runs from any Linux workstation with network access to Proxmox)
 
 ## Non-negotiables
-- SSH into the controller LXC and run Ansible there (not from your dev machine).
-- Connect to the controller as `root@ansible.faviann.vms` over SSH (VS Code Remote SSH or plain shell).
+- Run Ansible from your Linux workstation (portable setup, no dedicated controller needed).
+- Ensure you have network access to Proxmox API (typically `proxmox.internal.faviann.com:8006`).
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys).
 - Always run `git pull` before executing ansible commands.
 
-## Controller Access
-**SSH details**: See [docs/reference/agent-control-node-reference.md](docs/reference/agent-control-node-reference.md) for full SSH config and connection instructions.
+## Workstation Requirements
+- **OS**: Linux (Debian/Ubuntu recommended)
+- **Python**: 3.10+ with venv support
+- **Network**: Access to Proxmox API and managed LXC containers
+- **Packages**: `python3-venv`, `python3-pip`, `sshpass` (installed via setup.sh)
 
 ## Standard Paths
 
@@ -57,7 +60,10 @@ Variables merge in this order (later overrides earlier):
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
-| `ansible-playbook bootstrap.yml` | Setup controller environment | First-time or after clean install |
+| `./setup.sh` | Complete initial setup | First-time workstation setup |
+| `./configure-vault.sh` | Update Proxmox credentials | Change API tokens or credentials |
+| `ansible-playbook bootstrap.yml` | Setup controller environment | After clean install or venv issues |
+| `ansible-playbook playbooks/validate-credentials.yml` | Test API credentials | Verify credentials work |
 | `ansible-playbook site.yml` | Full orchestration run | Deploy/update all LXCs |
 | `ansible-playbook site.yml --tags validation` | API connectivity only | Pre-flight check |
 | `ansible-playbook site.yml --limit gatekeeper` | Target specific host(s) | Test changes on one LXC |
