@@ -1,0 +1,37 @@
+---
+# Apply custom sysctl configurations to LXC config file
+# Required for containers running Docker images that need specific kernel parameters
+
+# Note: Due to containerd bug (https://github.com/containerd/containerd/issues/12484)
+# in versions 1.7.29+, sysctls alone may not solve Docker issues in unprivileged LXC.
+# Consider downgrading containerd or disabling AppArmor as alternative workarounds.
+
+- name: Apply custom sysctls to LXC configuration
+  ansible.builtin.lineinfile:
+    path: "{{ _lxc_config_file }}"
+    regexp: "^lxc\\.sysctl\\.{{ item.key | regex_escape() }}\\s*="
+    line: "lxc.sysctl.{{ item.key }} = {{ item.value }}"
+    state: present
+    create: false
+    backup: true
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  loop: "{{ lxc_custom_sysctls | default([]) }}"
+  when:
+    - lxc_custom_sysctls is defined
+    - lxc_custom_sysctls | length > 0
+  notify: restart_lxc
+
+- name: Disable AppArmor for Docker compatibility (optional workaround)
+  ansible.builtin.lineinfile:
+    path: "{{ _lxc_config_file }}"
+    regexp: "^lxc\\.apparmor\\.profile\\s*="
+    line: "lxc.apparmor.profile: unconfined"
+    state: present
+    create: false
+    backup: true
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: true
+  when:
+    - lxc_disable_apparmor | default(false) | bool
+  notify: restart_lxc
