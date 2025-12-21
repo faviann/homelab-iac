@@ -1,0 +1,11 @@
+---
+# Default variables for lxc_logging_config role
+
+# ==============================================================================
+# Journald Configuration
+# ==============================================================================
+# Maximum disk space journald can use
+lxc_logging_journald_max_use: "1000M"
+
+# Maximum size of individual journal files
+lxc_logging_journald_max_file_size: "20M"

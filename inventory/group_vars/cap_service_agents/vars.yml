@@ -2,6 +2,9 @@
 # Capability group: Service agent tooling
 # Adds management helpers on top of the Docker capability.
 
+# Feature flag for service agents capability
+service_agents_enabled: true
+
 configure_traefik_kop: true
 configure_traefik_socket_proxy: true
 configure_dockwatch: true

@@ -1,0 +1,15 @@
+---
+# Default variables for lxc_ssh_key_injector role
+
+# Path to the control node SSH public key
+lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir }}/.ansible/ssh/proxmox_lxc.pub"
+
+# Proxmox host to delegate pct commands to
+# pct commands must run on the Proxmox host itself
+lxc_ssh_key_injector_delegate_host: "{{ proxmox_pct_delegate_host | default(proxmox_api_host) }}"
+
+# User for Proxmox host access
+lxc_ssh_key_injector_delegate_user: root
+
+# Skip containers that don't exist (true) or fail (false)
+lxc_ssh_key_injector_skip_missing: true

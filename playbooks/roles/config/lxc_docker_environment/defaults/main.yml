@@ -1,0 +1,24 @@
+---
+# Default variables for lxc_docker_environment role
+
+# ==============================================================================
+# Docker Environment Configuration
+# ==============================================================================
+# Shared storage path inside container (source for bind mount)
+lxc_docker_env_shared_mount_source: "/shared/{{ inventory_hostname }}"
+
+# Target mount point for Docker configuration
+lxc_docker_env_root_docker_conf_path: "/conf/docker"
+
+# Ownership for files in shared directory (UID:GID)
+# Matches dockeruser UID from cap_docker group vars
+lxc_docker_env_shared_owner: "1001"
+lxc_docker_env_shared_group: "1001"
+
+# Dockge compose directory (relative to mount target)
+lxc_docker_env_dockge_compose_dir: "{{ lxc_docker_env_root_docker_conf_path }}/dockge"
+
+# Docker user configuration (inherited from cap_docker group vars)
+lxc_docker_env_user: "{{ docker_user | default('dockeruser') }}"
+lxc_docker_env_uid: "{{ docker_uid | default(1000) }}"
+lxc_docker_env_gid: "{{ docker_gid | default(1000) }}"

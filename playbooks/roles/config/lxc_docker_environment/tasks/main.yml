@@ -1,0 +1,121 @@
+---
+# Main tasks file for lxc_docker_environment role
+# Configures Docker environment: users, mounts, and Dockge deployment
+
+- name: Ensure shared mount source directory exists on host
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy template files to shared directory
+  ansible.builtin.copy:
+    src: "templates/files/"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: preserve
+  register: _copy_templates_result
+
+- name: Template Jinja2 files to shared directory
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/{{ item | regex_replace('\\.j2$', '') | regex_replace('^templates/files/', '') }}"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0644'
+  with_fileglob:
+    - "templates/files/**/*.j2"
+  register: _template_files_result
+
+- name: Ensure Docker config mount target exists
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_root_docker_conf_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Check if bind mount already exists
+  ansible.builtin.command:
+    cmd: "mountpoint -q {{ lxc_docker_env_root_docker_conf_path }}"
+  register: _mount_check
+  changed_when: false
+  failed_when: false
+
+- name: Create bind mount for Docker config
+  ansible.posix.mount:
+    path: "{{ lxc_docker_env_root_docker_conf_path }}"
+    src: "{{ lxc_docker_env_shared_mount_source }}"
+    opts: bind
+    state: mounted
+    fstype: none
+  when: _mount_check.rc != 0
+
+- name: Ensure bind mount is in fstab
+  ansible.posix.mount:
+    path: "{{ lxc_docker_env_root_docker_conf_path }}"
+    src: "{{ lxc_docker_env_shared_mount_source }}"
+    opts: bind
+    state: present
+    fstype: none
+    dump: '0'
+    passno: '0'
+
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+    system: true
+
+- name: Create Docker user
+  ansible.builtin.user:
+    name: "{{ lxc_docker_env_user }}"
+    uid: "{{ lxc_docker_env_uid }}"
+    group: "{{ lxc_docker_env_gid }}"
+    groups:
+      - docker
+      - sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    password: '!'  # Passwordless account
+    comment: "Docker user managed by Ansible"
+  register: _docker_user_result
+
+- name: Ensure Docker user can use sudo without password
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/{{ lxc_docker_env_user }}
+    line: "{{ lxc_docker_env_user }} ALL=(ALL) NOPASSWD:ALL"
+    create: true
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Check if Dockge directory exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_env_dockge_compose_dir }}"
+  register: _dockge_dir_stat
+
+- name: Check if Dockge is already running
+  ansible.builtin.command:
+    cmd: docker compose ps -q
+    chdir: "{{ lxc_docker_env_dockge_compose_dir }}"
+  register: _dockge_status
+  changed_when: false
+  failed_when: false
+  when: _dockge_dir_stat.stat.exists and _dockge_dir_stat.stat.isdir
+
+- name: Start Dockge with docker compose
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ lxc_docker_env_dockge_compose_dir }}"
+  become: true
+  become_user: "{{ lxc_docker_env_user }}"
+  when:
+    - _dockge_dir_stat.stat.exists
+    - _dockge_dir_stat.stat.isdir
+    - (_dockge_status.stdout | default('') | length == 0)
+  register: _dockge_start_result
+
+- name: Display Dockge startup result
+  ansible.builtin.debug:
+    msg: "Dockge {{ _dockge_start_result.changed | default(false) | ternary('started', 'already running or not configured') }}"
+  when: _dockge_dir_stat.stat.exists

@@ -2,6 +2,9 @@
 # Capability group: Docker runtime support
 # Enables Docker and related tooling inside the container.
 
+# Feature flag for Docker capability
+docker_enabled: true
+
 # Docker will be installed automatically by lxc_internal_setup role using geerlingguy.docker
 install_docker: true
 

@@ -1,0 +1,108 @@
+---
+# Main tasks file for lxc_ssh_key_injector role
+# Injects control node SSH public key into LXC container via Proxmox pct commands
+
+- name: Load control node SSH public key
+  ansible.builtin.set_fact:
+    lxc_ssh_key_injector_pubkey_content: "{{ lookup('file', lxc_ssh_key_injector_pubkey_path) }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Ensure container VMID is defined
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_overrides is defined
+      - proxmox_lxc_overrides.vmid is defined
+    fail_msg: "VMID not defined for {{ inventory_hostname }}"
+
+- name: Check if container exists on Proxmox
+  ansible.builtin.command:
+    cmd: "pct status {{ proxmox_lxc_overrides.vmid }}"
+  register: _container_status
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  changed_when: false
+  failed_when: false
+
+- name: Skip non-existent containers
+  ansible.builtin.debug:
+    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist - skipping"
+  when:
+    - _container_status.rc != 0
+    - lxc_ssh_key_injector_skip_missing | bool
+
+- name: Fail on non-existent containers when skip_missing is false
+  ansible.builtin.fail:
+    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist"
+  when:
+    - _container_status.rc != 0
+    - not (lxc_ssh_key_injector_skip_missing | bool)
+
+- name: Create .ssh directory in container
+  ansible.builtin.command:
+    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- mkdir -p /root/.ssh"
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  when: _container_status.rc == 0
+  changed_when: true
+
+- name: Set .ssh directory permissions
+  ansible.builtin.command:
+    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 700 /root/.ssh"
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  when: _container_status.rc == 0
+  changed_when: false
+
+- name: Check if SSH key already exists in authorized_keys
+  ansible.builtin.shell:
+    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -qF '{{ lxc_ssh_key_injector_pubkey_content }}' /root/.ssh/authorized_keys 2>/dev/null"
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  register: _key_exists
+  when: _container_status.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Add SSH public key to authorized_keys (idempotent)
+  ansible.builtin.shell:
+    cmd: |
+      pct exec {{ proxmox_lxc_overrides.vmid }} -- bash -c "echo '{{ lxc_ssh_key_injector_pubkey_content }}' >> /root/.ssh/authorized_keys"
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  when:
+    - _container_status.rc == 0
+    - _key_exists.rc != 0
+  changed_when: true
+
+- name: Set authorized_keys permissions
+  ansible.builtin.command:
+    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 600 /root/.ssh/authorized_keys"
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  when: _container_status.rc == 0
+  changed_when: false
+
+- name: Verify SSH key is present
+  ansible.builtin.shell:
+    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -c '{{ lxc_ssh_key_injector_pubkey_content }}' /root/.ssh/authorized_keys"
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  register: _key_count
+  when: _container_status.rc == 0
+  changed_when: false
+  failed_when: false
+
+- name: Report SSH key injection result
+  ansible.builtin.debug:
+    msg: "SSH key verified in container {{ inventory_hostname }} ({{ _key_count.stdout | default('0') }} occurrence(s))"
+  when:
+    - _container_status.rc == 0
+    - _key_count.stdout is defined

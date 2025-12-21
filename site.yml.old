@@ -1,0 +1,174 @@
+---
+# Top-level playbook orchestrating Proxmox LXC lifecycle operations.
+# Run everything:           ansible-playbook -i inventory/hosts.yml site.yml
+# Run specific phases only: ansible-playbook ... --tags validation|provision|host_prep|configure
+
+- name: Verify control node has been bootstrapped
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false  # Run as regular user
+  tags:
+    - always
+  vars:
+    control_node_project_root: "{{ playbook_dir }}"
+    control_node_pip_virtualenv: "{{ [playbook_dir, '.ansible', 'venv'] | path_join }}"
+    control_node_collection_install_path: "{{ [playbook_dir, 'collections'] | path_join }}"
+    control_node_required_collections:
+      - community.proxmox
+  tasks:
+    - name: Check for control node virtual environment
+      ansible.builtin.stat:
+        path: "{{ control_node_pip_virtualenv }}"
+      register: control_node_virtualenv_stat
+      run_once: true
+
+    - name: Check for required Ansible collections
+      ansible.builtin.stat:
+        path: "{{ [control_node_collection_install_path, 'ansible_collections', item | replace('.', '/')] | path_join }}"
+      loop: "{{ control_node_required_collections }}"
+      register: control_node_collection_stats
+      run_once: true
+
+    - name: Detect missing bootstrap artifacts
+      ansible.builtin.set_fact:
+        control_node_missing_collections: "{{ control_node_collection_stats.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
+      run_once: true
+
+    - name: Assert bootstrap prerequisites are present
+      ansible.builtin.assert:
+        that:
+          - control_node_virtualenv_stat.stat.exists
+          - control_node_missing_collections | length == 0
+        fail_msg: >-
+          Bootstrap prerequisites are missing. Run `ansible-playbook bootstrap.yml` to install the
+          control node virtualenv and dependencies. Missing collections: {{ control_node_missing_collections }}.
+        success_msg: Bootstrap prerequisites detected.
+      run_once: true
+
+- name: Bootstrap Proxmox host SSH access
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false  # Run as regular user
+  tags:
+    - always
+    - bootstrap
+  roles:
+    - infrastructure/proxmox_host_bootstrap
+
+- name: Validate Proxmox API connectivity
+  hosts: proxmox_api
+  gather_facts: false
+  become: false
+  collections:
+    - community.proxmox
+  tags:
+    - always
+    - validation
+    - proxmox
+  tasks:
+    - name: Include Proxmox validation tasks
+      ansible.builtin.include_tasks:
+        file: "{{ [playbook_dir, 'playbooks', 'tasks', 'proxmox_validation.yml'] | path_join }}"
+      tags:
+        - always
+        - validation
+        - proxmox
+
+- name: Ensure LXC containers exist
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  collections:
+    - community.proxmox
+  tags:
+    - provision
+    - lxc
+  roles:
+    - role: infrastructure/proxmox_lxc_provision
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+- name: Apply host-side container configuration
+  hosts: lxcs
+  gather_facts: false
+  tags:
+    - host_config
+    - provision
+  tasks:
+    - name: Apply Proxmox host configuration for LXC
+      ansible.builtin.include_role:
+        name: infrastructure/proxmox_lxc_host_config
+        apply:
+          delegate_to: "{{ proxmox_api_host }}"
+          become: true
+      vars:
+        ansible_host: "{{ proxmox_api_host }}"
+        ansible_user: root
+      when:
+        - proxmox_lxc_host_config_enabled | default(true)
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+- name: Ensure SSH keys are installed in LXC containers
+  hosts: lxcs
+  gather_facts: false
+  vars:
+    lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir }}/.ansible/ssh/proxmox_lxc.pub"
+  roles:
+    - role: infrastructure/lxc_ssh_key_injector
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+- name: Configure LXC containers internally
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Ensure container is accessible via SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 15
+      register: _connection_check
+      retries: 3
+      delay: 10
+      until: _connection_check is succeeded
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+    - name: Gather container facts
+      ansible.builtin.setup:
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+    - name: Configure base system
+      ansible.builtin.include_role:
+        name: config/lxc_base_system
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+    - name: Configure logging
+      ansible.builtin.include_role:
+        name: config/lxc_logging_config
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+    - name: Install Docker runtime
+      ansible.builtin.include_role:
+        name: config/lxc_docker_runtime
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - "'cap_docker' in group_names"
+
+    - name: Configure Docker environment
+      ansible.builtin.include_role:
+        name: config/lxc_docker_environment
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - "'cap_docker' in group_names"
+
+    - name: Flush handlers before reboot
+      ansible.builtin.meta: flush_handlers
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+    - name: Reboot container
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/playbooks/roles/config/lxc_base_system/tasks/reboot.yml"
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+
+    - name: Configuration complete
+      ansible.builtin.debug:
+        msg: "Internal configuration of {{ inventory_hostname }} completed successfully"
+      when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))

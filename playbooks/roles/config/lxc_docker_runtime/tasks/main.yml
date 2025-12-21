@@ -1,0 +1,40 @@
+---
+# Main tasks file for lxc_docker_runtime role
+# Installs Docker using geerlingguy.docker role
+
+- name: Install Docker using geerlingguy.docker role
+  ansible.builtin.include_role:
+    name: geerlingguy.docker
+  vars:
+    docker_install_compose_plugin: "{{ lxc_docker_runtime_install_compose_plugin }}"
+    docker_compose_package: "{{ lxc_docker_runtime_compose_package }}"
+    docker_compose_package_state: "{{ lxc_docker_runtime_compose_package_state }}"
+    docker_users:
+      - "{{ lxc_docker_runtime_user }}"
+    docker_daemon_options: "{{ lxc_docker_runtime_daemon_options }}"
+
+- name: Ensure Docker service is started and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Verify Docker installation
+  ansible.builtin.command:
+    cmd: docker --version
+  register: _docker_version
+  changed_when: false
+
+- name: Display Docker version
+  ansible.builtin.debug:
+    msg: "Docker installed: {{ _docker_version.stdout }}"
+
+- name: Verify Docker Compose installation
+  ansible.builtin.command:
+    cmd: docker compose version
+  register: _docker_compose_version
+  changed_when: false
+
+- name: Display Docker Compose version
+  ansible.builtin.debug:
+    msg: "Docker Compose installed: {{ _docker_compose_version.stdout }}"

@@ -63,7 +63,11 @@ proxmox_lxc_global_defaults:
 # Host Configuration Settings
 # ==============================================================================
 proxmox_lxc_host_config_enabled: true
-proxmox_host_delegate: "{{ proxmox_api_host }}"
+# Delegation variables for different operation types:
+# - API calls (community.proxmox modules): delegate to localhost (where API client runs)
+# - pct commands (host-side operations): delegate to Proxmox host directly
+proxmox_api_delegate_host: localhost
+proxmox_pct_delegate_host: "{{ proxmox_api_host }}"
 proxmox_host_delegate_user: root
 
 # ==============================================================================

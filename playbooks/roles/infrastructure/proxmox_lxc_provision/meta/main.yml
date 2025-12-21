@@ -1,0 +1,4 @@
+---
+# Dependencies for proxmox_lxc_provision role
+dependencies:
+  - role: provisioning/lxc_spec_builder

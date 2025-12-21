@@ -15,4 +15,4 @@
     control_node_pip_requirements: "{{ [playbook_dir, 'requirements', 'pip.txt'] | path_join }}"
     control_node_collection_requirements: "{{ [playbook_dir, 'collections', 'requirements.yml'] | path_join }}"
   roles:
-    - control_node_bootstrap
+    - base/control_node_bootstrap

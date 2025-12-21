@@ -1,0 +1,23 @@
+---
+# Default variables for lxc_spec_builder role
+
+# ==============================================================================
+# Baseline Container Settings
+# ==============================================================================
+# Baseline container settings merged with host_vars before provisioning
+proxmox_lxc_defaults:
+  state: present
+  update: false
+  unprivileged: true
+  onboot: true
+  start_on_create: false
+
+# ==============================================================================
+# SSH Key Configuration
+# ==============================================================================
+# Automatically copy the control node's SSH public key into newly provisioned containers
+proxmox_lxc_controller_pubkey_enabled: true
+proxmox_lxc_controller_pubkey_path: "{{ playbook_dir }}/.ansible/ssh/proxmox_lxc.pub"
+
+# When enabled, omit any password from the provisioning request so root key auth is required
+proxmox_lxc_disable_root_password: true

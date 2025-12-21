@@ -1,0 +1,20 @@
+---
+# Default delegate host for API calls towards proxmox; override if API access must happen from elsewhere.
+# API calls delegate to localhost (where API client runs)
+proxmox_api_delegate_host: "{{ proxmox_api_delegate_host | default('localhost') }}"
+
+# Baseline container settings merged with host_vars before provisioning.
+proxmox_lxc_defaults:
+  state: present
+  update: false
+  unprivileged: true
+  onboot: true
+  start_on_create: false
+
+# Automatically copy the control node's SSH public key into newly provisioned containers.
+# Default path aligns with playbooks/roles/control_node_bootstrap output.
+proxmox_lxc_controller_pubkey_enabled: true
+proxmox_lxc_controller_pubkey_path: "{{ playbook_dir | dirname }}/.ansible/ssh/proxmox_lxc.pub"
+
+# When enabled, omit any password from the provisioning request so root key auth is required.
+proxmox_lxc_disable_root_password: true

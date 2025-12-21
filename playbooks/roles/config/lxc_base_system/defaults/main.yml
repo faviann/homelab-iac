@@ -1,0 +1,29 @@
+---
+# Default variables for lxc_base_system role
+
+# ==============================================================================
+# System Update Configuration
+# ==============================================================================
+# Whether to update apt cache before upgrading packages
+lxc_base_system_apt_update_cache: true
+
+# Whether to upgrade all packages
+lxc_base_system_apt_upgrade: true
+
+# APT cache valid time in seconds (3600 = 1 hour)
+lxc_base_system_apt_cache_valid_time: 3600
+
+# ==============================================================================
+# Reboot Configuration
+# ==============================================================================
+# Whether to reboot the container after configuration
+lxc_base_system_reboot_enabled: true
+
+# Maximum time to wait for container to reboot (seconds)
+lxc_base_system_reboot_timeout: 300
+
+# Time to wait after reboot before continuing (seconds)
+lxc_base_system_post_reboot_delay: 30
+
+# Command to test if container is back online after reboot
+lxc_base_system_reboot_test_command: "uptime"

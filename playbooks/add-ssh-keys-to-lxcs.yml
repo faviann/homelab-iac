@@ -9,95 +9,12 @@
 - name: Add SSH keys to existing LXC containers via Proxmox host
   hosts: lxcs
   gather_facts: false
-  tags:
-    - ssh_setup
-    - bootstrap
 
   vars:
-    control_node_ssh_public_key_path: "{{ playbook_dir }}/../.ansible/ssh/proxmox_lxc.pub"
+    lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir }}/../.ansible/ssh/proxmox_lxc.pub"
 
-  tasks:
-    - name: Load control node SSH public key
-      ansible.builtin.set_fact:
-        control_node_ssh_pubkey: "{{ lookup('file', control_node_ssh_public_key_path) }}"
-      delegate_to: localhost
-      run_once: true
-
-    - name: Ensure container VMID is defined
-      ansible.builtin.assert:
-        that:
-          - proxmox_lxc_overrides is defined
-          - proxmox_lxc_overrides.vmid is defined
-        fail_msg: "VMID not defined for {{ inventory_hostname }}"
-
-    - name: Check if container exists on Proxmox
-      ansible.builtin.command:
-        cmd: "pct status {{ proxmox_lxc_overrides.vmid }}"
-      register: container_status
-      delegate_to: "{{ proxmox_api_host }}"
-      vars:
-        ansible_user: root
-      changed_when: false
-      failed_when: false
-
-    - name: Skip non-existent containers
-      ansible.builtin.debug:
-        msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist - skipping"
-      when: container_status.rc != 0
-
-    - name: Create .ssh directory in container
-      ansible.builtin.command:
-        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- mkdir -p /root/.ssh"
-      delegate_to: "{{ proxmox_api_host }}"
-      vars:
-        ansible_user: root
-      when: container_status.rc == 0
-      changed_when: true
-
-    - name: Set .ssh directory permissions
-      ansible.builtin.command:
-        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 700 /root/.ssh"
-      delegate_to: "{{ proxmox_api_host }}"
-      vars:
-        ansible_user: root
-      when: container_status.rc == 0
-      changed_when: false
-
-    - name: Check if SSH key already exists in authorized_keys
-      ansible.builtin.shell:
-        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -qF '{{ control_node_ssh_pubkey }}' /root/.ssh/authorized_keys 2>/dev/null"
-      delegate_to: "{{ proxmox_api_host }}"
-      vars:
-        ansible_user: root
-      register: key_exists
-      when: container_status.rc == 0
-      changed_when: false
-      failed_when: false
-
-    - name: Add SSH public key to authorized_keys (idempotent)
-      ansible.builtin.shell:
-        cmd: |
-          pct exec {{ proxmox_lxc_overrides.vmid }} -- bash -c "echo '{{ control_node_ssh_pubkey }}' >> /root/.ssh/authorized_keys"
-      delegate_to: "{{ proxmox_api_host }}"
-      vars:
-        ansible_user: root
-      when:
-        - container_status.rc == 0
-        - key_exists.rc != 0
-      changed_when: true
-
-    - name: Set authorized_keys permissions
-      ansible.builtin.command:
-        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 600 /root/.ssh/authorized_keys"
-      delegate_to: "{{ proxmox_api_host }}"
-      vars:
-        ansible_user: root
-      when: container_status.rc == 0
-      changed_when: false
-
-    - name: Verify SSH key is present
-      ansible.builtin.shell:
-        cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -c '{{ control_node_ssh_pubkey }}' /root/.ssh/authorized_keys"
+  roles:
+    - infrastructure/lxc_ssh_key_injector
       delegate_to: "{{ proxmox_api_host }}"
       vars:
         ansible_user: root

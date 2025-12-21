@@ -1,0 +1,20 @@
+---
+# Default variables for lxc_docker_runtime role
+
+# ==============================================================================
+# Docker Installation Configuration
+# ==============================================================================
+# Docker installation (uses geerlingguy.docker role)
+lxc_docker_runtime_install_compose_plugin: true
+lxc_docker_runtime_compose_package: docker-compose-plugin
+lxc_docker_runtime_compose_package_state: present
+
+# Docker daemon options
+lxc_docker_runtime_daemon_options:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+
+# Docker user (inherited from group vars or defaults)
+lxc_docker_runtime_user: "{{ docker_user | default('dockeruser') }}"

@@ -9,6 +9,9 @@ ansible/*.pyc
 collections/ansible_collections/
 collections/**/*.info/
 
+# External Ansible roles (installed dependencies)
+.ansible/roles/
+
 # Ignore local Vault password file
 .ansible-vault-pass
 .vault-pass

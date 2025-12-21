@@ -1,0 +1,8 @@
+---
+# Handlers for lxc_logging_config role
+
+- name: Restart systemd-journald
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted
+  listen: restart journald

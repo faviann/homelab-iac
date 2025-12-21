@@ -1,0 +1,21 @@
+---
+# Reboot tasks for LXC container
+
+- name: Check if reboot is needed
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: _reboot_required_stat
+
+- name: Reboot container if enabled
+  ansible.builtin.reboot:
+    msg: "Rebooting container for configuration changes"
+    reboot_timeout: "{{ lxc_base_system_reboot_timeout }}"
+    post_reboot_delay: "{{ lxc_base_system_post_reboot_delay }}"
+    test_command: "{{ lxc_base_system_reboot_test_command }}"
+  when:
+    - lxc_base_system_reboot_enabled | bool
+    - _reboot_required_stat.stat.exists
+
+- name: Display reboot status
+  ansible.builtin.debug:
+    msg: "Container {{ (_reboot_required_stat.stat.exists and lxc_base_system_reboot_enabled) | ternary('rebooted', 'does not require reboot') }}"

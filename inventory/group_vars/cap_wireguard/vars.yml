@@ -2,6 +2,9 @@
 # Capability group: WireGuard VPN support
 # Ensures containers can reach /dev/net/tun for WireGuard clients.
 
+# Feature flag for WireGuard capability
+wireguard_enabled: true
+
 enable_wireguard: true
 wireguard_kernel_module_access: true
 

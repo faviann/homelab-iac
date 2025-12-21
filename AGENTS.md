@@ -27,36 +27,65 @@
 | Vaulted secrets | `inventory/group_vars/all/vault.yml` (encrypted) |
 | Fact cache | `.ansible/cache/` (project-relative, gitignored) |
 | Venv | `.ansible/venv/` (project-relative, gitignored) |
+| External roles | `.ansible/roles/` (project-relative, gitignored, auto-installed) |
 
 ## Inventory Structure
 
 | Type | Groups | Purpose |
 |------|--------|---------|
 | **Tiers** | `tier_tiny`, `tier_small`, `tier_medium`, `tier_large` | Resource allocation (mutually exclusive) |
-| **Capabilities** | `cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_service_agents` | Feature flags (compositional) |
+| **Capabilities** | `cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_service_agents` | Sets feature flags: `docker_enabled`, `gpu_enabled`, etc. |
 | **Special** | `proxmox_api`, `lxcs` | API controller + all LXC targets |
 
 **Naming**: LXCs resolve as `{{ inventory_hostname }}.faviann.vms`
 
+**Feature Flags**: Capability groups set boolean flags (`docker_enabled: true`) instead of checking group membership. Roles use these flags for conditionals.
+
 ## Variable Precedence
 
 Variables merge in this order (later overrides earlier):
-1. Role defaults (`roles/*/defaults/main.yml`)
+1. Role defaults (`playbooks/roles/*/defaults/main.yml`)
 2. Global vars (`inventory/group_vars/all/*.yml`)
 3. Tier vars (`inventory/group_vars/tier_*/*.yml`)
-4. Capability vars (`inventory/group_vars/cap_*/*.yml`)
+4. Capability vars (sets feature flags in `inventory/group_vars/cap_*/*.yml`)
 5. Host vars (`inventory/host_vars/*.yml`)
 
-## Playbook Tags
+## Role Organization
 
-| Tag | Runs | Use Case |
-|-----|------|----------|
-| `validation` | API connectivity checks | Pre-flight validation |
-| `provision` | LXC creation via Proxmox API | Initial deployment |
-| `host_config` | Proxmox host-side config (pct) | Feature flags, bind mounts |
-| `configure` | In-LXC setup tasks | Docker, system updates, services |
+Roles are organized by function in subdirectories:
 
-## Common Commands
+| Directory | Purpose | Example Roles |
+|-----------|---------|---------------|
+| `roles/base/` | Foundation | `control_node_bootstrap` |
+| `roles/infrastructure/` | Proxmox/host mgmt | `proxmox_host_bootstrap`, `proxmox_lxc_provision`, `lxc_ssh_key_injector` |
+| `roles/provisioning/` | LXC spec building | `lxc_spec_builder` |
+| `Playbook Structure
+
+**Main Orchestrator**:
+- `site.yml`: Runs full lifecycle (imports all playbooks below)
+
+**Focused Playbooks** (independently runnable):
+- `playbooks/validate-infrastructure.yml`: Bootstrap checks, Proxmox API validation
+- `playbooks/provision-lxcs.yml`: Create containers, apply host config, inject SSH keys
+- `playbooks/configure-lxcs.yml`: In-container setup (system, logging, Docker, apps)
+
+**Utilities**:
+- `bootstrap.yml`: Setup control node (venv, collections, SSH keys)
+- `playbooks/add-ssh-keys-to-lxcs.yml`: Manually inject SSH keys
+- `playbooks/validate-credentials.yml`: Test API credentials
+
+## roles/config/` | In-container setup | `lxc_base_system`, `lxc_logging_config`, `lxc_docker_runtime`, `lxc_docker_environment` |
+
+**Key Roles**:lifecycle (all phases) | Deploy/update all LXCs |
+| `ansible-playbook playbooks/validate-infrastructure.yml` | Validation only | Pre-flight check |
+| `ansible-playbook playbooks/provision-lxcs.yml` | Provision only | Create/update containers |
+| `ansible-playbook playbooks/configure-lxcs.yml` | Configure only | In-container setup |
+| `ansible-playbook site.yml --limit gatekeeper` | Target specific host(s) | Test changes on one LXC |
+| `ansible-playbook site.yml --check` | Dry run (no changes) | Preview what would change |
+| `ansible-playbook site.yml -vvv` | Verbose debug output | Troubleshoot failures |
+| `ansible -i inventory/hosts.yml lxcs -m ping` | Test connectivity | Verify SSH access |
+| `ansible-inventory -i inventory/hosts.yml --list` | Show computed variables | Debug variable precedence |
+| `ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml` | Manually add SSH keys to LXCs | Only if provisioning
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
@@ -95,13 +124,14 @@ fi
 ansible --version
 ```
 
-## Troubleshooting Quick Hits
-
-- **"Permission denied (publickey)" on LXCs**: SSH key injection runs automatically in site.yml. If it fails, check `.ansible/ssh/proxmox_lxc.pub` exists and run `ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml` manually
+## Troubleshooting Quick Hitsin provisioning phase. If it fails, run `ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml`
 - **Venv missing**: Run `ansible-playbook bootstrap.yml` from project root
 - **Permission denied (vault)**: Check `.ansible/vault-pass.txt` exists in project directory
-- **SSH fails after automatic key addition**: Verify controller pubkey (`.ansible/ssh/proxmox_lxc.pub`) in target LXC `~/.ssh/authorized_keys` via `pct exec <vmid> -- cat /root/.ssh/authorized_keys`
-- **API 403 (restricted features)**: Use `pct` on Proxmox host (see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md))
+- **SSH fails after injection**: Verify `.ansible/ssh/proxmox_lxc.pub` in target `~/.ssh/authorized_keys` via `pct exec <vmid> -- cat /root/.ssh/authorized_keys`
+- **API 403 (restricted features)**: Some LXC features require pct commands on Proxmox host (see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md))
+- **Variable not applied**: Check precedence with `ansible-inventory -i inventory/hosts.yml --list`
+- **Stale facts**: Clear cache at `.ansible/cache/`
+- **Feature not enabled**: Check capability group_vars sets feature flag (e.g., `docker_enabled: true` in `cap_docker/vars.yml`)roxmox host (see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md))
 - **Variable not applied**: Check precedence with `ansible-inventory -i inventory/hosts.yml --list`
 - **Stale facts**: Clear cache at `.ansible/cache/`
 
@@ -109,14 +139,13 @@ ansible --version
 - Do not commit or paste: `.ansible/vault-pass.txt`, any private key (`.ansible/ssh/proxmox_lxc`), or token secrets (keep them in encrypted `vault.yml` only).
 - All secrets are gitignored and must be generated locally via `bootstrap.yml`.
 - Use placeholders like `<REPLACE_ME>` in docs or examples that mention secrets.
+Roles are single-purpose, composable, and use feature flags instead of group membership.
 
-## Role Design Guidelines (IaC)
-
-Keep roles small, composable, and configurable.
-
-- One role = one concern; split config, deploy, firewall, certs, etc.
-- Prefer extension via variables/defaults over task edits.
-- Keep variable names consistent across interchangeable roles.
+- One role = one concern (separated by subdirectory: base/, infrastructure/, provisioning/, config/)
+- Use feature flags (`docker_enabled`) not group checks (`'cap_docker' in group_names`)
+- Declare dependencies in `meta/main.yml`; roles can compose other roles
+- Centralize delegation with `proxmox_delegate_host` variable
+- Keep roles independently testable and reusable
 - Avoid hardcoded hostnames/paths/creds; inject via vars.
 - Declare dependencies in `meta/main.yml`; document required vars.
 - Ensure idempotency; use `assert` to fail fast on missing inputs.

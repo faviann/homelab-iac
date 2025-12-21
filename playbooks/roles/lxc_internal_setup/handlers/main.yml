@@ -1,8 +1,0 @@
----
-# Handlers for lxc_internal_setup role
-
-- name: Restart systemd-journald
-  ansible.builtin.systemd:
-    name: systemd-journald
-    state: restarted
-  listen: restart journald
