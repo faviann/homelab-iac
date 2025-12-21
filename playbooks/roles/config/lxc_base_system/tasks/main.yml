@@ -2,6 +2,17 @@
 # Main tasks file for lxc_base_system role
 # Handles base system configuration: package updates and reboots
 
+- name: Ensure essential packages are installed
+  ansible.builtin.apt:
+    name:
+      - sudo
+      - curl
+      - ca-certificates
+      - gnupg
+    state: present
+    update_cache: true
+  when: lxc_base_system_install_essentials | default(true)
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true

@@ -2,6 +2,15 @@
 # Main tasks file for lxc_docker_environment role
 # Configures Docker environment: users, mounts, and Dockge deployment
 
+- name: Verify required packages are installed
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Fail if sudo is not installed
+  ansible.builtin.fail:
+    msg: "sudo package must be installed before Docker environment configuration. Please run lxc_base_system role first."
+  when: "'sudo' not in ansible_facts.packages"
+
 - name: Ensure shared mount source directory exists on host
   ansible.builtin.file:
     path: "{{ lxc_docker_env_shared_mount_source }}"
@@ -14,7 +23,7 @@
     dest: "{{ lxc_docker_env_shared_mount_source }}/"
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
-    mode: preserve
+    mode: '0644'
   register: _copy_templates_result
 
 - name: Template Jinja2 files to shared directory
@@ -48,7 +57,7 @@
     opts: bind
     state: mounted
     fstype: none
-  when: _mount_check.rc != 0
+  when: _mount_check.rc != 0  # rc=0 means IS mounted, rc!=0 means NOT mounted
 
 - name: Ensure bind mount is in fstab
   ansible.posix.mount:
@@ -77,7 +86,7 @@
     append: true
     shell: /bin/bash
     create_home: true
-    password: '!'  # Passwordless account
+    password_lock: true  # Lock password for security
     comment: "Docker user managed by Ansible"
   register: _docker_user_result
 
@@ -101,6 +110,7 @@
   register: _dockge_status
   changed_when: false
   failed_when: false
+  check_mode: false
   when: _dockge_dir_stat.stat.exists and _dockge_dir_stat.stat.isdir
 
 - name: Start Dockge with docker compose

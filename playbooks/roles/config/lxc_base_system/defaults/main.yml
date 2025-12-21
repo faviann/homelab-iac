@@ -2,6 +2,12 @@
 # Default variables for lxc_base_system role
 
 # ==============================================================================
+# Essential Packages Configuration
+# ==============================================================================
+# Whether to install essential packages (sudo, curl, ca-certificates, gnupg)
+lxc_base_system_install_essentials: true
+
+# ==============================================================================
 # System Update Configuration
 # ==============================================================================
 # Whether to update apt cache before upgrading packages

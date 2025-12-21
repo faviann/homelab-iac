@@ -1,0 +1,22 @@
+---
+# Role dependencies for lxc_docker_runtime
+
+dependencies:
+  - role: config/lxc_base_system
+
+galaxy_info:
+  role_name: lxc_docker_runtime
+  author: Ansible Automation
+  description: Install Docker runtime in LXC containers
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - bullseye
+
+  galaxy_tags:
+    - docker
+    - lxc
+    - containers
