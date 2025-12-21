@@ -60,6 +60,7 @@
 - name: Validate Proxmox API connectivity
   hosts: proxmox_api
   gather_facts: false
+  become: false
   collections:
     - community.proxmox
   tags:
@@ -78,6 +79,7 @@
 - name: Ensure LXC containers exist
   hosts: lxcs
   gather_facts: false
+  become: false
   collections:
     - community.proxmox
   tags:

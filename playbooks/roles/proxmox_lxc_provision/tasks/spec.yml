@@ -103,7 +103,7 @@
 
 - name: Load control node SSH public key when requested
   ansible.builtin.set_fact:
-    proxmox_lxc_controller_pubkey_content: "{{ lookup('ansible.builtin.file', proxmox_lxc_controller_pubkey_path, errors='ignore') }}"
+    proxmox_lxc_controller_pubkey_content: "{{ lookup('ansible.builtin.file', proxmox_lxc_controller_pubkey_path, errors='ignore') | default('', true) }}"
   when:
     - proxmox_lxc_controller_pubkey_enabled | bool
     - proxmox_lxc_spec.pubkey is not defined
@@ -116,4 +116,4 @@
     - proxmox_lxc_controller_pubkey_enabled | bool
     - proxmox_lxc_spec.pubkey is not defined
     - proxmox_lxc_controller_pubkey_content is defined
-    - proxmox_lxc_controller_pubkey_content | length > 0
+    - proxmox_lxc_controller_pubkey_content | default('', true) | length > 0
