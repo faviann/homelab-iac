@@ -25,6 +25,7 @@
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
   register: _copy_templates_result
+  notify: restart dockge
 
 - name: Template Jinja2 files to shared directory
   ansible.builtin.template:
@@ -36,6 +37,7 @@
   with_fileglob:
     - "templates/files/**/*.j2"
   register: _template_files_result
+  notify: restart dockge
 
 - name: Ensure Docker config mount target exists
   ansible.builtin.file:

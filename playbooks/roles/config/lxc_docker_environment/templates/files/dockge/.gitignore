@@ -1,0 +1,15 @@
+# Exclude runtime/generated files from data directory
+data/*.log
+data/*.lock
+data/tmp/
+data/temp/
+data/cache/
+
+# SQLite WAL and SHM files (regenerated at runtime)
+data/*.db-shm
+data/*.db-wal
+
+# Keep configuration and database files
+!data/*.db
+!data/*.json
+!data/config/
