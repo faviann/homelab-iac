@@ -9,12 +9,20 @@
     - name: Ping hosts over SSH
       ansible.builtin.ping:
       register: ping_result
+      ignore_unreachable: true
+      ignore_errors: true
 
     - name: Report reachable host
       ansible.builtin.debug:
         msg: >-
-          SSH reachable: {{ inventory_hostname }} (target {{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }})
-      when: ping_result is succeeded
+          ✅ SSH reachable: {{ inventory_hostname }} (target {{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }})
+      when: ping_result is succeeded and ping_result is not unreachable
+
+    - name: Report unreachable host
+      ansible.builtin.debug:
+        msg: >-
+          ❌ SSH unreachable: {{ inventory_hostname }} (target {{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }})
+      when: ping_result is unreachable or ping_result is failed
 
 - name: Validate Proxmox API credentials
   hosts: proxmox_api

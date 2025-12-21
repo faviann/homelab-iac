@@ -35,7 +35,8 @@
         cmd: "pct status {{ proxmox_lxc_overrides.vmid }}"
       register: container_status
       delegate_to: "{{ proxmox_api_host }}"
-      become: true
+      vars:
+        ansible_user: root
       changed_when: false
       failed_when: false
 
@@ -48,7 +49,8 @@
       ansible.builtin.command:
         cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- mkdir -p /root/.ssh"
       delegate_to: "{{ proxmox_api_host }}"
-      become: true
+      vars:
+        ansible_user: root
       when: container_status.rc == 0
       changed_when: true
 
@@ -56,7 +58,8 @@
       ansible.builtin.command:
         cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 700 /root/.ssh"
       delegate_to: "{{ proxmox_api_host }}"
-      become: true
+      vars:
+        ansible_user: root
       when: container_status.rc == 0
       changed_when: false
 
@@ -64,7 +67,8 @@
       ansible.builtin.shell:
         cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -qF '{{ control_node_ssh_pubkey }}' /root/.ssh/authorized_keys 2>/dev/null"
       delegate_to: "{{ proxmox_api_host }}"
-      become: true
+      vars:
+        ansible_user: root
       register: key_exists
       when: container_status.rc == 0
       changed_when: false
@@ -75,7 +79,8 @@
         cmd: |
           pct exec {{ proxmox_lxc_overrides.vmid }} -- bash -c "echo '{{ control_node_ssh_pubkey }}' >> /root/.ssh/authorized_keys"
       delegate_to: "{{ proxmox_api_host }}"
-      become: true
+      vars:
+        ansible_user: root
       when:
         - container_status.rc == 0
         - key_exists.rc != 0
@@ -85,7 +90,8 @@
       ansible.builtin.command:
         cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 600 /root/.ssh/authorized_keys"
       delegate_to: "{{ proxmox_api_host }}"
-      become: true
+      vars:
+        ansible_user: root
       when: container_status.rc == 0
       changed_when: false
 
@@ -93,7 +99,8 @@
       ansible.builtin.shell:
         cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -c '{{ control_node_ssh_pubkey }}' /root/.ssh/authorized_keys"
       delegate_to: "{{ proxmox_api_host }}"
-      become: true
+      vars:
+        ansible_user: root
       register: key_verify
       when: container_status.rc == 0
       changed_when: false
@@ -115,14 +122,15 @@
     - name: Test SSH connection with new key
       ansible.builtin.ping:
       register: ping_result
+      ignore_unreachable: true
       ignore_errors: true
 
     - name: Report SSH connectivity status
       ansible.builtin.debug:
         msg: "✓ SSH connection successful to {{ inventory_hostname }}"
-      when: ping_result is succeeded
+      when: ping_result is succeeded and ping_result is not unreachable
 
     - name: Report SSH connectivity failure
       ansible.builtin.debug:
         msg: "✗ SSH connection failed to {{ inventory_hostname }} - manual intervention may be needed"
-      when: ping_result is failed
+      when: ping_result is unreachable or ping_result is failed
