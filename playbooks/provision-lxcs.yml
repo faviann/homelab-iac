@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ansible-playbook playbooks/provision-lxcs.yml
-#   ansible-playbook playbooks/provision-lxcs.yml --limit gatekeeper
+#   ansible-playbook playbooks/provision-lxcs.yml --limit portal
 
 - name: Ensure LXC containers exist
   hosts: lxcs

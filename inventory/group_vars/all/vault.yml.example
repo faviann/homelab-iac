@@ -35,3 +35,13 @@
 vault_proxmox_api_user: "REPLACE_WITH_YOUR_API_USER"
 vault_proxmox_api_token_id: "REPLACE_WITH_YOUR_TOKEN_ID"
 vault_proxmox_api_token_secret: "REPLACE_WITH_YOUR_TOKEN_SECRET"
+
+# Seedbox stack secrets (bittorrent/VPN services)
+vault_seedbox_wireguard_private_key: "REPLACE_WITH_WIREGUARD_PRIVATE_KEY"
+vault_seedbox_wireguard_preshared_key: "REPLACE_WITH_WIREGUARD_PRESHARED_KEY"
+vault_seedbox_wireguard_address: "REPLACE_WITH_WIREGUARD_ADDRESS"
+vault_seedbox_qbit_username: "REPLACE_WITH_QBITTORRENT_USERNAME"
+vault_seedbox_qbit_password: "REPLACE_WITH_QBITTORRENT_PASSWORD"
+vault_seedbox_ws_username: "REPLACE_WITH_WINDSCRIBE_USERNAME"
+vault_seedbox_ws_password: "REPLACE_WITH_WINDSCRIBE_PASSWORD"
+vault_seedbox_ws_session_cookie: "REPLACE_WITH_WINDSCRIBE_SESSION_COOKIE"

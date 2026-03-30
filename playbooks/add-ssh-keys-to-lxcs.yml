@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
-#   ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit gatekeeper
+#   ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
 
 - name: Add SSH keys to existing LXC containers via Proxmox host
   hosts: lxcs

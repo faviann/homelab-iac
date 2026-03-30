@@ -33,12 +33,12 @@ ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
 
 **Add SSH key to specific container:**
 ```bash
-ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit gatekeeper
+ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
 ```
 
 **Add SSH key to multiple specific containers:**
 ```bash
-ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit gatekeeper,seedpod
+ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal,seedbox
 ```
 
 **Dry run (check what would happen):**
@@ -103,7 +103,7 @@ If you already have SSH access to the containers with a different key:
 cat .ansible/ssh/proxmox_lxc.pub
 
 # SSH into each container with your existing key
-ssh -i ~/.ssh/your-existing-key root@gatekeeper.faviann.vms
+ssh -i ~/.ssh/your-existing-key root@portal.faviann.vms
 
 # Inside the container, add the new key
 echo "ssh-ed25519 AAAAC3... ansible-control" >> /root/.ssh/authorized_keys
@@ -162,7 +162,7 @@ After adding SSH keys, verify connectivity:
 ansible lxcs -m ping
 
 # Test specific container
-ansible gatekeeper -m ping
+ansible portal -m ping
 
 # Test with verbose output
 ansible lxcs -m ping -v
@@ -170,7 +170,7 @@ ansible lxcs -m ping -v
 
 Expected output for successful connection:
 ```
-gatekeeper | SUCCESS => {
+portal | SUCCESS => {
     "changed": false,
     "ping": "pong"
 }

@@ -230,7 +230,7 @@ ansible-playbook site.yml --tags validation
 |   `-- host_vars/                     # Host-specific variables
 |       |-- codeserver.yml
 |       |-- frontend.yml
-|       |-- gatekeeper.yml
+|       |-- portal.yml
 |       |-- jellyfin.yml
 |       `-- media.yml
 |-- playbooks/

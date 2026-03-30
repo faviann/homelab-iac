@@ -1,0 +1,73 @@
+services:
+  traefik-kop:
+    image: ghcr.io/jittering/traefik-kop:latest
+    container_name: traefik-kop
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - traefik-socket-proxy
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      DOCKER_HOST: tcp://127.0.0.1:2375
+      REDIS_ADDR: ${REDISURL}
+      KOP_POLL_INTERVAL: 60
+      DOCKER_CONFIG: |
+        ---
+        docker:
+          exposedByDefault: false          
+          defaultRule: Host(`{% raw %}{{ index .Labels "com.docker.compose.project" }}.{{ index .Labels "traefik.domain" | default "${DOMAIN}" }}{% endraw %}`)
+  traefik-socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: traefik-socket-proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - CONTAINERS=1 # Allow access to viewing containers
+      - SERVICES=1 # Allow access to viewing services (necessary for Docker Swarm)
+      - TASKS=1 # Allow access to viewing tasks (necessary for Docker Swarm)
+      - POST=0 # Disallow any POST operations (effectively read-only)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+  dockwatch-socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: dockwatch-socket-proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    environment:
+      - ALLOW_START=1
+      - ALLOW_STOP=1
+      - ALLOW_RESTARTS=1
+      - CONTAINERS=1
+      - IMAGES=1
+      - PORTS=1
+      - NETWORKS=1
+      - POST=1
+      - VOLUMES=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - admin
+  dockwatch:
+    container_name: dockwatch
+    image: ghcr.io/notifiarr/dockwatch:main
+    restart: unless-stopped
+    depends_on:
+      - dockwatch-socket-proxy
+    ports:
+      - 9999:80/tcp
+    environment:
+      - DOCKER_HOST=tcp://dockwatch-socket-proxy:2375
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Montreal
+    volumes:
+      - ./appdata/dockwatch:/config
+    networks:
+      - admin
+networks:
+  admin:
+    driver: bridge

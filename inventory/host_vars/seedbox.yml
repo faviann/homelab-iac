@@ -1,0 +1,27 @@
+---
+# Host-specific configuration for the download and seeding service
+# Inherits from: tier_large, cap_docker
+
+default_domain: admin.faviann.com
+
+lxc_hwaddr: "BC:24:11:6D:2E:7E"
+
+# Seedbox stack secrets (resolved from vault)
+seedbox_wireguard_private_key: "{{ vault_seedbox_wireguard_private_key }}"
+seedbox_wireguard_preshared_key: "{{ vault_seedbox_wireguard_preshared_key }}"
+seedbox_wireguard_address: "{{ vault_seedbox_wireguard_address }}"
+seedbox_qbit_username: "{{ vault_seedbox_qbit_username }}"
+seedbox_qbit_password: "{{ vault_seedbox_qbit_password }}"
+seedbox_ws_username: "{{ vault_seedbox_ws_username }}"
+seedbox_ws_password: "{{ vault_seedbox_ws_password }}"
+seedbox_ws_session_cookie: "{{ vault_seedbox_ws_session_cookie }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 301
+  hostname: seedbox
+  description: "Download and seeding service managed via Ansible"
+  tags:
+    - ansible
+    - download
+    - tunneled

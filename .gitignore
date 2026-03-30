@@ -29,6 +29,7 @@ vault-pass.txt
 .ansible/vault-pass.txt
 .ansible/ssh/
 .ansible/cp/
+.ansible/.lock
 
 # Backup files
 *.bak
@@ -48,3 +49,6 @@ Thumbs.db
 # Temporary files
 /tmp/
 inventory/group_vars/all/vault.yml
+
+# Rendered env files (secrets injected at deploy time)
+stacks/**/.env

@@ -1,0 +1,16 @@
+---
+# Host-specific configuration for the portal service
+# Inherits from: tier_medium, cap_docker
+
+portal_instance: true
+default_domain: faviann.com
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 300
+  hostname: portal
+  description: "Portal service managed via Ansible"
+  tags:
+    - ansible
+    - portal
+    - web

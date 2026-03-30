@@ -72,7 +72,7 @@ Information-only reference for agents operating this repository from any Linux w
 ### Minimal Smoke Test (venv-first)
 - Activate venv: `source .ansible/venv/bin/activate`
 - Confirm Ansible available: `ansible --version`
-- Ping `gatekeeper` from inventory: `ansible -i inventory/hosts.yml gatekeeper -m ping`
+- Ping `portal` from inventory: `ansible -i inventory/hosts.yml portal -m ping`
 
 ## First-time Setup (Controller, venv-only)
 If `ansible` is not present, create and seed the controller venv:

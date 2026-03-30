@@ -1,6 +1,6 @@
 # Template Files for LXC Internal Setup
 
-This directory contains template files and folders that will be copied to the LXC containers.
+This directory contains template files and folders that will be copied or rendered into the LXC containers.
 
 ## Directory Structure
 
@@ -8,13 +8,16 @@ This directory contains template files and folders that will be copied to the LX
 files/
 ├── dockge/               # Dockge Docker Compose configuration
 │   └── compose.yml       # Example compose file for Dockge
+├── admin/                # Service-agent admin stack templates
+│   ├── .env.j2           # Rendered from inventory variables
+│   └── compose.yml.j2    # Rendered admin stack compose file
 └── example-app/          # Example application structure
     └── compose.yml       # Example application compose file
 ```
 
 ## Usage
 
-Place your template files and directories in this `files/` folder. They will be copied to `/shared/{{ inventory_hostname }}/` on each LXC container in the `cap_docker` group.
+Place your template files and directories in this `files/` folder. Static files are copied to `/shared/{{ inventory_hostname }}/`, and files ending in `.j2` are rendered from inventory variables before being written.
 
 ### For Dockge
 
@@ -30,7 +33,7 @@ files/
 ├── dockge/
 ├── myapp/
 │   ├── compose.yml
-│   └── .env.example
+│   └── .env
 └── another-app/
     └── compose.yml
 ```

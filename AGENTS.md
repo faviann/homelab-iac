@@ -80,7 +80,7 @@ Roles are organized by function in subdirectories:
 | `ansible-playbook playbooks/validate-infrastructure.yml` | Validation only | Pre-flight check |
 | `ansible-playbook playbooks/provision-lxcs.yml` | Provision only | Create/update containers |
 | `ansible-playbook playbooks/configure-lxcs.yml` | Configure only | In-container setup |
-| `ansible-playbook site.yml --limit gatekeeper` | Target specific host(s) | Test changes on one LXC |
+| `ansible-playbook site.yml --limit portal` | Target specific host(s) | Test changes on one LXC |
 | `ansible-playbook site.yml --check` | Dry run (no changes) | Preview what would change |
 | `ansible-playbook site.yml -vvv` | Verbose debug output | Troubleshoot failures |
 | `ansible -i inventory/hosts.yml lxcs -m ping` | Test connectivity | Verify SSH access |
@@ -95,7 +95,7 @@ Roles are organized by function in subdirectories:
 | `ansible-playbook playbooks/validate-credentials.yml` | Test API credentials | Verify credentials work |
 | `ansible-playbook site.yml` | Full orchestration run | Deploy/update all LXCs |
 | `ansible-playbook site.yml --tags validation` | API connectivity only | Pre-flight check |
-| `ansible-playbook site.yml --limit gatekeeper` | Target specific host(s) | Test changes on one LXC |
+| `ansible-playbook site.yml --limit portal` | Target specific host(s) | Test changes on one LXC |
 | `ansible-playbook site.yml --check` | Dry run (no changes) | Preview what would change |
 | `ansible-playbook site.yml -vvv` | Verbose debug output | Troubleshoot failures |
 | `ansible -i inventory/hosts.yml lxcs -m ping` | Test connectivity | Verify SSH access |

@@ -61,7 +61,14 @@
 
 - name: Include network defaults
   ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'netif': {'net0': 'name=eth0,bridge=' + (lxc_network_bridge) + ',firewall=0,ip=dhcp,ip6=auto,type=veth'}}, recursive=True) }}"
+    proxmox_lxc_dynamic_defaults: >-
+      {{ proxmox_lxc_dynamic_defaults | combine({
+        'netif': {
+          'net0': 'name=eth0,bridge=' + (lxc_network_bridge) + ',firewall=0'
+                  + (',hwaddr=' + lxc_hwaddr if lxc_hwaddr is defined else '')
+                  + ',ip=dhcp,ip6=auto,type=veth'
+        }
+      }, recursive=True) }}
 
 - name: Include feature defaults (will be applied via host_prep, not API)
   ansible.builtin.set_fact:

@@ -11,12 +11,15 @@ lxc_docker_env_shared_mount_source: "/shared/{{ inventory_hostname }}"
 lxc_docker_env_root_docker_conf_path: "/conf/docker"
 
 # Ownership for files in shared directory (UID:GID)
-# Matches dockeruser UID from cap_docker group vars
-lxc_docker_env_shared_owner: "1001"
-lxc_docker_env_shared_group: "1001"
+# Uses the host-specific docker user UID/GID from inventory/capability vars.
+lxc_docker_env_shared_owner: "{{ lxc_docker_env_uid }}"
+lxc_docker_env_shared_group: "{{ lxc_docker_env_gid }}"
 
 # Dockge compose directory (relative to mount target)
 lxc_docker_env_dockge_compose_dir: "{{ lxc_docker_env_root_docker_conf_path }}/dockge"
+
+# Per-host stacks source directory (project-relative)
+lxc_docker_env_stacks_source: "{{ playbook_dir }}/../stacks/{{ inventory_hostname }}"
 
 # Docker user configuration (inherited from cap_docker group vars)
 lxc_docker_env_user: "{{ docker_user | default('dockeruser') }}"

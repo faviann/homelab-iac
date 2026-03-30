@@ -50,10 +50,10 @@ All tiers use the same network bridge (`vmbr1`) by default.
 
 Hosts can belong to **MULTIPLE** functional groups based on capabilities needed:
 
-- **cap_docker**: LXCs with Docker runtime and compose
+- **cap_docker**: LXCs with Docker runtime, compose, and Dockge baseline
 - **cap_gpu**: LXCs with GPU passthrough for hardware acceleration
 - **cap_wireguard**: LXCs with WireGuard kernel module access
-- **cap_service_agents**: Subset of cap_docker with additional tooling:
+- **cap_service_agents**: Subset of cap_docker with additional admin tooling:
   - traefik-kop (Traefik Kubernetes Operator)
   - traefik-socket-proxy (Docker socket security proxy)
   - dockwatch (Container monitoring and updates)
@@ -205,12 +205,12 @@ Each LXC must have a unique VMID across the entire inventory. The validation sys
 
 ```yaml
 # BAD - duplicate VMID
-gatekeeper:
+portal:
   proxmox_lxc_overrides:
-    vmid: 300  # ❌ Already used by another host
+    vmid: 301  # ❌ Already used by another host
 
 # GOOD - unique VMID
-gatekeeper:
+portal:
   proxmox_lxc_overrides:
     vmid: 300  # ✓ Unique across inventory
 ```
@@ -252,12 +252,12 @@ proxmox_validation_strict: true   # Alternative: abort entire playbook on any co
 
 Conflicts include detailed remediation guidance:
 ```
-Host 'gatekeeper': Inventory expects [vmid=300, name=gatekeeper], 
+Host 'portal': Inventory expects [vmid=300, name=portal], 
 but Proxmox shows [vmid=300, name=oldserver] - ID match, name mismatch
 
 Remediation options:
-  - Fix inventory name in inventory/host_vars/gatekeeper.yml to match Proxmox: oldserver
-  - OR rename container in Proxmox: pct set 300 -hostname gatekeeper
+  - Fix inventory name in inventory/host_vars/portal.yml to match Proxmox: oldserver
+  - OR rename container in Proxmox: pct set 300 -hostname portal
   - OR destroy conflicting container: pct destroy 300
 ```
 
@@ -272,7 +272,7 @@ ansible-playbook site.yml --tags validation
 ansible-playbook site.yml
 
 # Provision specific hosts (validation still runs first)
-ansible-playbook site.yml --limit gatekeeper --tags provision
+ansible-playbook site.yml --limit portal --tags provision
 ```
 
 ### 4. Override Only What You Need
@@ -300,9 +300,9 @@ Hosts will be resolved via DNS as `{hostname}.faviann.vms` or through Proxmox AP
    - Host vars (vmid, hostname, specific config)
 3. **After provisioning**, control node can connect to LXC via SSH for configuration
 4. Configuration playbooks use functional group variables to install software:
-   - `cap_docker` → Install Docker
+  - `cap_docker` → Install Docker and deploy Dockge baseline
    - `cap_gpu` → Configure GPU passthrough
-   - `cap_service_agents` → Deploy traefik-kop, socket-proxy, dockwatch
+  - `cap_service_agents` → Deploy admin extras (traefik-kop, socket-proxy, dockwatch)
 
 ### Example Playbook Targets
 

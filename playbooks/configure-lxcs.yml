@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ansible-playbook playbooks/configure-lxcs.yml
-#   ansible-playbook playbooks/configure-lxcs.yml --limit gatekeeper
+#   ansible-playbook playbooks/configure-lxcs.yml --limit portal
 
 - name: Configure LXC containers internally
   hosts: lxcs

@@ -36,13 +36,13 @@ features such as Docker or GPU access).
 
 |-------|---------|---------------|
 
-| `cap_docker` | Docker runtime and compose | `install_docker`, `lxc_features`, `docker_user` |
+| `cap_docker` | Docker runtime, compose, and Dockge baseline | `install_docker`, `lxc_features`, `docker_user` |
 
 | `cap_gpu` | GPU passthrough for hardware acceleration | `enable_gpu_passthrough`, `configure_nvidia_runtime` |
 
 | `cap_wireguard` | WireGuard VPN kernel module access | `enable_wireguard`, `lxc_wireguard_features` |
 
-| `cap_service_agents` | Service management tooling (subset of `cap_docker`) | `configure_traefik_kop`, `configure_traefik_socket_proxy`, `configure_dockwatch` |
+| `cap_service_agents` | Admin stack extras on top of `cap_docker` | `configure_traefik_kop`, `configure_traefik_socket_proxy`, `configure_dockwatch` |
 
 
 

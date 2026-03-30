@@ -17,27 +17,237 @@
     state: directory
     mode: '0755'
 
-- name: Copy template files to shared directory
+- name: Copy Dockge templates to shared directory
   ansible.builtin.copy:
-    src: "templates/files/"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/"
+    src: "templates/files/dockge/"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/dockge/"
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
-  register: _copy_templates_result
+    directory_mode: '0755'
+  register: _copy_dockge_result
   notify: restart dockge
 
-- name: Template Jinja2 files to shared directory
+- name: Initialize portal instance host list
+  ansible.builtin.set_fact:
+    lxc_docker_env_portal_hosts: []
+  when: service_agents_enabled | default(false)
+
+- name: Collect portal instance hosts from inventory
+  ansible.builtin.set_fact:
+    lxc_docker_env_portal_hosts: "{{ lxc_docker_env_portal_hosts + [item] }}"
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  when:
+    - service_agents_enabled | default(false)
+    - hostvars[item].portal_instance | default(false)
+
+- name: Validate admin environment variables
+  ansible.builtin.assert:
+    that:
+      - lxc_docker_env_portal_hosts | length == 1
+      - default_domain is defined
+      - default_domain | length > 0
+    fail_msg: >-
+      Service-agent hosts require exactly one host with portal_instance=true and a
+      default_domain value defined in host_vars.
+  when: service_agents_enabled | default(false)
+
+- name: Ensure admin stack directory exists (service agents only)
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
+    state: directory
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0755'
+  when: service_agents_enabled | default(false)
+
+- name: Remove legacy root admin directory
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}/admin"
+    state: absent
+
+- name: Remove admin stack for docker-only hosts
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
+    state: absent
+  when: docker_enabled | default(false) and not (service_agents_enabled | default(false))
+
+- name: Render admin environment file (service agents only)
   ansible.builtin.template:
-    src: "{{ item }}"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/{{ item | regex_replace('\\.j2$', '') | regex_replace('^templates/files/', '') }}"
+    src: "files/admin/.env.j2"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin/.env"
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
-  with_fileglob:
-    - "templates/files/**/*.j2"
-  register: _template_files_result
-  notify: restart dockge
+  when: service_agents_enabled | default(false)
+  register: _template_admin_env_result
+
+- name: Render admin compose template (service agents only)
+  ansible.builtin.template:
+    src: "files/admin/compose.yml.j2"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin/compose.yml"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0644'
+  when: service_agents_enabled | default(false)
+  register: _template_admin_compose_result
+
+- name: Copy stacks templates to shared directory (service agents only)
+  ansible.builtin.copy:
+    src: "templates/files/stacks/"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0644'
+    directory_mode: '0755'
+  when: service_agents_enabled | default(false)
+  register: _copy_stacks_result
+
+- name: Find markdown/docs in deployed docker config
+  ansible.builtin.find:
+    paths:
+      - "{{ lxc_docker_env_shared_mount_source }}"
+    patterns:
+      - "README*"
+      - "*.md"
+    recurse: true
+    file_type: file
+  register: _docker_env_docs
+  failed_when: false
+
+- name: Remove markdown/docs from deployed docker config
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ _docker_env_docs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Normalize Docker config ownership for existing files
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    recurse: true
+    state: directory
+
+- name: Remove service-agent stacks for docker-only hosts
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
+    state: absent
+  when: docker_enabled | default(false) and not (service_agents_enabled | default(false))
+
+- name: Ensure stacks directory exists
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks"
+    state: directory
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0755'
+
+# ==============================================================================
+# Per-Host Stacks: Deploy compose stacks from stacks/<hostname>/
+# ==============================================================================
+- name: Check if per-host stacks source exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_env_stacks_source }}"
+  register: _per_host_stacks_dir
+  delegate_to: localhost
+  become: false
+
+- name: Find template files (.j2) in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_stacks_source }}"
+    patterns: "*.j2"
+    hidden: true
+    recurse: true
+    file_type: file
+  register: _per_host_j2_files
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find static files in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_stacks_source }}"
+    patterns: "*"
+    excludes: "*.j2,.gitkeep"
+    hidden: true
+    recurse: true
+    file_type: file
+  register: _per_host_static_files
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find directories in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_stacks_source }}"
+    recurse: true
+    file_type: directory
+  register: _per_host_dirs
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Create per-host stack directories
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
+    state: directory
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0755'
+  loop: "{{ _per_host_dirs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Render templated files (.j2) for per-host stacks
+  ansible.builtin.template:
+    src: "{{ item.path }}"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) | regex_replace('\\.j2$', '') }}"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0644'
+  loop: "{{ _per_host_j2_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Copy static files for per-host stacks
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0644'
+  loop: "{{ _per_host_static_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+# ==============================================================================
+# Stack Lifecycle: Discover and start all deployed compose stacks
+# ==============================================================================
+- name: Find all compose files in stacks directory
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_root_docker_conf_path }}/stacks"
+    patterns:
+      - "compose.yml"
+      - "compose.yaml"
+    recurse: true
+    depth: 2
+  register: _stack_compose_files
+
+- name: Ensure all stacks are running
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ item.path | dirname }}"
+  loop: "{{ _stack_compose_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | dirname | basename }}"
+  register: _stack_up_results
+  changed_when: "'Started' in _stack_up_results.stderr or 'Created' in _stack_up_results.stderr"
 
 - name: Ensure Docker config mount target exists
   ansible.builtin.file:
