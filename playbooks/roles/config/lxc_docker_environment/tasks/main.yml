@@ -28,6 +28,12 @@
   register: _copy_dockge_result
   notify: restart dockge
 
+- name: Remove Homepage discovery stack on service-agent hosts
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_homepage_discovery_stack_dir }}"
+    state: absent
+  when: service_agents_enabled | default(false)
+
 - name: Ensure Homepage discovery stack directory exists
   ansible.builtin.file:
     path: "{{ lxc_docker_env_homepage_discovery_stack_dir }}"
@@ -35,6 +41,7 @@
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0755'
+  when: not (service_agents_enabled | default(false))
 
 - name: Render Homepage discovery proxy compose template
   ansible.builtin.template:
@@ -43,6 +50,7 @@
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
+  when: not (service_agents_enabled | default(false))
 
 - name: Initialize portal instance host list
   ansible.builtin.set_fact:
