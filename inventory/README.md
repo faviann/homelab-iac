@@ -36,15 +36,11 @@ features such as Docker or GPU access).
 
 |-------|---------|---------------|
 
-| `cap_docker` | Docker runtime, compose, and Dockge baseline | `install_docker`, `lxc_features`, `docker_user` |
+| `cap_docker` | Docker runtime, compose, Dockge, and universal Docker agents | `install_docker`, `lxc_features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled` |
 
 | `cap_gpu` | GPU passthrough for hardware acceleration | `enable_gpu_passthrough`, `configure_nvidia_runtime` |
 
 | `cap_wireguard` | WireGuard VPN kernel module access | `enable_wireguard`, `lxc_wireguard_features` |
-
-| `cap_service_agents` | Admin stack extras on top of `cap_docker` | `configure_traefik_kop`, `configure_traefik_socket_proxy`, `configure_dockwatch` |
-
-
 
 ## Current Hosts
 
@@ -56,7 +52,7 @@ codeserver:
 
   Resource Tier: tier_small (2 cores, 2 GB RAM)
 
-  Capability Groups: cap_docker, cap_service_agents
+  Capability Groups: cap_docker
 
   VMID: 301
 
@@ -66,7 +62,7 @@ frontend:
 
   Resource Tier: tier_small (2 cores, 2 GB RAM)
 
-  Capability Groups: cap_docker, cap_service_agents
+  Capability Groups: cap_docker
 
   VMID: 302
 
@@ -76,7 +72,7 @@ media:
 
   Resource Tier: tier_medium (4 cores, 8 GB RAM)
 
-  Capability Groups: cap_docker, cap_gpu, cap_service_agents
+  Capability Groups: cap_docker, cap_gpu
 
   VMID: 303
 
@@ -155,17 +151,11 @@ inventory/
 
 │   │   └── vars.yml
 
-│   └── cap_service_agents/         # Service management tools
-
-│       └── vars.yml
-
-│
-
 └── host_vars/                      # Host-specific variables
 
-    ├── codeserver.yml              # VSCode server (tier_small + cap_docker/cap_service_agents)
+  ├── codeserver.yml              # VSCode server (tier_small + cap_docker)
 
-    ├── frontend.yml                # Frontend service (tier_small + cap_docker/cap_service_agents)
+  ├── frontend.yml                # Frontend service (tier_small + cap_docker)
 
     ├── media.yml                   # Media processing (tier_medium + cap_docker/cap_gpu)
 
@@ -235,15 +225,13 @@ For the `media` host, variables resolve in this order:
 
      ```
 
-   - From `group_vars/cap_service_agents/vars.yml`:
+   - Universal Docker agents are now also sourced from `group_vars/cap_docker/vars.yml`:
 
      ```yaml
 
-     configure_traefik_kop: true
+     docker_agents_enabled: true
 
-     configure_traefik_socket_proxy: true
-
-     configure_dockwatch: true
+     traefik_kop_enabled: true
 
      ```
 

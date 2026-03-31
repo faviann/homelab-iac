@@ -18,8 +18,17 @@ lxc_docker_env_shared_group: "{{ lxc_docker_env_gid }}"
 # Dockge compose directory (relative to mount target)
 lxc_docker_env_dockge_compose_dir: "{{ lxc_docker_env_root_docker_conf_path }}/dockge"
 
-# Managed Homepage Docker discovery proxy stack
-lxc_docker_env_homepage_discovery_stack_dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/homepage-discovery"
+# Managed Docker agents stack
+lxc_docker_env_docker_agents_stack_dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/docker-agents"
+
+# Managed stack cleanup targets from previous layouts
+lxc_docker_env_legacy_managed_stacks:
+  - name: admin
+    dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
+    compose_file: compose.yml
+  - name: homepage-discovery
+    dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/homepage-discovery"
+    compose_file: compose.yml
 
 # Per-host stacks source directory (project-relative)
 lxc_docker_env_stacks_source: "{{ playbook_dir }}/../stacks/{{ inventory_hostname }}"

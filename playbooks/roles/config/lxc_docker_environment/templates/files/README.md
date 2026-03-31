@@ -8,9 +8,14 @@ This directory contains template files and folders that will be copied or render
 files/
 ├── dockge/               # Dockge Docker Compose configuration
 │   └── compose.yml       # Example compose file for Dockge
-├── admin/                # Service-agent admin stack templates
-│   ├── .env.j2           # Rendered from inventory variables
-│   └── compose.yml.j2    # Rendered admin stack compose file
+├── docker-agents/        # Universal managed helper stack templates
+│   ├── .env.j2           # Rendered only when Traefik integration is enabled
+│   ├── compose.yml.j2    # Universal Docker agents base compose file
+│   └── compose.override.yaml.j2
+├── stacks/
+│   └── docker-agents/    # Static assets copied into the managed helper stack
+│       └── appdata/
+│           └── dockwatch/
 └── example-app/          # Example application structure
     └── compose.yml       # Example application compose file
 ```
@@ -40,8 +45,8 @@ files/
 
 ## File Ownership
 
-All files copied to `/shared/{{ inventory_hostname }}/` will be owned by UID:GID `1001:1001` by default.
-This can be customized via the `lxc_internal_shared_owner` and `lxc_internal_shared_group` variables.
+All files copied to `/shared/{{ inventory_hostname }}/` will be owned by the Docker user UID:GID by default.
+This can be customized via the `lxc_docker_env_shared_owner` and `lxc_docker_env_shared_group` variables.
 
 ## Template Variables
 

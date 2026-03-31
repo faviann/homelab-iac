@@ -18,6 +18,10 @@ docker_user: dockeruser
 docker_uid: 1000
 docker_gid: 1000
 
+# Universal Docker agents managed stack
+docker_agents_enabled: true
+traefik_kop_enabled: true
+
 # Homepage Docker discovery proxy
 homepage_docker_proxy_port: 2375
 

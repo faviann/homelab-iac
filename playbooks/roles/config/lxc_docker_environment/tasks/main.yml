@@ -28,104 +28,132 @@
   register: _copy_dockge_result
   notify: restart dockge
 
-- name: Remove Homepage discovery stack on service-agent hosts
+- name: Check legacy managed stack compose files
+  ansible.builtin.stat:
+    path: "{{ item.dir }}/{{ item.compose_file }}"
+  loop: "{{ lxc_docker_env_legacy_managed_stacks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _legacy_managed_stack_compose_files
+
+- name: Stop legacy managed stacks
+  ansible.builtin.command:
+    cmd: docker compose down --remove-orphans
+    chdir: "{{ item.item.dir }}"
+  loop: "{{ _legacy_managed_stack_compose_files.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stat.exists
+  failed_when: false
+
+- name: Remove legacy managed stack directories
   ansible.builtin.file:
-    path: "{{ lxc_docker_env_homepage_discovery_stack_dir }}"
+    path: "{{ item.dir }}"
     state: absent
-  when: service_agents_enabled | default(false)
-
-- name: Ensure Homepage discovery stack directory exists
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_homepage_discovery_stack_dir }}"
-    state: directory
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0755'
-  when: not (service_agents_enabled | default(false))
-
-- name: Render Homepage discovery proxy compose template
-  ansible.builtin.template:
-    src: "files/homepage-discovery/compose.yml.j2"
-    dest: "{{ lxc_docker_env_homepage_discovery_stack_dir }}/compose.yml"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0644'
-  when: not (service_agents_enabled | default(false))
+  loop: "{{ lxc_docker_env_legacy_managed_stacks }}"
+  loop_control:
+    label: "{{ item.name }}"
 
 - name: Initialize portal instance host list
   ansible.builtin.set_fact:
     lxc_docker_env_portal_hosts: []
-  when: service_agents_enabled | default(false)
+  when: traefik_kop_enabled | default(false)
 
 - name: Collect portal instance hosts from inventory
   ansible.builtin.set_fact:
     lxc_docker_env_portal_hosts: "{{ lxc_docker_env_portal_hosts + [item] }}"
   loop: "{{ groups['lxcs'] | default([]) }}"
   when:
-    - service_agents_enabled | default(false)
+    - traefik_kop_enabled | default(false)
     - hostvars[item].portal_instance | default(false)
 
-- name: Validate admin environment variables
+- name: Validate Docker agents override variables
   ansible.builtin.assert:
     that:
       - lxc_docker_env_portal_hosts | length == 1
       - default_domain is defined
       - default_domain | length > 0
     fail_msg: >-
-      Service-agent hosts require exactly one host with portal_instance=true and a
+      Traefik-integrated Docker hosts require exactly one host with portal_instance=true and a
       default_domain value defined in host_vars.
-  when: service_agents_enabled | default(false)
+  when: traefik_kop_enabled | default(false)
 
-- name: Ensure admin stack directory exists (service agents only)
+- name: Ensure Docker agents stack directory exists
   ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
+    path: "{{ lxc_docker_env_docker_agents_stack_dir }}"
     state: directory
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0755'
-  when: service_agents_enabled | default(false)
+  when: docker_agents_enabled | default(false)
 
 - name: Remove legacy root admin directory
   ansible.builtin.file:
     path: "{{ lxc_docker_env_shared_mount_source }}/admin"
     state: absent
 
-- name: Remove admin stack for docker-only hosts
+- name: Remove Docker agents stack for disabled hosts
   ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
+    path: "{{ lxc_docker_env_docker_agents_stack_dir }}"
     state: absent
-  when: docker_enabled | default(false) and not (service_agents_enabled | default(false))
+  when: docker_enabled | default(false) and not (docker_agents_enabled | default(false))
 
-- name: Render admin environment file (service agents only)
+- name: Render Docker agents override environment file
   ansible.builtin.template:
-    src: "files/admin/.env.j2"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin/.env"
+    src: "files/docker-agents/.env.j2"
+    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/.env"
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
-  when: service_agents_enabled | default(false)
-  register: _template_admin_env_result
+  when:
+    - docker_agents_enabled | default(false)
+    - traefik_kop_enabled | default(false)
+  register: _template_docker_agents_env_result
 
-- name: Render admin compose template (service agents only)
+- name: Remove Docker agents override environment file when not needed
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_docker_agents_stack_dir }}/.env"
+    state: absent
+  when: docker_agents_enabled | default(false) and not (traefik_kop_enabled | default(false))
+
+- name: Render Docker agents base compose template
   ansible.builtin.template:
-    src: "files/admin/compose.yml.j2"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin/compose.yml"
+    src: "files/docker-agents/compose.yml.j2"
+    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/compose.yml"
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
-  when: service_agents_enabled | default(false)
-  register: _template_admin_compose_result
+  when: docker_agents_enabled | default(false)
+  register: _template_docker_agents_compose_result
 
-- name: Copy stacks templates to shared directory (service agents only)
+- name: Render Docker agents override compose template
+  ansible.builtin.template:
+    src: "files/docker-agents/compose.override.yaml.j2"
+    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/compose.override.yaml"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0644'
+  when:
+    - docker_agents_enabled | default(false)
+    - traefik_kop_enabled | default(false)
+  register: _template_docker_agents_override_result
+
+- name: Remove Docker agents override compose when not needed
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_docker_agents_stack_dir }}/compose.override.yaml"
+    state: absent
+  when: docker_agents_enabled | default(false) and not (traefik_kop_enabled | default(false))
+
+- name: Copy Docker agents stack assets to shared directory
   ansible.builtin.copy:
-    src: "templates/files/stacks/"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/"
+    src: "templates/files/stacks/docker-agents/"
+    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/"
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
     directory_mode: '0755'
-  when: service_agents_enabled | default(false)
-  register: _copy_stacks_result
+  when: docker_agents_enabled | default(false)
+  register: _copy_docker_agents_assets_result
 
 - name: Find markdown/docs in deployed docker config
   ansible.builtin.find:
@@ -154,12 +182,6 @@
     group: "{{ lxc_docker_env_shared_group }}"
     recurse: true
     state: directory
-
-- name: Remove service-agent stacks for docker-only hosts
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
-    state: absent
-  when: docker_enabled | default(false) and not (service_agents_enabled | default(false))
 
 - name: Ensure stacks directory exists
   ansible.builtin.file:

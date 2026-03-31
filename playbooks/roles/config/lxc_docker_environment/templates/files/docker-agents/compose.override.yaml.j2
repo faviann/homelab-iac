@@ -1,0 +1,19 @@
+services:
+  traefik-kop:
+    image: ghcr.io/jittering/traefik-kop:latest
+    container_name: traefik-kop
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - docker-metadata-proxy
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      DOCKER_HOST: tcp://127.0.0.1:2375
+      REDIS_ADDR: ${REDISURL}
+      KOP_POLL_INTERVAL: 60
+      DOCKER_CONFIG: |
+        ---
+        docker:
+          exposedByDefault: false
+          defaultRule: Host(`{% raw %}{{ index .Labels "com.docker.compose.project" }}.{{ index .Labels "traefik.domain" | default "${DOMAIN}" }}{% endraw %}`)

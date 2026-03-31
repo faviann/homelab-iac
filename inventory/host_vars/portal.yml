@@ -4,6 +4,7 @@
 
 portal_instance: true
 default_domain: faviann.com
+traefik_kop_enabled: false
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:
