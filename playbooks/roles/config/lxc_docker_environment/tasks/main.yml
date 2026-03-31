@@ -214,6 +214,16 @@
   become: false
   when: _per_host_stacks_dir.stat.exists | default(false)
 
+- name: Build list of templated per-host output files
+  ansible.builtin.set_fact:
+    lxc_docker_env_templated_outputs: >-
+      {%- set outputs = [] -%}
+      {%- for file in _per_host_j2_files.files | default([]) -%}
+      {%- set _ = outputs.append(file.path | relpath(lxc_docker_env_stacks_source) | regex_replace('\.j2$', '')) -%}
+      {%- endfor -%}
+      {{ outputs }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
 - name: Create per-host stack directories
   ansible.builtin.file:
     path: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
@@ -248,7 +258,9 @@
   loop: "{{ _per_host_static_files.files | default([]) }}"
   loop_control:
     label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
-  when: _per_host_stacks_dir.stat.exists | default(false)
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (item.path | relpath(lxc_docker_env_stacks_source)) not in (lxc_docker_env_templated_outputs | default([]))
 
 - name: Ensure Docker config mount target exists
   ansible.builtin.file:
