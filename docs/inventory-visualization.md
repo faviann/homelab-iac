@@ -25,27 +25,26 @@ This diagram shows how hosts are organized into resource tiers and functional gr
 │              (Compositional - Host can be in MULTIPLE)                   │
 └─────────────────────────────────────────────────────────────────────────┘
 
-    cap_docker              cap_gpu           cap_wireguard    cap_service_agents
-  (Docker runtime)        (GPU passthrough)         (WireGuard)    (Service tooling)
-         │                       │                      │                  │
-    ┌────┼────┬────┬────┐       ├───────┐              │          ┌───────┼──────┐
-    │    │    │    │    │       │       │              │          │       │      │
-codeserver │  media │  media jellyfin              codeserver frontend media
+    cap_docker              cap_gpu           cap_wireguard
+  (Docker runtime          (GPU passthrough)         (WireGuard)
+   + docker-agents)
+         │                       │                      │
+    ┌────┼────┬────┬────┐       ├───────┐              │
+    │    │    │    │    │       │       │              │
+codeserver │  media │  media jellyfin              │
            │       │                                    │
        frontend  jellyfin                               │
-                                                    (subset of
-                                                   cap_docker)
 
 ```
 
 ## Host Configuration Matrix
 
-| Host       | Resource Tier | CPU | RAM   | Docker | GPU | WireGuard | Service Agent | VMID |
-|------------|--------------|-----|-------|--------|-----|-----------|---------------|------|
-| codeserver | small        | 2   | 2GB   | ✓      | ✗   | ✗         | ✓             | 301  |
-| frontend   | small        | 2   | 2GB   | ✓      | ✗   | ✗         | ✓             | 302  |
-| media      | medium       | 4   | 8GB   | ✓      | ✓   | ✗         | ✓             | 303  |
-| jellyfin   | large        | 8   | 32GB* | ✓      | ✓   | ✗         | ✗             | 304  |
+| Host       | Resource Tier | CPU | RAM   | Docker | GPU | WireGuard | traefik-kop | VMID |
+|------------|--------------|-----|-------|--------|-----|-----------|-------------|------|
+| codeserver | small        | 2   | 2GB   | ✓      | ✗   | ✗         | ✓ (default) | 301  |
+| frontend   | small        | 2   | 2GB   | ✓      | ✗   | ✗         | ✓ (default) | 302  |
+| media      | medium       | 4   | 8GB   | ✓      | ✓   | ✗         | ✓ (default) | 303  |
+| jellyfin   | large        | 8   | 32GB* | ✓      | ✓   | ✗         | ✓ (default) | 304  |
 
 *jellyfin has a resource override: 32GB RAM instead of the tier_large default 16GB
 
@@ -74,18 +73,20 @@ This shows how variables flow from groups to a specific host (`media` example):
                     └────────────┬─────────────┘
                                  │
                 ┌────────────────┼────────────────┐
-                │                │                │
-                ▼                ▼                ▼
-    ┌───────────────────┐ ┌───────────────┐ ┌──────────────────┐
-    │ group_vars/       │ │ group_vars/   │ │ group_vars/      │
-    │ cap_docker.yml  │ │ cap_gpu.yml│ │ cap_service_agents.yml│
-    │                   │ │               │ │                  │
-    │ • install_docker  │ │ • enable_gpu  │ │ • traefik_kop    │
-    │ • lxc_features    │ │ • nvidia_cfg  │ │ • socket_proxy   │
-    │ • docker_user     │ │               │ │ • dockwatch      │
-    └─────────┬─────────┘ └───────┬───────┘ └────────┬─────────┘
-              │                   │                  │
-              └───────────────────┼──────────────────┘
+                │                │
+                ▼                ▼
+    ┌───────────────────┐ ┌───────────────┐
+    │ group_vars/       │ │ group_vars/   │
+    │ cap_docker.yml  │ │ cap_gpu.yml│
+    │                   │ │               │
+    │ • install_docker  │ │ • enable_gpu  │
+    │ • lxc_features    │ │ • nvidia_cfg  │
+    │ • docker_user     │ │               │
+    │ • docker_agents   │ └───────┬───────┘
+    │ • traefik_kop     │       │
+    └─────────┬─────────┘       │
+              │                   │
+              └───────────────────┼┘
                                   │
                                   ▼
                     ┌──────────────────────────┐
@@ -107,7 +108,6 @@ This shows how variables flow from groups to a specific host (`media` example):
                     │ • tier_medium.yml     │
                     │ • cap_docker.yml       │
                     │ • cap_gpu.yml         │
-                    │ • cap_service_agents.yml     │
                     │ • host_vars/media.yml    │
                     └──────────────────────────┘
 ```
@@ -116,27 +116,23 @@ This shows how variables flow from groups to a specific host (`media` example):
 
 ```
                         ┌─────────────────┐
-                        │   cap_docker  │
+                        │   cap_docker    │
                         │                 │
                         │ All LXCs with   │
                         │ Docker runtime  │
+                        │ + docker-agents │
                         └────────┬────────┘
                                  │
-                                 │ inherits from
-                                 │
-                        ┌────────▼────────┐
-                        │ cap_service_agents  │
-                        │                 │
-                        │ Subset with     │
-                        │ service tooling │
-                        └─────────────────┘
+                    Every host gets:
+                    • docker-metadata-proxy
+                    • dockwatch-socket-proxy
+                    • dockwatch
+                    • traefik-kop (unless
+                      traefik_kop_enabled: false
+                      in host_vars)
 
-    codeserver, frontend, media           codeserver, frontend, media
-       (all cap_docker)                    (all cap_service_agents)
-
-         jellyfin                                  ---
-    (docker_host but NOT                     (jellyfin excluded -
-     a service_agent)                      doesn't need traefik tools)
+    portal: traefik_kop_enabled: false
+    All other cap_docker hosts: traefik_kop_enabled: true (default)
 ```
 
 ## Provisioning Workflow
@@ -261,7 +257,7 @@ Use dynamic inventory via Proxmox API
    - Use `"{{ lxc_cores }}"` instead of hardcoded values
    - Makes overrides explicit and visible
 
-5. **Service Agents ⊂ Docker Hosts**
-   - All cap_service_agents must be cap_docker
-   - Not all cap_docker are cap_service_agents
-   - Example: jellyfin is docker_host but NOT service_agent
+5. **Docker Agents are Universal**
+   - All cap_docker hosts get docker-agents (dockwatch, socket proxies)
+   - traefik-kop is opt-out via `traefik_kop_enabled: false` in host_vars
+   - Example: portal disables traefik-kop because it runs the Traefik instance itself

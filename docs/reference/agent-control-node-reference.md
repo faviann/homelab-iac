@@ -30,7 +30,7 @@ Information-only reference for agents operating this repository from any Linux w
 
 ## Inventory and Naming
 - Inventory file: `inventory/hosts.yml`.
-- Groups: `proxmox_api` (local API operations, `ansible_connection: local`), `lxcs` (managed containers), resource tiers (`tier_tiny|small|medium|large`), capability groups (`cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_service_agents`).
+- Groups: `proxmox_api` (local API operations, `ansible_connection: local`), `lxcs` (managed containers), resource tiers (`tier_tiny|small|medium|large`), capability groups (`cap_docker`, `cap_gpu`, `cap_wireguard`).
 - Host naming convention for LXCs: `{{ inventory_hostname }}.faviann.vms` (see `inventory/group_vars/all/proxmox.yml`).
 
 ## Configuration Reference (non-secret)

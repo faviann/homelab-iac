@@ -21,10 +21,9 @@ inventory/
 │   ├── tier_medium/vars.yml       # Resource tier: 4 cores, 8GB RAM
 │   ├── tier_large/vars.yml        # Resource tier: 8 cores, 16GB RAM
 │   │
-│   ├── cap_docker/vars.yml        # Functional: Docker installation
+│   ├── cap_docker/vars.yml        # Functional: Docker installation + universal docker-agents
 │   ├── cap_gpu/vars.yml           # Functional: GPU passthrough
-│   ├── cap_wireguard/vars.yml     # Functional: WireGuard VPN
-│   └── cap_service_agents/vars.yml      # Functional: Service management tools
+│   └── cap_wireguard/vars.yml     # Functional: WireGuard VPN
 │
 └── host_vars/                         # Host-specific variables
     ├── codeserver.yml                # VSCode server configuration
@@ -53,10 +52,11 @@ Hosts can belong to **MULTIPLE** functional groups based on capabilities needed:
 - **cap_docker**: LXCs with Docker runtime, compose, and Dockge baseline
 - **cap_gpu**: LXCs with GPU passthrough for hardware acceleration
 - **cap_wireguard**: LXCs with WireGuard kernel module access
-- **cap_service_agents**: Subset of cap_docker with additional admin tooling:
-  - traefik-kop (Traefik Kubernetes Operator)
-  - traefik-socket-proxy (Docker socket security proxy)
-  - dockwatch (Container monitoring and updates)
+Every `cap_docker` host automatically receives the **docker-agents** managed stack:
+  - docker-metadata-proxy (read-only Docker socket proxy for Homepage discovery)
+  - dockwatch-socket-proxy (write-capable proxy for container management)
+  - dockwatch (container monitoring UI)
+  - traefik-kop (Traefik label replication — controlled by `traefik_kop_enabled`, default `true`; set `false` on portal)
 
 ### 3. Exception Handling
 
@@ -82,7 +82,7 @@ Ansible applies variables in this order (later sources override earlier ones):
 
 ### Example: Variable Inheritance
 
-For a host named `media` in `tier_medium`, `cap_docker`, `cap_gpu`, and `cap_service_agents`:
+For a host named `media` in `tier_medium`, `cap_docker`, and `cap_gpu`:
 
 ```yaml
 # Inherited variables (in merge order):
@@ -106,12 +106,7 @@ lxc_features: [nesting=1, keyctl=1]
 enable_gpu_passthrough: true
 configure_nvidia_runtime: true
 
-# 5. group_vars/cap_service_agents/vars.yml
-configure_traefik_kop: true
-configure_traefik_socket_proxy: true
-configure_dockwatch: true
-
-# 6. host_vars/media.yml (can override any of the above)
+# 5. host_vars/media.yml (can override any of the above)
 proxmox_lxc:
   vmid: 303
   hostname: media
@@ -135,7 +130,7 @@ Select all applicable functional groups:
 - Does it run Docker? → Add to `cap_docker`
 - Does it need GPU? → Add to `cap_gpu`
 - Does it need VPN? → Add to `cap_wireguard`
-- Is it a Docker service agent? → Add to `cap_service_agents`
+- Does it need traefik-kop disabled? → Set `traefik_kop_enabled: false` in host_vars
 
 ### Step 3: Add to Inventory
 
@@ -154,9 +149,8 @@ cap_docker:
   hosts:
     mynewhost:
 
-cap_service_agents:
-  hosts:
-    mynewhost:
+# traefik_kop_enabled defaults to true from cap_docker
+# Override in host_vars/mynewhost.yml only if needed
 ```
 
 ### Step 4: Create Host Variables
@@ -166,7 +160,7 @@ Create `inventory/host_vars/mynewhost.yml`:
 ```yaml
 ---
 # Host-specific configuration for mynewhost
-# Inherits from: tier_small, cap_docker, cap_service_agents
+# Inherits from: tier_small, cap_docker
 
 proxmox_lxc_overrides:
   vmid: 305
@@ -281,8 +275,8 @@ Leave CPU, memory, disk, network, and mount settings out of host_vars unless the
 
 ### 5. Organize Functional Groups Logically
 
-- Most Docker hosts will also be cap_service_agents (exceptions like reverse-proxy nodes)
-- All cap_service_agents should be in cap_docker
+- All `cap_docker` hosts automatically get the docker-agents stack (dockwatch, socket proxies)
+- Use `traefik_kop_enabled: false` in host_vars to opt out of traefik-kop (e.g., the portal host)
 - GPU access is typically independent of other functional groups
 
 ### 6. Network Resolution
@@ -302,7 +296,7 @@ Hosts will be resolved via DNS as `{hostname}.faviann.vms` or through Proxmox AP
 4. Configuration playbooks use functional group variables to install software:
   - `cap_docker` → Install Docker and deploy Dockge baseline
    - `cap_gpu` → Configure GPU passthrough
-  - `cap_service_agents` → Deploy admin extras (traefik-kop, socket-proxy, dockwatch)
+  - `cap_docker` → Also deploys universal docker-agents stack (dockwatch, socket proxies, traefik-kop if enabled)
 
 ### Example Playbook Targets
 
@@ -312,17 +306,11 @@ Hosts will be resolved via DNS as `{hostname}.faviann.vms` or through Proxmox AP
   roles:
     - proxmox_lxc_provision
 
-# Configure all Docker hosts
+# Configure all Docker hosts (also deploys docker-agents stack)
 - hosts: cap_docker
   roles:
     - docker_install
-
-# Configure service agents
-- hosts: cap_service_agents
-  roles:
-    - traefik_kop
-    - traefik_socket_proxy
-    - dockwatch
+    - lxc_docker_environment
 ```
 
 ## Variable Conflict Resolution

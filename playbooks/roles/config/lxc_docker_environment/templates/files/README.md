@@ -1,64 +1,54 @@
 # Template Files for LXC Internal Setup
 
-This directory contains template files and folders that will be copied or rendered into the LXC containers.
+This directory contains template files and folders that the `lxc_docker_environment` role copies or renders into LXC containers.
 
 ## Directory Structure
 
 ```
 files/
 ├── dockge/               # Dockge Docker Compose configuration
-│   └── compose.yml       # Example compose file for Dockge
+│   └── compose.yml       # Copied to /shared/<hostname>/dockge/
 ├── docker-agents/        # Universal managed helper stack templates
-│   ├── .env.j2           # Rendered only when Traefik integration is enabled
-│   ├── compose.yml.j2    # Universal Docker agents base compose file
-│   └── compose.override.yaml.j2
-├── stacks/
-│   └── docker-agents/    # Static assets copied into the managed helper stack
-│       └── appdata/
-│           └── dockwatch/
-└── example-app/          # Example application structure
-    └── compose.yml       # Example application compose file
+│   ├── compose.yml.j2    # Base: metadata-proxy, dockwatch-socket-proxy, dockwatch
+│   ├── compose.override.yaml.j2  # Override: traefik-kop (only when traefik_kop_enabled)
+│   └── .env.j2           # Override env: REDISURL + DOMAIN (only when traefik_kop_enabled)
+└── stacks/
+    └── docker-agents/    # Static assets copied into the managed helper stack
+        └── appdata/
+            └── dockwatch/    # Persistent dockwatch config directory
 ```
 
-## Usage
+## How It Works
 
-Place your template files and directories in this `files/` folder. Static files are copied to `/shared/{{ inventory_hostname }}/`, and files ending in `.j2` are rendered from inventory variables before being written.
+### Dockge
 
-### For Dockge
+The `dockge/` folder is copied to `/shared/<hostname>/dockge/` and started separately. Dockge provides a web UI for managing stacks and discovers all compose files under `/conf/docker/stacks/`.
 
-The `dockge/` folder should contain:
-- `compose.yml` - Docker Compose configuration for Dockge itself
-- Any other configuration files Dockge needs
+### Docker Agents (Managed Stack)
 
-### For Your Applications
+The `docker-agents/` templates are rendered to `/shared/<hostname>/stacks/docker-agents/`:
 
-Create additional folders for other applications you want to deploy:
-```
-files/
-├── dockge/
-├── myapp/
-│   ├── compose.yml
-│   └── .env
-└── another-app/
-    └── compose.yml
-```
+- `compose.yml.j2` → `compose.yml` — **always** rendered when `docker_agents_enabled` is true.
+- `compose.override.yaml.j2` → `compose.override.yaml` — rendered **only** when `traefik_kop_enabled` is true. Docker Compose automatically merges `compose.override.yaml` with `compose.yml`.
+- `.env.j2` → `.env` — rendered **only** when `traefik_kop_enabled` is true. Contains the Redis URL (pointing to portal) and domain for traefik-kop.
+
+Static assets from `stacks/docker-agents/` (like the dockwatch appdata directory) are copied alongside the rendered templates.
+
+### Per-Host Stacks
+
+Per-host stacks live in `stacks/` at the repo root (not in this directory). See `stacks/README.md` for the full guide on adding new stacks.
 
 ## File Ownership
 
-All files copied to `/shared/{{ inventory_hostname }}/` will be owned by the Docker user UID:GID by default.
+All files copied to `/shared/<hostname>/` will be owned by the Docker user UID:GID by default.
 This can be customized via the `lxc_docker_env_shared_owner` and `lxc_docker_env_shared_group` variables.
 
 ## Template Variables
 
-You can use Jinja2 template variables in any file with `.j2` extension:
-```
-files/
-└── dockge/
-    ├── compose.yml.j2    # Will be templated
-    └── config.json       # Will be copied as-is
-```
-
-Variables available:
-- `{{ inventory_hostname }}` - Container hostname
-- `{{ ansible_host }}` - Container IP address
-- Any other Ansible variables from your inventory
+Files ending in `.j2` are rendered with Jinja2. Available variables include:
+- `{{ inventory_hostname }}` — Container hostname
+- `{{ ansible_host }}` — Container IP/DNS
+- `{{ default_domain }}` — Host's domain (from host_vars)
+- `{{ homepage_docker_proxy_port }}` — Port for docker-metadata-proxy (default: 2375)
+- `{{ lxc_dns_domain }}` — DNS suffix for LXC resolution
+- Any other Ansible variables from inventory, group_vars, host_vars, or vault
