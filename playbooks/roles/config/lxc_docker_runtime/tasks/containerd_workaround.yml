@@ -17,6 +17,7 @@
     allow_downgrade: true
   when:
     - _containerd_version.stdout is defined
+    - _containerd_version.stdout | trim | length > 0
     - _containerd_version.stdout is version('1.7.29', '>=')
   register: _containerd_downgrade
 
@@ -26,6 +27,7 @@
     selection: hold
   when:
     - _containerd_version.stdout is defined
+    - _containerd_version.stdout | trim | length > 0
     - _containerd_version.stdout is version('1.7.29', '<')
 
 - name: Restart Docker service after containerd downgrade

@@ -52,3 +52,8 @@ inventory/group_vars/all/vault.yml
 
 # Rendered env files (secrets injected at deploy time)
 stacks/**/.env
+
+# Stack-local secrets and runtime artifacts
+stacks/**/secrets/
+stacks/portal/frontpage/appdata/homepage/config/icons/
+stacks/portal/frontpage/appdata/homepage/config/logs/

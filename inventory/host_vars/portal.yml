@@ -5,6 +5,10 @@
 portal_instance: true
 default_domain: faviann.com
 
+# External Docker networks required by compose stacks
+lxc_docker_env_external_networks:
+  - proxy
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 300

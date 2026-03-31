@@ -28,6 +28,22 @@
   register: _copy_dockge_result
   notify: restart dockge
 
+- name: Ensure Homepage discovery stack directory exists
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_homepage_discovery_stack_dir }}"
+    state: directory
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0755'
+
+- name: Render Homepage discovery proxy compose template
+  ansible.builtin.template:
+    src: "files/homepage-discovery/compose.yml.j2"
+    dest: "{{ lxc_docker_env_homepage_discovery_stack_dir }}/compose.yml"
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0644'
+
 - name: Initialize portal instance host list
   ansible.builtin.set_fact:
     lxc_docker_env_portal_hosts: []
@@ -226,29 +242,6 @@
     label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
   when: _per_host_stacks_dir.stat.exists | default(false)
 
-# ==============================================================================
-# Stack Lifecycle: Discover and start all deployed compose stacks
-# ==============================================================================
-- name: Find all compose files in stacks directory
-  ansible.builtin.find:
-    paths: "{{ lxc_docker_env_root_docker_conf_path }}/stacks"
-    patterns:
-      - "compose.yml"
-      - "compose.yaml"
-    recurse: true
-    depth: 2
-  register: _stack_compose_files
-
-- name: Ensure all stacks are running
-  ansible.builtin.command:
-    cmd: docker compose up -d
-    chdir: "{{ item.path | dirname }}"
-  loop: "{{ _stack_compose_files.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path | dirname | basename }}"
-  register: _stack_up_results
-  changed_when: "'Started' in _stack_up_results.stderr or 'Created' in _stack_up_results.stderr"
-
 - name: Ensure Docker config mount target exists
   ansible.builtin.file:
     path: "{{ lxc_docker_env_root_docker_conf_path }}"
@@ -341,3 +334,35 @@
   ansible.builtin.debug:
     msg: "Dockge {{ _dockge_start_result.changed | default(false) | ternary('started', 'already running or not configured') }}"
   when: _dockge_dir_stat.stat.exists
+
+# ==============================================================================
+# Stack Lifecycle: Discover and start all deployed compose stacks
+# ==============================================================================
+- name: Create external Docker networks
+  ansible.builtin.command:
+    cmd: "docker network create {{ item }}"
+  loop: "{{ lxc_docker_env_external_networks }}"
+  register: _network_create
+  changed_when: _network_create.rc == 0
+  failed_when: _network_create.rc != 0 and 'already exists' not in _network_create.stderr
+  when: lxc_docker_env_external_networks | length > 0
+
+- name: Find all compose files in stacks directory
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_root_docker_conf_path }}/stacks"
+    patterns:
+      - "compose.yml"
+      - "compose.yaml"
+    recurse: true
+    depth: 2
+  register: _stack_compose_files
+
+- name: Ensure all stacks are running
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ item.path | dirname }}"
+  loop: "{{ _stack_compose_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | dirname | basename }}"
+  register: _stack_up_results
+  changed_when: "'Started' in _stack_up_results.stderr or 'Created' in _stack_up_results.stderr"

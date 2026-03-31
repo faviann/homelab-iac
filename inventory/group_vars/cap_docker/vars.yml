@@ -18,5 +18,8 @@ docker_user: dockeruser
 docker_uid: 1000
 docker_gid: 1000
 
+# Homepage Docker discovery proxy
+homepage_docker_proxy_port: 2375
+
 # Default location for compose projects (override per host as needed)
 docker_compose_base_path: /conf/docker
