@@ -1,0 +1,17 @@
+---
+# Default variables for lxc_nvidia_runtime role
+# Installs NVIDIA Container Toolkit inside GPU-capable LXC containers
+
+# Feature flag gate (set by cap_gpu group membership)
+lxc_nvidia_runtime_enabled: "{{ gpu_enabled | default(false) }}"
+
+# NVIDIA Container Toolkit APT repository
+lxc_nvidia_runtime_gpg_key_url: "https://nvidia.github.io/libnvidia-container/gpgkey"
+lxc_nvidia_runtime_keyring_path: "/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
+lxc_nvidia_runtime_repo_list_url: "https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list"
+
+# NVIDIA container runtime config
+lxc_nvidia_runtime_config_toml: "/etc/nvidia-container-runtime/config.toml"
+
+# Required for unprivileged LXC containers
+lxc_nvidia_runtime_no_cgroups: true

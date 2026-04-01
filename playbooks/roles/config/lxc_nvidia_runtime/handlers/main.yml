@@ -1,0 +1,7 @@
+---
+# Handlers for lxc_nvidia_runtime role
+
+- name: Restart Docker for NVIDIA runtime
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted

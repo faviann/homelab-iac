@@ -41,6 +41,13 @@
         - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
         - docker_enabled | default(false)
 
+    - name: Configure NVIDIA GPU runtime
+      ansible.builtin.include_role:
+        name: config/lxc_nvidia_runtime
+      when:
+        - inventory_hostname not in (lxc_validation_failed_hosts | default([]))
+        - gpu_enabled | default(false)
+
     - name: Configure Docker environment
       ansible.builtin.include_role:
         name: config/lxc_docker_environment

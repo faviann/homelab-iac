@@ -1,0 +1,23 @@
+---
+# Dependencies for lxc_nvidia_runtime role
+# Docker must be installed before the NVIDIA Container Toolkit
+
+dependencies:
+  - role: config/lxc_docker_runtime
+
+galaxy_info:
+  role_name: lxc_nvidia_runtime
+  author: Ansible Automation
+  description: Install NVIDIA Container Toolkit in GPU-capable LXC containers
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+
+  galaxy_tags:
+    - nvidia
+    - gpu
+    - docker
+    - lxc

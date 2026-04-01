@@ -1,0 +1,89 @@
+---
+# Main tasks for lxc_nvidia_runtime role
+# Installs NVIDIA Container Toolkit and configures Docker nvidia runtime
+# Only runs on hosts with gpu_enabled (cap_gpu group membership)
+
+- name: Skip NVIDIA runtime setup (GPU not enabled)
+  ansible.builtin.debug:
+    msg: "GPU not enabled for {{ inventory_hostname }}, skipping NVIDIA runtime"
+  when: not (lxc_nvidia_runtime_enabled | bool)
+
+- name: Install and configure NVIDIA Container Toolkit
+  when: lxc_nvidia_runtime_enabled | bool
+  block:
+    - name: Install GPG package for apt key management
+      ansible.builtin.apt:
+        name: gpg
+        state: present
+        update_cache: true
+
+    - name: Check if NVIDIA GPG keyring exists
+      ansible.builtin.stat:
+        path: "{{ lxc_nvidia_runtime_keyring_path }}"
+      register: _nvidia_keyring_stat
+
+    - name: Download NVIDIA GPG key
+      ansible.builtin.get_url:
+        url: "{{ lxc_nvidia_runtime_gpg_key_url }}"
+        dest: /tmp/nvidia-container-toolkit.gpgkey
+        mode: "0644"
+        force: true
+      register: _nvidia_gpg_download
+
+    - name: Install NVIDIA GPG keyring
+      ansible.builtin.shell: |
+        gpg --batch --yes --dearmor -o {{ lxc_nvidia_runtime_keyring_path }} < /tmp/nvidia-container-toolkit.gpgkey
+      when: _nvidia_gpg_download is changed or not _nvidia_keyring_stat.stat.exists
+
+    - name: Clean up temporary GPG key
+      ansible.builtin.file:
+        path: /tmp/nvidia-container-toolkit.gpgkey
+        state: absent
+
+    - name: Add NVIDIA Container Toolkit APT repository
+      ansible.builtin.shell: |
+        curl -s -L {{ lxc_nvidia_runtime_repo_list_url }} \
+          | sed 's#deb https://#deb [signed-by={{ lxc_nvidia_runtime_keyring_path }}] https://#g' \
+          > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+      args:
+        creates: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+      register: _nvidia_repo_added
+
+    - name: Update apt cache after adding NVIDIA repository
+      ansible.builtin.apt:
+        update_cache: true
+      when: _nvidia_repo_added is changed
+
+    - name: Install NVIDIA Container Toolkit
+      ansible.builtin.apt:
+        name: nvidia-container-toolkit
+        state: present
+
+    - name: Configure Docker to use NVIDIA runtime
+      ansible.builtin.command:
+        cmd: nvidia-ctk runtime configure --runtime=docker
+      register: _nvidia_ctk_configure
+      changed_when: "'wrote updated config' in _nvidia_ctk_configure.stderr or 'wrote updated config' in _nvidia_ctk_configure.stdout"
+      notify: Restart Docker for NVIDIA runtime
+
+    - name: Set no-cgroups for unprivileged LXC compatibility
+      ansible.builtin.lineinfile:
+        path: "{{ lxc_nvidia_runtime_config_toml }}"
+        regexp: '^#?\s*no-cgroups\s*='
+        line: "no-cgroups = {{ lxc_nvidia_runtime_no_cgroups | lower }}"
+      notify: Restart Docker for NVIDIA runtime
+
+    - name: Flush handlers to restart Docker before verification
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify NVIDIA runtime is registered with Docker
+      ansible.builtin.command:
+        cmd: docker info --format '{{ '{{' }}json .Runtimes{{ '}}' }}'
+      register: _docker_runtimes
+      changed_when: false
+      check_mode: false
+      failed_when: "'nvidia' not in _docker_runtimes.stdout"
+
+    - name: Display NVIDIA runtime status
+      ansible.builtin.debug:
+        msg: "NVIDIA Container Toolkit configured. Docker runtimes: {{ _docker_runtimes.stdout }}"
