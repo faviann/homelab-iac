@@ -1,0 +1,38 @@
+services:
+  jellystat-db:
+    image: postgres:15.2
+    container_name: jellystat-db
+    restart: unless-stopped
+    user: ${PUID}:${PGID}
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/jellystat-db/config:/config
+      - ./appdata/jellystat-db/data:/var/lib/postgresql/data
+  jellystat:
+    image: cyfershepard/jellystat:latest
+    container_name: jellystat
+    restart: unless-stopped
+    user: ${PUID}:${PGID}
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_IP=jellystat-db
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/jellystat:/app/backend/backup-data
+    ports:
+      - 3000:3000
+    labels:
+      - traefik.enable=true
+      - homepage.group=Media
+      - homepage.name=${COMPOSE_PROJECT_NAME}
+      - homepage.icon=mdi-chart-line
+      - homepage.href=https://${HOMEPAGE_FQDN}
+      - homepage.description=Jellyfin analytics
+    depends_on:
+      - jellystat-db

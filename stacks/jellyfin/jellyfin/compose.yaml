@@ -1,0 +1,33 @@
+services:
+  jellyfin:
+    container_name: jellyfin
+    image: jellyfin/jellyfin
+    restart: unless-stopped
+    user: ${PUID}:${PGID}
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - JELLYFIN_PublishedServerUrl=https://${HOMEPAGE_FQDN}
+    volumes:
+      - ./appdata/jellyfin/cache:/cache
+      - ./appdata/jellyfin/config:/config
+      - /data/media:/data/media
+    ports:
+      - 8096:8096
+    labels:
+      - traefik.enable=true
+      - homepage.group=Media
+      - homepage.name=${COMPOSE_PROJECT_NAME}
+      - homepage.icon=jellyfin
+      - homepage.href=https://${HOMEPAGE_FQDN}
+      - homepage.description=Media server
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
