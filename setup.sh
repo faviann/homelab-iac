@@ -161,8 +161,8 @@ echo "These will be stored in an encrypted vault file."
 echo
 
 # Proxmox API host
-read -p "Proxmox API host [proxmox.internal.faviann.com]: " PROXMOX_HOST
-PROXMOX_HOST=${PROXMOX_HOST:-proxmox.internal.faviann.com}
+read -p "Proxmox API host [proxmox.vms]: " PROXMOX_HOST
+PROXMOX_HOST=${PROXMOX_HOST:-proxmox.vms}
 
 # Proxmox API user
 echo

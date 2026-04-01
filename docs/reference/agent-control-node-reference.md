@@ -44,7 +44,7 @@ Information-only reference for agents operating this repository from any Linux w
 ## Configuration Reference (non-secret)
 - File: `inventory/group_vars/all/proxmox.yml`.
 - Key defaults:
-  - `proxmox_api_host`: `proxmox.internal.faviann.com`
+  - `proxmox_api_host`: `proxmox.vms`
   - `proxmox_api_port`: `8006`
   - `proxmox_default_node`: `proxmox`
   - `proxmox_default_pool`: `ansible_pool`

@@ -6,7 +6,7 @@
 
 ## Non-negotiables
 - Run Ansible from your Linux workstation (portable setup, no dedicated controller needed).
-- Ensure you have network access to Proxmox API (typically `proxmox.internal.faviann.com:8006`).
+- Ensure you have network access to Proxmox API (typically `proxmox.vms:8006`).
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys).
 - Always run `git pull` before executing ansible commands.
 

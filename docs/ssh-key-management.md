@@ -59,7 +59,7 @@ If you prefer manual control or the automated playbook isn't working:
 
 ```bash
 # SSH into Proxmox host
-ssh root@proxmox.lan
+ssh root@proxmox.vms
 
 # Get the public key content (from control node)
 # cat .ansible/ssh/proxmox_lxc.pub
@@ -180,20 +180,20 @@ portal | SUCCESS => {
 
 ### "Container does not exist"
 - Verify VMID in `inventory/host_vars/<hostname>.yml`
-- Check container exists: `ssh root@proxmox.lan pct list`
+- Check container exists: `ssh root@proxmox.vms pct list`
 
 ### "Container is not running"
-- Start the container: `ssh root@proxmox.lan pct start <VMID>`
+- Start the container: `ssh root@proxmox.vms pct start <VMID>`
 - Or from Proxmox web UI
 
 ### "Permission denied (publickey)"
-- Verify key was actually added: `ssh root@proxmox.lan pct exec <VMID> -- cat /root/.ssh/authorized_keys`
-- Check permissions: `ssh root@proxmox.lan pct exec <VMID> -- ls -la /root/.ssh/`
+- Verify key was actually added: `ssh root@proxmox.vms pct exec <VMID> -- cat /root/.ssh/authorized_keys`
+- Check permissions: `ssh root@proxmox.vms pct exec <VMID> -- ls -la /root/.ssh/`
 - Verify you're using the correct key: `ssh -i .ansible/ssh/proxmox_lxc root@container.faviann.vms`
 
 ### "Cannot connect to Proxmox host"
 - Run bootstrap first: `ansible-playbook site.yml --tags bootstrap`
-- Verify Proxmox host access: `ssh root@proxmox.lan`
+- Verify Proxmox host access: `ssh root@proxmox.vms`
 
 ## Security Notes
 
