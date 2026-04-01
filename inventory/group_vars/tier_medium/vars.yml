@@ -4,7 +4,7 @@
 
 # LXC resource specifications
 lxc_cores: 4
-lxc_memory: 8192  # MB (8GB)
+lxc_memory: 16384  # MB (16GB)
 lxc_disk: "8"     # GB
 lxc_swap: 1024    # MB
 
