@@ -64,3 +64,6 @@
     - name: Include Proxmox validation tasks
       ansible.builtin.include_tasks:
         file: "{{ [playbook_dir, 'tasks', 'proxmox_validation.yml'] | path_join }}"
+      tags:
+        - validation
+        - proxmox
