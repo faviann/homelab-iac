@@ -55,7 +55,7 @@ services:
       deunhealth.restart.on.unhealthy: true
       homepage.group: Downloads
       homepage.name: qBittorrent
-      homepage.href: https://bittorrent.faviann.com
+      homepage.href: https://${HOMEPAGE_FQDN}
       homepage.description: Torrent client
       homepage.icon: qbittorrent
     environment:

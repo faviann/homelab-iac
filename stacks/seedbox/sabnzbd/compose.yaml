@@ -1,6 +1,12 @@
 services:
   sabnzbd:
     container_name: sabnzbd
+    labels:
+      homepage.group: Downloads
+      homepage.name: SABnzbd
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Usenet client
+      homepage.icon: sabnzbd
     environment:
       - PUID=1000
       - PGID=1000

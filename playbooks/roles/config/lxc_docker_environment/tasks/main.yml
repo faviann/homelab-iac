@@ -265,6 +265,9 @@
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0644'
+  vars:
+    # Match Traefik's compose project naming by deriving stack name from folder path.
+    stack_name: "{{ (item.path | relpath(lxc_docker_env_stacks_source)).split('/')[0] }}"
   loop: "{{ _per_host_j2_files.files | default([]) }}"
   loop_control:
     label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"

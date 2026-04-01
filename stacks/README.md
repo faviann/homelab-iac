@@ -38,6 +38,7 @@ stacks/
 - **Hybrid-safe**: Stacks created manually via Dockge are never touched by Ansible. Only stacks defined here are managed.
 - **Auto-started**: Every deployed `compose.yaml` is automatically started with `docker compose up -d`.
 - **Appdata**: Persistent data volumes use `./appdata/<service>/` relative to the compose file. Use `.gitkeep` for empty directories that must exist on the controller.
+- **Stack name inference**: During `.j2` rendering, Ansible injects `stack_name` derived from the stack folder name.
 
 ## Adding a New Stack
 
@@ -135,13 +136,35 @@ Never put secrets directly in `.env` files checked into git. Instead:
 
 4. The role renders the `.j2` file on deploy, producing a `.env` with real values on the target host.
 
+### Pattern: Dynamic Homepage URL (One Variable)
+
+Use one env var for Homepage links instead of splitting hostname/domain.
+
+In each stack `.env.j2`:
+
+```jinja2
+HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
+```
+
+- `stack_name` is injected by the role from the stack folder name (`stacks/<host>/<stack-name>/...`)
+- `default_domain` comes from `inventory/host_vars/<hostname>.yml`
+
+In `compose.yaml` labels:
+
+```yaml
+labels:
+  homepage.href: https://${HOMEPAGE_FQDN}
+```
+
+That is the full pattern. No split variables required.
+
 ### Dollar-Sign Escaping
 
 Docker Compose interprets `$` as variable interpolation. If a secret value may contain `$`, use the `replace('$', '$$')` Jinja2 filter to escape it in the rendered `.env`.
 
 ### Static `.env` vs `.env.j2`
 
-If a stack has **both** a static `.env` and a `.env.j2`, the role renders the `.j2` first, then copies the static `.env` — which **overwrites** the rendered output. Use one or the other, never both for the same purpose. Prefer `.env.j2` when any value comes from vault or inventory.
+If a stack has **both** a static `.env` and a `.env.j2`, the role prefers the templated output path and skips copying the static duplicate. To keep intent obvious, still use one or the other, never both for the same purpose. Prefer `.env.j2` when any value comes from vault or inventory.
 
 ---
 
@@ -180,9 +203,15 @@ services:
       # Homepage discovery
       homepage.group: Apps
       homepage.name: My App
-      homepage.href: https://myapp.faviann.com
+      homepage.href: https://${HOMEPAGE_FQDN}
       homepage.description: Example service
       homepage.icon: myapp
+```
+
+And in `.env.j2` for that same stack:
+
+```jinja2
+HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 ```
 
 ---
@@ -363,7 +392,7 @@ services:
       traefik.domain: admin.faviann.com
       homepage.group: Media
       homepage.name: Jellyfin
-      homepage.href: https://jellyfin.admin.faviann.com
+      homepage.href: https://${HOMEPAGE_FQDN}
       homepage.description: Media streaming server
       homepage.icon: jellyfin
 ```
@@ -375,6 +404,7 @@ services:
 PUID=1000
 PGID=1000
 TZ=America/Montreal
+HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 JELLYFIN_API_KEY={{ media_jellyfin_api_key }}
 ```
 
