@@ -35,7 +35,7 @@ Information-only reference for agents operating this repository from any Linux w
 
 ## Traefik Label Contract (Docker Stacks)
 - Traefik autodiscovery depends on container labels. Labels are the routing contract.
-- Public user-facing services should include `traefik.enable=true` and `traefik.domain=<domain>`.
+- Public user-facing services should include `traefik.enable=true`; add `traefik.domain=<domain>` only when overriding the host `default_domain`.
 - Internal-only services should remain unlabeled.
 - On non-portal hosts, discovery is replicated through `traefik-kop`; no shared `proxy` network is required.
 - On portal-hosted routed services, use the `proxy` external network where needed.

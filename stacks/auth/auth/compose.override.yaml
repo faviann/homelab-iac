@@ -15,7 +15,6 @@ services:
       - AUTHENTIK_PROXY_HEADERS=true
     labels:
       - traefik.enable=true
-      - traefik.domain=faviann.com
       - traefik.docker.network=proxy
   worker:
     environment:

@@ -59,7 +59,8 @@ Services on non-portal hosts reach the internet through the **Traefik** reverse 
 
 Treat labels as the discovery contract:
 
-- `traefik.enable=true` + `traefik.domain=<domain>` on a service means Traefik should route it.
+- `traefik.enable=true` on a service means Traefik should route it.
+- `traefik.domain=<domain>` is optional and only needed to override the host default domain.
 - No Traefik labels means no route is expected.
 - Add labels only on the user-facing service container, not every sidecar or dependency.
 
@@ -79,16 +80,17 @@ services:
     image: example/myapp:latest
     labels:
       - traefik.enable=true
-      - traefik.domain=faviann.com
 ```
 
-The `traefik-kop` defaultRule auto-generates the hostname from the Docker Compose **project name** (i.e. the stack folder name) and the `traefik.domain` label:
+By default, `traefik-kop` auto-generates the hostname from the Docker Compose **project name** (i.e. the stack folder name) and the host's `default_domain` (`DOMAIN` in docker-agents `.env`):
 
 ```
-Host(`<project-name>.<traefik.domain>`)
+Host(`<project-name>.<default_domain>`)
 ```
 
-So a stack in `stacks/seedbox/bittorrent/` with `traefik.domain=admin.faviann.com` becomes reachable at `bittorrent.admin.faviann.com`.
+So a stack in `stacks/seedbox/bittorrent/` on host `seedbox` (`default_domain=admin.faviann.com`) becomes reachable at `bittorrent.admin.faviann.com` without adding `traefik.domain`.
+
+Use `traefik.domain` only when a single service needs a different domain than the host default.
 
 ### Services That Should Usually Stay Unlabeled
 
@@ -143,7 +145,7 @@ Use this list in reviews and before merging stack changes:
 1. Exposure intent is explicit (public via Traefik vs internal-only).
 2. Public user-facing services include Traefik labels.
 3. Internal support services are intentionally unlabeled.
-4. Expected hostname follows `<stack-name>.<traefik.domain>`.
+4. Expected hostname follows `<stack-name>.<default_domain>` unless `traefik.domain` override is set.
 5. `proxy` external network is used only for portal-hosted routed services.
 6. No accidental public routes were introduced.
 
@@ -235,7 +237,8 @@ services:
     labels:
       # Traefik routing
       traefik.enable: "true"
-      traefik.domain: faviann.com
+      # Optional override if this service should not use host default_domain
+      traefik.domain: staging.faviann.com
       # Homepage discovery
       homepage.group: Apps
       homepage.name: My App
@@ -425,7 +428,6 @@ services:
       - /data/media:/data/media:ro
     labels:
       traefik.enable: "true"
-      traefik.domain: admin.faviann.com
       homepage.group: Media
       homepage.name: Jellyfin
       homepage.href: https://${HOMEPAGE_FQDN}
