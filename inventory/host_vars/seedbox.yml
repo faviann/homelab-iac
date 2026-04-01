@@ -18,7 +18,7 @@ seedbox_ws_session_cookie: "{{ vault_seedbox_ws_session_cookie }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
-  vmid: 301
+  vmid: 302
   hostname: seedbox
   description: "Download and seeding service managed via Ansible"
   tags:

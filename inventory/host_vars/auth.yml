@@ -7,7 +7,7 @@ default_domain: faviann.com
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
-  vmid: 303
+  vmid: 301
   hostname: auth
   description: "Auth service managed via Ansible"
   tags:
