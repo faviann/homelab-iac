@@ -6,7 +6,7 @@ services:
       - idm
   server:
     volumes:
-      - ./appdata/authentik/media:/media
+      - ./appdata/authentik/data:/data
       - ./appdata/authentik/custom-templates:/templates
     networks:
       - proxy
@@ -20,7 +20,7 @@ services:
     environment:
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM}
     volumes:
-      - ./appdata/authentik/media:/media
+      - ./appdata/authentik/data:/data
       - ./appdata/authentik/certs:/certs
       - ./appdata/authentik/custom-templates:/templates
     networks:
