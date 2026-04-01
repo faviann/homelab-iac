@@ -1,0 +1,17 @@
+---
+# Host-specific configuration for the Jellyfin media server
+# Inherits from: tier_large, cap_docker, cap_gpu
+
+lxc_hwaddr: "BC:24:11:A1:82:92"
+default_domain: admin.faviann.com
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 304
+  hostname: jellyfin
+  description: "Jellyfin media server"
+  tags:
+    - ansible
+    - media
+    - jellyfin
+    - gpu
