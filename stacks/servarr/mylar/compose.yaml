@@ -14,6 +14,7 @@ services:
     ports:
       - 8090:8090
     labels:
+      traefik.enable: true
       homepage.group: Media
       homepage.name: Mylar
       homepage.href: https://${HOMEPAGE_FQDN}

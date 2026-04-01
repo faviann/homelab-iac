@@ -53,6 +53,7 @@ services:
     restart: unless-stopped
     labels:
       deunhealth.restart.on.unhealthy: true
+      traefik.enable: true
       homepage.group: Downloads
       homepage.name: qBittorrent
       homepage.href: https://${HOMEPAGE_FQDN}

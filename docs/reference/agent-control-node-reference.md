@@ -33,6 +33,14 @@ Information-only reference for agents operating this repository from any Linux w
 - Groups: `proxmox_api` (local API operations, `ansible_connection: local`), `lxcs` (managed containers), resource tiers (`tier_tiny|small|medium|large`), capability groups (`cap_docker`, `cap_gpu`, `cap_wireguard`).
 - Host naming convention for LXCs: `{{ inventory_hostname }}.faviann.vms` (see `inventory/group_vars/all/proxmox.yml`).
 
+## Traefik Label Contract (Docker Stacks)
+- Traefik autodiscovery depends on container labels. Labels are the routing contract.
+- Public user-facing services should include `traefik.enable=true` and `traefik.domain=<domain>`.
+- Internal-only services should remain unlabeled.
+- On non-portal hosts, discovery is replicated through `traefik-kop`; no shared `proxy` network is required.
+- On portal-hosted routed services, use the `proxy` external network where needed.
+- Canonical compose conventions and examples: `stacks/README.md`.
+
 ## Configuration Reference (non-secret)
 - File: `inventory/group_vars/all/proxmox.yml`.
 - Key defaults:

@@ -56,6 +56,11 @@ Every `cap_docker` host automatically receives the **docker-agents** managed sta
   - dockwatch (container monitoring UI)
   - traefik-kop (Traefik label replication — controlled by `traefik_kop_enabled`, default `true`; set `false` on portal)
 
+Traefik discovery contract:
+- Routes are created from service labels.
+- If a service has no Traefik labels, no public route is expected.
+- Apply labels only to intentionally exposed user-facing services.
+
 ### 3. Exception Handling
 
 Resource overrides for special cases are handled in `host_vars/`:

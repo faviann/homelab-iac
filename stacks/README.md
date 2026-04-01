@@ -55,6 +55,20 @@ The role discovers all files under `stacks/<hostname>/` automatically — no reg
 
 Services on non-portal hosts reach the internet through the **Traefik** reverse proxy running on `portal`. The mechanism is **traefik-kop**: it reads Docker labels on each host and replicates them into the portal's Redis, where Traefik picks them up.
 
+### Traefik Discovery Contract
+
+Treat labels as the discovery contract:
+
+- `traefik.enable=true` + `traefik.domain=<domain>` on a service means Traefik should route it.
+- No Traefik labels means no route is expected.
+- Add labels only on the user-facing service container, not every sidecar or dependency.
+
+Use this exposure decision before editing labels:
+
+1. Is this service intentionally internet-reachable over HTTP(S)?
+2. If yes, add Traefik labels to the user-facing container.
+3. If no, keep it unlabeled and internal.
+
 ### Exposing a Service via Traefik
 
 Add these labels to the user-facing container:
@@ -75,6 +89,17 @@ Host(`<project-name>.<traefik.domain>`)
 ```
 
 So a stack in `stacks/seedbox/bittorrent/` with `traefik.domain=admin.faviann.com` becomes reachable at `bittorrent.admin.faviann.com`.
+
+### Services That Should Usually Stay Unlabeled
+
+Do not add Traefik labels by default to:
+
+- Internal stateful dependencies (`postgres`, `redis`, etc.)
+- Workers/background jobs with no direct user UI
+- VPN-isolated workloads that are intentionally private
+- Internal-only API/support services used by other containers
+
+If one of these must become public, document the intent first and then add labels intentionally.
 
 ### When to Use the `proxy` External Network
 
@@ -110,6 +135,17 @@ The `lxc_docker_environment` role creates these networks before starting any sta
 | seedbox | `admin.faviann.com` | `bittorrent.admin.faviann.com` |
 
 Set `default_domain` in each host's `host_vars`. The docker-agents `.env.j2` passes it to traefik-kop as `DOMAIN`.
+
+### Review Checklist For New/Changed Stacks
+
+Use this list in reviews and before merging stack changes:
+
+1. Exposure intent is explicit (public via Traefik vs internal-only).
+2. Public user-facing services include Traefik labels.
+3. Internal support services are intentionally unlabeled.
+4. Expected hostname follows `<stack-name>.<traefik.domain>`.
+5. `proxy` external network is used only for portal-hosted routed services.
+6. No accidental public routes were introduced.
 
 ---
 

@@ -2,6 +2,7 @@ services:
   sabnzbd:
     container_name: sabnzbd
     labels:
+      traefik.enable: true
       homepage.group: Downloads
       homepage.name: SABnzbd
       homepage.href: https://${HOMEPAGE_FQDN}
