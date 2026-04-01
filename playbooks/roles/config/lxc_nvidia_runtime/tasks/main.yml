@@ -63,7 +63,9 @@
       ansible.builtin.command:
         cmd: nvidia-ctk runtime configure --runtime=docker
       register: _nvidia_ctk_configure
-      changed_when: "'wrote updated config' in _nvidia_ctk_configure.stderr or 'wrote updated config' in _nvidia_ctk_configure.stdout"
+      changed_when: >-
+        'wrote updated config' in (_nvidia_ctk_configure.stderr | lower)
+        or 'wrote updated config' in (_nvidia_ctk_configure.stdout | lower)
       notify: Restart Docker for NVIDIA runtime
 
     - name: Set no-cgroups for unprivileged LXC compatibility
