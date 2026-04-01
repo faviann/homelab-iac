@@ -1,0 +1,28 @@
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    hostname: radarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/radarr:/config
+      - /data:/data
+    ports:
+      - 7878:7878
+    labels:
+      homepage.group: Media
+      homepage.name: Radarr
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Movie management
+      homepage.icon: radarr
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

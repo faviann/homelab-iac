@@ -1,0 +1,23 @@
+---
+# Host-specific configuration for the Servarr services host
+# Inherits from: tier_medium, cap_docker
+
+# Keep Docker agents disabled by default on this host unless explicitly needed.
+docker_agents_enabled: false
+traefik_kop_enabled: false
+default_domain: admin.faviann.com
+
+# External Docker networks required by compose stacks
+lxc_docker_env_external_networks:
+  - servarr-internal
+
+# Container definition for proxmox_lxc_provision role
+# NOTE: Confirm vmid matches the existing Proxmox container if already created.
+proxmox_lxc_overrides:
+  vmid: 302
+  hostname: servarr
+  description: "Servarr services host managed via Ansible"
+  tags:
+    - ansible
+    - media
+    - services

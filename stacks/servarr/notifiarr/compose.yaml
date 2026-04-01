@@ -1,0 +1,21 @@
+services:
+  notifiarr:
+    image: golift/notifiarr
+    container_name: notifiarr
+    hostname: notifiarr-servarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/notifiarr:/config
+      - /data:/data
+    ports:
+      - 5454:5454
+    labels:
+      homepage.group: Media
+      homepage.name: Notifiarr
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Notification and automation companion
+      homepage.icon: notifiarr

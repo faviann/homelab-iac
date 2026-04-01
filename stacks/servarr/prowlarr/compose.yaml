@@ -1,0 +1,43 @@
+services:
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    hostname: prowlarr
+    restart: unless-stopped
+    depends_on:
+      - flaresolverr-custom
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/prowlarr:/config
+      - /data:/data
+    ports:
+      - 9696:9696
+    labels:
+      homepage.group: Media
+      homepage.name: Prowlarr
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Indexer management
+      homepage.icon: prowlarr
+    networks:
+      - servarr-internal
+
+  flaresolverr-custom:
+    image: 21hsmw/flaresolverr:nodriver
+    container_name: flaresolverr-custom
+    hostname: flaresolverr-servarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - DRIVER=nodriver
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

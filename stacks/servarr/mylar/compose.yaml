@@ -1,0 +1,28 @@
+services:
+  mylar:
+    image: lscr.io/linuxserver/mylar:latest
+    container_name: mylar
+    hostname: mylar
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/mylar:/config
+      - /data:/data
+    ports:
+      - 8090:8090
+    labels:
+      homepage.group: Media
+      homepage.name: Mylar
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Comic management
+      homepage.icon: mylar
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

@@ -1,0 +1,28 @@
+services:
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    hostname: lidarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/lidarr:/config
+      - /data:/data
+    ports:
+      - 8686:8686
+    labels:
+      homepage.group: Media
+      homepage.name: Lidarr
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Music management
+      homepage.icon: lidarr
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

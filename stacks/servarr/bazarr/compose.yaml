@@ -1,0 +1,28 @@
+services:
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    hostname: bazarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/bazarr:/config
+      - /data:/data
+    ports:
+      - 6767:6767
+    labels:
+      homepage.group: Media
+      homepage.name: Bazarr
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Subtitle management
+      homepage.icon: bazarr
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

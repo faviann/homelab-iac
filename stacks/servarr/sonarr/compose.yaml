@@ -1,0 +1,28 @@
+services:
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    hostname: sonarr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/sonarr:/config
+      - /data:/data
+    ports:
+      - 8989:8989
+    labels:
+      homepage.group: Media
+      homepage.name: Sonarr
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: TV series management
+      homepage.icon: sonarr
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true
