@@ -3,7 +3,7 @@
 # Prepares SSH access and validates Proxmox host readiness
 
 # Proxmox host connection details
-proxmox_host: "{{ proxmox_api_host | default('proxmox.vms') }}"
+proxmox_host: "{{ proxmox_api_host | default('proxmox.lan') }}"
 proxmox_ssh_user: root
 
 # SSH key configuration - references control_node_bootstrap variables for DRY

@@ -91,7 +91,7 @@ For a host named `servarr` in `tier_medium` and `cap_docker`:
 ```yaml
 # Inherited variables (in merge order):
 # 1. group_vars/all/proxmox.yml
-proxmox_api_host: "proxmox.vms"
+proxmox_api_host: "proxmox.lan"
 proxmox_default_node: "proxmox"
 proxmox_default_mounts: { ... }
 

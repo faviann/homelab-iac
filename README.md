@@ -84,7 +84,7 @@ IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `ne
 
 These defaults are configured for the target homelab:
 
-- **API host**: `proxmox.vms`
+- **API host**: `proxmox.lan`
 - **Node name**: `proxmox`
 - **Network bridge**: `vmbr1`
 - **Default template**: `local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst`
@@ -260,7 +260,7 @@ ansible-playbook site.yml --tags validation
 Edit `inventory/group_vars/all/proxmox.yml` to configure your environment:
 
 ```yaml
-proxmox_api_host: "proxmox.vms"           # Proxmox hostname or IP
+proxmox_api_host: "proxmox.lan"           # Proxmox hostname or IP
 proxmox_api_port: 8006                     # API port (default 8006)
 proxmox_api_token_id: "ansible@pve!controller"  # API token ID
 proxmox_default_node: "proxmox"           # Default node for operations
@@ -311,7 +311,7 @@ The automation requires SSH access to the Proxmox host to apply certain configur
 **Manual Setup** (optional): If you prefer to configure SSH access manually:
 ```bash
 # Copy your public key to Proxmox
-ssh-copy-id -i .ansible/ssh/proxmox_lxc.pub root@proxmox.vms
+ssh-copy-id -i .ansible/ssh/proxmox_lxc.pub root@proxmox.lan
 ```
 
 After initial setup, all subsequent playbook runs will use passwordless SSH authentication.
@@ -355,7 +355,7 @@ Builds the effective LXC specs from tier and capability group variables, ensures
 
 ### Cannot reach Proxmox API
 
-- Verify controller can reach Proxmox host: `curl -k https://proxmox.vms:8006`
+- Verify controller can reach Proxmox host: `curl -k https://proxmox.lan:8006`
 - Check firewall rules allow HTTPS (port 8006)
 - Verify VPN/network connectivity
 

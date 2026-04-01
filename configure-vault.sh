@@ -81,8 +81,8 @@ print_info "Enter new Proxmox API credentials"
 echo
 
 # Proxmox API host
-read -p "Proxmox API host [proxmox.vms]: " PROXMOX_HOST
-PROXMOX_HOST=${PROXMOX_HOST:-proxmox.vms}
+read -p "Proxmox API host [proxmox.lan]: " PROXMOX_HOST
+PROXMOX_HOST=${PROXMOX_HOST:-proxmox.lan}
 
 # Proxmox API user
 echo

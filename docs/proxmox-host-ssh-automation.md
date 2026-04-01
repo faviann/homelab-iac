@@ -91,12 +91,12 @@ TASK [proxmox_host_bootstrap : Prompt for Proxmox root password]
 ║  SSH Key Authentication Setup Required                            ║
 ╚════════════════════════════════════════════════════════════════════╝
 
-SSH key authentication to proxmox.vms is not configured.
+SSH key authentication to proxmox.lan is not configured.
 
 Please enter the root password to automatically add your SSH key.
 This prompt will not appear on subsequent runs.
 
-Password for root@proxmox.vms:
+Password for root@proxmox.lan:
 ```
 
 ### Subsequent Runs
@@ -194,7 +194,7 @@ The `proxmox_lxc_host_config/tasks/features.yml` task:
 **Solution**:
 ```bash
 # Manually verify SSH access
-ssh -i .ansible/ssh/proxmox_lxc root@proxmox.vms
+ssh -i .ansible/ssh/proxmox_lxc root@proxmox.lan
 
 # If it fails, check:
 # 1. Proxmox SSH daemon accepts key auth

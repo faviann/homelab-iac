@@ -4,7 +4,7 @@
 # ==============================================================================
 lxc_dns_domain: "faviann.vms"
 
-proxmox_api_host: "proxmox.vms"
+proxmox_api_host: "proxmox.lan"
 proxmox_api_port: 8006
 proxmox_api_user: "{{ vault_proxmox_api_user }}"
 proxmox_api_token_id: "{{ vault_proxmox_api_token_id }}"
