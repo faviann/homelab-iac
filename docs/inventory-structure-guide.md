@@ -3,33 +3,31 @@
 
 ## Overview
 
-This document describes the resource-based inventory structure for managing Proxmox LXC containers. The design follows Ansible best practices for scalability, clarity, and maintainability.
+This document describes the resource-based inventory structure for managing
+Proxmox LXC containers.
 
 ## Directory Structure
 
-```
+```text
 inventory/
-├── hosts.yml                           # Main inventory file
-├── group_vars/                         # Group-level variables
-│   ├── all/                           # Variables for all hosts
-│   │   ├── proxmox.yml               # Proxmox API and infrastructure config
-│   │   └── vault.yml                 # Encrypted secrets (API tokens, etc.)
-│   ├── proxmox_api/vars.yml          # API controller configuration
-│   │
-│   ├── tier_tiny/vars.yml         # Resource tier: 1 core, 512MB RAM
-│   ├── tier_small/vars.yml        # Resource tier: 2 cores, 2GB RAM
-│   ├── tier_medium/vars.yml       # Resource tier: 4 cores, 8GB RAM
-│   ├── tier_large/vars.yml        # Resource tier: 8 cores, 16GB RAM
-│   │
-│   ├── cap_docker/vars.yml        # Functional: Docker installation + universal docker-agents
-│   ├── cap_gpu/vars.yml           # Functional: GPU passthrough
-│   └── cap_wireguard/vars.yml     # Functional: WireGuard VPN
-│
-└── host_vars/                         # Host-specific variables
-    ├── codeserver.yml                # VSCode server configuration
-    ├── frontend.yml                  # Frontend service configuration
-    ├── media.yml                     # Media processing configuration
-    └── jellyfin.yml                  # Jellyfin (with resource overrides)
+|-- hosts.yml
+|-- group_vars/
+|   |-- all/
+|   |   |-- proxmox.yml
+|   |   `-- vault.yml
+|   |-- proxmox_api/vars.yml
+|   |-- tier_tiny/vars.yml
+|   |-- tier_small/vars.yml
+|   |-- tier_medium/vars.yml
+|   |-- tier_large/vars.yml
+|   |-- cap_docker/vars.yml
+|   |-- cap_gpu/vars.yml
+|   `-- cap_wireguard/vars.yml
+`-- host_vars/
+  |-- auth.yml
+  |-- portal.yml
+  |-- seedbox.yml
+  `-- servarr.yml
 ```
 
 ## Design Principles
@@ -38,10 +36,10 @@ inventory/
 
 Each host belongs to **exactly ONE** resource tier group that defines its compute resources:
 
-- **tier_tiny**: Lightweight services (1 core, 512MB RAM, 8GB disk)
-- **tier_small**: Small applications (2 cores, 2GB RAM, 8GB disk)
-- **tier_medium**: Medium workloads (4 cores, 8GB RAM, 8GB disk)
-- **tier_large**: Resource-intensive apps (8 cores, 16GB RAM, 8GB disk)
+- **tier_tiny**: 1 core, 1GB RAM, 8GB disk
+- **tier_small**: 2 cores, 4GB RAM, 8GB disk
+- **tier_medium**: 4 cores, 16GB RAM, 8GB disk
+- **tier_large**: 8 cores, 32GB RAM, 8GB disk
 
 All tiers use the same network bridge (`vmbr1`) by default.
 
@@ -63,10 +61,11 @@ Every `cap_docker` host automatically receives the **docker-agents** managed sta
 Resource overrides for special cases are handled in `host_vars/`:
 
 ```yaml
-# Example: jellyfin.yml overrides memory allocation
-proxmox_lxc:
-  cores: "{{ lxc_cores }}"      # Inherit from group
-  memory: 32768                  # Override: 32GB instead of 16GB default
+# Example: portal.yml
+proxmox_lxc_overrides:
+  vmid: 300
+  hostname: portal
+  description: "Portal service managed via Ansible"
 ```
 
 Use overrides **sparingly** and document the reason for each exception.
@@ -82,7 +81,7 @@ Ansible applies variables in this order (later sources override earlier ones):
 
 ### Example: Variable Inheritance
 
-For a host named `media` in `tier_medium`, `cap_docker`, and `cap_gpu`:
+For a host named `servarr` in `tier_medium` and `cap_docker`:
 
 ```yaml
 # Inherited variables (in merge order):
@@ -93,7 +92,7 @@ proxmox_default_mounts: { ... }
 
 # 2. group_vars/tier_medium/vars.yml
 lxc_cores: 4
-lxc_memory: 8192
+lxc_memory: 16384
 lxc_disk: "8"
 lxc_network_bridge: vmbr1
 
@@ -102,16 +101,12 @@ install_docker: true
 docker_user: dockeruser
 lxc_features: [nesting=1, keyctl=1]
 
-# 4. group_vars/cap_gpu/vars.yml
-enable_gpu_passthrough: true
-configure_nvidia_runtime: true
-
-# 5. host_vars/media.yml (can override any of the above)
-proxmox_lxc:
-  vmid: 303
-  hostname: media
+# 4. host_vars/servarr.yml (can override any of the above)
+proxmox_lxc_overrides:
+  vmid: 302
+  hostname: servarr
   cores: "{{ lxc_cores }}"      # Uses inherited value: 4
-  memory: "{{ lxc_memory }}"    # Uses inherited value: 8192
+  memory: "{{ lxc_memory }}"    # Uses inherited value: 16384
 ```
 
 ## Adding New Hosts
@@ -140,10 +135,6 @@ Edit `inventory/hosts.yml`:
 tier_small:
   hosts:
     mynewhost:
-      proxmox_lxc:
-        vmid: 305
-        hostname: mynewhost
-        description: "My new service"
 
 cap_docker:
   hosts:
@@ -176,8 +167,8 @@ proxmox_lxc_overrides:
 ### 1. Use Templates for Common Patterns
 
 Most host_vars files now only declare what is unique to the host. Copy an existing file and edit the override map:
-- Use `codeserver.yml` as template for small docker hosts
-- Use `jellyfin.yml` as template for large hosts with resource overrides
+- Use `auth.yml` as a template for small docker hosts
+- Use `seedbox.yml` as a template for larger hosts with extra capability flags
 
 ### 2. Document Exceptions
 
@@ -186,7 +177,7 @@ When overriding resource allocations, add a comment explaining why:
 ```yaml
 # OVERRIDE: Extra memory for heavy transcoding workload
 proxmox_lxc_overrides:
-  memory: 32768  # 32GB instead of tier_large default 16GB
+  memory: 65536  # example: 64GB instead of tier_large default 32GB
 ```
 
 ### 3. Keep Defaults Generic
@@ -276,7 +267,7 @@ Leave CPU, memory, disk, network, and mount settings out of host_vars unless the
 ### 5. Organize Functional Groups Logically
 
 - All `cap_docker` hosts automatically get the docker-agents stack (dockwatch, socket proxies)
-- Use `traefik_kop_enabled: false` in host_vars to opt out of traefik-kop (e.g., the portal host)
+- Use `traefik_kop_enabled: false` in host_vars to opt out of traefik-kop (for example, on portal)
 - GPU access is typically independent of other functional groups
 
 ### 6. Network Resolution
@@ -410,20 +401,20 @@ yamllint inventory/
 ansible-inventory --list --yaml
 
 # View variables for specific host
-ansible-inventory --host codeserver --yaml
+ansible-inventory --host servarr --yaml
 ```
 
 ### Variable Inspection
 
 ```bash
 # Show all variables for a host
-ansible-inventory --host media --yaml
+ansible-inventory --host portal --yaml
 
 # Show group membership
 ansible-inventory --graph
 
 # Debug variable precedence
-ansible -m debug -a "var=hostvars[inventory_hostname]" media
+ansible -m debug -a "var=hostvars[inventory_hostname]" servarr
 ```
 
 ### Test Provisioning
@@ -433,7 +424,7 @@ ansible -m debug -a "var=hostvars[inventory_hostname]" media
 ansible-playbook playbooks/lxc-provision.yml --check --diff
 
 # Provision single host
-ansible-playbook playbooks/lxc-provision.yml --limit codeserver
+ansible-playbook playbooks/lxc-provision.yml --limit auth
 
 # Provision by resource tier
 ansible-playbook playbooks/lxc-provision.yml --limit tier_small

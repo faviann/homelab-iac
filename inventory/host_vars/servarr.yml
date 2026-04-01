@@ -2,10 +2,8 @@
 # Host-specific configuration for the Servarr services host
 # Inherits from: tier_medium, cap_docker
 
-# Keep Docker agents disabled by default on this host unless explicitly needed.
-docker_agents_enabled: false
-traefik_kop_enabled: false
 default_domain: admin.faviann.com
+lxc_hwaddr: "BC:24:11:77:E5:FC"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:

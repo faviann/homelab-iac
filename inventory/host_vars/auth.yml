@@ -1,0 +1,15 @@
+---
+# Host-specific configuration for the auth service
+# Inherits from: tier_small, cap_docker
+
+lxc_hwaddr: "BC:24:11:18:EE:67"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 303
+  hostname: auth
+  description: "Auth service managed via Ansible"
+  tags:
+    - ansible
+    - auth
+    - security

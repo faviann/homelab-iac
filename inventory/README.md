@@ -1,366 +1,143 @@
 # Inventory Structure
 
-
-
 This inventory drives LXC automation on Proxmox. Hosts inherit variables from
-
-resource **tiers** (baseline CPU/RAM/disk) and optional **capabilities** (extra
-
-features such as Docker or GPU access).
-
-
+resource tiers (baseline CPU/RAM/disk) and optional capabilities (Docker,
+WireGuard, GPU).
 
 ## Resource Tiers
 
-
-
 | Group | CPU | RAM | Disk | Use Cases |
-
 |-------|-----|-----|------|-----------|
-
-| `tier_tiny` | 1 core | 512 MB | 8 GB | Monitoring agents, lightweight proxies |
-
-| `tier_small` | 2 cores | 2 GB | 8 GB | Development tools, small web services |
-
-| `tier_medium` | 4 cores | 8 GB | 8 GB | Application servers, media processing |
-
-| `tier_large` | 8 cores | 16 GB | 8 GB | Database services, media servers with transcoding |
-
-
+| `tier_tiny` | 1 core | 1 GB | 8 GB | Monitoring agents, lightweight proxies |
+| `tier_small` | 2 cores | 4 GB | 8 GB | Lightweight services |
+| `tier_medium` | 4 cores | 16 GB | 8 GB | Application servers and media tooling |
+| `tier_large` | 8 cores | 32 GB | 8 GB | Heavy workloads and download stacks |
 
 ## Capability Groups
 
-
-
 | Group | Purpose | Key Variables |
-
 |-------|---------|---------------|
-
-| `cap_docker` | Docker runtime, compose, Dockge, and universal Docker agents | `install_docker`, `lxc_features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled` |
-
+| `cap_docker` | Docker runtime, compose, and docker-agents baseline | `install_docker`, `lxc_features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled` |
 | `cap_gpu` | GPU passthrough for hardware acceleration | `enable_gpu_passthrough`, `configure_nvidia_runtime` |
+| `cap_wireguard` | WireGuard kernel support | `enable_wireguard`, `lxc_wireguard_features` |
 
-| `cap_wireguard` | WireGuard VPN kernel module access | `enable_wireguard`, `lxc_wireguard_features` |
+`cap_docker` defaults:
+- `docker_agents_enabled: true`
+- `traefik_kop_enabled: true`
+
+Portal intentionally opts out of `traefik_kop_enabled` in host_vars because it
+runs Traefik itself.
 
 ## Current Hosts
 
-
-
-```
-
-codeserver:
-
-  Resource Tier: tier_small (2 cores, 2 GB RAM)
-
-  Capability Groups: cap_docker
-
-  VMID: 301
-
-
-
-frontend:
-
-  Resource Tier: tier_small (2 cores, 2 GB RAM)
-
-  Capability Groups: cap_docker
-
-  VMID: 302
-
-
-
-media:
-
-  Resource Tier: tier_medium (4 cores, 8 GB RAM)
-
-  Capability Groups: cap_docker, cap_gpu
-
-  VMID: 303
-
-
-
-jellyfin:
-
-  Resource Tier: tier_large (8 cores, 16 GB RAM)
-
-  Capability Groups: cap_docker, cap_gpu
-
-  VMID: 304
-
-  Override: 32 GB RAM instead of 16 GB default
-
-```
-
-
+| Host | Tier | Capability Groups | VMID | Notes |
+|------|------|-------------------|------|-------|
+| `auth` | `tier_small` | `cap_docker` | `303` | Auth stack host |
+| `portal` | `tier_medium` | `cap_docker` | `300` | Traefik host (`traefik_kop_enabled: false`) |
+| `servarr` | `tier_medium` | `cap_docker` | `302` | Servarr application host |
+| `seedbox` | `tier_large` | `cap_docker`, `cap_wireguard` | `301` | Download/tunneled host |
 
 ## Directory Layout
 
-
-
-```
-
+```text
 inventory/
-
-├── hosts.yml                       # Main inventory with host groupings
-
-│
-
-├── group_vars/                     # Group-level variables
-
-│   ├── all/                        # Variables for all hosts
-
-│   │   ├── proxmox.yml             # Proxmox API and infrastructure config
-
-│   │   ├── vault.yml               # Encrypted secrets (API tokens)
-│   │   └── vault.yml.example       # Template for vault.yml (safe to commit)
-
-│   │
-
-│   ├── proxmox_api/                # API controller configuration
-
-│   │   └── vars.yml
-
-│   │
-
-│   ├── tier_tiny/                  # Resource tier: 1 core, 512 MB RAM
-
-│   │   └── vars.yml
-
-│   ├── tier_small/                 # Resource tier: 2 cores, 2 GB RAM
-
-│   │   └── vars.yml
-
-│   ├── tier_medium/                # Resource tier: 4 cores, 8 GB RAM
-
-│   │   └── vars.yml
-
-│   ├── tier_large/                 # Resource tier: 8 cores, 16 GB RAM
-
-│   │   └── vars.yml
-
-│   │
-
-│   ├── cap_docker/                 # Docker installation and configuration
-
-│   │   └── vars.yml
-
-│   ├── cap_gpu/                    # GPU passthrough capabilities
-
-│   │   └── vars.yml
-
-│   ├── cap_wireguard/              # WireGuard VPN configuration
-
-│   │   └── vars.yml
-
-└── host_vars/                      # Host-specific variables
-
-  ├── codeserver.yml              # VSCode server (tier_small + cap_docker)
-
-  ├── frontend.yml                # Frontend service (tier_small + cap_docker)
-
-    ├── media.yml                   # Media processing (tier_medium + cap_docker/cap_gpu)
-
-    └── jellyfin.yml                # Media server (tier_large + cap_docker/cap_gpu)
-
+|-- hosts.yml
+|-- group_vars/
+|   |-- all/
+|   |   |-- proxmox.yml
+|   |   |-- vault.yml
+|   |   `-- vault.yml.example
+|   |-- proxmox_api/vars.yml
+|   |-- tier_tiny/vars.yml
+|   |-- tier_small/vars.yml
+|   |-- tier_medium/vars.yml
+|   |-- tier_large/vars.yml
+|   |-- cap_docker/vars.yml
+|   |-- cap_gpu/vars.yml
+|   `-- cap_wireguard/vars.yml
+`-- host_vars/
+    |-- auth.yml
+    |-- portal.yml
+    |-- seedbox.yml
+    `-- servarr.yml
 ```
-
-
 
 ## Variable Inheritance Example
 
+For `servarr` (`tier_medium` + `cap_docker`), variables resolve in this order:
 
+1. `group_vars/all/*.yml`
+2. `group_vars/tier_medium/vars.yml`
+3. `group_vars/cap_docker/vars.yml`
+4. `host_vars/servarr.yml`
 
-For the `media` host, variables resolve in this order:
+Tier and capability inputs:
 
+```yaml
+# group_vars/tier_medium/vars.yml
+lxc_cores: 4
+lxc_memory: 16384
+lxc_disk: "8"
+lxc_network_bridge: vmbr1
 
+# group_vars/cap_docker/vars.yml
+install_docker: true
+docker_agents_enabled: true
+traefik_kop_enabled: true
+```
 
-1. **All Hosts** (`group_vars/all/proxmox.yml`)
+Host-specific overrides:
 
-   - Proxmox API configuration
-
-   - Default mounts and ID-mapping
-
-2. **Resource Tier** (`group_vars/tier_medium/vars.yml`)
-
-   ```yaml
-
-   lxc_cores: 4
-
-   lxc_memory: 8192
-
-   lxc_disk: "8"
-
-   lxc_network_bridge: vmbr1
-
-   ```
-
-3. **Capability Groups** (merged from multiple files)
-
-   - From `group_vars/cap_docker/vars.yml`:
-
-     ```yaml
-
-     install_docker: true
-
-     lxc_features:
-
-       - nesting=1
-
-       - keyctl=1
-
-  docker_user: dockeruser
-
-  ```
-
-  IMPORTANT: LXC feature flags and host delegation
-
-  The example above shows `lxc_features` (for example `nesting=1` and `keyctl=1`). These flags cannot be applied through the Proxmox API by non-root accounts, so the provisioning role delegates to the Proxmox host and runs `pct set` as root to keep things idempotent. Ensure the inventory entry referenced by `proxmox_host_delegate` allows Ansible to connect (SSH) and escalate to root. If host delegation is disabled, you must apply these feature flags manually.
-
-   - From `group_vars/cap_gpu/vars.yml`:
-
-     ```yaml
-
-     enable_gpu_passthrough: true
-
-     configure_nvidia_runtime: true
-
-     ```
-
-   - Universal Docker agents are now also sourced from `group_vars/cap_docker/vars.yml`:
-
-     ```yaml
-
-     docker_agents_enabled: true
-
-     traefik_kop_enabled: true
-
-     ```
-
-4. **Host-Specific** (`host_vars/media.yml`)
-
-   ```yaml
-
-   proxmox_lxc:
-
-     vmid: 303
-
-     hostname: media
-
-     cores: "{{ lxc_cores }}"
-
-     memory: "{{ lxc_memory }}"
-
-   ```
-
-
+```yaml
+# host_vars/servarr.yml
+proxmox_lxc_overrides:
+  vmid: 302
+  hostname: servarr
+```
 
 ## Adding a New Host
 
+1. Pick exactly one resource tier.
+2. Add capability groups as needed.
+3. Add host to matching groups in `hosts.yml`.
+4. Create `host_vars/<hostname>.yml`.
 
-
-1. Choose the resource tier based on workload requirements.
-
-2. Select capability groups for the features the container needs.
-
-3. Add the host to `hosts.yml` under the appropriate groups.
-
-4. Create `host_vars/<hostname>.yml` with container specifics.
-
-
-
-Example: add a `database` host requiring the large tier and Docker tooling.
-
-
+Example:
 
 ```yaml
-
 # hosts.yml
+tier_small:
+  hosts:
+    mynewhost:
 
-all:
-
-  children:
-
-    tier_large:
-
-      hosts:
-
-        database:
-
-    cap_docker:
-
-      hosts:
-
-        database:
-
-    lxcs:
-
-      hosts:
-
-        database:
-
+cap_docker:
+  hosts:
+    mynewhost:
 ```
-
-
 
 ```yaml
-
-# host_vars/database.yml
-
+# host_vars/mynewhost.yml
 ---
-
-proxmox_lxc:
-
+proxmox_lxc_overrides:
   vmid: 305
-
-  hostname: database
-
-  description: "PostgreSQL database server"
-
-  node: "{{ proxmox_default_node }}"
-
-  cores: "{{ lxc_cores }}"
-
-  memory: "{{ lxc_memory }}"
-
-  disk: "local-lvm:{{ lxc_disk }}"
-
+  hostname: mynewhost
+  description: "My new service managed via Ansible"
+  tags:
+    - ansible
+    - mynewhost
 ```
-
-
 
 ## Useful Commands
 
+```bash
+# Visualize group membership
+ansible-inventory -i inventory/hosts.yml --graph
 
+# Show merged vars for one host
+ansible-inventory -i inventory/hosts.yml --host servarr --yaml
 
-```powershell
-
-# Visualize the inventory
-
-ansible-inventory --graph
-
-
-
-# Inspect variables merged for a host
-
-ansible-inventory --host media --yaml
-
-
-
-# List members of a resource tier
-
-ansible-inventory --graph tier_small
-
+# Show all resolved inventory data
+ansible-inventory -i inventory/hosts.yml --list
 ```
 
-
-
-Validate YAML syntax with `yamllint inventory/` and consult
-
-[docs/inventory-structure-guide.md](../docs/inventory-structure-guide.md) for
-
-additional detail.
-
-
-
-Hosts resolve via DNS as `{hostname}.faviann.vms` or through the Proxmox API by
-
-container ID.
+Hosts resolve via DNS as `{hostname}.faviann.vms`.

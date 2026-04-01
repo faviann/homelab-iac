@@ -5,52 +5,50 @@
 This diagram shows how hosts are organized into resource tiers and functional groups:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          Resource Tiers                                  │
-│                    (Mutually Exclusive - Pick ONE)                       │
-└─────────────────────────────────────────────────────────────────────────┘
+Resource Tiers (exactly one per host)
 
-    tier_tiny          tier_small         tier_medium        tier_large
-   (1c/512MB/8GB)        (2c/2GB/8GB)         (4c/8GB/8GB)          (8c/16GB/8GB)
-        │                      │                    │                     │
-        │               ┌──────┴──────┐             │                     │
-        │               │             │             │                     │
-        │          codeserver    frontend         media              jellyfin
-        │               │             │             │                     │
-        └───────────────┴─────────────┴─────────────┴─────────────────────┘
+   tier_tiny (1c/1GB/8GB):
+      - (none)
+
+   tier_small (2c/4GB/8GB):
+      - auth
+
+   tier_medium (4c/16GB/8GB):
+      - portal
+      - servarr
+
+   tier_large (8c/32GB/8GB):
+      - seedbox
 
 
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      Functional Groups                                   │
-│              (Compositional - Host can be in MULTIPLE)                   │
-└─────────────────────────────────────────────────────────────────────────┘
+Functional Groups (host can belong to multiple)
 
-    cap_docker              cap_gpu           cap_wireguard
-  (Docker runtime          (GPU passthrough)         (WireGuard)
-   + docker-agents)
-         │                       │                      │
-    ┌────┼────┬────┬────┐       ├───────┐              │
-    │    │    │    │    │       │       │              │
-codeserver │  media │  media jellyfin              │
-           │       │                                    │
-       frontend  jellyfin                               │
+   cap_docker:
+      - auth
+      - portal
+      - servarr
+      - seedbox
+
+   cap_wireguard:
+      - seedbox
+
+   cap_gpu:
+      - (none)
 
 ```
 
 ## Host Configuration Matrix
 
-| Host       | Resource Tier | CPU | RAM   | Docker | GPU | WireGuard | traefik-kop | VMID |
-|------------|--------------|-----|-------|--------|-----|-----------|-------------|------|
-| codeserver | small        | 2   | 2GB   | ✓      | ✗   | ✗         | ✓ (default) | 301  |
-| frontend   | small        | 2   | 2GB   | ✓      | ✗   | ✗         | ✓ (default) | 302  |
-| media      | medium       | 4   | 8GB   | ✓      | ✓   | ✗         | ✓ (default) | 303  |
-| jellyfin   | large        | 8   | 32GB* | ✓      | ✓   | ✗         | ✓ (default) | 304  |
-
-*jellyfin has a resource override: 32GB RAM instead of the tier_large default 16GB
+| Host      | Resource Tier | CPU | RAM  | Docker | GPU | WireGuard | traefik-kop | VMID |
+|-----------|---------------|-----|------|--------|-----|-----------|-------------|------|
+| auth      | small         | 2   | 4GB  | yes    | no  | no        | yes (default) | 303 |
+| portal    | medium        | 4   | 16GB | yes    | no  | no        | no (host override) | 300 |
+| servarr   | medium        | 4   | 16GB | yes    | no  | no        | yes (default) | 302 |
+| seedbox   | large         | 8   | 32GB | yes    | no  | yes       | yes (default) | 301 |
 
 ## Variable Flow Diagram
 
-This shows how variables flow from groups to a specific host (`media` example):
+This shows how variables flow from groups to a specific host (`servarr` example):
 
 ```
                     ┌──────────────────────────┐
@@ -65,50 +63,47 @@ This shows how variables flow from groups to a specific host (`media` example):
                                  ▼
                     ┌──────────────────────────┐
                     │ group_vars/              │
-                    │ tier_medium.yml       │
+                    │ tier_medium/vars.yml  │
                     │                          │
                     │ • lxc_cores: 4           │
-                    │ • lxc_memory: 8192       │
+                    │ • lxc_memory: 16384      │
                     │ • lxc_disk: "8"          │
                     └────────────┬─────────────┘
                                  │
                 ┌────────────────┼────────────────┐
                 │                │
-                ▼                ▼
-    ┌───────────────────┐ ┌───────────────┐
-    │ group_vars/       │ │ group_vars/   │
-    │ cap_docker.yml  │ │ cap_gpu.yml│
-    │                   │ │               │
-    │ • install_docker  │ │ • enable_gpu  │
-    │ • lxc_features    │ │ • nvidia_cfg  │
-    │ • docker_user     │ │               │
-    │ • docker_agents   │ └───────┬───────┘
-    │ • traefik_kop     │       │
-    └─────────┬─────────┘       │
-              │                   │
-              └───────────────────┼┘
-                                  │
+               ▼
+      ┌───────────────────┐
+      │ group_vars/       │
+      │ cap_docker/vars.yml│
+      │                    │
+      │ • install_docker   │
+      │ • lxc_features     │
+      │ • docker_user      │
+      │ • docker_agents... │
+      │ • traefik_kop...   │
+      └─────────┬──────────┘
+              │
                                   ▼
                     ┌──────────────────────────┐
-                    │ host_vars/media.yml      │
+                  │ host_vars/servarr.yml    │
                     │                          │
-                    │ • vmid: 303              │
-                    │ • hostname: media        │
+                  │ • vmid: 302              │
+                  │ • hostname: servarr      │
                     │ • cores: "{{ lxc_cores }}"│  ← Uses 4 from tier_medium
-                    │ • memory: "{{ lxc_memory }}"│ ← Uses 8192 from tier_medium
+                  │ • memory: "{{ lxc_memory }}"│ ← Uses 16384 from tier_medium
                     └──────────────────────────┘
                                   │
                                   ▼
                     ┌──────────────────────────┐
                     │   Final Host Config      │
-                    │        (media)           │
+                    │       (servarr)          │
                     │                          │
                     │ Merged variables from:   │
                     │ • all/proxmox.yml        │
-                    │ • tier_medium.yml     │
-                    │ • cap_docker.yml       │
-                    │ • cap_gpu.yml         │
-                    │ • host_vars/media.yml    │
+                    │ • tier_medium/vars.yml  │
+                    │ • cap_docker/vars.yml   │
+                    │ • host_vars/servarr.yml │
                     └──────────────────────────┘
 ```
 
@@ -131,8 +126,8 @@ This shows how variables flow from groups to a specific host (`media` example):
                       traefik_kop_enabled: false
                       in host_vars)
 
-    portal: traefik_kop_enabled: false
-    All other cap_docker hosts: traefik_kop_enabled: true (default)
+   portal: traefik_kop_enabled: false
+   auth, servarr, seedbox: traefik_kop_enabled: true (default)
 ```
 
 ## Provisioning Workflow
@@ -161,7 +156,7 @@ This shows how variables flow from groups to a specific host (`media` example):
 ┌──────────────────┐
 │ LXC Container    │
 │                  │
-│ (e.g., media)    │◄─── Created with merged variables
+│ (e.g., servarr)  │◄─── Created with merged variables
 └──────┬───────────┘
        │
        │ 3. Configure LXC using:
@@ -178,36 +173,31 @@ This shows how variables flow from groups to a specific host (`media` example):
 
 ## Exception Handling Pattern
 
-Example: jellyfin needs extra RAM beyond its resource tier default
+Example: portal opts out of traefik-kop while keeping docker-agents enabled
 
 ```
 ┌────────────────────────────┐
-│ group_vars/tier_large   │
-│                            │
-│ lxc_cores: 8               │
-│ lxc_memory: 16384  ◄───────┼─── Default for all tier_large
-│ lxc_disk: "8"              │
+│ group_vars/cap_docker/vars.yml │
+│                                 │
+│ docker_agents_enabled: true     │
+│ traefik_kop_enabled: true ◄─────┼─── Default for all cap_docker hosts
 └────────────┬───────────────┘
              │
-             │ Inherited by jellyfin
+             │ Inherited by portal
              │
              ▼
 ┌────────────────────────────┐
-│ host_vars/jellyfin.yml     │
+│ host_vars/portal.yml       │
 │                            │
-│ proxmox_lxc:               │
-│   cores: "{{ lxc_cores }}" │◄─── Uses group default: 8
-│   memory: 32768            │◄─── OVERRIDE: 32GB instead of 16GB
-│   disk: "{{ lxc_disk }}"   │◄─── Uses group default: "8"
+│ traefik_kop_enabled: false │◄─── Host-level opt-out
 └────────────────────────────┘
              │
              ▼
 ┌────────────────────────────┐
-│ Final jellyfin config:     │
+│ Final portal behavior:     │
 │                            │
-│ • 8 CPU cores (inherited)  │
-│ • 32GB RAM (overridden)    │
-│ • 8GB disk (inherited)     │
+│ • docker-agents enabled    │
+│ • traefik-kop disabled     │
 └────────────────────────────┘
 ```
 
@@ -258,6 +248,6 @@ Use dynamic inventory via Proxmox API
    - Makes overrides explicit and visible
 
 5. **Docker Agents are Universal**
-   - All cap_docker hosts get docker-agents (dockwatch, socket proxies)
+   - All cap_docker hosts get docker-agents by default
    - traefik-kop is opt-out via `traefik_kop_enabled: false` in host_vars
    - Example: portal disables traefik-kop because it runs the Traefik instance itself
