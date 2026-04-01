@@ -287,6 +287,20 @@
     - _per_host_stacks_dir.stat.exists | default(false)
     - (item.path | relpath(lxc_docker_env_stacks_source)) not in (lxc_docker_env_templated_outputs | default([]))
 
+- name: Check if Traefik cert directory exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs"
+  register: _traefik_cert_dir
+
+- name: Ensure Traefik ACME storage file exists with secure permissions
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
+    state: touch
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0600'
+  when: _traefik_cert_dir.stat.exists | default(false)
+
 - name: Ensure Docker config mount target exists
   ansible.builtin.file:
     path: "{{ lxc_docker_env_root_docker_conf_path }}"
