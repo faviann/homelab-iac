@@ -1,0 +1,34 @@
+services:
+  postgresql:
+    volumes:
+      - ./appdata/database:/var/lib/postgresql/data
+    networks:
+      - idm
+  server:
+    volumes:
+      - ./appdata/authentik/media:/media
+      - ./appdata/authentik/custom-templates:/templates
+    networks:
+      - proxy
+      - idm
+    environment:
+      - AUTHENTIK_PROXY_HEADERS=true
+    labels:
+      - traefik.enable=true
+      - traefik.domain=faviann.com
+      - traefik.docker.network=proxy
+  worker:
+    environment:
+      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM}
+    volumes:
+      - ./appdata/authentik/media:/media
+      - ./appdata/authentik/certs:/certs
+      - ./appdata/authentik/custom-templates:/templates
+    networks:
+      - idm
+networks:
+  idm:
+    name: idm
+    driver: bridge
+  proxy:
+    external: true
