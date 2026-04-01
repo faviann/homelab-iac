@@ -158,6 +158,9 @@ Create `inventory/host_vars/mynewhost.yml`:
 # Host-specific configuration for mynewhost
 # Inherits from: tier_small, cap_docker
 
+lxc_hwaddr: "BC:24:11:XX:XX:XX"
+default_domain: admin.faviann.com
+
 proxmox_lxc_overrides:
   vmid: 305
   hostname: mynewhost
@@ -272,6 +275,7 @@ Leave CPU, memory, disk, network, and mount settings out of host_vars unless the
 ### 5. Organize Functional Groups Logically
 
 - All `cap_docker` hosts automatically get the docker-agents stack (dockwatch, socket proxies)
+- For `cap_docker` hosts with `traefik_kop_enabled: true` (default), `default_domain` in host_vars is required
 - Use `traefik_kop_enabled: false` in host_vars to opt out of traefik-kop (for example, on portal)
 - GPU access is typically independent of other functional groups
 
