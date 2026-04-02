@@ -60,6 +60,7 @@ entryPoints:
         domains:
           - main: faviann.com # change this to your proxy domain
             sans:
+              - "homepage.faviann.com" # change this to your proxy domain
               - "auth.faviann.com" # change this to your proxy domain
               - "bittorrent.faviann.com" # change this to your proxy domain
               - "*.app.faviann.com" # change this to your proxy domain
