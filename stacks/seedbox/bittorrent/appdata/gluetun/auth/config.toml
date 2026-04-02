@@ -1,0 +1,4 @@
+[[roles]]
+name = "ws-ephemeral-status"
+routes = ["GET /v1/vpn/status", "GET /v1/portforward", "PUT /v1/portforward"]
+auth = "none"

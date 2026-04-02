@@ -79,7 +79,7 @@ services:
   #
   ws-ephemeral:
     container_name: ws-ephemeral
-    image: ghcr.io/jelliedpizza/ws-ephemeral:latest
+    image: ghcr.io/faviann/ws-ephemeral:latest
     network_mode: service:gluetun
     environment:
       # === Windscribe session cookie ===
@@ -88,14 +88,14 @@ services:
       - TZ=${TZ:-UTC}
 
       # === qBittorrent settings ===
-      - QBIT_HOST=$QBIT_HOST
+      - QBIT_HOST=127.0.0.1
       - QBIT_PORT=$QBIT_WEBUI_PORT
       - QBIT_USERNAME=$QBIT_USERNAME # qBittorrent web UI username
       - QBIT_PASSWORD=$QBIT_PASSWORD # qBittorrent web UI password
       - QBIT_PRIVATE_TRACKER=true # Disable DHT/PeX/LSD for private trackers
 
       # === Gluetun settings ===
-      - GLUETUN_HOST=localhost # Gluetun container hostname
+      - GLUETUN_HOST=127.0.0.1 # Gluetun control server host in shared namespace
       - GLUETUN_PORT=8000 # Gluetun control server port
       - GLUETUN_AUTH_TYPE=none  # Gluetun type -> none, basic, or apikey
 
