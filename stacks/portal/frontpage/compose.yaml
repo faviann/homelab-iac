@@ -18,4 +18,4 @@ services:
       - proxy
     labels:
       - traefik.enable=true
-      - traefik.domain=staging.faviann.com
+      - traefik.domain=faviann.com

@@ -65,7 +65,7 @@ entryPoints:
               - "*.app.faviann.com" # change this to your proxy domain
               - "*.media.faviann.com" # change this to your proxy domain
               - "*.local.faviann.com" # change this to your proxy domain
-              - "*.staging.faviann.com" # change this to your proxy domain
+              - "*.admin.faviann.com" # change this to your proxy domain
               - "*.dev.faviann.com" # change this to your proxy domain
               - "*.public.faviann.com" # change this to your proxy domain
 #          - main: example2.com # change this to your proxy domain
