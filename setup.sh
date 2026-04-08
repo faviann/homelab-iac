@@ -307,7 +307,6 @@ echo "  • Edit encrypted vault:    ${BLUE}ansible-vault edit inventory/group_v
 echo
 echo "Documentation:"
 echo "  • Main README:             ${BLUE}README.md${NC}"
-echo "  • Migration guide:         ${BLUE}MIGRATION.md${NC}"
 echo "  • Agent instructions:      ${BLUE}AGENTS.md${NC}"
 echo
 

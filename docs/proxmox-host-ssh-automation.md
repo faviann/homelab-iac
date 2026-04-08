@@ -1,266 +1,59 @@
-# Proxmox Host SSH Access Automation
+# Proxmox Host SSH Access
 
-## Overview
+## Why SSH is Required
 
-This document describes the automated SSH access setup implemented for managing Proxmox host-side operations that cannot be performed via the API.
-
-## Why SSH Access is Required
-
-Certain LXC configuration operations are restricted by Proxmox and cannot be performed through the API, even with `root@pam` credentials:
-
-- **Feature flags like `keyctl=1`**: Required for Docker containers to use kernel keyrings
-- Direct LXC configuration file modifications
-- Running `pct` commands on the Proxmox host
-
-The Proxmox API returns `403 Forbidden: Permission check failed (changing feature flags (except nesting) is only allowed for root@pam)` when attempting to set restricted features via API.
-
-## Solution Architecture
-
-### Components
-
-1. **`proxmox_host_bootstrap` role**: Sets up SSH access automatically
-   - Detects if SSH key authentication already works
-   - Prompts for password only when needed
-   - Adds SSH public key to Proxmox authorized_keys
-   - Validates the connection
-
-2. **`proxmox_lxc_host_config` role**: Applies host-side configuration
-   - Applies restricted feature flags via `pct set` commands
-   - Modifies LXC config files for GPU, WireGuard, etc.
-   - Idempotent operations with proper change detection
-
-3. **`proxmox_lxc_provision` role**: Filters API-incompatible features
-   - Removes `keyctl=1` and similar restricted features before API call
-   - Allows `nesting=1` (API-compatible) to pass through
-   - Defers restricted features to host_config role
-
-### Workflow
+Certain LXC configuration operations cannot be performed via the Proxmox API, even with `root@pam` credentials. Attempting to set restricted feature flags returns:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ site.yml Execution Flow                                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. Bootstrap Check                                          │
-│     └─> Verify venv and collections exist                   │
-│                                                              │
-│  2. proxmox_host_bootstrap (new)                            │
-│     ├─> Test SSH key auth                                   │
-│     ├─> Prompt for password (if needed)                     │
-│     ├─> Add SSH public key                                  │
-│     └─> Validate connectivity                               │
-│                                                              │
-│  3. API Validation                                           │
-│     └─> Test Proxmox API connectivity                       │
-│                                                              │
-│  4. For each LXC container:                                  │
-│     ├─> Build LXC spec (filter restricted features)         │
-│     ├─> Pre-provision host prep                             │
-│     ├─> API: Create/update container (nesting=1 only)       │
-│     └─> Post-provision host prep                            │
-│         └─> Apply restricted features via pct (keyctl=1)    │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+403 Forbidden: Permission check failed (changing feature flags (except nesting) is only allowed for root@pam)
 ```
 
-## User Experience
+Affected features: `keyctl=1` (required for Docker kernel keyring support) and any future flags Proxmox restricts to pct.
 
-### First Run
+## Architecture
 
-```bash
-$ ansible-playbook -i inventory/hosts.yml site.yml
+Three roles handle this split:
 
-PLAY [Verify control node has been bootstrapped] **************
-...
-ok: [localhost]
+1. **`proxmox_host_bootstrap`** — Sets up SSH key auth on first run. Tests if key auth works; prompts for root password once if not; adds the public key; validates. Subsequent runs skip the prompt entirely.
+2. **`proxmox_lxc_provision`** — Filters the feature list before the API call, passing only API-compatible features.
+3. **`proxmox_lxc_host_config`** — Applies restricted features via `pct set` on the Proxmox host after provisioning.
 
-PLAY [Bootstrap Proxmox host SSH access] **********************
-
-TASK [proxmox_host_bootstrap : Test if SSH key authentication already works]
-changed: [localhost]
-
-TASK [proxmox_host_bootstrap : SSH key authentication status]
-ok: [localhost] => {
-    "msg": "SSH key auth not configured - will prompt for password"
-}
-
-TASK [proxmox_host_bootstrap : Prompt for Proxmox root password]
-[proxmox_host_bootstrap : Prompt for Proxmox root password]
-
-╔════════════════════════════════════════════════════════════════════╗
-║  SSH Key Authentication Setup Required                            ║
-╚════════════════════════════════════════════════════════════════════╝
-
-SSH key authentication to proxmox.lan is not configured.
-
-Please enter the root password to automatically add your SSH key.
-This prompt will not appear on subsequent runs.
-
-Password for root@proxmox.lan:
+```
+site.yml execution:
+  1. proxmox_host_bootstrap  →  SSH key setup (password prompt once, then never again)
+  2. API validation
+  3. Per-LXC:
+       proxmox_lxc_provision      →  API call with nesting=1 only
+       proxmox_lxc_host_config    →  pct set <vmid> -features keyctl=1,nesting=1
 ```
 
-### Subsequent Runs
+## Feature Flag Handling
 
-```bash
-$ ansible-playbook -i inventory/hosts.yml site.yml
+| Feature | Via API | Via pct |
+|---------|---------|---------|
+| `nesting=1` | ✅ | — |
+| `keyctl=1` | ❌ (filtered out) | ✅ |
 
-PLAY [Bootstrap Proxmox host SSH access] **********************
-
-TASK [proxmox_host_bootstrap : Test if SSH key authentication already works]
-ok: [localhost]
-
-TASK [proxmox_host_bootstrap : SSH key authentication status]
-ok: [localhost] => {
-    "msg": "SSH key auth already configured"
-}
-# No password prompt - continues directly to validation
-```
-
-## Technical Details
-
-### SSH Key Location
-
-- **Private key**: `.ansible/ssh/proxmox_lxc`
-- **Public key**: `.ansible/ssh/proxmox_lxc.pub`
-- **Type**: ED25519 (modern, secure, fast)
-
-Generated by the `control_node_bootstrap` role during initial setup.
-
-### Proxmox Host Access
-
-- **User**: `root`
-- **Host**: Value of `proxmox_api_host` variable
-- **Connection**: SSH with key-based authentication
-- **Privilege escalation**: Uses `become: true` for host-side operations
-
-### Feature Flag Handling
-
-**API-Compatible Features** (applied via API):
-- `nesting=1` - Container can run nested containers
-
-**Restricted Features** (applied via pct):
-- `keyctl=1` - Container can use kernel keyrings
-- Any future features restricted by Proxmox
-
-The `proxmox_lxc_provision` role automatically filters the feature list:
-```yaml
-# In cap_docker/vars.yml
-lxc_features:
-  - nesting=1    # ✓ Sent to API
-  - keyctl=1     # ✗ Filtered out, applied via pct later
-```
-
-### Idempotency
-
-The `proxmox_lxc_host_config/tasks/features.yml` task:
-1. Reads current features with `pct config <vmid>`
-2. Merges with desired features from inventory
-3. Only runs `pct set` if changes are needed
-4. Reports whether changes were made
-
-## Security Considerations
-
-### SSH Key Security
-
-- ED25519 keys are more secure than traditional RSA
-- Private key never leaves the control node
-- Public key is world-readable (by design)
-- Password authentication is only used once to bootstrap
-
-### Root Access
-
-- SSH key is added to Proxmox `root` user
-- Required because:
-  - `pct` commands require root
-  - LXC config files are owned by root
-  - Proxmox permissions model doesn't support delegated `pct` access
-- Alternative: Use Proxmox API for all operations (requires manual feature flag setup)
-
-### Password Handling
-
-- Password is prompted via `ansible.builtin.pause` with `echo: false`
-- Never logged or stored
-- Used only for initial SSH key deployment
-- Connection uses `ansible_password` variable (ephemeral, in-memory only)
+The `proxmox_lxc_provision` role automatically strips restricted features before the API call. `proxmox_lxc_host_config` reads the current container config, merges desired features, and only runs `pct set` if a change is needed.
 
 ## Troubleshooting
 
-### Password Prompt Appears Every Run
+**Password prompt appears on every run**
 
-**Symptom**: Repeatedly prompted for password despite entering it correctly.
-
-**Cause**: SSH key wasn't successfully added to Proxmox.
-
-**Solution**:
+SSH key wasn't successfully added. Verify manually:
 ```bash
-# Manually verify SSH access
 ssh -i .ansible/ssh/proxmox_lxc root@proxmox.lan
-
-# If it fails, check:
-# 1. Proxmox SSH daemon accepts key auth
-grep PubkeyAuthentication /etc/ssh/sshd_config  # Should be 'yes'
-
-# 2. Permissions on authorized_keys
-ls -la /root/.ssh/authorized_keys  # Should be 600
-
-# 3. SELinux or AppArmor blocking
-journalctl -u ssh -f  # Watch for denials while connecting
 ```
+If it fails, check that `PubkeyAuthentication yes` is set in `/etc/ssh/sshd_config` on the Proxmox host and that `/root/.ssh/authorized_keys` has mode 600.
 
-### "Permission denied" When Running pct Commands
+**`keyctl=1` not present after provisioning**
 
-**Symptom**: `pct set` commands fail with permission errors.
-
-**Cause**: User doesn't have root access or `become` isn't working.
-
-**Solution**: Verify delegation and become settings in `site.yml`:
-```yaml
-- name: Apply post-provision host adjustments
-  ansible.builtin.include_role:
-    name: proxmox_lxc_host_config
-    apply:
-      delegate_to: "{{ proxmox_api_host }}"
-      become: true  # ← Required
-```
-
-### Features Not Applied
-
-**Symptom**: `keyctl=1` not present in container after provisioning.
-
-**Debug**:
 ```bash
-# Check if feature was detected
-ansible-playbook -i inventory/hosts.yml site.yml --tags host_prep -vv
+# Check current container features
+ssh root@proxmox.lan pct config <vmid> | grep features
 
-# Manually verify on Proxmox
-ssh root@proxmox pct config 300 | grep features
+# Re-run host config phase
+ansible-playbook site.yml --tags host_prep -vv
 ```
 
-**Common causes**:
-- `lxc_features` not defined in inventory
-- `proxmox_lxc_host_config_enabled` set to false
-- Host config role not included in playbook
-
-## Future Enhancements
-
-### Potential Improvements
-
-1. **SSH Key Rotation**: Add playbook to rotate SSH keys periodically
-2. **Multi-Node Support**: Handle multiple Proxmox nodes in a cluster
-3. **Audit Logging**: Log all `pct` commands executed for compliance
-4. **Dry-Run Mode**: Show what would change without applying
-5. **Feature Flag Discovery**: Auto-detect which features require pct vs API
-
-### Alternative Approaches Considered
-
-1. **Manual SSH setup**: Rejected - too much friction for users
-2. **Password-based SSH for all operations**: Rejected - security risk
-3. **API-only with manual feature setup**: Rejected - breaks automation goal
-4. **Ansible Tower/AWX credentials**: May implement for enterprise deployments
-
-## References
-
-- [Proxmox API Documentation](https://pve.proxmox.com/wiki/Proxmox_VE_API)
-- [LXC Feature Flags](https://pve.proxmox.com/wiki/Linux_Container#pct_options)
-- [Ansible authorized_key Module](https://docs.ansible.com/ansible/latest/collections/ansible/builtin/authorized_key_module.html)
-- [SSH Key Best Practices](https://www.ssh.com/academy/ssh/key)
+Common causes: `lxc_features` not defined in inventory, or `proxmox_lxc_host_config_enabled` set to false.

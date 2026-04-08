@@ -28,7 +28,7 @@ source activate-env.sh
 ansible-playbook playbooks/validate-credentials.yml
 ```
 
-**Manual setup:** See [detailed instructions below](#first-time-setup) or [MIGRATION.md](MIGRATION.md).
+**Manual setup:** See [detailed instructions below](#first-time-setup).
 
 ## Overview
 
@@ -87,7 +87,7 @@ These defaults are configured for the target homelab:
 - **API host**: `proxmox.lan`
 - **Node name**: `proxmox`
 - **Network bridge**: `vmbr1`
-- **Default template**: `local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst`
+- **Default template**: `local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst`
 
 Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variables, or playbook vars as needed for your environment.
 
@@ -215,11 +215,8 @@ ansible-playbook site.yml --tags validation
 |   `-- requirements.yml               # Ansible collection dependencies
 |-- docs/
 |   |-- inventory-structure-guide.md
-|   |-- inventory-visualization.md
 |   |-- proxmox-host-ssh-automation.md
-|   |-- remote-controller-setup.md
-|   `-- reference/
-|       `-- agent-control-node-reference.md
+|   `-- ssh-key-management.md
 |-- inventory/
 |   |-- hosts.yml                      # Static inventory file
 |   |-- group_vars/
@@ -228,17 +225,20 @@ ansible-playbook site.yml --tags validation
 |   |       |-- vault.yml              # Encrypted secrets
 |   |       `-- vault.yml.example      # Template for vault
 |   `-- host_vars/                     # Host-specific variables
-|       |-- codeserver.yml
-|       |-- frontend.yml
+|       |-- auth.yml
 |       |-- portal.yml
-|       |-- jellyfin.yml
-|       `-- media.yml
+|       |-- servarr.yml
+|       |-- seedbox.yml
+|       `-- jellyfin.yml
 |-- playbooks/
-|   |-- lab-connectivity.yml           # SSH + Proxmox API connectivity checks
-|   |-- proxmox_api_check.yml          # API connectivity test
-|   |-- lxc-provision.yml              # Inventory-driven LXC provisioning
-|   `-- tasks/
-|       `-- proxmox_validation.yml
+|   |-- validate-infrastructure.yml   # Pre-flight checks (bootstrap, SSH, API)
+|   |-- provision-lxcs.yml            # Create/update LXC containers
+|   |-- configure-lxcs.yml            # In-container setup (Docker, GPU, stacks)
+|   |-- add-ssh-keys-to-lxcs.yml      # Manual SSH key injection
+|   |-- validate-credentials.yml      # Test API credentials
+|   |-- lab-connectivity.yml          # SSH + Proxmox API connectivity checks
+|   |-- proxmox_api_check.yml         # API connectivity test
+|   `-- lxc-provision.yml             # Legacy provisioning playbook
 |-- requirements/
 |   `-- pip.txt                        # Python package dependencies
 |-- site.yml                           # Top-level orchestration playbook
@@ -247,11 +247,11 @@ ansible-playbook site.yml --tags validation
 
 ## Documentation
 
-- **docs/reference/agent-control-node-reference.md** - Control node reference for agents
-- **docs/remote-controller-setup.md** - Setup and usage guide
-- **docs/proxmox-host-ssh-automation.md** - Host-side SSH automation details
 - **docs/inventory-structure-guide.md** - Inventory design and best practices
-- **docs/inventory-visualization.md** - Inventory group relationships
+- **docs/proxmox-host-ssh-automation.md** - Host-side SSH automation details
+- **docs/ssh-key-management.md** - Adding SSH keys to existing containers
+- **stacks/README.md** - Docker Compose conventions and Traefik label contract
+- **AGENTS.md** - Agent operating instructions
 
 ## Configuration
 
