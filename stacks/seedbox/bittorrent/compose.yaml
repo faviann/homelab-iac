@@ -68,7 +68,7 @@ services:
     volumes:
       - ./appdata/qbittorrent:/config
       - /data:/data
-      - /ephemeral/qbittorrent:/ephemeral
+      - /ephemeral:/downloads
     network_mode: service:gluetun
     healthcheck:
       test: ping -c 1 www.google.com || exit 1
