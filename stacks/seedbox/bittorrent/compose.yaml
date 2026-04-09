@@ -30,8 +30,14 @@ services:
       timeout: 20s
       retries: 5
     restart: unless-stopped
+    labels:
+      homepage.instance.admin.group: Downloads
+      homepage.instance.admin.name: qBittorrent
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Torrent client
+      homepage.instance.admin.icon: qbittorrent
   #
-  # This is a new addition since creating the tutorial video on this stack. 
+  # This is a new addition since creating the tutorial video on this stack.
   # See the 'qBittorrent Stalls with VPN Timeout' section for more information.
   deunhealth:
     image: qmcgaw/deunhealth
@@ -54,11 +60,6 @@ services:
     labels:
       deunhealth.restart.on.unhealthy: true
       traefik.enable: true
-      homepage.group: Downloads
-      homepage.name: qBittorrent
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Torrent client
-      homepage.icon: qbittorrent
     environment:
       - PUID=$PUID
       - PGID=$PGID

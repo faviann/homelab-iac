@@ -15,11 +15,11 @@ services:
       - 8686:8686
     labels:
       traefik.enable: true
-      homepage.group: Media
-      homepage.name: Lidarr
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Music management
-      homepage.icon: lidarr
+      homepage.instance.admin.group: Media
+      homepage.instance.admin.name: Lidarr
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Music management
+      homepage.instance.admin.icon: lidarr
     networks:
       - servarr-internal
 

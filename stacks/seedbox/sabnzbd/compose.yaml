@@ -3,11 +3,11 @@ services:
     container_name: sabnzbd
     labels:
       traefik.enable: true
-      homepage.group: Downloads
-      homepage.name: SABnzbd
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Usenet client
-      homepage.icon: sabnzbd
+      homepage.instance.admin.group: Downloads
+      homepage.instance.admin.name: SABnzbd
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Usenet client
+      homepage.instance.admin.icon: sabnzbd
     environment:
       - PUID=1000
       - PGID=1000

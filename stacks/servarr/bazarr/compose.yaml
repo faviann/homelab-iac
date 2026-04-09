@@ -15,11 +15,11 @@ services:
       - 6767:6767
     labels:
       traefik.enable: true
-      homepage.group: Media
-      homepage.name: Bazarr
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Subtitle management
-      homepage.icon: bazarr
+      homepage.instance.admin.group: Media
+      homepage.instance.admin.name: Bazarr
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Subtitle management
+      homepage.instance.admin.icon: bazarr
     networks:
       - servarr-internal
 

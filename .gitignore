@@ -55,5 +55,9 @@ stacks/**/.env
 
 # Stack-local secrets and runtime artifacts
 stacks/**/secrets/
-stacks/portal/frontpage/appdata/homepage/config/icons/
-stacks/portal/frontpage/appdata/homepage/config/logs/
+stacks/portal/homepage-media/appdata/homepage/config/icons/
+stacks/portal/homepage-media/appdata/homepage/config/logs/
+stacks/portal/homepage-editors/appdata/homepage/config/icons/
+stacks/portal/homepage-editors/appdata/homepage/config/logs/
+stacks/portal/homepage-admin/appdata/homepage/config/icons/
+stacks/portal/homepage-admin/appdata/homepage/config/logs/

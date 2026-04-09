@@ -15,11 +15,11 @@ services:
       - 8090:8090
     labels:
       traefik.enable: true
-      homepage.group: Media
-      homepage.name: Mylar
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Comic management
-      homepage.icon: mylar
+      homepage.instance.admin.group: Media
+      homepage.instance.admin.name: Mylar
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Comic management
+      homepage.instance.admin.icon: mylar
     networks:
       - servarr-internal
 

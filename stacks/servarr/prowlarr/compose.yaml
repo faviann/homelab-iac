@@ -17,11 +17,11 @@ services:
       - 9696:9696
     labels:
       traefik.enable: true
-      homepage.group: Media
-      homepage.name: Prowlarr
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Indexer management
-      homepage.icon: prowlarr
+      homepage.instance.admin.group: Media
+      homepage.instance.admin.name: Prowlarr
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Indexer management
+      homepage.instance.admin.icon: prowlarr
     networks:
       - servarr-internal
 

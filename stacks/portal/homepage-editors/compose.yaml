@@ -1,0 +1,28 @@
+networks:
+  proxy:
+    name: proxy
+    external: true
+
+services:
+  homepage-editors:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage-editors
+    ports:
+      - 3002:3000
+    volumes:
+      - ./appdata/homepage/config:/app/config
+    environment:
+      - PUID=$PUID
+      - PGID=$PGID
+      - HOMEPAGE_INSTANCE_NAME=editors
+      - HOMEPAGE_ALLOWED_HOSTS=localhost:3002,127.0.0.1:3002,[::1]:3002,portal.faviann.vms:3002,home.faviann.com
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.domain=faviann.com
+      - traefik.http.routers.homepage-editors.rule=Host(`home.faviann.com`)
+      - traefik.http.routers.homepage-editors.entrypoints=websecure
+      - traefik.http.routers.homepage-editors.tls=true
+      - traefik.http.routers.homepage-editors.middlewares=forwardAuth-authentik@file
+      - traefik.http.services.homepage-editors.loadbalancer.server.port=3000

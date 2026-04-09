@@ -8,11 +8,19 @@ Ansible deploys each host's stacks to `/conf/docker/stacks/` on the target conta
 ```
 stacks/
 ├── portal/
-│   ├── frontpage/
-│   │   ├── compose.yaml          # Static compose file (copied as-is)
-│   │   ├── .env                  # Static env file
+│   ├── homepage-media/           # Homepage for media tier (media.faviann.com)
+│   │   ├── compose.yaml
+│   │   ├── .env
 │   │   └── appdata/homepage/config/
 │   │       └── docker.yaml.j2    # Templated Homepage config
+│   ├── homepage-editors/         # Homepage for editors tier (home.faviann.com)
+│   │   ├── compose.yaml
+│   │   ├── .env
+│   │   └── appdata/homepage/config/
+│   ├── homepage-admin/           # Homepage for admin tier (admin.faviann.com)
+│   │   ├── compose.yaml
+│   │   ├── .env
+│   │   └── appdata/homepage/config/
 │   └── traefik3/
 │       ├── compose.yaml
 │       ├── .env
@@ -133,7 +141,7 @@ The `lxc_docker_environment` role creates these networks before starting any sta
 
 | Host | `default_domain` | Example URL |
 |------|------------------|-------------|
-| portal | `faviann.com` | `homepage.faviann.com` |
+| portal | `faviann.com` | `media.faviann.com`, `home.faviann.com`, `admin.faviann.com` |
 | seedbox | `admin.faviann.com` | `bittorrent.admin.faviann.com` |
 
 Set `default_domain` in each host's `host_vars`. The docker-agents `.env.j2` passes it to traefik-kop as `DOMAIN`.
@@ -208,11 +216,21 @@ If a stack has **both** a static `.env` and a `.env.j2`, the role prefers the te
 
 ## Homepage Labels
 
-Homepage runs on the `portal` host and autodiscovers services from every host in `cap_docker`.
-Each Docker host gets a managed read-only Docker socket proxy (port 2375) from the `lxc_docker_environment`
-role, and Homepage renders its `docker.yaml` from inventory.
+Homepage runs three instances on the `portal` host (`media`, `editors`, `admin`), each protected by Authentik. Services are autodiscovered from every host in `cap_docker` via read-only Docker socket proxies.
 
-For a service to appear in Homepage, define these labels on the user-facing container:
+### Access Tiers
+
+Each service must be labelled for the correct access tier:
+
+| Tier | Who sees it | Label pattern |
+|------|-------------|---------------|
+| Media | All signed-in users | plain `homepage.*` |
+| Admin | Admin only | `homepage.instance.admin.*` |
+| Editors + Admin | Editors and admin | `homepage.instance.editors.*` + `homepage.instance.admin.*` |
+
+Plain `homepage.*` labels are visible on all instances. Instance-scoped labels are visible only on the named instance.
+
+### Required Labels
 
 | Label | Required | Purpose |
 |-------|----------|---------|
@@ -222,29 +240,30 @@ For a service to appear in Homepage, define these labels on the user-facing cont
 | `homepage.description` | Recommended | Short description |
 | `homepage.icon` | Recommended | Icon name (see Homepage icon catalogue) |
 
-Do not rely on partial labels or fallback naming. If a service should be visible in Homepage,
-label it intentionally.
+Do not rely on partial labels or fallback naming. If a service should be visible in Homepage, label it intentionally.
 
-Widgets are out of scope for the baseline stack contract. Keep `homepage.widget.*` labels opt-in
-for later, since they often require extra secrets or internal-only URLs.
+Widgets are out of scope for the baseline stack contract. Keep `homepage.widget.*` labels opt-in for later, since they often require extra secrets or internal-only URLs.
 
-### Example with Traefik + Homepage Labels
+### Example — Media Tier (visible to all)
 
 ```yaml
-services:
-  myapp:
-    image: ghcr.io/example/myapp:latest
-    labels:
-      # Traefik routing
-      traefik.enable: "true"
-      # Optional override if this service should not use host default_domain
-      traefik.domain: staging.faviann.com
-      # Homepage discovery
-      homepage.group: Apps
-      homepage.name: My App
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Example service
-      homepage.icon: myapp
+labels:
+  homepage.group: Media
+  homepage.name: My App
+  homepage.href: https://${HOMEPAGE_FQDN}
+  homepage.description: Example service
+  homepage.icon: myapp
+```
+
+### Example — Admin Tier (admin only)
+
+```yaml
+labels:
+  homepage.instance.admin.group: Admin
+  homepage.instance.admin.name: My App
+  homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+  homepage.instance.admin.description: Example service
+  homepage.instance.admin.icon: myapp
 ```
 
 And in `.env.j2` for that same stack:

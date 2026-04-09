@@ -15,11 +15,11 @@ services:
       - 7878:7878
     labels:
       traefik.enable: true
-      homepage.group: Media
-      homepage.name: Radarr
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Movie management
-      homepage.icon: radarr
+      homepage.instance.admin.group: Media
+      homepage.instance.admin.name: Radarr
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Movie management
+      homepage.instance.admin.icon: radarr
     networks:
       - servarr-internal
 

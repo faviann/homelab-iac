@@ -1,0 +1,8 @@
+---
+# Rendered from inventory so Homepage can autodiscover labeled services on all Docker hosts.
+
+{% for docker_host in groups['cap_docker'] | default([]) | sort %}
+{{ docker_host }}:
+  host: {{ hostvars[docker_host].proxmox_lxc_overrides.hostname | default(docker_host) }}.{{ lxc_dns_domain }}
+  port: {{ homepage_docker_proxy_port }}
+{% endfor %}
