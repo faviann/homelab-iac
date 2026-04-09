@@ -107,6 +107,7 @@ Traefik is configured with defaults that make most labels unnecessary:
 
 - **`websecure` is the default entrypoint** (`asDefault: true`) — never add `entrypoints=websecure`
 - **TLS is automatic** on all websecure routers via entrypoint-level certResolver — never add `tls=true`
+- **Auth is enforced by default** via `forwardAuth-authentik@file` set as a default middleware on websecure — never add a middleware label unless overriding
 - **Hostname is auto-generated** from the compose project name and `traefik.domain` — only add an explicit `rule=Host(...)` when you need a non-default hostname
 
 | Situation | Labels needed |
@@ -115,6 +116,7 @@ Traefik is configured with defaults that make most labels unnecessary:
 | Custom hostname | `traefik.enable=true` + `traefik.http.routers.<name>.rule=Host(...)` |
 | Different domain than host default | `traefik.enable=true` + `traefik.domain=<domain>` |
 | Ambiguous port (multiple exposed) | above + `traefik.http.services.<name>.loadbalancer.server.port=<port>` |
+| Public service (no auth) | above + `traefik.http.routers.<name>.middlewares=no-auth@file` |
 
 `traefik.domain` is only used by the defaultRule to build the auto-generated hostname. If you set an explicit `rule=Host(...)`, `traefik.domain` is ignored and can be omitted.
 

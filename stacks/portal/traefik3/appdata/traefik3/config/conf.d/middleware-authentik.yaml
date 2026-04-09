@@ -7,6 +7,9 @@
 ################################################################
 http:
     middlewares:
+        no-auth:
+            chain:
+                middlewares: []  # Empty chain — use on public services to bypass the default forwardAuth
         forwardAuth-authentik:
             forwardAuth:
                 address: http://auth.faviann.vms:9000/outpost.goauthentik.io/auth/traefik

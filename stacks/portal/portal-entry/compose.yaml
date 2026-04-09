@@ -10,7 +10,6 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.portal-entry.rule=Host(`faviann.com`)
-      - traefik.http.routers.portal-entry.middlewares=forwardAuth-authentik@file
 networks:
   proxy:
     external: true

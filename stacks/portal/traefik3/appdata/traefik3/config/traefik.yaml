@@ -52,6 +52,8 @@ entryPoints:
       maxConcurrentStreams: 250
     http3: {}
     http:
+      middlewares:
+        - forwardAuth-authentik@file  # Auth required by default; override with no-auth@file for public services
       tls:
         # Generate a wildcard domain certificate
         certResolver: cloudflare
