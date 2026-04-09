@@ -147,6 +147,20 @@ The `lxc_docker_environment` role creates these networks before starting any sta
 
 Set `default_domain` in each host's `host_vars`. The docker-agents `.env.j2` passes it to traefik-kop as `DOMAIN`.
 
+**When adding a new tier subdomain** (e.g. `dev.faviann.com`), also add a wildcard SAN to the Traefik cert config so TLS works for all services on that subdomain:
+
+```yaml
+# stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml
+domains:
+  - main: faviann.com
+    sans:
+      - "*.faviann.com"
+      - "*.admin.faviann.com"
+      - "*.dev.faviann.com"   # <-- add this
+```
+
+Without the SAN, services on the new subdomain will get a TLS certificate error.
+
 ### Review Checklist For New/Changed Stacks
 
 Use this list in reviews and before merging stack changes:
