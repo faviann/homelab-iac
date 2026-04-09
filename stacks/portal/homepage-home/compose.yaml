@@ -21,3 +21,4 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.homepage-home.rule=Host(`homepage.home.faviann.com`)
+      - traefik.http.routers.homepage-home.middlewares=forwardAuth-authentik@file

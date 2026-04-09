@@ -10,6 +10,7 @@ http:
       service: api@internal
       priority: 1000
       middlewares:
+        - forwardAuth-authentik
         - local-ip-restriction
 
     proxmox:
@@ -18,31 +19,28 @@ http:
       service: proxmoxve
       priority: 1000
       middlewares:
+        - forwardAuth-authentik
         - sslheader
         - local-ip-restriction
 
+    # Authentik itself must NOT go through forwardAuth — it is the auth server.
     authentik:
       rule: "Host(`auth.faviann.com`)"
       entryPoints: websecure
       service: authentik
       priority: 1000
       middlewares:
-        - no-auth
         - sslheader
 
     # Authentik outpost callback routers — one per tier domain + root.
-    # These intercept /outpost.goauthentik.io/* on each domain before any
-    # content router fires. Required for domain-level forward auth callbacks.
-
-    # Root domain: catch-all Authentik provider uses faviann.com as external_host.
-    # Must intercept before portal-entry Nginx redirect handles the request.
+    # These handle /outpost.goauthentik.io/* paths (auth callbacks) and must
+    # NOT have forwardAuth, otherwise the callback itself triggers a loop.
     authentik-outpost-root:
       rule: "Host(`faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
       entryPoints: websecure
       service: authentik
       priority: 1001
       middlewares:
-        - no-auth
         - sslheader
 
     authentik-outpost-admin:
@@ -51,7 +49,6 @@ http:
       service: authentik
       priority: 1001
       middlewares:
-        - no-auth
         - sslheader
 
     authentik-outpost-home:
@@ -60,7 +57,6 @@ http:
       service: authentik
       priority: 1001
       middlewares:
-        - no-auth
         - sslheader
 
     authentik-outpost-media:
@@ -69,7 +65,6 @@ http:
       service: authentik
       priority: 1001
       middlewares:
-        - no-auth
         - sslheader
 
     dockge:
@@ -78,6 +73,7 @@ http:
       service: dockge
       priority: 1000
       middlewares:
+        - forwardAuth-authentik
         - local-ip-restriction
 
   services:

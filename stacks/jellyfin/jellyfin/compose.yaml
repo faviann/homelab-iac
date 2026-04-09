@@ -17,6 +17,7 @@ services:
       - 8096:8096
     labels:
       - traefik.enable=true
+      - traefik.http.routers.jellyfin.middlewares=forwardAuth-authentik@file
       - homepage.group=Media
       - homepage.name=${COMPOSE_PROJECT_NAME}
       - homepage.icon=jellyfin

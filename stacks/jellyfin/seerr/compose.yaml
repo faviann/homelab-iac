@@ -16,6 +16,7 @@ services:
       - ./appdata/seerr/config:/app/config
     labels:
       - traefik.enable=true
+      - traefik.http.routers.seerr.middlewares=forwardAuth-authentik@file
       - homepage.group=Media
       - homepage.name=${COMPOSE_PROJECT_NAME}
       - homepage.icon=overseerr
