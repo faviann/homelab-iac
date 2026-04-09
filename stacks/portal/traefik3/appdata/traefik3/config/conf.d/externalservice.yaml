@@ -29,9 +29,21 @@ http:
       middlewares:
         - sslheader
 
-    # Authentik outpost callback routers — one per tier domain.
-    # These intercept /outpost.goauthentik.io/* on the tier base domains,
-    # which Authentik uses as callback URLs for domain-level forward auth.
+    # Authentik outpost callback routers — one per tier domain + root.
+    # These intercept /outpost.goauthentik.io/* on each domain before any
+    # content router fires. Required for domain-level forward auth callbacks.
+
+    # Root domain: catch-all Authentik provider uses faviann.com as external_host.
+    # Must intercept before portal-entry Nginx redirect handles the request.
+    authentik-outpost-root:
+      rule: "Host(`faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - no-auth
+        - sslheader
+
     authentik-outpost-admin:
       rule: "Host(`admin.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
       entryPoints: websecure
