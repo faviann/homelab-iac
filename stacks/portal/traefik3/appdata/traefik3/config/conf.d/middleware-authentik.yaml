@@ -14,6 +14,8 @@ http:
             forwardAuth:
                 address: http://auth.faviann.vms:9000/outpost.goauthentik.io/auth/traefik
                 trustForwardHeader: true
+                authRequestHeaders:
+                    - X-Forwarded-Proto
                 authResponseHeaders:
                     - X-authentik-username
                     - X-authentik-groups
