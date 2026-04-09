@@ -22,4 +22,3 @@ services:
       - traefik.enable=true
       - traefik.http.routers.homepage-editors.rule=Host(`home.faviann.com`)
       - traefik.http.routers.homepage-editors.middlewares=forwardAuth-authentik@file
-      - traefik.http.services.homepage-editors.loadbalancer.server.port=3000
