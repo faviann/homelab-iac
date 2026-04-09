@@ -16,6 +16,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
+      - traefik.http.routers.server-auth.middlewares=no-auth@file
   worker:
     environment:
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM}
