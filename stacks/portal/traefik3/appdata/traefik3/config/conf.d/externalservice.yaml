@@ -27,6 +27,7 @@ http:
       service: authentik
       priority: 1000
       middlewares:
+        - no-auth
         - sslheader
 
     # Authentik outpost callback routers — one per tier domain + root.
