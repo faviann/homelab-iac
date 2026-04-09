@@ -34,11 +34,20 @@ http:
         - forwardAuth-authentik
     
     authentik:
-      rule: "Host(`auth.faviann.com`)"  # <-- Change Rules here...
+      rule: "Host(`auth.faviann.com`)"
       entryPoints: websecure
-      service: authentik  # <-- Point to Service Name here...
+      service: authentik
       priority: 1000
       middlewares:
+        - sslheader
+
+    authentik-outpost-admin:
+      rule: "Host(`admin.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - no-auth
         - sslheader
 
     dockge:
