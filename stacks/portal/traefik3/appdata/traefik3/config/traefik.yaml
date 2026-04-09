@@ -52,8 +52,8 @@ entryPoints:
       maxConcurrentStreams: 250
     http3: {}
     http:
-      middlewares:
-        - forwardAuth-authentik@file
+      # middlewares:
+      #   - forwardAuth-authentik@file  # temporarily disabled — re-enable after Authentik passthrough setup
       tls:
         # Generate a wildcard domain certificate
         certResolver: cloudflare
