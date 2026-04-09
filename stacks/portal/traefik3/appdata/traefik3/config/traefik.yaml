@@ -58,17 +58,9 @@ entryPoints:
         # Generate a wildcard domain certificate
         certResolver: cloudflare
         domains:
-          - main: faviann.com # change this to your proxy domain
+          - main: faviann.com
             sans:
-              - "homepage.faviann.com" # change this to your proxy domain
-              - "auth.faviann.com" # change this to your proxy domain
-              - "bittorrent.faviann.com" # change this to your proxy domain
-              - "*.app.faviann.com" # change this to your proxy domain
-              - "*.media.faviann.com" # change this to your proxy domain
-              - "*.local.faviann.com" # change this to your proxy domain
-              - "*.admin.faviann.com" # change this to your proxy domain
-              - "*.dev.faviann.com" # change this to your proxy domain
-              - "*.public.faviann.com" # change this to your proxy domain
+              - "*.faviann.com"
 #          - main: example2.com # change this to your proxy domain
 #            sans:
 #              - '*.example2.com' # change this to your proxy domain  
