@@ -20,9 +20,6 @@ services:
       - proxy
     labels:
       - traefik.enable=true
-      - traefik.domain=faviann.com
       - traefik.http.routers.homepage-media.rule=Host(`media.faviann.com`)
-      - traefik.http.routers.homepage-media.entrypoints=websecure
-      - traefik.http.routers.homepage-media.tls=true
       - traefik.http.routers.homepage-media.middlewares=forwardAuth-authentik@file
       - traefik.http.services.homepage-media.loadbalancer.server.port=3000

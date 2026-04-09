@@ -101,6 +101,23 @@ So a stack in `stacks/seedbox/bittorrent/` on host `seedbox` (`default_domain=ad
 
 Use `traefik.domain` only when a single service needs a different domain than the host default.
 
+### Traefik Label Reference
+
+Traefik is configured with defaults that make most labels unnecessary:
+
+- **`websecure` is the default entrypoint** (`asDefault: true`) — never add `entrypoints=websecure`
+- **TLS is automatic** on all websecure routers via entrypoint-level certResolver — never add `tls=true`
+- **Hostname is auto-generated** from the compose project name and `traefik.domain` — only add an explicit `rule=Host(...)` when you need a non-default hostname
+
+| Situation | Labels needed |
+|-----------|--------------|
+| Standard service, default hostname | `traefik.enable=true` |
+| Custom hostname | `traefik.enable=true` + `traefik.http.routers.<name>.rule=Host(...)` |
+| Different domain than host default | `traefik.enable=true` + `traefik.domain=<domain>` |
+| Ambiguous port (multiple exposed) | above + `traefik.http.services.<name>.loadbalancer.server.port=<port>` |
+
+`traefik.domain` is only used by the defaultRule to build the auto-generated hostname. If you set an explicit `rule=Host(...)`, `traefik.domain` is ignored and can be omitted.
+
 ### Services That Should Usually Stay Unlabeled
 
 Do not add Traefik labels by default to:
