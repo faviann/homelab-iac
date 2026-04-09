@@ -9,13 +9,11 @@ http:
     middlewares:
         no-auth:
             chain:
-                middlewares: []  # Empty chain — use on public services to bypass the default forwardAuth
+                middlewares: []  # Only bypasses router-level chains; it does not bypass entrypoint-level forwardAuth in Traefik v3.
         forwardAuth-authentik:
             forwardAuth:
                 address: http://auth.faviann.vms:9000/outpost.goauthentik.io/auth/traefik
                 trustForwardHeader: true
-                authRequestHeaders:
-                    - X-Forwarded-Proto
                 authResponseHeaders:
                     - X-authentik-username
                     - X-authentik-groups

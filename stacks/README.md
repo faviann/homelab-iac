@@ -107,7 +107,7 @@ Traefik is configured with defaults that make most labels unnecessary:
 
 - **`websecure` is the default entrypoint** (`asDefault: true`) — never add `entrypoints=websecure`
 - **TLS is automatic** on all websecure routers via entrypoint-level certResolver — never add `tls=true`
-- **Auth is enforced by default** via `forwardAuth-authentik@file` on the websecure entrypoint — every service is auth-protected without any extra labels. Exceptions (`auth.faviann.com`, outpost callbacks) are handled via Authentik-side passthrough policies, not Traefik config.
+- **Auth is enforced by default** via `forwardAuth-authentik@file` on the websecure entrypoint — every service is auth-protected without any extra labels. Pre-login exceptions (`auth.faviann.com`, `/outpost.goauthentik.io/*`) must be allowlisted in the matching Authentik provider's `Unauthenticated URLs / Paths`; router-level empty chains do not bypass the entrypoint middleware.
 - **Hostname is auto-generated** from the compose project name and `traefik.domain` — only add an explicit `rule=Host(...)` when you need a non-default hostname
 
 | Situation | Labels needed |
@@ -316,12 +316,17 @@ A domain-wide **`Faviann Domain`** Proxy Provider in Authentik covers `faviann.c
 
 For **group-based access restriction** (e.g., admin-only services), a dedicated Proxy Provider + Application with group bindings must be created and added to the outpost. The individual provider for that hostname takes precedence over the catch-all.
 
+For the admin tier on this installation, exact-host providers are required for `*.admin.faviann.com` applications. The embedded outpost did not preserve callback state correctly with a shared `forward_domain` admin provider, so each admin subdomain now uses its own `forward_single` provider. The root `admin.faviann.com` homepage also uses `forward_single`.
+
+When using entrypoint-level forwardAuth in Traefik, any URL that must remain reachable before login must be allowlisted in the matching provider's `Unauthenticated URLs / Paths`. In this repo that includes the full `https://auth.faviann.com/...` host and each routed `https://<domain>/outpost.goauthentik.io/...` path. Expression policies still apply after authentication; they do not replace the unauthenticated allowlist.
+
 | Need | Authentik action required |
 |------|--------------------------|
-| Require login only | None — catch-all handles it |
+| Require login only | None — catch-all handles it, except for current `*.admin.faviann.com` hosts |
+| Require login only on `*.admin.faviann.com` | Sync an exact-host `forward_single` provider for that admin app |
 | Restrict to specific group(s) | Create Proxy Provider + Application, bind groups, add to outpost |
 
-Current per-app providers: `homepage-admin` (`admin.faviann.com`), `homepage-editors` (`home.faviann.com`), `homepage-media` (`media.faviann.com`).
+Current non-catch-all providers: `admin-proxy-provider` (`admin.faviann.com`), exact-host admin providers synced by `scripts/authentik_sync_admin_forwardauth_providers.py`, `homepage-editors` (`home.faviann.com`), and `homepage-media` (`media.faviann.com`).
 
 ---
 
