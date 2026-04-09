@@ -3,8 +3,6 @@ global:
   checkNewVersion: false
   sendAnonymousUsage: false
 
-core:
-  defaultRuleSyntax: v3
 # --> (Optional) Change log level and format here ...
 #     - level: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL]
 log:
