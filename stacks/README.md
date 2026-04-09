@@ -54,6 +54,7 @@ stacks/
 2. Optionally add `.env` or `.env.j2` for environment variables.
 3. Add `appdata/` subdirectories if the stack needs persistent volume mounts.
 4. Run `ansible-playbook site.yml --limit <hostname>` to deploy.
+5. Decide authentication level: if any logged-in user should access it, no Authentik action needed (catch-all covers it). If group-restricted, create a Proxy Provider + Application in Authentik, bind the required groups, and add to the outpost.
 
 The role discovers all files under `stacks/<hostname>/` automatically — no registration needed.
 
@@ -156,6 +157,8 @@ Use this list in reviews and before merging stack changes:
 4. Expected hostname follows `<stack-name>.<default_domain>` unless `traefik.domain` override is set.
 5. `proxy` external network is used only for portal-hosted routed services.
 6. No accidental public routes were introduced.
+7. Authentication intent is explicit: catch-all (login only) vs. per-app provider (group restriction) — see Authentik Integration section.
+8. Homepage labels match the correct access tier — see Homepage Labels section for tier/label mapping.
 
 ---
 
@@ -271,6 +274,21 @@ And in `.env.j2` for that same stack:
 ```jinja2
 HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 ```
+
+---
+
+## Authentik Integration
+
+A domain-wide **`Faviann Domain`** Proxy Provider in Authentik covers `faviann.com` and all subdomains. Any service behind `forwardAuth-authentik@file` middleware gets authentication enforced automatically — no individual Authentik app registration needed just to require login.
+
+For **group-based access restriction** (e.g., admin-only services), a dedicated Proxy Provider + Application with group bindings must be created and added to the outpost. The individual provider for that hostname takes precedence over the catch-all.
+
+| Need | Authentik action required |
+|------|--------------------------|
+| Require login only | None — catch-all handles it |
+| Restrict to specific group(s) | Create Proxy Provider + Application, bind groups, add to outpost |
+
+Current per-app providers: `homepage-admin` (`admin.faviann.com`), `homepage-editors` (`home.faviann.com`), `homepage-media` (`media.faviann.com`).
 
 ---
 

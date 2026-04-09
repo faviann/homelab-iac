@@ -1,0 +1,19 @@
+services:
+  portal-entry:
+    image: nginx:alpine
+    container_name: portal-entry
+    restart: unless-stopped
+    volumes:
+      - ./appdata/nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.portal-entry.rule=Host(`faviann.com`)
+      - traefik.http.routers.portal-entry.entrypoints=websecure
+      - traefik.http.routers.portal-entry.tls=true
+      - traefik.http.routers.portal-entry.middlewares=forwardAuth-authentik@file
+      - traefik.http.services.portal-entry.loadbalancer.server.port=80
+networks:
+  proxy:
+    external: true
