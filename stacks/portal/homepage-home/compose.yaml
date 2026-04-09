@@ -4,9 +4,9 @@ networks:
     external: true
 
 services:
-  homepage-editors:
+  homepage-home:
     image: ghcr.io/gethomepage/homepage:latest
-    container_name: homepage-editors
+    container_name: homepage-home
     ports:
       - 3002:3000
     volumes:
@@ -14,10 +14,10 @@ services:
     environment:
       - PUID=$PUID
       - PGID=$PGID
-      - HOMEPAGE_INSTANCE_NAME=editors
-      - HOMEPAGE_ALLOWED_HOSTS=localhost:3002,127.0.0.1:3002,[::1]:3002,portal.faviann.vms:3002,home.faviann.com
+      - HOMEPAGE_INSTANCE_NAME=home
+      - HOMEPAGE_ALLOWED_HOSTS=localhost:3002,127.0.0.1:3002,[::1]:3002,portal.faviann.vms:3002,homepage.home.faviann.com
     networks:
       - proxy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.homepage-editors.rule=Host(`home.faviann.com`)
+      - traefik.http.routers.homepage-home.rule=Host(`homepage.home.faviann.com`)

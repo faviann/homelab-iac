@@ -1,38 +1,26 @@
 ---
 http:
-  # -- Change Router Configuration here...
   routers:
-
 
 # --- SPECIFIC ROUTERS ---
 
     traefik:
       rule: "Host(`traefik.local.faviann.com`)"
       entryPoints: websecure
-      service: api@internal  # <-- Point to Service Name here...
+      service: api@internal
       priority: 1000
       middlewares:
         - local-ip-restriction
-        - forwardAuth-authentik
-        
+
     proxmox:
       rule: "Host(`proxmox.local.faviann.com`)"
       entryPoints: websecure
-      service: proxmoxve  # <-- Point to Service Name here...
+      service: proxmoxve
       priority: 1000
       middlewares:
-        - sslheader  # Apply custom header middleware
+        - sslheader
         - local-ip-restriction
 
-    # TODO REMOVE THIS
-    torrent:
-      rule: "Host(`bittorrent.faviann.com`)"  # <-- Change Rules here...
-      entryPoints: websecure
-      service: torrent  # <-- Point to Service Name here...
-      priority: 1000
-      middlewares:
-        - forwardAuth-authentik
-    
     authentik:
       rule: "Host(`auth.faviann.com`)"
       entryPoints: websecure
@@ -41,8 +29,29 @@ http:
       middlewares:
         - sslheader
 
+    # Authentik outpost callback routers — one per tier domain.
+    # These intercept /outpost.goauthentik.io/* on the tier base domains,
+    # which Authentik uses as callback URLs for domain-level forward auth.
     authentik-outpost-admin:
       rule: "Host(`admin.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - no-auth
+        - sslheader
+
+    authentik-outpost-home:
+      rule: "Host(`home.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - no-auth
+        - sslheader
+
+    authentik-outpost-media:
+      rule: "Host(`media.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
       entryPoints: websecure
       service: authentik
       priority: 1001
@@ -53,38 +62,33 @@ http:
     dockge:
       rule: "Host(`dockge.local.faviann.com`)"
       entryPoints: websecure
-      service: dockge  # <-- Point to Service Name here...
+      service: dockge
       priority: 1000
       middlewares:
         - local-ip-restriction
 
-  ## -- Change Service Configuration here...
   services:
-    proxmoxve:  # <-- Change Service Name here...
+    proxmoxve:
       loadBalancer:
         servers:
-          - url: "https://proxmox.lan:8006"  # <-- Change Target Service URL here...
-    torrent:  # <-- Change Service Name here...
+          - url: "https://proxmox.lan:8006"
+    authentik:
       loadBalancer:
         servers:
-          - url: "http://seedbox.faviann.vms:8181"  # <-- Change Target Service URL here...
-    authentik:  # <-- Change Service Name here...
+          - url: "http://auth.faviann.vms:9000"
+    dockge:
       loadBalancer:
         servers:
-          - url: "http://auth.faviann.vms:9000"  # <-- Change Target Service URL here...
-    dockge:  # <-- Change Service Name here...
-      loadBalancer:
-        servers:
-          - url: "http://frontend.faviann.vms:5001"  # <-- Change Target Service URL here...
+          - url: "http://frontend.faviann.vms:5001"
     noop:
       loadBalancer:
         servers: []
-        
+
   middlewares:
     sslheader:
       headers:
         customRequestHeaders:
-          X-Forwarded-Proto: "https"  # Adds the X-Forwarded-Proto header with value 'https'
+          X-Forwarded-Proto: "https"
     local-ip-restriction:
       IPAllowList:
         sourceRange:
