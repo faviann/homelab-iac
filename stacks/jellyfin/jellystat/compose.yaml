@@ -29,7 +29,6 @@ services:
       - 3000:3000
     labels:
       - traefik.enable=true
-      - traefik.http.routers.jellystat.middlewares=forwardAuth-authentik@file
       - homepage.instance.admin.group=Media
       - homepage.instance.admin.name=${COMPOSE_PROJECT_NAME}
       - homepage.instance.admin.icon=mdi-chart-line

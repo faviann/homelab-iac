@@ -10,7 +10,6 @@ http:
       service: api@internal
       priority: 1000
       middlewares:
-        - forwardAuth-authentik
         - local-ip-restriction
 
     proxmox:
@@ -19,11 +18,12 @@ http:
       service: proxmoxve
       priority: 1000
       middlewares:
-        - forwardAuth-authentik
         - sslheader
         - local-ip-restriction
 
-    # Authentik itself must NOT go through forwardAuth — it is the auth server.
+    # Authentik itself is excluded from forwardAuth via an Authentik-side passthrough
+    # provider (expression policy: return True) — forwardAuth cannot protect its own
+    # auth server without a circular dependency.
     authentik:
       rule: "Host(`auth.faviann.com`)"
       entryPoints: websecure
@@ -33,8 +33,8 @@ http:
         - sslheader
 
     # Authentik outpost callback routers — one per tier domain + root.
-    # These handle /outpost.goauthentik.io/* paths (auth callbacks) and must
-    # NOT have forwardAuth, otherwise the callback itself triggers a loop.
+    # These handle /outpost.goauthentik.io/* paths; the outpost returns 200
+    # for its own paths in the forwardAuth check, so no loop occurs.
     authentik-outpost-root:
       rule: "Host(`faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
       entryPoints: websecure
@@ -73,7 +73,6 @@ http:
       service: dockge
       priority: 1000
       middlewares:
-        - forwardAuth-authentik
         - local-ip-restriction
 
   services:

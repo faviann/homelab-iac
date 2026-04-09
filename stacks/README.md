@@ -107,16 +107,16 @@ Traefik is configured with defaults that make most labels unnecessary:
 
 - **`websecure` is the default entrypoint** (`asDefault: true`) — never add `entrypoints=websecure`
 - **TLS is automatic** on all websecure routers via entrypoint-level certResolver — never add `tls=true`
-- **Auth must be added explicitly** via `forwardAuth-authentik@file` on each router — Traefik v3 entrypoint-level default middlewares cannot be bypassed per-router, so auth is opt-in per service rather than a global default
+- **Auth is enforced by default** via `forwardAuth-authentik@file` on the websecure entrypoint — every service is auth-protected without any extra labels. Exceptions (`auth.faviann.com`, outpost callbacks) are handled via Authentik-side passthrough policies, not Traefik config.
 - **Hostname is auto-generated** from the compose project name and `traefik.domain` — only add an explicit `rule=Host(...)` when you need a non-default hostname
 
 | Situation | Labels needed |
 |-----------|--------------|
-| Standard protected service | `traefik.enable=true` + `traefik.http.routers.<name>.middlewares=forwardAuth-authentik@file` |
-| Custom hostname | above + `traefik.http.routers.<name>.rule=Host(...)` |
-| Different domain than host default | above + `traefik.domain=<domain>` |
+| Standard service, default hostname | `traefik.enable=true` |
+| Custom hostname | `traefik.enable=true` + `traefik.http.routers.<name>.rule=Host(...)` |
+| Different domain than host default | `traefik.enable=true` + `traefik.domain=<domain>` |
 | Ambiguous port (multiple exposed) | above + `traefik.http.services.<name>.loadbalancer.server.port=<port>` |
-| Public service (no auth) | `traefik.enable=true` only — omit the middleware label |
+| Public service (no auth) | Not yet implemented — add a `*.public.faviann.com` tier with a passthrough Authentik provider |
 
 `traefik.domain` is only used by the defaultRule to build the auto-generated hostname. If you set an explicit `rule=Host(...)`, `traefik.domain` is ignored and can be omitted.
 
@@ -190,7 +190,7 @@ Use this list in reviews and before merging stack changes:
 4. Expected hostname follows `<stack-name>.<default_domain>` unless `traefik.domain` override is set.
 5. `proxy` external network is used only for portal-hosted routed services.
 6. No accidental public routes were introduced.
-7. `forwardAuth-authentik@file` middleware is present on all routers that should require auth — it is **not** automatic.
+7. No accidental public routes — `traefik.enable=true` alone is sufficient and automatically auth-protected.
 8. Homepage labels match the correct access tier — see Homepage Labels section for tier/label mapping.
 
 ---
