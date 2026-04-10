@@ -116,7 +116,7 @@ Traefik is configured with defaults that make most labels unnecessary:
 | Custom hostname | `traefik.enable=true` + `traefik.http.routers.<name>.rule=Host(...)` |
 | Different domain than host default | `traefik.enable=true` + `traefik.domain=<domain>` |
 | Ambiguous port (multiple exposed) | above + `traefik.http.services.<name>.loadbalancer.server.port=<port>` |
-| Public service (no auth) | Not yet implemented — add a `*.public.faviann.com` tier with a passthrough Authentik provider |
+| Public self-auth service | `traefik.enable=true` on a host using `public.faviann.com`, plus the shared `public-wildcard-forwardauth` provider and public outpost routers |
 
 `traefik.domain` is only used by the defaultRule to build the auto-generated hostname. If you set an explicit `rule=Host(...)`, `traefik.domain` is ignored and can be omitted.
 
@@ -316,17 +316,19 @@ A domain-wide **`Faviann Domain`** Proxy Provider in Authentik covers `faviann.c
 
 For **group-based access restriction** (e.g., admin-only services), a dedicated Proxy Provider + Application with group bindings must be created and added to the outpost. The individual provider for that hostname takes precedence over the catch-all.
 
-For the admin tier on this installation, exact-host providers are required for `*.admin.faviann.com` applications. The embedded outpost did not preserve callback state correctly with a shared `forward_domain` admin provider, so each admin subdomain now uses its own `forward_single` provider. The root `admin.faviann.com` homepage also uses `forward_single`.
+For the admin tier on this installation, one shared `forward_domain` provider now covers `admin.faviann.com` and `*.admin.faviann.com`. The embedded outpost only started preserving callback state correctly after Authentik's global `AUTHENTIK_COOKIE_DOMAIN` was set to `.faviann.com`, so the admin tier now stays on `admin-wildcard-forwardauth` and the retired exact-host providers have been removed.
+
+For self-auth services that must bypass Traefik login entirely, use the public tier. In practice that means setting the host default domain to `public.faviann.com`, adding the `public` and wildcard public outpost routers on `portal`, and creating a shared `public-wildcard-forwardauth` provider in `forward_domain` mode for `https://public.faviann.com` with a full-URL allowlist such as `^https://([a-z0-9-]+\.)?public\.faviann\.com/.*$`. This Authentik step is still manual.
 
 When using entrypoint-level forwardAuth in Traefik, any URL that must remain reachable before login must be allowlisted in the matching provider's `Unauthenticated URLs / Paths`. In this repo that includes the full `https://auth.faviann.com/...` host and each routed `https://<domain>/outpost.goauthentik.io/...` path. Expression policies still apply after authentication; they do not replace the unauthenticated allowlist.
 
 | Need | Authentik action required |
 |------|--------------------------|
-| Require login only | None — catch-all handles it, except for current `*.admin.faviann.com` hosts |
-| Require login only on `*.admin.faviann.com` | Sync an exact-host `forward_single` provider for that admin app |
+| Require login only | None — catch-all handles it, except for the shared admin tier |
+| Require login only on `*.admin.faviann.com` | Keep `admin-wildcard-forwardauth` synced and routed through the shared admin callback |
 | Restrict to specific group(s) | Create Proxy Provider + Application, bind groups, add to outpost |
 
-Current non-catch-all providers: `admin-proxy-provider` (`admin.faviann.com`), exact-host admin providers synced by `scripts/authentik_sync_admin_forwardauth_providers.py`, `homepage-editors` (`home.faviann.com`), and `homepage-media` (`media.faviann.com`).
+Current non-catch-all providers: `admin-wildcard-forwardauth` (`admin.faviann.com`), `home-wildcard-forwardauth` (`home.faviann.com` and `*.home.faviann.com`), and `homepage-media` (`media.faviann.com`).
 
 ---
 

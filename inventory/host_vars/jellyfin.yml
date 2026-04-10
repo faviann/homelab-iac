@@ -3,7 +3,7 @@
 # Inherits from: tier_large, cap_docker, cap_gpu
 
 lxc_hwaddr: "BC:24:11:A1:82:92"
-default_domain: media.faviann.com
+default_domain: public.faviann.com
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:

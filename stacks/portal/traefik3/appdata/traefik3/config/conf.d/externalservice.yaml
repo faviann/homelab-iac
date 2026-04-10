@@ -68,8 +68,40 @@ http:
       middlewares:
         - sslheader
 
+    authentik-outpost-home-subdomains:
+      rule: "HostRegexp(`^[a-z0-9-]+\\.home\\.faviann\\.com$`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - sslheader
+
     authentik-outpost-media:
       rule: "Host(`media.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - sslheader
+
+    authentik-outpost-media-subdomains:
+      rule: "HostRegexp(`^[a-z0-9-]+\\.media\\.faviann\\.com$`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - sslheader
+
+    authentik-outpost-public:
+      rule: "Host(`public.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - sslheader
+
+    authentik-outpost-public-subdomains:
+      rule: "HostRegexp(`^[a-z0-9-]+\\.public\\.faviann\\.com$`) && PathPrefix(`/outpost.goauthentik.io`)"
       entryPoints: websecure
       service: authentik
       priority: 1001

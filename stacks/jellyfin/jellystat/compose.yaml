@@ -29,10 +29,10 @@ services:
       - 3000:3000
     labels:
       - traefik.enable=true
-      - homepage.instance.admin.group=Media
-      - homepage.instance.admin.name=${COMPOSE_PROJECT_NAME}
-      - homepage.instance.admin.icon=mdi-chart-line
-      - homepage.instance.admin.href=https://${HOMEPAGE_FQDN}
-      - homepage.instance.admin.description=Jellyfin analytics
+      - homepage.group=Media
+      - homepage.name=${COMPOSE_PROJECT_NAME}
+      - homepage.icon=mdi-chart-line
+      - homepage.href=https://${HOMEPAGE_FQDN}
+      - homepage.description=Jellyfin analytics
     depends_on:
       - jellystat-db

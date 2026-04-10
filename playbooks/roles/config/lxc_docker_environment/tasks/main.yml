@@ -236,6 +236,72 @@
   become: false
   when: _per_host_stacks_dir.stat.exists | default(false)
 
+- name: Find top-level directories in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_stacks_source }}"
+    recurse: false
+    file_type: directory
+  register: _per_host_top_level_dirs
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find deployed top-level stack directories
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_shared_mount_source }}/stacks"
+    recurse: false
+    file_type: directory
+  register: _deployed_top_level_stack_dirs
+
+- name: Build list of desired top-level stack directories
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: >-
+      {%- set desired = [] -%}
+      {%- for directory in _per_host_top_level_dirs.files | default([]) -%}
+      {%- set _ = desired.append(directory.path | basename) -%}
+      {%- endfor -%}
+      {%- set _ = desired.append('docker-agents') -%}
+      {%- if service_agents_enabled | default(false) -%}
+      {%- set _ = desired.append('admin') -%}
+      {%- endif -%}
+      {{ desired | unique }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Ensure stale stack quarantine directory exists
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_stale_stack_quarantine_root }}"
+    state: directory
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0755'
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Stop stale deployed top-level stack projects
+  ansible.builtin.command:
+    cmd: docker compose down --remove-orphans
+    chdir: "{{ item.path }}"
+  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  failed_when: false
+  changed_when: false
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (item.path | basename) not in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
+
+- name: Quarantine stale deployed top-level stack directories
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ item.path }}"
+      - "{{ lxc_docker_env_stale_stack_quarantine_root }}/{{ item.path | basename }}-{{ ansible_date_time.iso8601_basic_short }}"
+  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (item.path | basename) not in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
+
 - name: Build list of templated per-host output files
   ansible.builtin.set_fact:
     lxc_docker_env_templated_outputs: >-
