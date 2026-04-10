@@ -4,17 +4,13 @@
 **Purpose**: Automate Proxmox LXC provisioning, configuration, and service deployments  
 **Architecture**: Portable workstation-based (runs from any Linux workstation with network access to Proxmox)
 
-## Non-negotiables
-- Run Ansible from your Linux workstation (portable setup, no dedicated controller needed).
-- Ensure you have network access to Proxmox API (typically `proxmox.lan:8006`).
-- Never request, paste, or print secrets (API token secret, vault passphrase, private keys).
-- Always run `git pull` before executing ansible commands.
+## Project Philosophy
 
-## Workstation Requirements
-- **OS**: Linux (Debian/Ubuntu recommended)
-- **Python**: 3.10+ with venv support
-- **Network**: Access to Proxmox API and managed LXC containers
-- **Packages**: `python3-venv`, `python3-pip`, `sshpass` (installed via setup.sh)
+**Code is a liability, not an asset.** When two approaches exist, recommend the one with less code and fewer objects.
+
+## Non-negotiables
+- Never request, paste, or print secrets (API token secret, vault passphrase, private keys).
+- Activate the venv before running any ansible command: `source .ansible/venv/bin/activate` (create with `ansible-playbook bootstrap.yml` if missing).
 
 ## Standard Paths
 
@@ -53,24 +49,9 @@ Variables merge in this order (later overrides earlier):
 
 ## Deployment Lifecycle
 
-`site.yml` orchestrates three sequential phases:
+`site.yml` runs three phases in sequence: **validate** → **provision** (LXC create/update via Proxmox API) → **configure** (in-container: packages, Docker, stacks). Two-tier host config: `proxmox_lxc_provision` handles API-allowed settings; `proxmox_lxc_host_config` handles restricted features (`keyctl=1`, `nesting=1`) via `pct` on the Proxmox host.
 
-1. **Validate** (`playbooks/validate-infrastructure.yml`) — Assert bootstrap prerequisites, Proxmox SSH access, API connectivity
-2. **Provision** (`playbooks/provision-lxcs.yml`) — Build LXC spec from tier+capability vars, create/update containers via API, apply host-side config, inject SSH keys
-3. **Configure** (`playbooks/configure-lxcs.yml`) — In-container: system packages, Docker runtime, NVIDIA runtime (if `gpu_enabled`), deploy Docker stacks
-
-## Role Organization
-
-Roles live in `playbooks/roles/` organized by function:
-
-| Directory | Purpose | Key Roles |
-|-----------|---------|-----------|
-| `roles/base/` | Foundation | `control_node_bootstrap` (venv, SSH keys, collections) |
-| `roles/infrastructure/` | Proxmox/host mgmt | `proxmox_host_bootstrap`, `proxmox_lxc_provision`, `proxmox_lxc_host_config`, `lxc_ssh_key_injector` |
-| `roles/provisioning/` | LXC spec building | `lxc_spec_builder` (merges tier + capability + host vars) |
-| `roles/config/` | In-container setup | `lxc_base_system`, `lxc_logging_config`, `lxc_docker_runtime`, `lxc_docker_environment`, `lxc_nvidia_runtime` |
-
-**Two-tier host config**: `proxmox_lxc_provision` handles API-allowed settings; `proxmox_lxc_host_config` handles restricted features (e.g., `keyctl=1`, `nesting=1`) via `pct` commands on the Proxmox host.
+Roles live in `playbooks/roles/{base,infrastructure,provisioning,config}/`.
 
 ## Docker Stacks
 
@@ -80,63 +61,29 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Files ending in `.
 
 ## Command Reference
 
-| Command | Purpose | When to Use |
-|---------|---------|-------------|
-| `./setup.sh` | Complete initial setup | First-time workstation setup |
-| `./configure-vault.sh` | Update Proxmox credentials | Change API tokens or credentials |
-| `ansible-playbook bootstrap.yml` | Setup controller environment | After clean install or venv issues |
-| `ansible-playbook playbooks/validate-credentials.yml` | Test API credentials | Verify credentials work |
-| `ansible-playbook site.yml` | Full lifecycle (all phases) | Deploy/update all LXCs |
-| `ansible-playbook site.yml --tags validation` | API connectivity only | Pre-flight check |
-| `ansible-playbook site.yml --limit jellyfin` | Target specific host(s) | Test changes on one LXC |
-| `ansible-playbook site.yml --check` | Dry run (no changes) | Preview what would change |
-| `ansible-playbook site.yml -vvv` | Verbose debug output | Troubleshoot failures |
-| `ansible-playbook playbooks/validate-infrastructure.yml` | Validation only | Pre-flight check |
-| `ansible-playbook playbooks/provision-lxcs.yml` | Provision only | Create/update containers |
-| `ansible-playbook playbooks/configure-lxcs.yml` | Configure only | In-container setup |
-| `ansible -i inventory/hosts.yml lxcs -m ping` | Test connectivity | Verify SSH access |
-| `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` | Show merged vars | Debug variable precedence |
-| `ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml` | Manually add SSH keys | Only if site.yml SSH step fails |
-
-### Venv guard (idempotent one-liner for agents)
-
-Use this at the start of any Ansible session to automatically activate or create the venv. It's **safe to run repeatedly** and prevents "ansible: command not found" errors:
-
-```bash
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$PWD}")" && pwd)"
-if [ -x "$PROJECT_ROOT/.ansible/venv/bin/ansible" ]; then
-	. "$PROJECT_ROOT/.ansible/venv/bin/activate"
-else
-	cd "$PROJECT_ROOT"
-	python3 -m venv ".ansible/venv"
-	. ".ansible/venv/bin/activate"
-	python3 -m pip install --upgrade pip
-	pip install ansible
-	pip install -r "requirements/pip.txt"
-fi
-ansible --version
-```
+| Command | Purpose |
+|---------|---------|
+| `ansible-playbook site.yml` | Full lifecycle — deploy/update all LXCs |
+| `ansible-playbook site.yml --limit <host>` | Target one host |
+| `ansible-playbook site.yml --check` | Dry run |
+| `ansible-playbook site.yml -vvv` | Verbose debug |
+| `ansible -i inventory/hosts.yml lxcs -m ping` | Test SSH connectivity |
+| `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` | Show merged vars (debug precedence) |
+| `ansible-playbook bootstrap.yml` | Recreate venv + SSH keys after clean install |
+| `./configure-vault.sh` | Update Proxmox credentials |
 
 ## Troubleshooting
 
-- **`ansible: command not found`**: Run `source .ansible/venv/bin/activate`
-- **Venv missing**: Run `ansible-playbook bootstrap.yml` from project root
-- **Permission denied (vault)**: Check `.ansible/vault-pass.txt` exists in project directory
-- **SSH fails after injection**: Verify key via `pct exec <vmid> -- cat /root/.ssh/authorized_keys`
-- **API 403 (restricted features)**: Requires `root@pam` token or pct delegation — see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md)
-- **Variable not applied**: Debug with `ansible-inventory -i inventory/hosts.yml --host <name> --yaml`
+- **`ansible: command not found`**: `source .ansible/venv/bin/activate`
+- **API 403 (restricted features)**: Requires `root@pam` token — see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md)
+- **Variable not applied**: `ansible-inventory -i inventory/hosts.yml --host <name> --yaml`
 - **Stale facts**: Delete `.ansible/cache/`
-- **Feature not enabled**: Check capability group_vars sets feature flag (e.g., `docker_enabled: true` in `cap_docker/vars.yml`)
 
 ## Role Design Principles
 
-- One role = one concern (separated by subdirectory: base/, infrastructure/, provisioning/, config/)
+- One role = one concern; use `meta/main.yml` for dependencies
 - Use feature flags (`docker_enabled`) not group checks (`'cap_docker' in group_names`)
-- Declare dependencies in `meta/main.yml`; roles can compose other roles
-- Centralize delegation with `proxmox_delegate_host` variable
-- Keep roles independently testable and reusable
-- Avoid hardcoded hostnames/paths/credentials; inject via vars
-- Ensure idempotency; use `assert` to fail fast on missing inputs
+- Avoid hardcoded values; inject via vars. Ensure idempotency; use `assert` to fail fast
 
 ## Security Rules
 
