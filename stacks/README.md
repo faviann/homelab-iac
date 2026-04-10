@@ -1,549 +1,280 @@
 # Per-Host Docker Compose Stacks
 
-This directory contains Docker Compose stacks organized by LXC hostname.
-Ansible deploys each host's stacks to `/conf/docker/stacks/` on the target container.
+This directory defines repo-managed Docker Compose stacks, grouped by `inventory_hostname`. The role deploys `stacks/<host>/` to `/conf/docker/stacks/` inside the target container and starts every discovered `compose.yml` / `compose.yaml`.
 
-## Directory Structure
+Manual Dockge stacks are separate and are not managed here.
 
-```
+## Stack Contract
+
+```text
 stacks/
-├── portal/
-│   ├── homepage-media/           # Homepage for media tier (media.faviann.com)
-│   │   ├── compose.yaml
-│   │   ├── .env
-│   │   └── appdata/homepage/config/
-│   │       └── docker.yaml.j2    # Templated Homepage config
-│   ├── homepage-editors/         # Homepage for editors tier (home.faviann.com)
-│   │   ├── compose.yaml
-│   │   ├── .env
-│   │   └── appdata/homepage/config/
-│   ├── homepage-admin/           # Homepage for admin tier (admin.faviann.com)
-│   │   ├── compose.yaml
-│   │   ├── .env
-│   │   └── appdata/homepage/config/
-│   └── traefik3/
-│       ├── compose.yaml
-│       ├── .env
-│       ├── secrets/
-│       └── appdata/traefik3/
-├── seedbox/
-│   ├── bittorrent/
-│   │   ├── compose.yaml
-│   │   ├── .env.j2              # Templated env (rendered with inventory vars)
-│   │   └── appdata/
-│   └── sabnzbd/
-│       ├── compose.yaml
-│       └── .env
-└── README.md
+  <inventory_hostname>/
+    <stack_name>/
+      compose.yaml
+      .env | .env.j2
+      appdata/
 ```
 
-## Conventions
+- Host folder must match `inventory_hostname`.
+- Stack folder name becomes the Compose project name. During `.j2` rendering, the role also injects `stack_name`.
+- `.j2` files are rendered with inventory, host, group, and vault variables, then deployed without the `.j2` suffix.
+- Other files are copied verbatim.
+- Compose-relative persistent data should live under `./appdata/...`.
+- Pre-create any `./appdata/...` directories referenced by bind mounts. If they do not exist, Docker will create them on first start with the wrong ownership.
+- Use `.gitkeep` for empty directories that must exist in git.
+- If both `.env` and `.env.j2` exist for the same output path, the templated output wins.
+- Hosts with no folder here are valid; they just get no repo-managed stacks.
 
-- **One folder per host**: The folder name must match the `inventory_hostname`.
-- **One subfolder per stack**: Each stack gets its own directory with a `compose.yaml` (or `compose.yml`).
-- **Templating**: Files ending in `.j2` are rendered via Jinja2 (the `.j2` suffix is stripped on deploy). All inventory variables, host_vars, group_vars, and vault vars are available.
-- **Static files**: All other files are copied verbatim.
-- **Hybrid-safe**: Stacks created manually via Dockge are never touched by Ansible. Only stacks defined here are managed.
-- **Auto-started**: Every deployed `compose.yaml` is automatically started with `docker compose up -d`.
-- **Appdata**: Persistent data volumes use `./appdata/<service>/` relative to the compose file. Use `.gitkeep` for empty directories that must exist on the controller.
-- **Stack name inference**: During `.j2` rendering, Ansible injects `stack_name` derived from the stack folder name.
+## Build a Stack
 
-## Adding a New Stack
+1. Create `stacks/<host>/<stack>/compose.yaml`.
+2. Add `.env` or `.env.j2` if the stack needs environment variables.
+3. Add `appdata/` subdirectories for any compose-relative bind mounts before first start.
+4. Add Traefik and Homepage labels only to the user-facing service.
+5. Deploy with:
 
-1. Create `stacks/<hostname>/<stack-name>/compose.yaml` (or `.yaml.j2` for templating).
-2. Optionally add `.env` or `.env.j2` for environment variables.
-3. Add `appdata/` subdirectories if the stack needs persistent volume mounts.
-4. Run `ansible-playbook site.yml --limit <hostname>` to deploy.
-5. Decide authentication level: if any logged-in user should access it, no Authentik action needed (catch-all covers it). If group-restricted, create a Proxy Provider + Application in Authentik, bind the required groups, and add to the outpost.
-
-The role discovers all files under `stacks/<hostname>/` automatically — no registration needed.
-
----
-
-## Traefik Integration
-
-Services on non-portal hosts reach the internet through the **Traefik** reverse proxy running on `portal`. The mechanism is **traefik-kop**: it reads Docker labels on each host and replicates them into the portal's Redis, where Traefik picks them up.
-
-### Traefik Discovery Contract
-
-Treat labels as the discovery contract:
-
-- `traefik.enable=true` on a service means Traefik should route it.
-- `traefik.domain=<domain>` is optional and only needed to override the host default domain.
-- No Traefik labels means no route is expected.
-- Add labels only on the user-facing service container, not every sidecar or dependency.
-
-Use this exposure decision before editing labels:
-
-1. Is this service intentionally internet-reachable over HTTP(S)?
-2. If yes, add Traefik labels to the user-facing container.
-3. If no, keep it unlabeled and internal.
-
-### Exposing a Service via Traefik
-
-Add these labels to the user-facing container:
-
-```yaml
-services:
-  myapp:
-    image: example/myapp:latest
-    labels:
-      - traefik.enable=true
+```bash
+source .ansible/venv/bin/activate
+ansible-playbook site.yml --limit <host>
 ```
 
-By default, `traefik-kop` auto-generates the hostname from the Docker Compose **project name** (i.e. the stack folder name) and the host's `default_domain` (`DOMAIN` in docker-agents `.env`):
+No registration step is required; the role discovers everything under `stacks/<host>/` automatically.
 
+## Traefik
+
+Non-portal hosts are exposed through Traefik on `portal` via `traefik-kop`, which copies Docker labels into portal's Redis. Portal-hosted stacks use Traefik directly.
+
+### Discovery Contract
+
+- `traefik.enable=true` means the service should be routed.
+- No Traefik labels means the service stays internal.
+- Put labels on the user-facing container, not sidecars or databases.
+- `traefik.domain=<domain>` only overrides the host's `default_domain`.
+- Use an explicit `traefik.http.routers.<name>.rule=Host(...)` only when you need a non-default hostname.
+
+Default hostname:
+
+```text
+Host(`<compose-project>.<default_domain>`)
 ```
-Host(`<project-name>.<default_domain>`)
-```
 
-So a stack in `stacks/seedbox/bittorrent/` on host `seedbox` (`default_domain=admin.faviann.com`) becomes reachable at `bittorrent.admin.faviann.com` without adding `traefik.domain`.
+### Defaults You Should Not Restate
 
-Use `traefik.domain` only when a single service needs a different domain than the host default.
+- `websecure` is the default entrypoint.
+- TLS is automatic on `websecure`.
+- Auth is automatic on `websecure` via `forwardAuth-authentik@file`.
 
-### Traefik Label Reference
+So you normally should not add `entrypoints=websecure` or `tls=true`.
 
-Traefik is configured with defaults that make most labels unnecessary:
+### Common Patterns
 
-- **`websecure` is the default entrypoint** (`asDefault: true`) — never add `entrypoints=websecure`
-- **TLS is automatic** on all websecure routers via entrypoint-level certResolver — never add `tls=true`
-- **Auth is enforced by default** via `forwardAuth-authentik@file` on the websecure entrypoint — every service is auth-protected without any extra labels. Pre-login exceptions (`auth.faviann.com`, `/outpost.goauthentik.io/*`) must be allowlisted in the matching Authentik provider's `Unauthenticated URLs / Paths`; router-level empty chains do not bypass the entrypoint middleware.
-- **Hostname is auto-generated** from the compose project name and `traefik.domain` — only add an explicit `rule=Host(...)` when you need a non-default hostname
+| Situation | Labels |
+| --- | --- |
+| Standard routed service | `traefik.enable=true` |
+| Different domain than host default | above + `traefik.domain=<domain>` |
+| Custom hostname | above + `traefik.http.routers.<name>.rule=Host(...)` |
+| Ambiguous service port | above + `traefik.http.services.<name>.loadbalancer.server.port=<port>` |
+| Self-auth public service | host uses `public.faviann.com`, plus public outpost routers and `public-wildcard-forwardauth` |
 
-| Situation | Labels needed |
-|-----------|--------------|
-| Standard service, default hostname | `traefik.enable=true` |
-| Custom hostname | `traefik.enable=true` + `traefik.http.routers.<name>.rule=Host(...)` |
-| Different domain than host default | `traefik.enable=true` + `traefik.domain=<domain>` |
-| Ambiguous port (multiple exposed) | above + `traefik.http.services.<name>.loadbalancer.server.port=<port>` |
-| Public self-auth service | `traefik.enable=true` on a host using `public.faviann.com`, plus the shared `public-wildcard-forwardauth` provider and public outpost routers |
+### Usually Leave Unlabeled
 
-`traefik.domain` is only used by the defaultRule to build the auto-generated hostname. If you set an explicit `rule=Host(...)`, `traefik.domain` is ignored and can be omitted.
+- internal databases and caches
+- workers/background jobs
+- internal helper APIs
+- VPN support containers
 
-### Services That Should Usually Stay Unlabeled
+### `proxy` Network
 
-Do not add Traefik labels by default to:
-
-- Internal stateful dependencies (`postgres`, `redis`, etc.)
-- Workers/background jobs with no direct user UI
-- VPN-isolated workloads that are intentionally private
-- Internal-only API/support services used by other containers
-
-If one of these must become public, document the intent first and then add labels intentionally.
-
-### When to Use the `proxy` External Network
-
-Only stacks on the **portal** host (where Traefik runs) need to join the `proxy` external network. Non-portal hosts use traefik-kop label replication — no shared network required.
-
-If a stack on portal needs Traefik routing, add:
+Only portal-hosted stacks that Traefik routes need the external `proxy` network:
 
 ```yaml
 services:
   myapp:
     networks:
       - proxy
+
 networks:
   proxy:
     external: true
 ```
 
-And ensure the host's `host_vars` declares the network:
+Also declare the external network in host vars:
 
 ```yaml
-# inventory/host_vars/portal.yml
 lxc_docker_env_external_networks:
   - proxy
 ```
 
-The `lxc_docker_environment` role creates these networks before starting any stacks.
+### Domains
 
-### Domain Conventions
+Set `default_domain` per host in `inventory/host_vars/<host>.yml`. The docker-agents `.env.j2` passes it to traefik-kop as `DOMAIN`.
 
-| Host | `default_domain` | Example URL |
-|------|------------------|-------------|
-| portal | `faviann.com` | `media.faviann.com`, `home.faviann.com`, `admin.faviann.com` |
-| seedbox | `admin.faviann.com` | `bittorrent.admin.faviann.com` |
+| Host | `default_domain` | Example |
+| --- | --- | --- |
+| `portal` | `faviann.com` | `media.faviann.com` |
+| `seedbox` | `admin.faviann.com` | `bittorrent.admin.faviann.com` |
+| `jellyfin` | `public.faviann.com` | `jellyfin.public.faviann.com` |
 
-Set `default_domain` in each host's `host_vars`. The docker-agents `.env.j2` passes it to traefik-kop as `DOMAIN`.
+When adding a new tier subdomain, also add its wildcard SAN in `stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml` or TLS will fail.
 
-**When adding a new tier subdomain** (e.g. `dev.faviann.com`), also add a wildcard SAN to the Traefik cert config so TLS works for all services on that subdomain:
+## Secrets and `.env`
+
+Use `.env.j2` whenever values come from inventory or vault.
+
+Example:
 
 ```yaml
-# stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml
-domains:
-  - main: faviann.com
-    sans:
-      - "*.faviann.com"
-      - "*.admin.faviann.com"
-      - "*.dev.faviann.com"   # <-- add this
+# inventory/host_vars/seedbox.yml
+seedbox_qbit_username: "{{ vault_seedbox_qbit_username }}"
+seedbox_qbit_password: "{{ vault_seedbox_qbit_password }}"
 ```
 
-Without the SAN, services on the new subdomain will get a TLS certificate error.
-
-### Review Checklist For New/Changed Stacks
-
-Use this list in reviews and before merging stack changes:
-
-1. Exposure intent is explicit (public via Traefik vs internal-only).
-2. Public user-facing services include Traefik labels.
-3. Internal support services are intentionally unlabeled.
-4. Expected hostname follows `<stack-name>.<default_domain>` unless `traefik.domain` override is set.
-5. `proxy` external network is used only for portal-hosted routed services.
-6. No accidental public routes were introduced.
-7. No accidental public routes — `traefik.enable=true` alone is sufficient and automatically auth-protected.
-8. Homepage labels match the correct access tier — see Homepage Labels section for tier/label mapping.
-
----
-
-## Secrets Management
-
-### Pattern: `.env.j2` with Vault References
-
-Never put secrets directly in `.env` files checked into git. Instead:
-
-1. Define secret variables in `inventory/host_vars/<hostname>.yml` that reference vault:
-   ```yaml
-   # inventory/host_vars/seedbox.yml
-   seedbox_qbit_username: "{{ vault_seedbox_qbit_username }}"
-   seedbox_qbit_password: "{{ vault_seedbox_qbit_password }}"
-   ```
-
-2. Add the actual secrets to `inventory/group_vars/all/vault.yml` (encrypted with `ansible-vault`).
-
-3. Create a `.env.j2` template in the stack directory:
-   ```
-   QBIT_USERNAME={{ seedbox_qbit_username }}
-   QBIT_PASSWORD={{ seedbox_qbit_password | replace('$', '$$') }}
-   ```
-
-4. The role renders the `.j2` file on deploy, producing a `.env` with real values on the target host.
-
-### Pattern: Dynamic Homepage URL (One Variable)
-
-Use one env var for Homepage links instead of splitting hostname/domain.
-
-In each stack `.env.j2`:
-
 ```jinja2
+# stacks/seedbox/bittorrent/.env.j2
+QBIT_USERNAME={{ seedbox_qbit_username }}
+QBIT_PASSWORD={{ seedbox_qbit_password | replace('$', '$$') }}
 HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 ```
 
-- `stack_name` is injected by the role from the stack folder name (`stacks/<host>/<stack-name>/...`)
-- `default_domain` comes from `inventory/host_vars/<hostname>.yml`
-
-In `compose.yaml` labels:
-
-```yaml
-labels:
-  homepage.href: https://${HOMEPAGE_FQDN}
-```
-
-That is the full pattern. No split variables required.
-
-### Dollar-Sign Escaping
-
-Docker Compose interprets `$` as variable interpolation. If a secret value may contain `$`, use the `replace('$', '$$')` Jinja2 filter to escape it in the rendered `.env`.
-
-### Static `.env` vs `.env.j2`
-
-If a stack has **both** a static `.env` and a `.env.j2`, the role prefers the templated output path and skips copying the static duplicate. To keep intent obvious, still use one or the other, never both for the same purpose. Prefer `.env.j2` when any value comes from vault or inventory.
-
----
+Rules:
+- never commit real secrets to static `.env`
+- escape `$` as `$$` in rendered `.env` values
+- prefer one source of truth: `.env` or `.env.j2`, not both
 
 ## Homepage Labels
 
-Homepage runs three instances on the `portal` host (`media`, `editors`, `admin`), each protected by Authentik. Services are autodiscovered from every host in `cap_docker` via read-only Docker socket proxies.
+Homepage runs three protected instances on `portal`: media, editors, and admin. Services are autodiscovered from `cap_docker` hosts through the Docker socket proxies.
 
-### Access Tiers
+| Tier | Label pattern |
+| --- | --- |
+| Media / visible to all signed-in users | `homepage.*` |
+| Admin only | `homepage.instance.admin.*` |
+| Editors + admin | `homepage.instance.editors.*` and `homepage.instance.admin.*` |
 
-Each service must be labelled for the correct access tier:
+Recommended baseline labels:
 
-| Tier | Who sees it | Label pattern |
-|------|-------------|---------------|
-| Media | All signed-in users | plain `homepage.*` |
-| Admin | Admin only | `homepage.instance.admin.*` |
-| Editors + Admin | Editors and admin | `homepage.instance.editors.*` + `homepage.instance.admin.*` |
+| Label | Purpose |
+| --- | --- |
+| `homepage.group` | section |
+| `homepage.name` | display name |
+| `homepage.href` | canonical URL |
+| `homepage.description` | short description |
+| `homepage.icon` | icon |
 
-Plain `homepage.*` labels are visible on all instances. Instance-scoped labels are visible only on the named instance.
-
-### Required Labels
-
-| Label | Required | Purpose |
-|-------|----------|---------|
-| `homepage.group` | **Yes** | Dashboard section (e.g., `Downloads`, `Media`) |
-| `homepage.name` | **Yes** | Display name |
-| `homepage.href` | Recommended | Canonical public URL (Traefik URL) |
-| `homepage.description` | Recommended | Short description |
-| `homepage.icon` | Recommended | Icon name (see Homepage icon catalogue) |
-
-Do not rely on partial labels or fallback naming. If a service should be visible in Homepage, label it intentionally.
-
-Widgets are out of scope for the baseline stack contract. Keep `homepage.widget.*` labels opt-in for later, since they often require extra secrets or internal-only URLs.
-
-### Example — Media Tier (visible to all)
+Example:
 
 ```yaml
 labels:
-  homepage.group: Media
-  homepage.name: My App
-  homepage.href: https://${HOMEPAGE_FQDN}
-  homepage.description: Example service
-  homepage.icon: myapp
+  - homepage.group=Media
+  - homepage.name=${COMPOSE_PROJECT_NAME}
+  - homepage.href=https://${HOMEPAGE_FQDN}
 ```
 
-### Example — Admin Tier (admin only)
+For admin-only visibility, switch the prefix to `homepage.instance.admin.`.
 
-```yaml
-labels:
-  homepage.instance.admin.group: Admin
-  homepage.instance.admin.name: My App
-  homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
-  homepage.instance.admin.description: Example service
-  homepage.instance.admin.icon: myapp
-```
+Keep widget labels opt-in; they often need extra secrets or internal-only URLs.
 
-And in `.env.j2` for that same stack:
+## Authentik
 
-```jinja2
-HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
-```
+The catch-all provider covers `faviann.com` and its subdomains, so most routed services need no per-app Authentik object just to require login.
 
----
+Create a dedicated Proxy Provider + Application when:
+- access is group-restricted
+- the hostname needs a non-catch-all provider
+- the service is self-auth and should bypass Traefik login
 
-## Authentik Integration
+Repo-specific rules:
+- admin uses shared `admin-wildcard-forwardauth`
+- home uses shared `home-wildcard-forwardauth`
+- public self-auth services use `public.faviann.com` plus shared `public-wildcard-forwardauth`
+- shared callback tiers rely on global `AUTHENTIK_COOKIE_DOMAIN=.faviann.com`
 
-A domain-wide **`Faviann Domain`** Proxy Provider in Authentik covers `faviann.com` and all subdomains. Any service behind `forwardAuth-authentik@file` middleware gets authentication enforced automatically — no individual Authentik app registration needed just to require login.
+Important: auth runs at the Traefik `websecure` entrypoint. Any pre-login URL must be allowlisted in the matching provider's `Unauthenticated URLs / Paths`, including `https://<domain>/outpost.goauthentik.io/...`. Router-level empty middleware chains do not bypass entrypoint auth.
 
-For **group-based access restriction** (e.g., admin-only services), a dedicated Proxy Provider + Application with group bindings must be created and added to the outpost. The individual provider for that hostname takes precedence over the catch-all.
+| Need | Action |
+| --- | --- |
+| Basic login only | none; catch-all handles it |
+| Shared admin-tier login | keep `admin-wildcard-forwardauth` synced |
+| Group restriction | create provider + application and bind groups |
+| Self-auth public app | use `public.faviann.com` and `public-wildcard-forwardauth` |
 
-For the admin tier on this installation, one shared `forward_domain` provider now covers `admin.faviann.com` and `*.admin.faviann.com`. The embedded outpost only started preserving callback state correctly after Authentik's global `AUTHENTIK_COOKIE_DOMAIN` was set to `.faviann.com`, so the admin tier now stays on `admin-wildcard-forwardauth` and the retired exact-host providers have been removed.
+Current non-catch-all providers: `admin-wildcard-forwardauth`, `home-wildcard-forwardauth`, and `homepage-media`.
 
-For self-auth services that must bypass Traefik login entirely, use the public tier. In practice that means setting the host default domain to `public.faviann.com`, adding the `public` and wildcard public outpost routers on `portal`, and creating a shared `public-wildcard-forwardauth` provider in `forward_domain` mode for `https://public.faviann.com` with a full-URL allowlist such as `^https://([a-z0-9-]+\.)?public\.faviann\.com/.*$`. This Authentik step is still manual.
+## Docker Agents
 
-When using entrypoint-level forwardAuth in Traefik, any URL that must remain reachable before login must be allowlisted in the matching provider's `Unauthenticated URLs / Paths`. In this repo that includes the full `https://auth.faviann.com/...` host and each routed `https://<domain>/outpost.goauthentik.io/...` path. Expression policies still apply after authentication; they do not replace the unauthenticated allowlist.
+Every `cap_docker` host gets the managed `docker-agents` stack from the role. Do not define it under `stacks/`.
 
-| Need | Authentik action required |
-|------|--------------------------|
-| Require login only | None — catch-all handles it, except for the shared admin tier |
-| Require login only on `*.admin.faviann.com` | Keep `admin-wildcard-forwardauth` synced and routed through the shared admin callback |
-| Restrict to specific group(s) | Create Proxy Provider + Application, bind groups, add to outpost |
+Base services:
+- `docker-metadata-proxy`: read-only Docker API for Homepage and discovery
+- `dockwatch-socket-proxy`: write-capable proxy for Dockwatch
+- `dockwatch`: container monitoring UI
 
-Current non-catch-all providers: `admin-wildcard-forwardauth` (`admin.faviann.com`), `home-wildcard-forwardauth` (`home.faviann.com` and `*.home.faviann.com`), and `homepage-media` (`media.faviann.com`).
+Optional when `traefik_kop_enabled: true`:
+- `traefik-kop`: copies Docker labels into portal's Redis for Traefik routing
 
----
+Set `traefik_kop_enabled: false` on `portal`, because portal runs Traefik itself.
 
-## Docker Agents (Managed Stack)
+## Networking
 
-Every `cap_docker` host automatically receives the **docker-agents** managed stack, deployed by the `lxc_docker_environment` role. You do not define this stack in `stacks/` — it is rendered from role templates.
+| Pattern | Use |
+| --- | --- |
+| `proxy` external bridge | portal-hosted Traefik-routed services |
+| `admin` internal bridge | docker-agents |
+| `network_mode: service:<vpn>` | stacks that must share a VPN container's network namespace |
 
-### Base Services (always deployed when `docker_agents_enabled: true`)
-
-| Service | Image | Purpose | Port |
-|---------|-------|---------|------|
-| `docker-metadata-proxy` | `tecnativa/docker-socket-proxy` | Read-only Docker API for Homepage discovery | `2375` (published) |
-| `dockwatch-socket-proxy` | `tecnativa/docker-socket-proxy` | Write-capable proxy for container start/stop | internal only |
-| `dockwatch` | `ghcr.io/notifiarr/dockwatch` | Container monitoring and update UI | `9999` |
-
-These services run on an isolated `admin` bridge network, separate from user stacks.
-
-### Override Service (when `traefik_kop_enabled: true`)
-
-| Service | Image | Purpose |
-|---------|-------|---------|
-| `traefik-kop` | `ghcr.io/jittering/traefik-kop` | Replicates Docker labels to portal's Redis for Traefik routing |
-
-This is deployed via `compose.override.yaml` — Docker Compose merges it automatically with the base `compose.yml`.
-
-### Feature Flags
-
-| Variable | Default | Set in | Effect |
-|----------|---------|--------|--------|
-| `docker_agents_enabled` | `true` | `cap_docker/vars.yml` | Deploy the entire docker-agents stack |
-| `traefik_kop_enabled` | `true` | `cap_docker/vars.yml` | Deploy traefik-kop override + `.env` |
-
-Override per-host in `host_vars`:
-```yaml
-# inventory/host_vars/portal.yml
-traefik_kop_enabled: false   # Portal runs Traefik itself, doesn't need kop
-```
-
-### Why Two Socket Proxies?
-
-- **docker-metadata-proxy**: Read-only (`POST=0`). Exposes container/image/network metadata for Homepage and traefik-kop. Published on port 2375 so Homepage on portal can reach it.
-- **dockwatch-socket-proxy**: Write-capable (`ALLOW_START=1`, `ALLOW_STOP=1`). Needed by Dockwatch to restart containers. Never published externally.
-
----
-
-## Networking Model
-
-### Network Types Used
-
-| Network | Type | Used by | When |
-|---------|------|---------|------|
-| `proxy` | External bridge | Traefik + portal services | Only on portal host |
-| `admin` | Internal bridge | docker-agents services | Every cap_docker host |
-| `network_mode: service:<vpn>` | Shared network namespace | VPN-tunneled stacks | When services must route through a VPN container |
-
-### External Networks
-
-External networks are created by the role before any stacks start. Declare them in `host_vars`:
+External networks must be declared in host vars before deploy:
 
 ```yaml
 lxc_docker_env_external_networks:
   - proxy
 ```
 
-Only declare a network if at least one stack on that host references it as `external: true`.
+For VPN-tunneled stacks, publish ports on the VPN container, not on the tunneled service.
 
-### VPN-Tunneled Stacks
+## Minimal Example
 
-For services that must route through a VPN (like the seedbox bittorrent stack), use `network_mode: service:<vpn-container>`:
-
-```yaml
-services:
-  gluetun:
-    image: qmcgaw/gluetun
-    cap_add: [NET_ADMIN]
-    ports:
-      - 8181:8181   # qbittorrent webui (exposed via VPN container)
-
-  qbittorrent:
-    network_mode: service:gluetun   # All traffic goes through VPN
-    depends_on:
-      gluetun:
-        condition: service_healthy
-```
-
-Ports for tunneled services are declared on the VPN container, not the service itself.
-
----
-
-## Appdata Conventions
-
-```
-stacks/<hostname>/<stack-name>/
-├── compose.yaml
-├── .env (or .env.j2)
-└── appdata/
-    ├── <service-name>/          # Persistent config/data
-    │   └── .gitkeep             # Empty dirs need this for git
-    └── <another-service>/
-```
-
-- Mount persistent data as `./appdata/<service>:/config` (or similar) in compose.
-- Use `.gitkeep` files so empty directories are tracked in git and created on the target.
-- Compose-relative paths (`./appdata/...`) resolve correctly because Ansible deploys the entire stack directory structure.
-
----
-
-## Complete Worked Example
-
-Adding a `media` stack to a new Docker host:
-
-### 1. Inventory Setup
-
-```yaml
-# inventory/hosts.yml — add to tier and capability groups
-tier_medium:
-  hosts:
-    media:
-
-cap_docker:
-  hosts:
-    media:
-
-cap_gpu:
-  hosts:
-    media:
-```
-
-### 2. Host Variables
-
-```yaml
-# inventory/host_vars/media.yml
----
-default_domain: admin.faviann.com
-
-media_jellyfin_api_key: "{{ vault_media_jellyfin_api_key }}"
-
-proxmox_lxc_overrides:
-  vmid: 303
-  hostname: media
-  description: "Media server managed via Ansible"
-  tags: [ansible, media]
-```
-
-### 3. Stack Directory
-
-```
+```text
 stacks/media/jellyfin/
 ├── compose.yaml
 ├── .env.j2
-└── appdata/
-    └── jellyfin/
-        └── .gitkeep
+└── appdata/jellyfin/.gitkeep
 ```
 
-### 4. Compose File
-
 ```yaml
-# stacks/media/jellyfin/compose.yaml
 services:
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
-    container_name: jellyfin
     restart: unless-stopped
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-      - JELLYFIN_PublishedServerUrl=https://jellyfin.admin.faviann.com
-    ports:
-      - 8096:8096
     volumes:
       - ./appdata/jellyfin:/config
       - /data/media:/data/media:ro
     labels:
-      traefik.enable: "true"
-      homepage.group: Media
-      homepage.name: Jellyfin
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Media streaming server
-      homepage.icon: jellyfin
+      - traefik.enable=true
+      - homepage.group=Media
+      - homepage.name=Jellyfin
+      - homepage.href=https://${HOMEPAGE_FQDN}
+      - homepage.description=Media streaming server
+      - homepage.icon=jellyfin
 ```
 
-### 5. Environment Template
-
-```
-# stacks/media/jellyfin/.env.j2
+```jinja2
 PUID=1000
 PGID=1000
 TZ=America/Montreal
 HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
-JELLYFIN_API_KEY={{ media_jellyfin_api_key }}
 ```
 
-### 6. Deploy
+## Review Checklist
 
-```bash
-source activate-env.sh
-ansible-playbook site.yml --limit media
-```
-
-The role will:
-1. Copy the stack to `/shared/media/stacks/jellyfin/` on the Proxmox host
-2. Render `.env.j2` → `.env` with vault values
-3. Bind-mount into the container at `/conf/docker/stacks/jellyfin/`
-4. Deploy the docker-agents stack (with traefik-kop by default)
-5. Run `docker compose up -d` for all stacks
-6. Traefik-kop picks up the labels and registers `jellyfin.admin.faviann.com` in portal's Redis
-7. Homepage discovers the service via the metadata proxy on port 2375
-
----
+1. Exposure intent is explicit.
+2. Only user-facing services carry Traefik labels.
+3. Homepage labels match the intended access tier.
+4. Persistent bind-mounted data lives under `./appdata/...`, and referenced directories exist in git before first deploy.
+5. Any new subdomain tier also updates Traefik SANs.
+6. Secrets live in vault-backed `.env.j2`, not static `.env`.
 
 ## Notes
 
-- The `docker-agents` stack (docker-metadata-proxy, dockwatch-socket-proxy, dockwatch, and optionally traefik-kop) is managed automatically by the `lxc_docker_environment` role for every `cap_docker` host. See the **Docker Agents** section above for details.
-- Hosts with no directory here simply get an empty stacks folder — no error.
-- Dockge is deployed separately (from `playbooks/roles/config/lxc_docker_environment/templates/files/dockge/`) and is not part of the stacks directory.
-- The role discovers compose files by globbing `compose.yml` and `compose.yaml` — both extensions work.
+- Dockge is deployed separately and is not part of this directory.
+- The role discovers both `compose.yml` and `compose.yaml`.
+- A host with no folder here is not an error.
