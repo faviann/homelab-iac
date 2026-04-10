@@ -13,12 +13,14 @@ services:
       - idm
     environment:
       - AUTHENTIK_PROXY_HEADERS=true
+      - AUTHENTIK_COOKIE_DOMAIN=.faviann.com
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
   worker:
     environment:
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM}
+      AUTHENTIK_COOKIE_DOMAIN: .faviann.com
     volumes:
       - ./appdata/authentik/data:/data
       - ./appdata/authentik/certs:/certs
