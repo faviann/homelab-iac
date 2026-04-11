@@ -119,117 +119,23 @@ When adding a new tier subdomain, also add its wildcard SAN in `stacks/portal/tr
 
 ## Secrets and `.env`
 
-Use `.env.j2` whenever values come from inventory or vault.
-
-Example:
-
-```yaml
-# inventory/host_vars/seedbox.yml
-seedbox_qbit_username: "{{ vault_seedbox_qbit_username }}"
-seedbox_qbit_password: "{{ vault_seedbox_qbit_password }}"
-```
-
-```jinja2
-# stacks/seedbox/bittorrent/.env.j2
-QBIT_USERNAME={{ seedbox_qbit_username }}
-QBIT_PASSWORD={{ seedbox_qbit_password | replace('$', '$$') }}
-HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
-```
-
-Rules:
-- never commit real secrets to static `.env`
-- escape `$` as `$$` in rendered `.env` values
-- prefer one source of truth: `.env` or `.env.j2`, not both
+→ [docs/stacks-secrets.md](../docs/stacks-secrets.md) — read when adding secrets or environment variables to a stack.
 
 ## Homepage Labels
 
-Homepage runs three protected instances on `portal`: media, editors, and admin. Services are autodiscovered from `cap_docker` hosts through the Docker socket proxies.
-
-| Tier | Label pattern |
-| --- | --- |
-| Media / visible to all signed-in users | `homepage.*` |
-| Admin only | `homepage.instance.admin.*` |
-| Editors + admin | `homepage.instance.editors.*` and `homepage.instance.admin.*` |
-
-Recommended baseline labels:
-
-| Label | Purpose |
-| --- | --- |
-| `homepage.group` | section |
-| `homepage.name` | display name |
-| `homepage.href` | canonical URL |
-| `homepage.description` | short description |
-| `homepage.icon` | icon |
-
-Example:
-
-```yaml
-labels:
-  - homepage.group=Media
-  - homepage.name=${COMPOSE_PROJECT_NAME}
-  - homepage.href=https://${HOMEPAGE_FQDN}
-```
-
-For admin-only visibility, switch the prefix to `homepage.instance.admin.`.
-
-Keep widget labels opt-in; they often need extra secrets or internal-only URLs.
+→ [docs/stacks-homepage.md](../docs/stacks-homepage.md) — read when adding or changing Homepage visibility for a service.
 
 ## Authentik
 
-The catch-all provider covers `faviann.com` and its subdomains, so most routed services need no per-app Authentik object just to require login.
-
-Create a dedicated Proxy Provider + Application when:
-- access is group-restricted
-- the hostname needs a non-catch-all provider
-- the service is self-auth and should bypass Traefik login
-
-Repo-specific rules:
-- admin uses shared `admin-wildcard-forwardauth`
-- home uses shared `home-wildcard-forwardauth`
-- public self-auth services use `public.faviann.com` plus shared `public-wildcard-forwardauth`
-- shared callback tiers rely on global `AUTHENTIK_COOKIE_DOMAIN=.faviann.com`
-
-Important: auth runs at the Traefik `websecure` entrypoint. Any pre-login URL must be allowlisted in the matching provider's `Unauthenticated URLs / Paths`, including `https://<domain>/outpost.goauthentik.io/...`. Router-level empty middleware chains do not bypass entrypoint auth.
-
-| Need | Action |
-| --- | --- |
-| Basic login only | none; catch-all handles it |
-| Shared admin-tier login | keep `admin-wildcard-forwardauth` synced |
-| Group restriction | create provider + application and bind groups |
-| Self-auth public app | use `public.faviann.com` and `public-wildcard-forwardauth` |
-
-Current non-catch-all providers: `admin-wildcard-forwardauth`, `home-wildcard-forwardauth`, and `homepage-media`.
+→ [docs/stacks-authentik.md](../docs/stacks-authentik.md) — read when creating or modifying Authentik providers, applications, or auth bypass rules.
 
 ## Docker Agents
 
-Every `cap_docker` host gets the managed `docker-agents` stack from the role. Do not define it under `stacks/`.
-
-Base services:
-- `docker-metadata-proxy`: read-only Docker API for Homepage and discovery
-- `dockwatch-socket-proxy`: write-capable proxy for Dockwatch
-- `dockwatch`: container monitoring UI
-
-Optional when `traefik_kop_enabled: true`:
-- `traefik-kop`: copies Docker labels into portal's Redis for Traefik routing
-
-Set `traefik_kop_enabled: false` on `portal`, because portal runs Traefik itself.
+→ [docs/stacks-docker-agents.md](../docs/stacks-docker-agents.md) — read when debugging the managed docker-agents stack or changing agent configuration.
 
 ## Networking
 
-| Pattern | Use |
-| --- | --- |
-| `proxy` external bridge | portal-hosted Traefik-routed services |
-| `admin` internal bridge | docker-agents |
-| `network_mode: service:<vpn>` | stacks that must share a VPN container's network namespace |
-
-External networks must be declared in host vars before deploy:
-
-```yaml
-lxc_docker_env_external_networks:
-  - proxy
-```
-
-For VPN-tunneled stacks, publish ports on the VPN container, not on the tunneled service.
+→ [docs/stacks-networking.md](../docs/stacks-networking.md) — read when a stack needs external networks, VPN tunneling, or non-default network configuration.
 
 ## Minimal Example
 

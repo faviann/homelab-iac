@@ -9,7 +9,7 @@
 **Code is a liability, not an asset.** When two approaches exist, recommend the one with less code and fewer objects.
 
 ## Non-negotiables
-- Never request, paste, or print secrets (API token secret, vault passphrase, private keys).
+- Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
 - Activate the venv before running any ansible command: `source .ansible/venv/bin/activate` (create with `ansible-playbook bootstrap.yml` if missing).
 
 ## Standard Paths
@@ -24,7 +24,7 @@
 | Venv | `.ansible/venv/` (project-relative, gitignored) |
 | External roles | `.ansible/roles/` (project-relative, gitignored, auto-installed) |
 
-Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never commit plaintext credentials.
+Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never commit plaintext credentials. All secrets are gitignored and must be generated locally via `bootstrap.yml`.
 
 ## Inventory Structure
 
@@ -38,14 +38,7 @@ Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never com
 
 **Feature Flags**: Capability groups set boolean flags (`docker_enabled: true`) instead of checking group membership. Roles use `when: docker_enabled | default(false)`, never `'cap_docker' in group_names`.
 
-## Variable Precedence
-
-Variables merge in this order (later overrides earlier):
-1. Role defaults (`playbooks/roles/*/defaults/main.yml`)
-2. Global vars (`inventory/group_vars/all/*.yml`)
-3. Tier vars (`inventory/group_vars/tier_*/*.yml`)
-4. Capability vars (`inventory/group_vars/cap_*/*.yml`)
-5. Host vars (`inventory/host_vars/*.yml`)
+→ [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read for variable precedence order, worked examples, and adding new hosts.
 
 ## Deployment Lifecycle
 
@@ -55,9 +48,9 @@ Roles live in `playbooks/roles/{base,infrastructure,provisioning,config}/`.
 
 ## Docker Stacks
 
-Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Files ending in `.j2` are Jinja2-templated with all inventory vars. Stacks are auto-discovered and started with `docker compose up -d` — no registration needed.
+Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered and started with `docker compose up -d` — no registration needed.
 
-**Traefik routing**: Non-portal hosts use `traefik-kop` to replicate Docker labels to portal's Redis. Portal runs Traefik directly (`traefik_kop_enabled: false` in `host_vars/portal.yml`).
+→ [stacks/README.md](stacks/README.md) — read for stack contract, Traefik routing, secrets, and full conventions.
 
 ## Command Reference
 
@@ -66,18 +59,9 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Files ending in `.
 | `ansible-playbook site.yml` | Full lifecycle — deploy/update all LXCs |
 | `ansible-playbook site.yml --limit <host>` | Target one host |
 | `ansible-playbook site.yml --check` | Dry run |
-| `ansible-playbook site.yml -vvv` | Verbose debug |
-| `ansible -i inventory/hosts.yml lxcs -m ping` | Test SSH connectivity |
-| `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` | Show merged vars (debug precedence) |
 | `ansible-playbook bootstrap.yml` | Recreate venv + SSH keys after clean install |
-| `./configure-vault.sh` | Update Proxmox credentials |
 
-## Troubleshooting
-
-- **`ansible: command not found`**: `source .ansible/venv/bin/activate`
-- **API 403 (restricted features)**: Requires `root@pam` token — see [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md)
-- **Variable not applied**: `ansible-inventory -i inventory/hosts.yml --host <name> --yaml`
-- **Stale facts**: Delete `.ansible/cache/`
+Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` for merged vars, `ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
 
 ## Role Design Principles
 
@@ -85,14 +69,8 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Files ending in `.
 - Use feature flags (`docker_enabled`) not group checks (`'cap_docker' in group_names`)
 - Avoid hardcoded values; inject via vars. Ensure idempotency; use `assert` to fail fast
 
-## Security Rules
-
-- Do not commit or paste: `.ansible/vault-pass.txt`, any private key (`.ansible/ssh/proxmox_lxc`), or token secrets
-- All secrets are gitignored and must be generated locally via `bootstrap.yml`
-- Use placeholders like `<REPLACE_ME>` in docs or examples that mention secrets
-
 ## Related Documentation
 
-- Inventory guide: [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md)
-- SSH automation: [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md)
-- Docker stacks conventions: [stacks/README.md](stacks/README.md)
+→ [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read when adding hosts or debugging variable precedence.
+→ [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md) — read when hitting API 403 errors or configuring restricted LXC features.
+→ [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
