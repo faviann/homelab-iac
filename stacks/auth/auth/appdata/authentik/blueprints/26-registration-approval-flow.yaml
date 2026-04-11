@@ -1,0 +1,286 @@
+version: 1
+metadata:
+  name: repo-auth-registration-approval-flow
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- id: self-service-registration-approval-flow
+  model: authentik_flows.flow
+  state: present
+  identifiers:
+    slug: self-service-registration-approval
+  attrs:
+    name: Self-service registration approval
+    title: Create your account
+    slug: self-service-registration-approval
+    designation: enrollment
+    authentication: require_unauthenticated
+
+- id: self-service-registration-username
+  model: authentik_stages_prompt.prompt
+  state: present
+  identifiers:
+    field_key: username
+    name: self-service-registration-username
+  attrs:
+    name: self-service-registration-username
+    field_key: username
+    label: Username
+    type: username
+    required: true
+    order: 10
+
+- id: self-service-registration-name
+  model: authentik_stages_prompt.prompt
+  state: present
+  identifiers:
+    field_key: name
+    name: self-service-registration-name
+  attrs:
+    name: self-service-registration-name
+    field_key: name
+    label: Display name
+    type: text
+    required: false
+    order: 20
+
+- id: self-service-registration-email
+  model: authentik_stages_prompt.prompt
+  state: present
+  identifiers:
+    field_key: email
+    name: self-service-registration-email
+  attrs:
+    name: self-service-registration-email
+    field_key: email
+    label: Email address
+    type: email
+    required: true
+    order: 30
+
+- id: self-service-registration-password
+  model: authentik_stages_prompt.prompt
+  state: present
+  identifiers:
+    field_key: password
+    name: self-service-registration-password
+  attrs:
+    name: self-service-registration-password
+    field_key: password
+    label: Password
+    type: password
+    required: true
+    order: 40
+
+- id: self-service-registration-password-repeat
+  model: authentik_stages_prompt.prompt
+  state: present
+  identifiers:
+    field_key: password_repeat
+    name: self-service-registration-password-repeat
+  attrs:
+    name: self-service-registration-password-repeat
+    field_key: password_repeat
+    label: Repeat password
+    type: password
+    required: true
+    order: 50
+
+- id: self-service-registration-pending-copy
+  model: authentik_stages_prompt.prompt
+  state: present
+  identifiers:
+    field_key: pending_approval_message
+    name: self-service-registration-pending-copy
+  attrs:
+    name: self-service-registration-pending-copy
+    field_key: pending_approval_message
+    label: Pending approval
+    type: static
+    required: false
+    initial_value: |-
+      Thanks. Your email address has been verified and your account is now awaiting admin approval.
+      We will keep the account inactive until an admin reviews it.
+    order: 10
+
+- id: self-service-registration-details-stage
+  model: authentik_stages_prompt.promptstage
+  state: present
+  identifiers:
+    name: self-service-registration-details-stage
+  attrs:
+    name: self-service-registration-details-stage
+    fields:
+    - !Find [authentik_stages_prompt.prompt, [name, self-service-registration-username]]
+    - !Find [authentik_stages_prompt.prompt, [name, self-service-registration-name]]
+    - !Find [authentik_stages_prompt.prompt, [name, self-service-registration-email]]
+    - !Find [authentik_stages_prompt.prompt, [name, self-service-registration-password]]
+    - !Find [authentik_stages_prompt.prompt, [name, self-service-registration-password-repeat]]
+
+- id: self-service-registration-email-stage
+  model: authentik_stages_email.emailstage
+  state: present
+  identifiers:
+    name: self-service-registration-email-stage
+  attrs:
+    name: self-service-registration-email-stage
+    use_global_settings: true
+    token_expiry: minutes=30
+    subject: Confirm your email address
+    template: email/account_confirmation.html
+    activate_user_on_success: false
+
+- id: self-service-registration-user-write-stage
+  model: authentik_stages_user_write.userwritestage
+  state: present
+  identifiers:
+    name: self-service-registration-user-write-stage
+  attrs:
+    name: self-service-registration-user-write-stage
+    user_creation_mode: always_create
+    create_users_as_inactive: true
+    user_type: external
+
+- id: self-service-registration-pending-stage
+  model: authentik_stages_prompt.promptstage
+  state: present
+  identifiers:
+    name: self-service-registration-pending-stage
+  attrs:
+    name: self-service-registration-pending-stage
+    fields:
+    - !Find [authentik_stages_prompt.prompt, [name, self-service-registration-pending-copy]]
+
+- id: self-service-registration-notification-event
+  model: authentik_policies_expression.expressionpolicy
+  state: present
+  identifiers:
+    name: self-service-registration-notification-event
+  attrs:
+    name: self-service-registration-notification-event
+    expression: |-
+      from django.core.cache import cache
+      from django.utils import timezone
+
+      restored_token = request.context.get("is_restored")
+      if not restored_token:
+          return True
+
+      pending_user = request.context.get("pending_user")
+      prompt_data = request.context.get("prompt_data", {})
+      if not pending_user:
+          return True
+
+      display_name = (prompt_data.get("name") or pending_user.name or "").strip()
+      username = str(pending_user.username or "")
+      email = str(pending_user.email or prompt_data.get("email") or "")
+      user_pk = str(getattr(pending_user, "pk", "") or "")
+      token_key = str(getattr(restored_token, "key", "") or "")
+      dedupe_key = f"self-service-registration-approval-notify:{token_key or user_pk or username}"
+      if not cache.add(dedupe_key, "1", timeout=3600):
+          return True
+
+      admin_url = f"https://auth.faviann.com/if/admin/#/identity/users/{user_pk}" if user_pk else "https://auth.faviann.com/if/admin/#/identity/users"
+      source_ip = str(request.http_request.META.get("HTTP_X_FORWARDED_FOR", request.http_request.META.get("REMOTE_ADDR", "unknown")))
+
+      ak_create_event(
+          "self_service_registration_pending_approval",
+          username=username,
+          email=email,
+          display_name=display_name or "(not provided)",
+          source_ip=source_ip,
+          timestamp=timezone.now().isoformat(),
+          admin_url=admin_url,
+      )
+      return True
+
+- id: self-service-registration-details-binding
+  model: authentik_flows.flowstagebinding
+  state: present
+  identifiers:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_prompt.promptstage, [name, self-service-registration-details-stage]]
+    order: 10
+  attrs:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_prompt.promptstage, [name, self-service-registration-details-stage]]
+    order: 10
+    invalid_response_action: retry
+    policy_engine_mode: all
+    re_evaluate_policies: true
+
+- id: self-service-registration-captcha-binding
+  model: authentik_flows.flowstagebinding
+  state: present
+  identifiers:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_captcha.captchastage, [name, cloudflare-turnstile]]
+    order: 20
+  attrs:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_captcha.captchastage, [name, cloudflare-turnstile]]
+    order: 20
+    invalid_response_action: retry
+    policy_engine_mode: all
+    re_evaluate_policies: true
+
+- id: self-service-registration-user-write-binding
+  model: authentik_flows.flowstagebinding
+  state: present
+  identifiers:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_user_write.userwritestage, [name, self-service-registration-user-write-stage]]
+    order: 30
+  attrs:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_user_write.userwritestage, [name, self-service-registration-user-write-stage]]
+    order: 30
+    invalid_response_action: retry
+    policy_engine_mode: all
+    re_evaluate_policies: true
+
+- id: self-service-registration-email-binding
+  model: authentik_flows.flowstagebinding
+  state: present
+  identifiers:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_email.emailstage, [name, self-service-registration-email-stage]]
+    order: 40
+  attrs:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_email.emailstage, [name, self-service-registration-email-stage]]
+    order: 40
+    invalid_response_action: retry
+    policy_engine_mode: all
+    re_evaluate_policies: true
+
+- id: self-service-registration-pending-binding
+  model: authentik_flows.flowstagebinding
+  state: present
+  identifiers:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_prompt.promptstage, [name, self-service-registration-pending-stage]]
+    order: 50
+  attrs:
+    target: !KeyOf self-service-registration-approval-flow
+    stage: !Find [authentik_stages_prompt.promptstage, [name, self-service-registration-pending-stage]]
+    order: 50
+    invalid_response_action: retry
+    policy_engine_mode: all
+    re_evaluate_policies: true
+
+- id: self-service-registration-notification-binding
+  model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf self-service-registration-email-binding
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, self-service-registration-notification-event]]
+    order: 0
+  attrs:
+    target: !KeyOf self-service-registration-email-binding
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, self-service-registration-notification-event]]
+    order: 0
+    enabled: true
+    negate: false
+    timeout: 30

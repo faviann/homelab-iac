@@ -1,0 +1,54 @@
+version: 1
+metadata:
+  name: repo-auth-notifications
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- id: policy-discord-self-service-signup-events
+  model: authentik_policies_expression.expressionpolicy
+  state: present
+  identifiers:
+    name: discord-self-service-signup-events
+  attrs:
+    name: discord-self-service-signup-events
+    expression: |-
+      ev = request.context.get("event")
+      if not ev:
+          return False
+      return ev.action == "custom_self_service_registration_pending_approval"
+
+- id: transport-discord-registration-approval
+  model: authentik_events.notificationtransport
+  state: present
+  identifiers:
+    name: Discord Registration Approval
+  attrs:
+    name: Discord Registration Approval
+    mode: webhook_slack
+    webhook_url: "{{ auth_discord_approval_webhook_url | regex_replace('/slack/?$', '') }}/slack"
+    send_once: true
+
+- id: rule-registration-pending-approval
+  model: authentik_events.notificationrule
+  state: present
+  identifiers:
+    name: Registration Pending Approval
+  attrs:
+    name: Registration Pending Approval
+    transports:
+    - !Find [authentik_events.notificationtransport, [name, Discord Registration Approval]]
+    severity: notice
+    destination_group: !Find [authentik_core.group, [name, admins]]
+
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf rule-registration-pending-approval
+    order: 0
+  attrs:
+    target: !KeyOf rule-registration-pending-approval
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, discord-self-service-signup-events]]
+    order: 0
+    enabled: true
+    negate: false

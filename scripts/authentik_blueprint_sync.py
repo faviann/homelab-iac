@@ -20,18 +20,40 @@ PREFERRED_BASE_URLS = [
 
 DESCRIPTION_LABEL = "Managed from ServerManagementScripts"
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BLUEPRINT_ROOT = REPO_ROOT / "stacks" / "auth" / "auth" / "blueprints"
+BLUEPRINT_ROOT = REPO_ROOT / "stacks" / "auth" / "auth" / "appdata" / "authentik" / "blueprints"
 FLOW_ROOT = BLUEPRINT_ROOT / "20-flows"
 
 GROUPS_FILE = BLUEPRINT_ROOT / "10-groups.yaml"
+BRAND_FLOWS_FILE = BLUEPRINT_ROOT / "24-brand-flows.yaml"
 DEFAULT_AUTH_POLICIES_FILE = BLUEPRINT_ROOT / "25-default-auth-policies.yaml"
+REGISTRATION_APPROVAL_FILE = BLUEPRINT_ROOT / "26-registration-approval-flow.yaml"
 PROVIDERS_FILE = BLUEPRINT_ROOT / "30-providers.yaml"
 APPLICATIONS_FILE = BLUEPRINT_ROOT / "40-applications.yaml"
 SERVICE_ACCOUNTS_FILE = BLUEPRINT_ROOT / "50-service-accounts.yaml"
 OUTPOSTS_FILE = BLUEPRINT_ROOT / "60-outposts.yaml"
+NOTIFICATIONS_TEMPLATE_FILE = BLUEPRINT_ROOT / "70-notifications.yaml.j2"
 
 CUSTOM_BLUEPRINT_FILES = [
-    ("repo-auth-default-auth-policies", DEFAULT_AUTH_POLICIES_FILE),
+    {
+        "name": "repo-auth-brand-flows",
+        "source_path": BRAND_FLOWS_FILE,
+        "deployed_relative_path": "24-brand-flows.yaml",
+    },
+    {
+        "name": "repo-auth-default-auth-policies",
+        "source_path": DEFAULT_AUTH_POLICIES_FILE,
+        "deployed_relative_path": "25-default-auth-policies.yaml",
+    },
+    {
+        "name": "repo-auth-registration-approval-flow",
+        "source_path": REGISTRATION_APPROVAL_FILE,
+        "deployed_relative_path": "26-registration-approval-flow.yaml",
+    },
+    {
+        "name": "repo-auth-notifications",
+        "source_path": NOTIFICATIONS_TEMPLATE_FILE,
+        "deployed_relative_path": "70-notifications.yaml",
+    },
 ]
 
 
@@ -579,8 +601,8 @@ def blueprint_plan(flow_slugs: list[str]) -> list[tuple[str, str]]:
         (f"repo-auth-flow-{slug}", f"20-flows/{slug}.yaml") for slug in flow_slugs
     )
     steps.extend(
-        (name, str(path.relative_to(BLUEPRINT_ROOT)))
-        for name, path in CUSTOM_BLUEPRINT_FILES
+        (entry["name"], entry["deployed_relative_path"])
+        for entry in CUSTOM_BLUEPRINT_FILES
     )
     steps.extend(
         [
@@ -610,7 +632,7 @@ def export_blueprints(client: AuthentikClient) -> dict[str, Any]:
         "files": [
             str(GROUPS_FILE.relative_to(REPO_ROOT)),
             *[str(path.relative_to(REPO_ROOT)) for path in flow_paths],
-            *[str(path.relative_to(REPO_ROOT)) for _, path in CUSTOM_BLUEPRINT_FILES],
+            *[str(entry["source_path"].relative_to(REPO_ROOT)) for entry in CUSTOM_BLUEPRINT_FILES],
             str(PROVIDERS_FILE.relative_to(REPO_ROOT)),
             str(APPLICATIONS_FILE.relative_to(REPO_ROOT)),
             str(SERVICE_ACCOUNTS_FILE.relative_to(REPO_ROOT)),
