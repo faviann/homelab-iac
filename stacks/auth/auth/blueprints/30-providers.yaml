@@ -146,7 +146,7 @@ entries:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-entitlements]]
 - model: authentik_providers_proxy.proxyprovider
-  state: present
+  state: absent
   identifiers:
     name: homepage-editors
   attrs:
@@ -180,7 +180,7 @@ entries:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-entitlements]]
 - model: authentik_providers_proxy.proxyprovider
-  state: present
+  state: absent
   identifiers:
     name: homepage-media
   attrs:

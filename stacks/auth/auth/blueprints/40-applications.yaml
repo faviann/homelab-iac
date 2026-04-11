@@ -85,7 +85,7 @@ entries:
     name: home-wildcard
     slug: home-wildcard
     provider: !Find [authentik_providers_proxy.proxyprovider, [name, home-wildcard-forwardauth]]
-    policy_engine_mode: all
+    policy_engine_mode: any
     launch_url: https://home.faviann.com
     open_in_new_tab: false
     meta_launch_url: ''
@@ -119,58 +119,9 @@ entries:
     group: !Find [authentik_core.group, [name, admins]]
 - id: app-homepage-media
   model: authentik_core.application
-  state: present
+  state: absent
   identifiers:
     slug: homepage-media
-  attrs:
-    name: homepage-media
-    slug: homepage-media
-    provider: !Find [authentik_providers_proxy.proxyprovider, [name, homepage-media]]
-    policy_engine_mode: all
-    launch_url: https://media.faviann.com
-    open_in_new_tab: false
-    meta_launch_url: ''
-    meta_publisher: ''
-    meta_description: ''
-- model: authentik_policies.policybinding
-  state: present
-  identifiers:
-    target: !KeyOf 'app-homepage-media'
-    order: 0
-  attrs:
-    target: !KeyOf 'app-homepage-media'
-    order: 0
-    enabled: true
-    negate: false
-    failure_result: false
-    timeout: 30
-    group: !Find [authentik_core.group, [name, media]]
-- model: authentik_policies.policybinding
-  state: present
-  identifiers:
-    target: !KeyOf 'app-homepage-media'
-    order: 1
-  attrs:
-    target: !KeyOf 'app-homepage-media'
-    order: 1
-    enabled: true
-    negate: false
-    failure_result: false
-    timeout: 30
-    group: !Find [authentik_core.group, [name, admins]]
-- model: authentik_policies.policybinding
-  state: present
-  identifiers:
-    target: !KeyOf 'app-homepage-media'
-    order: 2
-  attrs:
-    target: !KeyOf 'app-homepage-media'
-    order: 2
-    enabled: true
-    negate: false
-    failure_result: false
-    timeout: 30
-    group: !Find [authentik_core.group, [name, content-editors]]
 - id: app-ldap
   model: authentik_core.application
   state: present
@@ -214,6 +165,32 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, media]]
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-media-wildcard'
+    order: 1
+  attrs:
+    target: !KeyOf 'app-media-wildcard'
+    order: 1
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, admins]]
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-media-wildcard'
+    order: 2
+  attrs:
+    target: !KeyOf 'app-media-wildcard'
+    order: 2
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, content-editors]]
 - id: app-public-wildcard
   model: authentik_core.application
   state: present
