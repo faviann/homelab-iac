@@ -44,3 +44,7 @@ lxc_docker_env_gid: "{{ docker_gid | default(1000) }}"
 # External Docker networks to create before starting stacks
 # Override in host_vars to declare networks required by compose files
 lxc_docker_env_external_networks: []
+
+# Optional path-specific ownership overrides for bind-mounted stack data.
+# Each item supports: path, owner, group, recurse.
+lxc_docker_env_path_ownership_overrides: []

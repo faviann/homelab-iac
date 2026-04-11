@@ -9,6 +9,12 @@ default_domain: faviann.com
 lxc_docker_env_external_networks:
   - proxy
 
+lxc_docker_env_path_ownership_overrides:
+  - path: "/shared/{{ inventory_hostname }}/stacks/auth/appdata/database"
+    owner: '70'
+    group: '70'
+    recurse: true
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 301

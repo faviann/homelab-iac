@@ -353,6 +353,18 @@
     - _per_host_stacks_dir.stat.exists | default(false)
     - (item.path | relpath(lxc_docker_env_stacks_source)) not in (lxc_docker_env_templated_outputs | default([]))
 
+- name: Apply path-specific ownership overrides for stack data
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    recurse: "{{ item.recurse | default(false) }}"
+  loop: "{{ lxc_docker_env_path_ownership_overrides }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: lxc_docker_env_path_ownership_overrides | length > 0
+
 - name: Check if Traefik cert directory exists
   ansible.builtin.stat:
     path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs"
