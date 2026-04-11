@@ -45,13 +45,21 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+.venv/
+__pycache__/
+*.pyc
+*.pyo
 
 # Temporary files
 /tmp/
 inventory/group_vars/all/vault.yml
+token.txt
 
 # Rendered env files (secrets injected at deploy time)
 stacks/**/.env
+
+# MCP server config (contains API token)
+.mcp.json
 
 # Stack-local secrets and runtime artifacts
 stacks/**/secrets/
