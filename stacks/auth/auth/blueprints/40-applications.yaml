@@ -1,0 +1,231 @@
+version: 1
+metadata:
+  name: repo-auth-applications
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- id: app-admin-wildcard
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: admin-wildcard
+  attrs:
+    name: admin-wildcard
+    slug: admin-wildcard
+    provider: !Find [authentik_providers_proxy.proxyprovider, [name, admin-wildcard-forwardauth]]
+    policy_engine_mode: any
+    launch_url: https://admin.faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-admin-wildcard'
+    order: 0
+  attrs:
+    target: !KeyOf 'app-admin-wildcard'
+    order: 0
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, admins]]
+- id: app-authentik-ui
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: authentik-ui
+  attrs:
+    name: Authentik UI
+    slug: authentik-ui
+    provider: !Find [authentik_providers_proxy.proxyprovider, [name, auth-passthrough]]
+    policy_engine_mode: any
+    launch_url: https://auth.faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-authentik-ui'
+    order: 0
+  attrs:
+    target: !KeyOf 'app-authentik-ui'
+    order: 0
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, always-allow]]
+- id: app-faviann-domain
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: faviann-domain
+  attrs:
+    name: Faviann Domain
+    slug: faviann-domain
+    provider: !Find [authentik_providers_proxy.proxyprovider, [name, Provider for Domain Wide Forward Auth Catch All]]
+    policy_engine_mode: any
+    launch_url: https://faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+- id: app-home-wildcard
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: home-wildcard
+  attrs:
+    name: home-wildcard
+    slug: home-wildcard
+    provider: !Find [authentik_providers_proxy.proxyprovider, [name, home-wildcard-forwardauth]]
+    policy_engine_mode: all
+    launch_url: https://home.faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-home-wildcard'
+    order: 0
+  attrs:
+    target: !KeyOf 'app-home-wildcard'
+    order: 0
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, content-editors]]
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-home-wildcard'
+    order: 1
+  attrs:
+    target: !KeyOf 'app-home-wildcard'
+    order: 1
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, admins]]
+- id: app-homepage-media
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: homepage-media
+  attrs:
+    name: homepage-media
+    slug: homepage-media
+    provider: !Find [authentik_providers_proxy.proxyprovider, [name, homepage-media]]
+    policy_engine_mode: all
+    launch_url: https://media.faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-homepage-media'
+    order: 0
+  attrs:
+    target: !KeyOf 'app-homepage-media'
+    order: 0
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, media]]
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-homepage-media'
+    order: 1
+  attrs:
+    target: !KeyOf 'app-homepage-media'
+    order: 1
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, admins]]
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-homepage-media'
+    order: 2
+  attrs:
+    target: !KeyOf 'app-homepage-media'
+    order: 2
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, content-editors]]
+- id: app-ldap
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: ldap
+  attrs:
+    name: LDAP
+    slug: ldap
+    provider: !Find [authentik_providers_ldap.ldapprovider, [name, ldap-provider]]
+    policy_engine_mode: any
+    launch_url: null
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+- id: app-media-wildcard
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: media-wildcard
+  attrs:
+    name: media-wildcard
+    slug: media-wildcard
+    provider: !Find [authentik_providers_proxy.proxyprovider, [name, media-wildcard-forwardauth]]
+    policy_engine_mode: any
+    launch_url: https://media.faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-media-wildcard'
+    order: 0
+  attrs:
+    target: !KeyOf 'app-media-wildcard'
+    order: 0
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, media]]
+- id: app-public-wildcard
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: public-wildcard
+  attrs:
+    name: public-wildcard
+    slug: public-wildcard
+    provider: !Find [authentik_providers_proxy.proxyprovider, [name, public-wildcard-forwardauth]]
+    policy_engine_mode: any
+    launch_url: https://public.faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''

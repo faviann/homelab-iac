@@ -1,0 +1,45 @@
+context: {}
+entries:
+- attrs:
+    authentication: none
+    denied_action: message_continue
+    designation: invalidation
+    layout: stacked
+    name: Logout
+    policy_engine_mode: any
+    title: Default Invalidation Flow
+  conditions: []
+  identifiers:
+    pk: 5e090a1b-f00a-4510-8c7a-21182a0a212c
+    slug: default-invalidation-flow
+  model: authentik_flows.flow
+  permissions: []
+  state: present
+- attrs: {}
+  conditions: []
+  identifiers:
+    name: default-invalidation-logout
+    pk: ffac2db0-61d9-4761-a464-f548090fb3f1
+  model: authentik_stages_user_logout.userlogoutstage
+  permissions: []
+  state: present
+- attrs:
+    invalid_response_action: retry
+    policy_engine_mode: any
+    re_evaluate_policies: true
+  conditions: []
+  identifiers:
+    order: 0
+    pk: 8eb0911d-fd46-40a6-bb38-c0e995cf6592
+    stage: ffac2db0-61d9-4761-a464-f548090fb3f1
+    target: 5e090a1b-f00a-4510-8c7a-21182a0a212c
+  model: authentik_flows.flowstagebinding
+  permissions: []
+  state: present
+metadata:
+  name: repo-auth-flow-default-invalidation-flow
+  labels:
+    blueprints.goauthentik.io/generated: 'true'
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+version: 1

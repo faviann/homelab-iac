@@ -1,0 +1,47 @@
+context: {}
+entries:
+- attrs:
+    authentication: require_authenticated
+    denied_action: message_continue
+    designation: authorization
+    layout: stacked
+    name: Authorize Application
+    policy_engine_mode: any
+    title: Redirecting to %(app)s
+  conditions: []
+  identifiers:
+    pk: cdb145f4-bc99-4546-9a3a-2bca87ae3842
+    slug: default-provider-authorization-explicit-consent
+  model: authentik_flows.flow
+  permissions: []
+  state: present
+- attrs:
+    consent_expire_in: weeks=4
+    mode: expiring
+  conditions: []
+  identifiers:
+    name: default-provider-authorization-consent
+    pk: 6935649c-3c9f-4513-99d8-0a33d70eceaf
+  model: authentik_stages_consent.consentstage
+  permissions: []
+  state: present
+- attrs:
+    invalid_response_action: retry
+    policy_engine_mode: any
+    re_evaluate_policies: true
+  conditions: []
+  identifiers:
+    order: 0
+    pk: e9fdfe96-fcb8-4bdb-9b31-f9590907734a
+    stage: 6935649c-3c9f-4513-99d8-0a33d70eceaf
+    target: cdb145f4-bc99-4546-9a3a-2bca87ae3842
+  model: authentik_flows.flowstagebinding
+  permissions: []
+  state: present
+metadata:
+  name: repo-auth-flow-default-provider-authorization-explicit-consent
+  labels:
+    blueprints.goauthentik.io/generated: 'true'
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+version: 1

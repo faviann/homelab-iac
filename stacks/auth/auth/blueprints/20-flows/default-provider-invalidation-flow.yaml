@@ -1,0 +1,24 @@
+context: {}
+entries:
+- attrs:
+    authentication: none
+    denied_action: message_continue
+    designation: invalidation
+    layout: stacked
+    name: Logged out of application
+    policy_engine_mode: any
+    title: You've logged out of %(app)s.
+  conditions: []
+  identifiers:
+    pk: e252fa4f-a3f4-4f7c-9e12-e44b1d965624
+    slug: default-provider-invalidation-flow
+  model: authentik_flows.flow
+  permissions: []
+  state: present
+metadata:
+  name: repo-auth-flow-default-provider-invalidation-flow
+  labels:
+    blueprints.goauthentik.io/generated: 'true'
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+version: 1

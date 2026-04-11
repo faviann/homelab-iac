@@ -1,0 +1,78 @@
+version: 1
+metadata:
+  name: repo-auth-outposts
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- model: authentik_outposts.outpost
+  state: present
+  identifiers:
+    name: LDAP
+  attrs:
+    name: LDAP
+    type: ldap
+    providers:
+    - !Find [authentik_providers_ldap.ldapprovider, [name, ldap-provider]]
+    config:
+      log_level: info
+      docker_labels: null
+      authentik_host: https://auth.faviann.com/
+      docker_network: null
+      container_image: null
+      docker_map_ports: true
+      refresh_interval: minutes=5
+      kubernetes_replicas: 1
+      kubernetes_namespace: default
+      authentik_host_browser: ''
+      object_naming_template: ak-outpost-%(name)s
+      authentik_host_insecure: false
+      kubernetes_json_patches: null
+      kubernetes_service_type: ClusterIP
+      kubernetes_ingress_path_type: null
+      kubernetes_image_pull_secrets: []
+      kubernetes_ingress_class_name: null
+      kubernetes_disabled_components: []
+      kubernetes_ingress_annotations: {}
+      kubernetes_ingress_secret_name: authentik-outpost-tls
+      kubernetes_httproute_annotations: {}
+      kubernetes_httproute_parent_refs: []
+    refresh_interval_s: 300
+    service_connection: !Find [authentik_outposts.dockerserviceconnection, [name, Local Docker connection]]
+- model: authentik_outposts.outpost
+  state: present
+  identifiers:
+    name: authentik Embedded Outpost
+  attrs:
+    name: authentik Embedded Outpost
+    type: proxy
+    providers:
+    - !Find [authentik_providers_proxy.proxyprovider, [name, Provider for Domain Wide Forward Auth Catch All]]
+    - !Find [authentik_providers_proxy.proxyprovider, [name, homepage-media]]
+    - !Find [authentik_providers_proxy.proxyprovider, [name, auth-passthrough]]
+    - !Find [authentik_providers_proxy.proxyprovider, [name, admin-wildcard-forwardauth]]
+    - !Find [authentik_providers_proxy.proxyprovider, [name, home-wildcard-forwardauth]]
+    - !Find [authentik_providers_proxy.proxyprovider, [name, media-wildcard-forwardauth]]
+    - !Find [authentik_providers_proxy.proxyprovider, [name, public-wildcard-forwardauth]]
+    config:
+      log_level: info
+      docker_labels: null
+      authentik_host: https://auth.faviann.com
+      docker_network: null
+      container_image: null
+      docker_map_ports: true
+      refresh_interval: minutes=5
+      kubernetes_replicas: 1
+      kubernetes_namespace: default
+      authentik_host_browser: ''
+      object_naming_template: ak-outpost-%(name)s
+      authentik_host_insecure: false
+      kubernetes_json_patches: null
+      kubernetes_service_type: ClusterIP
+      kubernetes_image_pull_secrets: []
+      kubernetes_ingress_class_name: null
+      kubernetes_disabled_components: []
+      kubernetes_ingress_annotations: {}
+      kubernetes_ingress_secret_name: authentik-outpost-tls
+    refresh_interval_s: 300
+    service_connection: !Find [authentik_outposts.dockerserviceconnection, [name, Local Docker connection]]

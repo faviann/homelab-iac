@@ -1,0 +1,79 @@
+context: {}
+entries:
+- attrs:
+    authentication: none
+    compatibility_mode: true
+    denied_action: message_continue
+    designation: authentication
+    layout: stacked
+    name: ldap-authentication-flow
+    policy_engine_mode: any
+    title: ldap-authentication-flow
+  conditions: []
+  identifiers:
+    pk: 28511b91-98d7-4b08-b59d-fa59fbf86945
+    slug: ldap-authentication-flow
+  model: authentik_flows.flow
+  permissions: []
+  state: present
+- attrs:
+    case_insensitive_matching: true
+    password_stage: a5153048-d35b-42bc-933c-b292e340d92f
+    pretend_user_exists: true
+    show_matched_user: true
+    user_fields:
+    - username
+    - email
+  conditions: []
+  identifiers:
+    name: ldap-identification-stage
+    pk: 0aacb712-a2b0-4eb1-96d0-6aaf224cc37f
+  model: authentik_stages_identification.identificationstage
+  permissions: []
+  state: present
+- attrs:
+    geoip_binding: bind_continent
+    network_binding: bind_asn
+    remember_device: days=30
+    remember_me_offset: seconds=0
+    session_duration: seconds=0
+  conditions: []
+  identifiers:
+    name: ldap-authentication-login
+    pk: 5511746e-d101-4b62-acdb-3beeac2af280
+  model: authentik_stages_user_login.userloginstage
+  permissions: []
+  state: present
+- attrs:
+    evaluate_on_plan: true
+    invalid_response_action: retry
+    policy_engine_mode: any
+  conditions: []
+  identifiers:
+    order: 10
+    pk: b422ebfd-705d-4734-b38e-31af43c2bf7f
+    stage: 0aacb712-a2b0-4eb1-96d0-6aaf224cc37f
+    target: 28511b91-98d7-4b08-b59d-fa59fbf86945
+  model: authentik_flows.flowstagebinding
+  permissions: []
+  state: present
+- attrs:
+    evaluate_on_plan: true
+    invalid_response_action: retry
+    policy_engine_mode: any
+  conditions: []
+  identifiers:
+    order: 30
+    pk: a8d8bc11-cd24-4193-8d67-6c3fa53b00ff
+    stage: 5511746e-d101-4b62-acdb-3beeac2af280
+    target: 28511b91-98d7-4b08-b59d-fa59fbf86945
+  model: authentik_flows.flowstagebinding
+  permissions: []
+  state: present
+metadata:
+  name: repo-auth-flow-ldap-authentication-flow
+  labels:
+    blueprints.goauthentik.io/generated: 'true'
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+version: 1

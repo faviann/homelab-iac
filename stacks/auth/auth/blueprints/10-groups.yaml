@@ -1,0 +1,31 @@
+version: 1
+metadata:
+  name: repo-auth-groups
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: admins
+  attrs:
+    name: admins
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: content-editors
+  attrs:
+    name: content-editors
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: ldapsearch
+  attrs:
+    name: ldapsearch
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: media
+  attrs:
+    name: media

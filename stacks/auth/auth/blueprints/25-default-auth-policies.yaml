@@ -1,0 +1,90 @@
+version: 1
+metadata:
+  name: repo-auth-default-auth-policies
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- model: authentik_policies_expression.expressionpolicy
+  state: present
+  identifiers:
+    name: local-network-check
+  attrs:
+    name: local-network-check
+    expression: |-
+      return (
+          ak_client_ip in ip_network("10.1.0.0/18")
+          or ak_client_ip in ip_network("10.0.0.0/24")
+          or ak_client_ip in ip_network("12.200.196.0/24")
+      )
+- id: default-auth-turnstile-binding
+  model: authentik_flows.flowstagebinding
+  state: present
+  identifiers:
+    target: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+    stage: !Find [authentik_stages_captcha.captchastage, [name, cloudflare-turnstile]]
+    order: 15
+  attrs:
+    target: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+    stage: !Find [authentik_stages_captcha.captchastage, [name, cloudflare-turnstile]]
+    order: 15
+    invalid_response_action: retry
+    policy_engine_mode: any
+    re_evaluate_policies: true
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'default-auth-turnstile-binding'
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, local-network-check]]
+    order: 0
+  attrs:
+    target: !KeyOf 'default-auth-turnstile-binding'
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, local-network-check]]
+    order: 0
+    enabled: true
+    negate: true
+    timeout: 30
+- id: default-auth-mfa-binding
+  model: authentik_flows.flowstagebinding
+  state: present
+  identifiers:
+    target: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+    stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+    order: 30
+  attrs:
+    target: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+    stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+    order: 30
+    invalid_response_action: retry
+    policy_engine_mode: all
+    re_evaluate_policies: true
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf 'default-auth-mfa-binding'
+    order: 0
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'default-auth-mfa-binding'
+    order: 5
+  attrs:
+    target: !KeyOf 'default-auth-mfa-binding'
+    order: 5
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, admins]]
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'default-auth-mfa-binding'
+    order: 10
+  attrs:
+    target: !KeyOf 'default-auth-mfa-binding'
+    order: 10
+    enabled: true
+    failure_result: true
+    timeout: 30
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, default-authentication-flow-authenticator-validate-stage]]
