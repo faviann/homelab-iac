@@ -1,0 +1,22 @@
+---
+# Host-specific configuration for the public service
+# Inherits from: tier_large, cap_docker
+
+lxc_hwaddr: "BC:24:11:D4:52:3F"
+default_domain: public.faviann.com
+
+lxc_docker_env_external_networks:
+  - proxy
+
+# Mealie stack secrets (resolved from vault)
+public_mealie_smtp_password: "{{ vault_public_mealie_smtp_password }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 305
+  hostname: public
+  description: "Public service managed via Ansible"
+  tags:
+    - ansible
+    - public
+    - web

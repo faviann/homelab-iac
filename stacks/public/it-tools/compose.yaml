@@ -1,0 +1,14 @@
+services:
+  it-tools:
+    image: corentinth/it-tools
+    container_name: it-tools
+    restart: unless-stopped
+    ports:
+      - 8088:80
+    labels:
+      - traefik.enable=true
+      - homepage.group=Tools
+      - homepage.name=${COMPOSE_PROJECT_NAME}
+      - homepage.icon=it-tools
+      - homepage.href=https://${HOMEPAGE_FQDN}
+      - homepage.description=IT Tools for random things
