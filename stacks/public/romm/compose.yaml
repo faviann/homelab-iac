@@ -1,0 +1,58 @@
+services:
+  romm:
+    image: rommapp/romm:latest
+    container_name: romm
+    restart: unless-stopped
+    environment:
+      - DB_HOST=romm-db
+      - DB_NAME=romm
+      - DB_USER=romm
+      - DB_PASSWD=${DB_PASSWD}
+      - ROMM_AUTH_SECRET_KEY=${ROMM_AUTH_SECRET_KEY}
+      # Chef's Choice metadata providers
+      - HASHEOUS_API_ENABLED=true
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
+      - STEAMGRIDDB_API_KEY=${STEAMGRIDDB_API_KEY}
+      - RETROACHIEVEMENTS_API_KEY=${RETROACHIEVEMENTS_API_KEY}
+    volumes:
+      - ./appdata/resources:/romm/resources
+      - ./appdata/redis-data:/redis-data
+      - ./appdata/assets:/romm/assets
+      - ./appdata/config:/romm/config
+      - /data/roms:/romm/library
+    depends_on:
+      romm-db:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.romm.loadbalancer.server.port=8080
+      - homepage.group=Gaming
+      - homepage.name=${COMPOSE_PROJECT_NAME}
+      - homepage.icon=romm
+      - homepage.href=https://${HOMEPAGE_FQDN}
+      - homepage.description=ROM manager
+    networks:
+      - proxy
+      - default
+
+  romm-db:
+    image: mariadb:latest
+    container_name: romm-db
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD=${DB_ROOT_PASSWD}
+      - MARIADB_DATABASE=romm
+      - MARIADB_USER=romm
+      - MARIADB_PASSWORD=${DB_PASSWD}
+    volumes:
+      - ./appdata/db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      interval: 10s
+      retries: 5
+
+networks:
+  proxy:
+    external: true

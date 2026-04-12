@@ -104,10 +104,31 @@ HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 
 Then merge additional deployment-specific vars from the input. If the input has non-standard values for `PUID`, `PGID`, or `TZ`, flag the deviation and ask whether to keep or use defaults.
 
-**Secrets**: For env vars the user identifies as needing vault:
+**Secrets**: Classify every vault-bound env var by type using these heuristics:
+
+| Pattern | Type | Action |
+|---------|------|--------|
+| `*_password`, `*_passwd`, `*_secret_key`, `*_auth_key`, `*_secret` (internal) | **Generated** | `openssl rand -hex 32` (or 20 for passwords) |
+| `*_api_key`, `*_client_id`, `*_client_secret`, `*_token` | **User-provided** | `REPLACE_ME` placeholder |
+
+Present a single grouped confirmation before Step 8 — do not ask per-secret:
+
+```
+Secrets classified:
+  Generated (will be auto-vaulted with random values):
+    vault_<host>_<var> ...
+  You provide (REPLACE_ME in vault — fill before deploying):
+    vault_<host>_<var> ...
+Correct? (y / move X to the other column)
+```
+
+Compute the generated values now (store internally for Step 14). Do not print them.
+
+For all vault-bound vars:
 1. Add to `.env.j2`: `VAR={{ <host>_<var_name> | replace('$', '$$') }}`
 2. Add to `inventory/host_vars/<host>.yml`: `<host>_<var_name>: "{{ vault_<host>_<var_name> }}"`
-3. Flag in output: "Run `ansible-vault edit inventory/group_vars/all/vault.yml` and add `vault_<host>_<var_name>`"
+
+Do not write to vault yet — that happens in Step 14.
 
 ### Step 8: Networking
 
@@ -149,19 +170,29 @@ Do not create Authentik config. Just flag and link the docs.
 Present all changes as a unified preview:
 - New files: `compose.yaml`, `.env.j2`, `appdata/` tree
 - Modified files: `inventory/host_vars/<host>.yml` (vault var indirection, network declarations)
-- Manual steps: vault edit command, any Authentik notes
+- Vault writes: list generated var names (not values) and user-provided vars that will get `REPLACE_ME`
+- Any Authentik notes
 
 **Do not write any files until the user confirms.**
 
 ### Step 14: Write and Deploy Command
 
-On confirmation, write all files. Then print:
+On confirmation:
 
-```
-Deploy with: ansible-playbook site.yml --limit <host>
-```
+1. Write all stack files (`compose.yaml`, `.env.j2`, `appdata/` tree, host var updates).
+2. Write vault entries:
+   ```bash
+   ansible-vault decrypt inventory/group_vars/all/vault.yml --vault-password-file .ansible/vault-pass.txt
+   # append generated entries with computed values and REPLACE_ME entries for user-provided
+   ansible-vault encrypt --encrypt-vault-id default inventory/group_vars/all/vault.yml --vault-password-file .ansible/vault-pass.txt
+   ```
+3. If any user-provided secrets exist, print which vault keys need real values before deploying.
+4. Print:
+   ```
+   Deploy with: ansible-playbook site.yml --limit <host>
+   ```
 
-Do not offer to run the command.
+Do not offer to run the deploy command.
 
 ---
 

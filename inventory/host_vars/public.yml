@@ -11,6 +11,15 @@ lxc_docker_env_external_networks:
 # Mealie stack secrets (resolved from vault)
 public_mealie_smtp_password: "{{ vault_public_mealie_smtp_password }}"
 
+# RomM stack secrets (resolved from vault)
+public_romm_db_passwd: "{{ vault_public_romm_db_passwd }}"
+public_romm_db_root_passwd: "{{ vault_public_romm_db_root_passwd }}"
+public_romm_auth_secret_key: "{{ vault_public_romm_auth_secret_key }}"
+public_romm_igdb_client_id: "{{ vault_public_romm_igdb_client_id }}"
+public_romm_igdb_client_secret: "{{ vault_public_romm_igdb_client_secret }}"
+public_romm_retroachievements_api_key: "{{ vault_public_romm_retroachievements_api_key }}"
+public_romm_steamgriddb_api_key: "{{ vault_public_romm_steamgriddb_api_key }}"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 305
