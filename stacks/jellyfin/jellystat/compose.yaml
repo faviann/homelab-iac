@@ -1,3 +1,8 @@
+x-prereq-dirs:
+  - ./appdata/jellystat-db/config
+  - ./appdata/jellystat-db/data
+  - ./appdata/jellystat
+
 services:
   jellystat-db:
     image: postgres:15.2

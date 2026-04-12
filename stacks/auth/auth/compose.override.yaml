@@ -1,3 +1,9 @@
+x-prereq-dirs:
+  - ./appdata/database
+  - ./appdata/authentik/data
+  - ./appdata/authentik/certs
+  - ./appdata/authentik/custom-templates
+
 services:
   postgresql:
     volumes:

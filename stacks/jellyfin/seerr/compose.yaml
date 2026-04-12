@@ -1,3 +1,6 @@
+x-prereq-dirs:
+  - ./appdata/seerr/config
+
 services:
   seerr:
     image: ghcr.io/seerr-team/seerr:latest

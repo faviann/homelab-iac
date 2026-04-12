@@ -1,3 +1,6 @@
+x-prereq-dirs:
+  - ./appdata/mylar
+
 services:
   mylar:
     image: lscr.io/linuxserver/mylar:latest

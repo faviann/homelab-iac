@@ -1,3 +1,7 @@
+x-prereq-dirs:
+  - ./appdata/jellyfin/cache
+  - ./appdata/jellyfin/config
+
 services:
   jellyfin:
     container_name: jellyfin

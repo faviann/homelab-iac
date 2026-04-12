@@ -1,3 +1,6 @@
+x-prereq-dirs:
+  - ./appdata/sonarr
+
 services:
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest

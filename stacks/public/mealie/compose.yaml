@@ -1,3 +1,6 @@
+x-prereq-dirs:
+  - ./appdata/mealie
+
 services:
   mealie:
     image: ghcr.io/mealie-recipes/mealie:v3.14.0

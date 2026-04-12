@@ -1,3 +1,6 @@
+x-prereq-dirs:
+  - ./appdata/prowlarr
+
 services:
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest

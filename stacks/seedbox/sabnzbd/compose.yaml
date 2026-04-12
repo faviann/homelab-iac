@@ -1,3 +1,7 @@
+x-prereq-dirs:
+  - ./appdata/sabnzbd
+  - /ephemeral/sabnzbd
+
 services:
   sabnzbd:
     container_name: sabnzbd

@@ -1,3 +1,6 @@
+x-prereq-dirs:
+  - ./appdata/bazarr
+
 services:
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest

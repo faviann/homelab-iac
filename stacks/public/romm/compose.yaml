@@ -1,3 +1,10 @@
+x-prereq-dirs:
+  - ./appdata/assets
+  - ./appdata/config
+  - ./appdata/db
+  - /ephemeral/romm/resources
+  - /ephemeral/romm/redis-data
+
 services:
   romm:
     image: rommapp/romm:latest
