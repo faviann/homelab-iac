@@ -1,7 +1,0 @@
----
-# Proxmox API authentication details
-# Updated by configure-vault.sh on Sat 20 Dec 2025 07:25:52 PM EST
-
-vault_proxmox_api_user: "root@pam"
-vault_proxmox_api_token_id: "root@pam!ansible-token-laptop"
-vault_proxmox_api_token_secret: "5cf0361e-68ff-442f-99f2-4f44896705115cf0361e-68ff-442f-99f2-4f44896705115cf03"
