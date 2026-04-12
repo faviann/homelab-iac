@@ -172,7 +172,7 @@ When the user provides only a service name (no existing compose):
 1. Research the service's Docker image documentation (Docker Hub, GHCR, official docs)
 2. If multiple images exist (official, LSIO, community), present options with a note when an LSIO image is available (LSIO aligns with the `.env.j2` boilerplate). Let the user pick.
 3. From the chosen image docs, extract: required/optional env vars, volume mount points, exposed ports, any special requirements (GPU, sysctls, capabilities)
-4. Assemble a contract-compliant compose from these raw facts — do not copy community compose examples
+4. Assemble a contract-compliant compose from these raw facts — do not copy community compose examples. The user-facing service **must** include a `ports:` mapping for its primary port — traefik-kop requires the port to be reachable on the host network.
 5. Continue from Step 3 of the scaffolding flow
 
 ---
@@ -207,3 +207,4 @@ Run this checklist when modifying existing files under `stacks/`. Flag violation
 14. No `user:` on LSIO images
 15. GPU config only on `cap_gpu` hosts
 16. VPN stacks have ports on the VPN container
+17. User-facing service with `traefik.enable=true` has a `ports:` mapping
