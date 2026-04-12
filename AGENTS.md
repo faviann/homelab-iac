@@ -60,6 +60,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `ansible-playbook site.yml --limit <host>` | Target one host |
 | `ansible-playbook site.yml --check` | Dry run |
 | `ansible-playbook bootstrap.yml` | Recreate venv + SSH keys after clean install |
+| `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
 
 Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` for merged vars, `ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
 
@@ -74,3 +75,4 @@ Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -
 → [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read when adding hosts or debugging variable precedence.
 → [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md) — read when hitting API 403 errors or configuring restricted LXC features.
 → [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
+→ [setup.sh](setup.sh) — read when addressing workstation tooling, editor config, or environment setup for contributors.
