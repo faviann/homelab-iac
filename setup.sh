@@ -298,6 +298,25 @@ EOF
 fi
 
 echo
+echo "Step 8: VS Code configuration..."
+echo "─────────────────────────────────────────"
+
+if command -v code &> /dev/null || [ -d "$HOME/.vscode" ]; then
+    mkdir -p .vscode
+    cat > .vscode/settings.json << 'EOF'
+{
+  "terminal.integrated.profiles.linux": {
+    "bash": { "path": "bash", "args": ["-l"] }
+  },
+  "terminal.integrated.defaultProfile.linux": "bash"
+}
+EOF
+    print_status "VS Code terminal configured (login shell for direnv support)"
+else
+    print_info "VS Code not detected — skipping .vscode/settings.json"
+fi
+
+echo
 echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║  Setup Complete!                                          ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"

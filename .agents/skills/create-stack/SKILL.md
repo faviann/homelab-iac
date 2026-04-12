@@ -182,6 +182,7 @@ On confirmation:
 1. Write all stack files (`compose.yaml`, `.env.j2`, `appdata/` tree, host var updates).
 2. Write vault entries:
    ```bash
+   source .ansible/venv/bin/activate
    ansible-vault decrypt inventory/group_vars/all/vault.yml --vault-password-file .ansible/vault-pass.txt
    # append generated entries with computed values and REPLACE_ME entries for user-provided
    ansible-vault encrypt --encrypt-vault-id default inventory/group_vars/all/vault.yml --vault-password-file .ansible/vault-pass.txt

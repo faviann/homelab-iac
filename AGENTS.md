@@ -10,7 +10,7 @@
 
 ## Non-negotiables
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
-- The venv activates automatically on `cd` via direnv. If it doesn't exist yet, run `ansible-playbook bootstrap.yml` to create it.
+- The venv must be active for all `ansible` and `ansible-vault` commands. Source `.ansible/venv/bin/activate` explicitly in agent/script contexts; interactive terminals and VS Code handle it automatically. If the venv doesn't exist yet, run `ansible-playbook bootstrap.yml` to create it.
 
 ## Standard Paths
 
