@@ -16,11 +16,11 @@ services:
       - STEAMGRIDDB_API_KEY=${STEAMGRIDDB_API_KEY}
       - RETROACHIEVEMENTS_API_KEY=${RETROACHIEVEMENTS_API_KEY}
     volumes:
-      - ./appdata/resources:/romm/resources
-      - ./appdata/redis-data:/redis-data
       - ./appdata/assets:/romm/assets
       - ./appdata/config:/romm/config
       - /data/roms:/romm/library
+      - /ephemeral/romm/resources:/romm/resources
+      - /ephemeral/romm/redis-data:/redis-data
     depends_on:
       romm-db:
         condition: service_healthy
