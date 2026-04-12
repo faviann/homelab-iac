@@ -314,6 +314,72 @@
       {{ outputs }}
   when: _per_host_stacks_dir.stat.exists | default(false)
 
+- name: Initialize per-host stack compose manifest facts
+  ansible.builtin.set_fact:
+    lxc_docker_env_source_compose_specs: []
+    lxc_docker_env_prereq_dirs: []
+
+- name: Build source compose spec list for per-host stacks
+  ansible.builtin.set_fact:
+    _lxc_docker_env_source_compose_specs_unrendered: >-
+      {%- set specs = [] -%}
+      {%- set compose_names = ['compose.yml', 'compose.yaml', 'compose.override.yml', 'compose.override.yaml'] -%}
+      {%- for file in _per_host_j2_files.files | default([]) -%}
+      {%- set relative_path = file.path | relpath(lxc_docker_env_stacks_source) | regex_replace('\.j2$', '') -%}
+      {%- if (relative_path | basename) in compose_names -%}
+      {%- set target_path = lxc_docker_env_shared_mount_source ~ '/stacks/' ~ relative_path -%}
+      {%- set _ = specs.append({
+        'source_path': file.path,
+        'relative_path': relative_path,
+        'target_path': target_path,
+        'target_dir': target_path | dirname,
+        'is_templated': true,
+        'stack_name': relative_path.split('/')[0]
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- for file in _per_host_static_files.files | default([]) -%}
+      {%- set relative_path = file.path | relpath(lxc_docker_env_stacks_source) -%}
+      {%- if (relative_path | basename) in compose_names and relative_path not in (lxc_docker_env_templated_outputs | default([])) -%}
+      {%- set target_path = lxc_docker_env_shared_mount_source ~ '/stacks/' ~ relative_path -%}
+      {%- set _ = specs.append({
+        'source_path': file.path,
+        'relative_path': relative_path,
+        'target_path': target_path,
+        'target_dir': target_path | dirname,
+        'is_templated': false,
+        'stack_name': relative_path.split('/')[0]
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ specs }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Render source compose manifest entries for prereq dir discovery
+  ansible.builtin.set_fact:
+    lxc_docker_env_source_compose_specs: >-
+      {{
+        lxc_docker_env_source_compose_specs
+        + [
+            item
+            | combine({
+                'content': (
+                  lookup('template', item.source_path)
+                  if item.is_templated
+                  else lookup('file', item.source_path)
+                )
+              })
+          ]
+      }}
+  vars:
+    stack_name: "{{ item.stack_name }}"
+  loop: "{{ _lxc_docker_env_source_compose_specs_unrendered | default([]) }}"
+  loop_control:
+    label: "{{ item.relative_path }}"
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (_lxc_docker_env_source_compose_specs_unrendered | default([])) | length > 0
+
 - name: Create per-host stack directories
   ansible.builtin.file:
     path: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
@@ -354,6 +420,47 @@
   when:
     - _per_host_stacks_dir.stat.exists | default(false)
     - (item.path | relpath(lxc_docker_env_stacks_source)) not in (lxc_docker_env_templated_outputs | default([]))
+
+- name: Collect prereq dirs from source stack compose files
+  ansible.builtin.set_fact:
+    lxc_docker_env_prereq_dirs: >-
+      {%- set dirs = [] -%}
+      {%- set override_paths = lxc_docker_env_path_ownership_overrides | default([]) | map(attribute='path') | list -%}
+      {%- for compose_spec in lxc_docker_env_source_compose_specs | default([]) -%}
+      {%- set compose = compose_spec.content | from_yaml -%}
+      {%- if compose is mapping -%}
+      {%- set prereq_dirs = compose.get('x-prereq-dirs', []) -%}
+      {%- if prereq_dirs is sequence and prereq_dirs is not string and prereq_dirs is not mapping -%}
+      {%- for prereq_dir in prereq_dirs -%}
+      {%- if prereq_dir is string -%}
+      {%- if prereq_dir.startswith('./') -%}
+      {%- set resolved_prereq_dir = compose_spec.target_dir + '/' + prereq_dir[2:] -%}
+      {%- else -%}
+      {%- set resolved_prereq_dir = prereq_dir -%}
+      {%- endif -%}
+      {%- if resolved_prereq_dir not in override_paths -%}
+      {%- set _ = dirs.append(resolved_prereq_dir) -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ dirs | unique }}
+  when:
+    - (lxc_docker_env_source_compose_specs | default([])) | length > 0
+
+- name: Ensure stack prereq dirs exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ lxc_docker_env_uid }}"
+    group: "{{ lxc_docker_env_gid }}"
+    mode: '0755'
+  loop: "{{ lxc_docker_env_prereq_dirs | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when: (lxc_docker_env_prereq_dirs | default([])) | length > 0
 
 - name: Apply path-specific ownership overrides for stack data
   ansible.builtin.file:
