@@ -12,6 +12,12 @@ This is a permanent log. When you make a mistake on this project, add an entry h
 
 ---
 
+### 2026-04-12
+
+- When a workstation setup problem arises, read `setup.sh` before proposing solutions. It handles all gitignored workstation config (venv, vault pass, direnv hook, SSH keys) and is the right place to extend — not new files, not git-tracked editor config, not dev containers.
+
+---
+
 ### 2026-04-10
 
 - When a forwardAuth callback fails, read `middleware-authentik.yaml` before forming any hypothesis. `authRequestHeaders` in Traefik v3 is an allowlist — if `Cookie` is not in it, session state never reaches the outpost.
