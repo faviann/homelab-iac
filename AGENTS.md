@@ -10,7 +10,7 @@
 
 ## Non-negotiables
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
-- Activate the venv before running any ansible command: `source .ansible/venv/bin/activate` (create with `ansible-playbook bootstrap.yml` if missing).
+- Activate the venv before running any ansible command: `source .ansible/venv/bin/activate` (create with `ansible-playbook bootstrap.yml` if missing). If direnv is installed and `.envrc` exists at the project root, this happens automatically on `cd`.
 
 ## Standard Paths
 

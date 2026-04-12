@@ -34,7 +34,6 @@ stacks/
 5. Deploy with:
 
 ```bash
-source .ansible/venv/bin/activate
 ansible-playbook site.yml --limit <host>
 ```
 

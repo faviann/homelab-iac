@@ -40,6 +40,9 @@ vault-pass.txt
 .DS_Store
 Thumbs.db
 
+# direnv
+.envrc
+
 # IDE files
 .vscode/
 .idea/

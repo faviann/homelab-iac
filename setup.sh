@@ -69,6 +69,11 @@ if ! dpkg -l | grep -q sshpass; then
     MISSING_PACKAGES+=("sshpass")
 fi
 
+if ! command -v direnv &> /dev/null; then
+    print_warning "direnv not installed"
+    MISSING_PACKAGES+=("direnv")
+fi
+
 # Install missing packages
 if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
     echo
@@ -299,7 +304,7 @@ echo -e "${GREEN}╚════════════════════
 echo
 echo "Project is ready to use. Quick reference:"
 echo
-echo "  • Activate environment:    ${BLUE}source activate-env.sh${NC}"
+echo "  • Activate environment:    ${BLUE}automatic via direnv on cd${NC}"
 echo "  • Test connectivity:       ${BLUE}ansible-playbook site.yml --tags validation${NC}"
 echo "  • Update credentials:      ${BLUE}./configure-vault.sh${NC}"
 echo "  • View vault password:     ${BLUE}cat .ansible/vault-pass.txt${NC}"
@@ -312,3 +317,27 @@ echo
 
 # Deactivate venv for clean exit
 deactivate 2>/dev/null || true
+
+# Set up direnv hook in shell profile if not already present
+if [ -f "$HOME/.zshrc" ]; then
+    SHELL_RC="$HOME/.zshrc"
+    SHELL_NAME="zsh"
+else
+    SHELL_RC="$HOME/.bashrc"
+    SHELL_NAME="bash"
+fi
+
+if ! grep -q "direnv hook" "$SHELL_RC" 2>/dev/null; then
+    echo '' >> "$SHELL_RC"
+    echo '# direnv' >> "$SHELL_RC"
+    echo "eval \"\$(direnv hook $SHELL_NAME)\"" >> "$SHELL_RC"
+    print_status "Added direnv hook to $SHELL_RC"
+else
+    print_status "direnv hook already in $SHELL_RC"
+fi
+
+# Allow .envrc in this project
+if [ -f ".envrc" ]; then
+    direnv allow .
+    print_status "direnv allowed for this project"
+fi
