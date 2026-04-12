@@ -39,7 +39,7 @@ Detect which input the user provided:
 
 Ask: **"Is this a vendor/upstream compose you want to keep close to the original (like Authentik), or should I fully normalize it to the repo contract?"**
 
-- **Vendor mode**: Skip all compose normalization (Steps 5-6). Still perform Steps 3-4 and 7-10.
+- **Vendor mode**: Skip compose normalization in Step 5 and the contract-only parts of Step 6. Still perform Steps 3-4, the bind-mount classification in Step 6, and Steps 7-11. When prereq-dir metadata is needed, preserve the upstream base file and emit `x-prereq-dirs` in `compose.override.yaml`.
 - **Contract mode**: Run all steps.
 
 ### Step 3: Validate Target Host
@@ -79,7 +79,11 @@ Apply these transformations automatically — do not ask:
 | `deploy` blocks | Preserve GPU reservations, flag anything else and ask the user |
 | No comments | Do not add comments to output files |
 
-### Step 6: Analyze Services (contract mode only)
+### Step 6: Analyze Services and Classify Bind Mounts
+
+In **contract mode**, run this full step.
+
+In **vendor mode**, skip the service-analysis and environment-placement parts, but still run the **Volume classification** subsection so prereq dirs are captured without rewriting the upstream base compose.
 
 **Multi-service stacks**: Auto-detect the user-facing service by filtering out known sidecars (postgres, redis, mariadb, mongo, services named `*-db`, `*-cache`, workers, services with no ports). Apply Traefik and Homepage labels only to the detected user-facing service. Confirm with the user. If ambiguous (multiple candidates), ask.
 
@@ -87,7 +91,20 @@ Apply these transformations automatically — do not ask:
 - Internal wiring (sibling service hostnames, static config) stays inline in the compose `environment:` block
 - Deployment-specific values (ports, domains, credentials, PUID/PGID/TZ) go to `.env.j2`
 
-**Named volumes**: Flag any named volumes (e.g., `database:/var/lib/postgresql/data`) and ask the user whether to convert to `./appdata/` bind mounts or keep as-is.
+**Volume classification (all modes)**: Classify every bind mount:
+
+| Path | Category | Action |
+|------|----------|--------|
+| `./appdata/...` (has committed files) | Persistent with content | Commit the files; Ansible copy task creates the dir |
+| `./appdata/...` (empty, container writes here) | Persistent empty | Add to `x-prereq-dirs` as `./appdata/...` |
+| `/ephemeral/<stack>/...` | Ephemeral (fast SSD, regenerable) | Add to `x-prereq-dirs` as absolute path |
+| `/data/...` (new subpath) | External pool, new | Add to `x-prereq-dirs` as absolute path |
+| `/data/...` (already exists) | External pool, pre-existing | Pass through, no action |
+| Other absolute path | Unknown | Ask user to classify |
+
+**Ephemeral auto-classification**: Volumes whose path or container mount target matches `*redis*`, `*cache*`, `*resources*`, `*thumbnails*`, `*tmp*`, `*incomplete*`, `*downloads*` are strong candidates for `/ephemeral/<stack>/<name>`. Propose the path and confirm.
+
+**Named volumes**: Flag any named volumes (e.g., `database:/var/lib/postgresql/data`) and ask whether to convert to `./appdata/` bind mounts or keep as-is. Warn that named volumes stay Docker-managed and bypass `appdata/` and `x-prereq-dirs`.
 
 ### Step 7: Generate `.env.j2`
 
@@ -152,9 +169,40 @@ If the compose includes GPU config (`runtime: nvidia`, `deploy.resources.reserva
 - Check if the target host is in `cap_gpu` group (look for `gpu_enabled: true` in host/group vars)
 - If the host lacks GPU capability, warn that GPU config won't work
 
-### Step 11: Appdata Scaffolding
+### Step 11: Dir Scaffolding
 
-Parse all bind-mount volumes pointing to `./appdata/...` from the compose. Auto-create the directory tree with `.gitkeep` files. Include in the preview.
+Collect all dirs classified in Step 6 as persistent-empty, ephemeral, or new external-pool paths. If there are any, emit an `x-prereq-dirs` block into the repo-managed compose file for the stack:
+
+- **Contract mode**: write it at the top of `compose.yaml`, before `services:`
+- **Vendor mode**: keep the upstream `compose.yaml` close to source and write it at the top of `compose.override.yaml`
+
+Example default placement in `compose.yaml`:
+
+```yaml
+x-prereq-dirs:
+  - ./appdata/config
+  - /ephemeral/romm/resources
+  - /ephemeral/romm/redis-data
+
+services:
+  ...
+```
+
+Vendor-mode example in `compose.override.yaml`:
+
+```yaml
+x-prereq-dirs:
+  - ./appdata/config
+
+services:
+  app:
+    volumes:
+      - ./appdata/config:/config
+```
+
+Use `./appdata/...` form for relative paths; absolute paths for everything else. The Ansible role resolves `./` entries against the deployed stack dir and creates all dirs with docker user ownership before starting the stack.
+
+Do not create `.gitkeep` files. Dirs with committed config files need no entry; the Ansible copy task handles them.
 
 ### Step 12: Authentik Flag
 
@@ -168,9 +216,16 @@ Do not create Authentik config. Just flag and link the docs.
 ### Step 13: Preview and Confirm
 
 Present all changes as a unified preview:
-- New files: `compose.yaml`, `.env.j2`, `appdata/` tree
+- New files: `compose.yaml`, `compose.override.yaml` (vendor mode when needed), `.env.j2`, any committed stack files
 - Modified files: `inventory/host_vars/<host>.yml` (vault var indirection, network declarations)
 - Vault writes: list generated var names (not values) and user-provided vars that will get `REPLACE_ME`
+- Prereq dirs (omit if none):
+  ```text
+  /conf/docker/stacks/romm/appdata/config   ← ./appdata/config
+  /ephemeral/romm/resources
+  /ephemeral/romm/redis-data
+  ```
+  → Declared in `x-prereq-dirs` in `compose.yaml` or `compose.override.yaml` (vendor mode)
 - Any Authentik notes
 
 **Do not write any files until the user confirms.**
@@ -179,7 +234,7 @@ Present all changes as a unified preview:
 
 On confirmation:
 
-1. Write all stack files (`compose.yaml`, `.env.j2`, `appdata/` tree, host var updates).
+1. Write all stack files (`compose.yaml`, `compose.override.yaml` when used, `.env.j2`, any committed stack files, host var updates).
 2. Write vault entries:
    ```bash
    source .ansible/venv/bin/activate
@@ -233,7 +288,7 @@ Run this checklist when modifying existing files under `stacks/`. Flag violation
 8. No `hostname` directive
 9. No `env_file` declarations
 10. Secrets in `.env.j2`, not static `.env`
-11. `appdata/` dirs exist for all bind mounts, with `.gitkeep`
+11. All bind-mount target dirs that need pre-creation are declared in `x-prereq-dirs` in the repo-managed compose definition (`compose.yaml` by default, `compose.override.yaml` for vendor-preserving stacks). No `.gitkeep` files.
 12. External networks declared in `lxc_docker_env_external_networks` host var
 13. No port conflicts with sibling stacks
 14. No `user:` on LSIO images

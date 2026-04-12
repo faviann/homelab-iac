@@ -11,6 +11,7 @@ stacks/
   <inventory_hostname>/
     <stack_name>/
       compose.yaml
+      compose.override.yaml   # optional: vendor-preserving overrides
       .env | .env.j2
       appdata/
 ```
@@ -20,16 +21,23 @@ stacks/
 - `.j2` files are rendered with inventory, host, group, and vault variables, then deployed without the `.j2` suffix.
 - Other files are copied verbatim.
 - Compose-relative persistent data should live under `./appdata/...`.
-- Pre-create any `./appdata/...` directories referenced by bind mounts. If they do not exist, Docker will create them on first start with the wrong ownership.
-- Use `.gitkeep` for empty directories that must exist in git.
+- All bind-mount target directories must exist before first deploy. If they do not, Docker creates them as root on first start, causing permission errors for non-root container processes. Declare dirs that need pre-creation in an `x-prereq-dirs` block in the repo-managed compose definition for the stack; the Ansible role creates them on the LXC with docker user ownership. Use `compose.yaml` by default. If the stack intentionally preserves an upstream vendor `compose.yaml`, place `x-prereq-dirs` in `compose.override.yaml` instead. This applies to empty `./appdata/` dirs, `/ephemeral/<stack>/` paths, and new `/data/` subpaths.
+- Dirs that contain committed files do not need an `x-prereq-dirs` entry; Ansible creates them automatically when deploying the files.
+- Do not use `.gitkeep`.
 - If both `.env` and `.env.j2` exist for the same output path, the templated output wins.
 - Hosts with no folder here are valid; they just get no repo-managed stacks.
+
+| Path Type | Purpose | Example | Notes |
+| --- | --- | --- | --- |
+| `./appdata/...` | Persistent container config or state | `./appdata/jellyfin/config` | Use `x-prereq-dirs` only when the dir is otherwise empty |
+| `/ephemeral/...` | Regenerable data on fast local storage | `/ephemeral/romm/resources` | Declare in `x-prereq-dirs` if the stack needs it created |
+| `/data/...` | Shared external pool | `/data/media` | Only declare new subpaths in `x-prereq-dirs`; leave pre-existing paths alone |
 
 ## Build a Stack
 
 1. Create `stacks/<host>/<stack>/compose.yaml`.
 2. Add `.env` or `.env.j2` if the stack needs environment variables.
-3. Add `appdata/` subdirectories for any compose-relative bind mounts before first start.
+3. For bind-mount target dirs that need pre-creation, add an `x-prereq-dirs` block to the repo-managed compose definition for the stack. Use `compose.yaml` by default. If you are intentionally preserving a vendor upstream base compose, put it in `compose.override.yaml` instead. Dirs that already contain committed config files need no entry.
 4. Add Traefik and Homepage labels only to the user-facing service.
 5. Deploy with:
 
@@ -139,27 +147,30 @@ When adding a new tier subdomain, also add its wildcard SAN in `stacks/portal/tr
 ## Minimal Example
 
 ```text
-stacks/media/jellyfin/
+stacks/jellyfin/jellyfin/
 ├── compose.yaml
-├── .env.j2
-└── appdata/jellyfin/.gitkeep
+└── .env.j2
 ```
 
 ```yaml
+x-prereq-dirs:
+  - ./appdata/jellyfin
+
 services:
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
     restart: unless-stopped
+    container_name: jellyfin
     volumes:
       - ./appdata/jellyfin:/config
       - /data/media:/data/media:ro
     labels:
-      - traefik.enable=true
-      - homepage.group=Media
-      - homepage.name=Jellyfin
-      - homepage.href=https://${HOMEPAGE_FQDN}
-      - homepage.description=Media streaming server
-      - homepage.icon=jellyfin
+      traefik.enable: true
+      homepage.group: Media
+      homepage.name: Jellyfin
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Media streaming server
+      homepage.icon: jellyfin
 ```
 
 ```jinja2
@@ -174,7 +185,7 @@ HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 1. Exposure intent is explicit.
 2. Only user-facing services carry Traefik labels.
 3. Homepage labels match the intended access tier.
-4. Persistent bind-mounted data lives under `./appdata/...`, and referenced directories exist in git before first deploy.
+4. All bind-mount target dirs that need pre-creation are declared in `x-prereq-dirs` in the repo-managed compose definition for the stack. `compose.yaml` is the default location; vendor-preserving stacks may use `compose.override.yaml`. No `.gitkeep` files.
 5. Any new subdomain tier also updates Traefik SANs.
 6. Secrets live in vault-backed `.env.j2`, not static `.env`.
 
