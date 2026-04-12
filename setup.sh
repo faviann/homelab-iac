@@ -298,7 +298,24 @@ EOF
 fi
 
 echo
-echo "Step 8: VS Code configuration..."
+echo "Step 8: Claude Code skills..."
+echo "─────────────────────────────────────────"
+
+SKILLS_DIR="$HOME/.claude/skills"
+mkdir -p "$SKILLS_DIR"
+for skill in "$PROJECT_ROOT/.agents/skills"/*/; do
+    skill_name="$(basename "$skill")"
+    target="$SKILLS_DIR/$skill_name"
+    if [ -L "$target" ] || [ -e "$target" ]; then
+        print_status "Skill already linked: $skill_name"
+    else
+        ln -s "$skill" "$target"
+        print_status "Linked skill: $skill_name"
+    fi
+done
+
+echo
+echo "Step 9: VS Code configuration..."
 echo "─────────────────────────────────────────"
 
 if command -v code &> /dev/null || [ -d "$HOME/.vscode" ]; then
