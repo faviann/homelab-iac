@@ -274,7 +274,9 @@
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0755'
-  when: _per_host_stacks_dir.stat.exists | default(false)
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - _deployed_top_level_stack_dirs.files | default([]) | map(attribute='path') | map('basename') | difference(lxc_docker_env_desired_top_level_stack_dirs | default([])) | list | length > 0
 
 - name: Stop stale deployed top-level stack projects
   ansible.builtin.command:
