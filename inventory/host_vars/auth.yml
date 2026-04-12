@@ -7,6 +7,7 @@ default_domain: faviann.com
 
 # Notifiarr integration
 auth_notifiarr_webhook_url: "{{ vault_notifiarr_authentik_webhook_url }}"
+auth_discord_approval_webhook_url: "{{ vault_authentik_discord_approval_webhook_url }}"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:
