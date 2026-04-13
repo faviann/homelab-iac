@@ -61,6 +61,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `ansible-playbook site.yml --check` | Dry run |
 | `ansible-playbook bootstrap.yml` | Recreate venv + SSH keys after clean install |
 | `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
+| `ssh -l root -i .ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 
 Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` for merged vars, `ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
 
