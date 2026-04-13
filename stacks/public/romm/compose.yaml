@@ -28,6 +28,8 @@ services:
       - /data/roms:/romm/library
       - /ephemeral/romm/resources:/romm/resources
       - /ephemeral/romm/redis-data:/redis-data
+    ports:
+      - "8080:8080"
     depends_on:
       romm-db:
         condition: service_healthy
