@@ -9,7 +9,11 @@ http:
     middlewares:
         no-auth:
             chain:
-                middlewares: []  # Only bypasses router-level chains; it does not bypass entrypoint-level forwardAuth in Traefik v3.
+                middlewares: []
+        protected-edge-auth:
+            chain:
+                middlewares:
+                    - forwardAuth-authentik
         forwardAuth-authentik:
             forwardAuth:
                 address: http://auth.faviann.vms:9000/outpost.goauthentik.io/auth/traefik

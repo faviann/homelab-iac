@@ -52,8 +52,6 @@ entryPoints:
       maxConcurrentStreams: 250
     http3: {}
     http:
-      middlewares:
-        - forwardAuth-authentik@file
       tls:
         # Generate a wildcard domain certificate
         certResolver: cloudflare

@@ -21,9 +21,8 @@ http:
         - sslheader
         - local-ip-restriction
 
-    # Authentik itself must be excluded from the entrypoint-level forwardAuth via
-    # Authentik's Unauthenticated URLs / Paths on the auth-passthrough provider.
-    # Expression policies alone do not bypass the initial unauthenticated redirect.
+    # Authentik itself stays edge-open at Traefik so it can handle its own login
+    # and callback flows without being wrapped by Traefik forwardAuth.
     authentik:
       rule: "Host(`auth.faviann.com`)"
       entryPoints: websecure
@@ -32,10 +31,8 @@ http:
       middlewares:
         - sslheader
 
-    # Authentik outpost callback routers — one per tier domain + root.
-    # These route /outpost.goauthentik.io/* to Authentik, but they do not bypass
-    # the entrypoint-level forwardAuth on their own. The matching Authentik
-    # provider must allowlist these URLs in Unauthenticated URLs / Paths.
+    # Authentik outpost callback routers for the protected tiers that still use
+    # edge forwardAuth. Public hosts do not use outpost callbacks by default.
     authentik-outpost-root:
       rule: "Host(`faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
       entryPoints: websecure
@@ -86,22 +83,6 @@ http:
 
     authentik-outpost-media-subdomains:
       rule: "HostRegexp(`^[a-z0-9-]+\\.media\\.faviann\\.com$`) && PathPrefix(`/outpost.goauthentik.io`)"
-      entryPoints: websecure
-      service: authentik
-      priority: 1001
-      middlewares:
-        - sslheader
-
-    authentik-outpost-public:
-      rule: "Host(`public.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
-      entryPoints: websecure
-      service: authentik
-      priority: 1001
-      middlewares:
-        - sslheader
-
-    authentik-outpost-public-subdomains:
-      rule: "HostRegexp(`^[a-z0-9-]+\\.public\\.faviann\\.com$`) && PathPrefix(`/outpost.goauthentik.io`)"
       entryPoints: websecure
       service: authentik
       priority: 1001

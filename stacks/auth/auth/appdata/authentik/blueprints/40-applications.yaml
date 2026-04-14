@@ -191,18 +191,3 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, content-editors]]
-- id: app-public-wildcard
-  model: authentik_core.application
-  state: present
-  identifiers:
-    slug: public-wildcard
-  attrs:
-    name: public-wildcard
-    slug: public-wildcard
-    provider: !Find [authentik_providers_proxy.proxyprovider, [name, public-wildcard-forwardauth]]
-    policy_engine_mode: any
-    launch_url: https://public.faviann.com
-    open_in_new_tab: false
-    meta_launch_url: ''
-    meta_publisher: ''
-    meta_description: ''
