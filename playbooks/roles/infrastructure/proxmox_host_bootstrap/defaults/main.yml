@@ -19,3 +19,4 @@ proxmox_ssh_port: 22
 # Validation checks
 proxmox_validate_pct: true
 proxmox_validate_api: true
+proxmox_min_lxc_pve_version: "6.0.5-2"

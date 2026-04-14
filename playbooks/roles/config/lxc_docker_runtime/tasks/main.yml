@@ -40,12 +40,3 @@
 - name: Display Docker Compose version
   ansible.builtin.debug:
     msg: "Docker Compose installed: {{ _docker_compose_version.stdout }}"
-
-# TODO: Remove this workaround after upgrading Proxmox host to lxc-pve >= 6.0.5-2
-# See: https://github.com/opencontainers/runc/issues/4968
-# The proper fix is upgrading Proxmox, not downgrading containerd in LXCs
-- name: Apply containerd workaround for LXC containers
-  ansible.builtin.include_tasks: containerd_workaround.yml
-  tags:
-    - containerd
-    - workaround
