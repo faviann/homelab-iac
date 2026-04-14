@@ -7,6 +7,7 @@ services:
       - 8088:80
     labels:
       - traefik.enable=true
+      - traefik.http.services.it-tools.loadbalancer.server.port=8088
       - homepage.group=Tools
       - homepage.name=${COMPOSE_PROJECT_NAME}
       - homepage.icon=it-tools
