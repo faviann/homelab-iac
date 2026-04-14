@@ -69,7 +69,6 @@ Host(`<compose-project>.<default_domain>`)
 
 - `websecure` is the default entrypoint.
 - TLS is automatic on `websecure`.
-- Auth is automatic on `websecure` via `forwardAuth-authentik@file`.
 
 So you normally should not add `entrypoints=websecure` or `tls=true`.
 
@@ -78,10 +77,12 @@ So you normally should not add `entrypoints=websecure` or `tls=true`.
 | Situation | Labels |
 | --- | --- |
 | Standard routed service | `traefik.enable=true` |
+| Protected routed service | above + `traefik.http.routers.<router>.middlewares=protected-edge-auth@file` |
 | Different domain than host default | above + `traefik.domain=<domain>` |
 | Custom hostname | above + `traefik.http.routers.<name>.rule=Host(...)` |
 | Ambiguous service port | above + `traefik.http.services.<name>.loadbalancer.server.port=<port>` |
-| Self-auth public service | host uses `public.faviann.com`, plus public outpost routers and `public-wildcard-forwardauth` |
+
+Public services should omit the auth middleware label. Protected tiers add it explicitly.
 
 ### Usually Leave Unlabeled
 
@@ -136,6 +137,10 @@ When adding a new tier subdomain, also add its wildcard SAN in `stacks/portal/tr
 
 → [docs/stacks-authentik.md](../docs/stacks-authentik.md) — read when creating or modifying Authentik providers, applications, or auth bypass rules.
 
+## RomM
+
+→ [docs/romm-mariadb-operations.md](../docs/romm-mariadb-operations.md) — read when debugging the RomM stack or recovering MariaDB after an unclean shutdown.
+
 ## Docker Agents
 
 → [docs/stacks-docker-agents.md](../docs/stacks-docker-agents.md) — read when debugging the managed docker-agents stack or changing agent configuration.
@@ -188,6 +193,7 @@ HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 4. All bind-mount target dirs that need pre-creation are declared in `x-prereq-dirs` in the repo-managed compose definition for the stack. `compose.yaml` is the default location; vendor-preserving stacks may use `compose.override.yaml`. No `.gitkeep` files.
 5. Any new subdomain tier also updates Traefik SANs.
 6. Secrets live in vault-backed `.env.j2`, not static `.env`.
+7. Stateful databases should not use floating `latest` tags; pin them and give them a realistic `stop_grace_period`.
 
 ## Notes
 

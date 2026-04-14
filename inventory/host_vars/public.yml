@@ -8,6 +8,12 @@ default_domain: public.faviann.com
 lxc_docker_env_external_networks:
   - proxy
 
+lxc_docker_env_path_ownership_overrides:
+  - path: "/shared/{{ inventory_hostname }}/stacks/romm/appdata/db"
+    owner: '999'
+    group: '999'
+    recurse: true
+
 # Mealie stack secrets (resolved from vault)
 public_mealie_smtp_password: "{{ vault_public_mealie_smtp_password }}"
 

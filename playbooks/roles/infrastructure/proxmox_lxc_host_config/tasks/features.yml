@@ -5,20 +5,37 @@
 # rather than splitting between API and SSH
 
 - name: Get current container features configuration
-  ansible.builtin.shell:
-    cmd: "pct config {{ proxmox_lxc_spec.vmid }} | grep -E '^features:' || echo 'features: '"
-  register: _current_features
+  ansible.builtin.command:
+    cmd: "pct config {{ proxmox_lxc_spec.vmid }}"
+  register: _pct_config
   changed_when: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
+
+- name: Normalize current features string
+  ansible.builtin.set_fact:
+    _current_features_string: >-
+      {{
+        (
+          _pct_config.stdout_lines
+          | select('search', 'features:')
+          | list
+          | first
+          | default('features: ')
+        )
+        | replace('features:', '')
+        | trim
+      }}
 
 - name: Parse current features into list
   ansible.builtin.set_fact:
     _current_features_list: >-
       {{
-        ((_current_features.stdout | regex_replace('^features:\\s*', '') | trim).split(',') if (_current_features.stdout | regex_replace('^features:\\s*', '') | trim) else [])
+        (_current_features_string.split(',') if _current_features_string else [])
         | map('trim')
         | select()
+        | unique
+        | sort
         | list
       }}
 
