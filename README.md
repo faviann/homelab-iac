@@ -4,6 +4,8 @@ Ansible automation for managing Proxmox LXC containers via API from a remote con
 
 ## Quick Start (New Workstation)
 
+Windows 10 users should use WSL2 as the Linux workstation. See [docs/windows-wsl2-setup.md](docs/windows-wsl2-setup.md).
+
 **One-command automated setup:**
 
 ```bash
@@ -32,7 +34,7 @@ ansible-playbook playbooks/validate-credentials.yml
 
 ## Overview
 
-This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. All playbooks run from the **Proxmox LXC control node** (unprivileged Debian/Ubuntu LTS). Do not run Ansible from your dev machine.
+This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. Run playbooks from a Linux control node with network access to Proxmox, such as a dedicated Debian/Ubuntu workstation, WSL2, or another Linux host.
 
 ### Key Features
 
@@ -248,6 +250,7 @@ ansible-playbook site.yml --tags validation
 ## Documentation
 
 - **docs/inventory-structure-guide.md** - Inventory design and best practices
+- **docs/windows-wsl2-setup.md** - Recommended Windows 10 + WSL2 workflow for VS Code and Codex CLI
 - **docs/proxmox-host-ssh-automation.md** - Host-side SSH automation details
 - **docs/ssh-key-management.md** - Adding SSH keys to existing containers
 - **stacks/README.md** - Docker Compose conventions and Traefik label contract
