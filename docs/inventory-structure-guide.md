@@ -103,6 +103,21 @@ proxmox_lxc_overrides:
 
 Override only what differs from the tier defaults. Leave CPU, memory, disk, network, and mount settings out unless they genuinely need to change.
 
+## Temporary Template Overrides
+
+For one-off reprovisioning or migration waves, add an `ostemplate` override in the host's
+`proxmox_lxc_overrides` block instead of changing the global template immediately.
+
+```yaml
+proxmox_lxc_overrides:
+  vmid: 303
+  hostname: servarr
+  ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst"
+```
+
+This is the preferred way to do a Debian release canary. The per-host override is merged after
+the global defaults, so it only affects the selected host.
+
 ## Validation and Safety
 
 The provisioning playbook includes automated validation to prevent accidental overwrites:
