@@ -135,8 +135,10 @@
 
 - name: Determine whether container should be rebuilt
   ansible.builtin.set_fact:
-    proxmox_lxc_rebuilt: "{{ proxmox_lxc_rebuild_required | bool }}"
-    proxmox_lxc_rebuild_required: >-
+    proxmox_lxc_rebuild_required: "{{ _rebuild_required }}"
+    proxmox_lxc_rebuilt: "{{ _rebuild_required | bool }}"
+  vars:
+    _rebuild_required: >-
       {{
         proxmox_lxc_spec.state | default('present') == 'present'
         and (proxmox_lxc_rebuild_on_release_mismatch | default(false) | bool)

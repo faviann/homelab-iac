@@ -58,10 +58,10 @@
 
     - name: Ensure container is accessible via SSH
       ansible.builtin.wait_for_connection:
-        timeout: 15
+        timeout: "{{ 60 if (proxmox_lxc_rebuilt | default(false) | bool) else 15 }}"
       register: _connection_check
-      retries: 3
-      delay: 10
+      retries: "{{ 6 if (proxmox_lxc_rebuilt | default(false) | bool) else 3 }}"
+      delay: "{{ 10 if (proxmox_lxc_rebuilt | default(false) | bool) else 5 }}"
       until: _connection_check is succeeded
       when: inventory_hostname not in (lxc_validation_failed_hosts | default([]))
 
