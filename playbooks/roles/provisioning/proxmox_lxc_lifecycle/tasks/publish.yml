@@ -1,0 +1,46 @@
+---
+- name: Build lifecycle result payload
+  ansible.builtin.set_fact:
+    lxc_lifecycle_result:
+      status: "{{ _lifecycle_status }}"
+      reason: "{{ _lifecycle_reason }}"
+      compiled_spec: "{{ proxmox_lxc_spec }}"
+      validation_status: "{{ proxmox_lifecycle_validation_snapshot.status | default('ok') }}"
+      runtime_state: "{{ proxmox_lifecycle_runtime_state }}"
+      release_probe_state: "{{ proxmox_lifecycle_release_probe_state }}"
+      release_mismatch: "{{ proxmox_lifecycle_release_mismatch | bool }}"
+      rebuild_required: "{{ proxmox_lifecycle_rebuild_required | bool }}"
+      skip_provision: "{{ proxmox_lifecycle_skip_provision | bool }}"
+      skip_configure: "{{ proxmox_lifecycle_skip_configure | bool }}"
+      host_actions: "{{ proxmox_lifecycle_host_actions }}"
+      guest_actions: "{{ proxmox_lifecycle_guest_actions }}"
+      cache_actions: "{{ proxmox_lifecycle_cache_actions }}"
+    proxmox_lxc_rebuilt: "{{ proxmox_lifecycle_rebuilt | bool }}"
+    lxc_lifecycle_skip_host: "{{ proxmox_lifecycle_skip_provision | bool and proxmox_lifecycle_skip_configure | bool }}"
+  vars:
+    _lifecycle_status: >-
+      {%- if proxmox_lifecycle_validation_failed | bool -%}
+      validation_failed
+      {%- elif proxmox_lifecycle_intent == 'validate_only' -%}
+      validated
+      {%- elif proxmox_lifecycle_skip_provision | bool and proxmox_lifecycle_skip_configure | bool -%}
+      skipped
+      {%- elif proxmox_lifecycle_intent == 'provision_only' -%}
+      ensured
+      {%- else -%}
+      configured
+      {%- endif -%}
+    _lifecycle_reason: >-
+      {%- if proxmox_lifecycle_validation_failed | bool -%}
+      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}
+      {%- elif proxmox_lifecycle_intent == 'configure_only' and proxmox_lifecycle_runtime_state == 'absent' -%}
+      Container does not exist in Proxmox, so configure-only was skipped.
+      {%- elif proxmox_lxc_spec.state | default('present') != 'present' -%}
+      Desired state is absent, so guest configuration was skipped.
+      {%- else -%}
+      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle actions completed') }}
+      {%- endif -%}
+
+- name: Report lifecycle outcome
+  ansible.builtin.debug:
+    msg: "Lifecycle {{ lxc_lifecycle_result.status }} for {{ inventory_hostname }}"

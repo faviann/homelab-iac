@@ -1,0 +1,77 @@
+---
+- name: Reconcile Proxmox host-side LXC configuration during configure-only runs
+  ansible.builtin.include_role:
+    name: infrastructure/proxmox_lxc_host_config
+    apply:
+      delegate_to: "{{ proxmox_pct_delegate_host }}"
+      become: true
+  vars:
+    ansible_host: "{{ proxmox_pct_delegate_host }}"
+    ansible_user: root
+  when:
+    - proxmox_lifecycle_intent == 'configure_only'
+    - not (proxmox_lifecycle_skip_configure | bool)
+    - proxmox_lxc_host_config_enabled | default(true)
+
+- name: Ensure controller SSH key is installed during configure-only runs
+  ansible.builtin.include_role:
+    name: infrastructure/lxc_ssh_key_injector
+  vars:
+    lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir | dirname }}/.ansible/ssh/proxmox_lxc.pub"
+  when:
+    - proxmox_lifecycle_intent == 'configure_only'
+    - not (proxmox_lifecycle_skip_configure | bool)
+
+- name: Ensure container is accessible via SSH
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ 60 if (proxmox_lifecycle_rebuilt | bool) else 15 }}"
+  register: proxmox_lifecycle_connection_check
+  retries: "{{ 6 if (proxmox_lifecycle_rebuilt | bool) else 3 }}"
+  delay: "{{ 10 if (proxmox_lifecycle_rebuilt | bool) else 5 }}"
+  until: proxmox_lifecycle_connection_check is succeeded
+  when: not (proxmox_lifecycle_skip_configure | bool)
+
+- name: Gather container facts
+  ansible.builtin.setup:
+  when: not (proxmox_lifecycle_skip_configure | bool)
+
+- name: Configure base system
+  ansible.builtin.include_role:
+    name: config/lxc_base_system
+  when: not (proxmox_lifecycle_skip_configure | bool)
+
+- name: Configure logging
+  ansible.builtin.include_role:
+    name: config/lxc_logging_config
+  when: not (proxmox_lifecycle_skip_configure | bool)
+
+- name: Install Docker runtime
+  ansible.builtin.include_role:
+    name: config/lxc_docker_runtime
+  when:
+    - not (proxmox_lifecycle_skip_configure | bool)
+    - docker_enabled | default(false)
+
+- name: Configure NVIDIA GPU runtime
+  ansible.builtin.include_role:
+    name: config/lxc_nvidia_runtime
+  when:
+    - not (proxmox_lifecycle_skip_configure | bool)
+    - gpu_enabled | default(false)
+
+- name: Configure Docker environment
+  ansible.builtin.include_role:
+    name: config/lxc_docker_environment
+  when:
+    - not (proxmox_lifecycle_skip_configure | bool)
+    - docker_enabled | default(false)
+
+- name: Flush handlers after guest configuration
+  ansible.builtin.meta: flush_handlers
+  when: not (proxmox_lifecycle_skip_configure | bool)
+
+- name: Reboot container if needed
+  ansible.builtin.include_role:
+    name: config/lxc_base_system
+    tasks_from: reboot
+  when: not (proxmox_lifecycle_skip_configure | bool)

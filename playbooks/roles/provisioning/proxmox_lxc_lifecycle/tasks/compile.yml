@@ -1,0 +1,20 @@
+---
+- name: Build the effective LXC specification
+  ansible.builtin.include_role:
+    name: provisioning/lxc_spec_builder
+
+- name: Derive desired Debian release from compiled spec
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_desired_release_candidates: "{{ proxmox_lxc_spec.ostemplate | regex_findall('debian-([0-9]+)-') }}"
+    proxmox_lifecycle_desired_release: "{{ (proxmox_lxc_spec.ostemplate | regex_findall('debian-([0-9]+)-') | first | default('')) }}"
+
+- name: Validate desired Debian release can be derived when rebuilds are enabled
+  ansible.builtin.assert:
+    that:
+      - proxmox_lifecycle_desired_release | length > 0
+    fail_msg: >-
+      Cannot derive desired Debian release from ostemplate '{{ proxmox_lxc_spec.ostemplate }}'.
+      Expected a template name like 'debian-<major>-...'.
+  when:
+    - proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
+    - proxmox_lxc_spec.state | default('present') == 'present'

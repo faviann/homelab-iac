@@ -479,10 +479,28 @@
     path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs"
   register: _traefik_cert_dir
 
-- name: Ensure Traefik ACME storage file exists with secure permissions
+- name: Check if Traefik ACME storage file exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
+  register: _traefik_acme_storage
+  when: _traefik_cert_dir.stat.exists | default(false)
+
+- name: Create Traefik ACME storage file when missing
+  ansible.builtin.copy:
+    content: ""
+    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
+    force: false
+    owner: "{{ lxc_docker_env_shared_owner }}"
+    group: "{{ lxc_docker_env_shared_group }}"
+    mode: '0600'
+  when:
+    - _traefik_cert_dir.stat.exists | default(false)
+    - not (_traefik_acme_storage.stat.exists | default(false))
+
+- name: Ensure Traefik ACME storage permissions are correct
   ansible.builtin.file:
     path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
-    state: touch
+    state: file
     owner: "{{ lxc_docker_env_shared_owner }}"
     group: "{{ lxc_docker_env_shared_group }}"
     mode: '0600'

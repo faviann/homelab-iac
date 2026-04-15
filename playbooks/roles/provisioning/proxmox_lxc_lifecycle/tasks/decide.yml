@@ -1,0 +1,81 @@
+---
+- name: Classify lifecycle decision
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_validation_failed: "{{ proxmox_lifecycle_validation_snapshot.status | default('ok') == 'mismatch' }}"
+    proxmox_lifecycle_should_provision: "{{ proxmox_lifecycle_intent in ['provision_only', 'full'] }}"
+    proxmox_lifecycle_should_configure: "{{ proxmox_lifecycle_intent in ['configure_only', 'full'] }}"
+    proxmox_lifecycle_rebuild_required: >-
+      {{
+        proxmox_lifecycle_intent in ['provision_only', 'full']
+        and proxmox_lxc_spec.state | default('present') == 'present'
+        and proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
+        and proxmox_lifecycle_release_mismatch | bool
+      }}
+
+- name: Enforce strict lifecycle validation policy
+  ansible.builtin.fail:
+    msg: "{{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}"
+  when:
+    - proxmox_lifecycle_policy_effective.strict_validation | bool
+    - proxmox_lifecycle_validation_failed | bool
+
+- name: Compute lifecycle skip flags
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_skip_provision: >-
+      {{
+        (not proxmox_lifecycle_should_provision)
+        or (proxmox_lifecycle_validation_failed | bool)
+      }}
+    proxmox_lifecycle_skip_configure: >-
+      {{
+        (not proxmox_lifecycle_should_configure)
+        or (proxmox_lifecycle_validation_failed | bool)
+        or (proxmox_lxc_spec.state | default('present') != 'present')
+        or (
+          proxmox_lifecycle_intent == 'configure_only'
+          and proxmox_lifecycle_runtime_state == 'absent'
+        )
+      }}
+
+- name: Build lifecycle action lists
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_host_actions: >-
+      {%- set actions = [] -%}
+      {%- if not (proxmox_lifecycle_skip_provision | bool) -%}
+      {%-   if proxmox_lifecycle_rebuild_required | bool -%}
+      {%-     set _ = actions.extend(['stop_container', 'destroy_container']) -%}
+      {%-   endif -%}
+      {%-   if proxmox_lxc_spec.state | default('present') == 'present' -%}
+      {%-     set _ = actions.append('ensure_container') -%}
+      {%-     if proxmox_lxc_host_config_enabled | default(true) -%}
+      {%-       set _ = actions.append('reconcile_host_config') -%}
+      {%-     endif -%}
+      {%-     set _ = actions.append('ensure_ssh_key') -%}
+      {%-   else -%}
+      {%-     set _ = actions.append('ensure_absent') -%}
+      {%-   endif -%}
+      {%- endif -%}
+      {%- if proxmox_lifecycle_intent == 'configure_only' and not (proxmox_lifecycle_skip_configure | bool) -%}
+      {%-   if proxmox_lxc_host_config_enabled | default(true) -%}
+      {%-     set _ = actions.append('reconcile_host_config') -%}
+      {%-   endif -%}
+      {%-   set _ = actions.append('ensure_ssh_key') -%}
+      {%- endif -%}
+      {{ actions }}
+    proxmox_lifecycle_guest_actions: >-
+      {%- set actions = [] -%}
+      {%- if not (proxmox_lifecycle_skip_configure | bool) -%}
+      {%-   set _ = actions.extend([
+              'wait_for_connection',
+              'gather_facts',
+              'configure_guest',
+              'reboot_if_required'
+            ]) -%}
+      {%- endif -%}
+      {{ actions }}
+    proxmox_lifecycle_cache_actions: >-
+      {%- set actions = [] -%}
+      {%- if proxmox_lifecycle_rebuild_required | bool and proxmox_lifecycle_policy_effective.cleanup_rebuilt_state | bool -%}
+      {%-   set _ = actions.extend(['clear_fact_cache', 'remove_known_hosts']) -%}
+      {%- endif -%}
+      {{ actions }}

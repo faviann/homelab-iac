@@ -1,6 +1,7 @@
 ---
 # Main orchestrator for Proxmox LXC lifecycle operations
-# Imports focused playbooks in sequence for full infrastructure deployment
+# Routes through the lifecycle facade for full validation, provisioning, and
+# guest configuration.
 #
 # Usage:
 #   ansible-playbook site.yml                    # Run full lifecycle
@@ -8,11 +9,5 @@
 #   ansible-playbook playbooks/provision-lxcs.yml          # Just provisioning
 #   ansible-playbook playbooks/configure-lxcs.yml          # Just configuration
 
-- name: Validate infrastructure
-  ansible.builtin.import_playbook: playbooks/validate-infrastructure.yml
-
-- name: Provision LXC containers
-  ansible.builtin.import_playbook: playbooks/provision-lxcs.yml
-
-- name: Configure LXC containers
-  ansible.builtin.import_playbook: playbooks/configure-lxcs.yml
+- name: Run the full LXC lifecycle
+  ansible.builtin.import_playbook: playbooks/lifecycle-lxcs.yml

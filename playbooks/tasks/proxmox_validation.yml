@@ -537,6 +537,7 @@
     lxc_release_rebuild_eligible_hosts: "{{ lxc_release_rebuild_eligible_hosts }}"
     lxc_release_skipped_stopped_hosts: "{{ lxc_release_skipped_stopped_hosts }}"
   loop: "{{ groups['lxcs'] | default([]) }}"
+  changed_when: false
   tags:
     - validation
     - proxmox

@@ -1,0 +1,45 @@
+---
+# Full LXC lifecycle orchestrator.
+# Runs validation first, then delegates host decisions to the lifecycle facade.
+
+- name: Validate infrastructure prerequisites and Proxmox state
+  ansible.builtin.import_playbook: validate-infrastructure.yml
+
+- name: Run the LXC lifecycle facade
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  roles:
+    - role: provisioning/proxmox_lxc_lifecycle
+
+- name: Ensure lifecycle summary facts exist on localhost
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Aggregate lifecycle summary facts from host results
+      ansible.builtin.set_fact:
+        lxc_lifecycle_results: >-
+          {%- set results = {} -%}
+          {%- for host in groups['lxcs'] | default([]) -%}
+          {%-   if hostvars[host].lxc_lifecycle_result is defined -%}
+          {%-     set _ = results.update({host: hostvars[host].lxc_lifecycle_result}) -%}
+          {%-   endif -%}
+          {%- endfor -%}
+          {{ results }}
+        lxc_lifecycle_skip_hosts: >-
+          {%- set hosts = [] -%}
+          {%- for host in groups['lxcs'] | default([]) -%}
+          {%-   if hostvars[host].lxc_lifecycle_skip_host | default(false) | bool -%}
+          {%-     set _ = hosts.append(host) -%}
+          {%-   endif -%}
+          {%- endfor -%}
+          {{ hosts }}
+        lxc_lifecycle_rebuilt_hosts: >-
+          {%- set hosts = [] -%}
+          {%- for host in groups['lxcs'] | default([]) -%}
+          {%-   if hostvars[host].proxmox_lxc_rebuilt | default(false) | bool -%}
+          {%-     set _ = hosts.append(host) -%}
+          {%-   endif -%}
+          {%- endfor -%}
+          {{ hosts }}

@@ -1,0 +1,10 @@
+---
+proxmox_lifecycle_intent: full
+
+proxmox_lifecycle_policy_default:
+  strict_validation: "{{ proxmox_validation_strict | default(false) | bool }}"
+  rebuild_on_release_mismatch: "{{ proxmox_lxc_rebuild_on_release_mismatch | default(false) | bool }}"
+  cleanup_rebuilt_state: true
+  skip_stopped_release_checks: true
+
+proxmox_lifecycle_policy: {}
