@@ -215,7 +215,6 @@ ansible-playbook site.yml --tags validation
 |   `-- requirements.yml               # Ansible collection dependencies
 |-- docs/
 |   |-- inventory-structure-guide.md
-|   |-- proxmox-host-ssh-automation.md
 |   `-- ssh-key-management.md
 |-- inventory/
 |   |-- hosts.yml                      # Static inventory file
@@ -248,7 +247,6 @@ ansible-playbook site.yml --tags validation
 ## Documentation
 
 - **docs/inventory-structure-guide.md** - Inventory design and best practices
-- **docs/proxmox-host-ssh-automation.md** - Host-side SSH automation details
 - **docs/ssh-key-management.md** - Adding SSH keys to existing containers
 - **stacks/README.md** - Docker Compose conventions and Traefik label contract
 - **AGENTS.md** - Agent operating instructions

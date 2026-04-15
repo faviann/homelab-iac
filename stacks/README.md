@@ -139,8 +139,6 @@ When adding a new tier subdomain, also add its wildcard SAN in `stacks/portal/tr
 
 ## RomM
 
-→ [docs/romm-mariadb-operations.md](../docs/romm-mariadb-operations.md) — read when debugging the RomM stack or recovering MariaDB after an unclean shutdown.
-
 ## Docker Agents
 
 → [docs/stacks-docker-agents.md](../docs/stacks-docker-agents.md) — read when debugging the managed docker-agents stack or changing agent configuration.

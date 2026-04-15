@@ -74,6 +74,5 @@ Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -
 ## Related Documentation
 
 → [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read when adding hosts or debugging variable precedence.
-→ [docs/proxmox-host-ssh-automation.md](docs/proxmox-host-ssh-automation.md) — read when hitting API 403 errors or configuring restricted LXC features.
 → [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
 → [setup.sh](setup.sh) — read when addressing workstation tooling, editor config, or environment setup for contributors.
