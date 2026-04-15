@@ -13,3 +13,6 @@ lxc_ssh_key_injector_delegate_user: root
 
 # Skip containers that don't exist (true) or fail (false)
 lxc_ssh_key_injector_skip_missing: true
+
+# Skip containers that exist but are not running (true) or fail (false)
+lxc_ssh_key_injector_skip_stopped: true

@@ -4,9 +4,10 @@
 
 - name: Load control node SSH public key
   ansible.builtin.set_fact:
-    lxc_ssh_key_injector_pubkey_content: "{{ lookup('file', lxc_ssh_key_injector_pubkey_path) }}"
+    lxc_ssh_key_injector_pubkey_content: "{{ lookup('file', lxc_ssh_key_injector_pubkey_path) | trim }}"
   delegate_to: localhost
   run_once: true
+  no_log: true
 
 - name: Ensure container VMID is defined
   ansible.builtin.assert:
@@ -25,80 +26,152 @@
   changed_when: false
   failed_when: false
 
+- name: Derive container runtime state from pct status
+  ansible.builtin.set_fact:
+    _lxc_ssh_key_injector_container_state: >-
+      {{
+        'absent'
+        if _container_status.rc != 0
+        else (_container_status.stdout | regex_search('running|stopped') | default('unknown', true))
+      }}
+
 - name: Skip non-existent containers
   ansible.builtin.debug:
     msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist - skipping"
   when:
-    - _container_status.rc != 0
+    - _lxc_ssh_key_injector_container_state == 'absent'
     - lxc_ssh_key_injector_skip_missing | bool
 
 - name: Fail on non-existent containers when skip_missing is false
   ansible.builtin.fail:
     msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist"
   when:
-    - _container_status.rc != 0
+    - _lxc_ssh_key_injector_container_state == 'absent'
     - not (lxc_ssh_key_injector_skip_missing | bool)
 
-- name: Create .ssh directory in container
-  ansible.builtin.command:
-    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- mkdir -p /root/.ssh"
-  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
-  vars:
-    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
-  when: _container_status.rc == 0
-  changed_when: true
-
-- name: Set .ssh directory permissions
-  ansible.builtin.command:
-    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 700 /root/.ssh"
-  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
-  vars:
-    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
-  when: _container_status.rc == 0
-  changed_when: false
-
-- name: Check if SSH key already exists in authorized_keys
-  ansible.builtin.shell:
-    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -qF '{{ lxc_ssh_key_injector_pubkey_content }}' /root/.ssh/authorized_keys 2>/dev/null"
-  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
-  vars:
-    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
-  register: _key_exists
-  when: _container_status.rc == 0
-  changed_when: false
-  failed_when: false
-
-- name: Add SSH public key to authorized_keys (idempotent)
-  ansible.builtin.shell:
-    cmd: |
-      pct exec {{ proxmox_lxc_overrides.vmid }} -- bash -c "echo '{{ lxc_ssh_key_injector_pubkey_content }}' >> /root/.ssh/authorized_keys"
-  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
-  vars:
-    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+- name: Skip stopped containers
+  ansible.builtin.debug:
+    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) is {{ _lxc_ssh_key_injector_container_state }} - skipping SSH key injection"
   when:
-    - _container_status.rc == 0
-    - _key_exists.rc != 0
-  changed_when: true
+    - _lxc_ssh_key_injector_container_state == 'stopped'
+    - lxc_ssh_key_injector_skip_stopped | bool
 
-- name: Set authorized_keys permissions
+- name: Fail on stopped containers when skip_stopped is false
+  ansible.builtin.fail:
+    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) is stopped"
+  when:
+    - _lxc_ssh_key_injector_container_state == 'stopped'
+    - not (lxc_ssh_key_injector_skip_stopped | bool)
+
+- name: Fail when pct status returned an unknown runtime state
+  ansible.builtin.fail:
+    msg: >-
+      Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) returned an unknown pct status:
+      {{ _container_status.stdout | default('') | trim }}
+  when:
+    - _lxc_ssh_key_injector_container_state not in ['absent', 'stopped', 'running']
+
+- name: Ensure SSH public key is installed idempotently
   ansible.builtin.command:
-    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- chmod 600 /root/.ssh/authorized_keys"
+    argv:
+      - pct
+      - exec
+      - "{{ proxmox_lxc_overrides.vmid | string }}"
+      - --
+      - sh
+      - -eu
+      - -c
+      - |
+        changed=0
+        pubkey="$(printf '%s' "$1" | base64 -d)" || exit 1
+        [ -n "$pubkey" ]
+
+        ssh_dir=/root/.ssh
+        auth_keys="$ssh_dir/authorized_keys"
+
+        umask 077
+
+        if [ ! -d "$ssh_dir" ]; then
+          mkdir -p "$ssh_dir"
+          changed=1
+        fi
+
+        if [ "$(stat -c '%u:%g' "$ssh_dir")" != '0:0' ]; then
+          chown 0:0 "$ssh_dir"
+          changed=1
+        fi
+
+        if [ "$(stat -c '%a' "$ssh_dir")" != '700' ]; then
+          chmod 700 "$ssh_dir"
+          changed=1
+        fi
+
+        if [ ! -f "$auth_keys" ]; then
+          : > "$auth_keys"
+          changed=1
+        fi
+
+        if [ "$(stat -c '%u:%g' "$auth_keys")" != '0:0' ]; then
+          chown 0:0 "$auth_keys"
+          changed=1
+        fi
+
+        if [ "$(stat -c '%a' "$auth_keys")" != '600' ]; then
+          chmod 600 "$auth_keys"
+          changed=1
+        fi
+
+        if ! grep -qxF -- "$pubkey" "$auth_keys"; then
+          printf '%s\n' "$pubkey" >> "$auth_keys"
+          changed=1
+        fi
+
+        printf 'CHANGED=%s\n' "$changed"
+      - sh
+      - "{{ lxc_ssh_key_injector_pubkey_content | b64encode }}"
   delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
   vars:
     ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
-  when: _container_status.rc == 0
-  changed_when: false
+  register: _ssh_key_injector_apply
+  when: _lxc_ssh_key_injector_container_state == 'running'
+  changed_when: "'CHANGED=1' in (_ssh_key_injector_apply.stdout | default(''))"
+  failed_when: >-
+    (_ssh_key_injector_apply.rc != 0)
+    or ('CHANGED=' not in (_ssh_key_injector_apply.stdout | default('')))
+  no_log: true
 
 - name: Verify SSH key is present
-  ansible.builtin.shell:
-    cmd: "pct exec {{ proxmox_lxc_overrides.vmid }} -- grep -c '{{ lxc_ssh_key_injector_pubkey_content }}' /root/.ssh/authorized_keys"
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ proxmox_lxc_overrides.vmid | string }}"
+      - --
+      - sh
+      - -eu
+      - -c
+      - |
+        pubkey="$(printf '%s' "$1" | base64 -d)" || exit 1
+        grep -cxF -- "$pubkey" /root/.ssh/authorized_keys
+      - sh
+      - "{{ lxc_ssh_key_injector_pubkey_content | b64encode }}"
   delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
   vars:
     ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
   register: _key_count
-  when: _container_status.rc == 0
+  when: _lxc_ssh_key_injector_container_state == 'running'
   changed_when: false
-  failed_when: false
+  failed_when: _key_count.rc != 0
+  no_log: true
+
+- name: Warn when duplicate SSH keys are present
+  ansible.builtin.debug:
+    msg: >-
+      SSH key for {{ inventory_hostname }} appears {{ _key_count.stdout | trim }} times in authorized_keys.
+      The injector preserved existing contents but duplicates should be cleaned up separately.
+  when:
+    - _lxc_ssh_key_injector_container_state == 'running'
+    - (_key_count.stdout | trim | int) > 1
 
 - name: Report SSH key injection result
   ansible.builtin.debug:
