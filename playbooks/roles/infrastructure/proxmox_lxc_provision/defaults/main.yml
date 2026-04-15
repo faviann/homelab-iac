@@ -18,3 +18,7 @@ proxmox_lxc_controller_pubkey_path: "{{ playbook_dir | dirname }}/.ansible/ssh/p
 
 # When enabled, omit any password from the provisioning request so root key auth is required.
 proxmox_lxc_disable_root_password: true
+
+# When enabled, destroy and recreate running containers whose guest Debian major
+# version differs from the desired release derived from the ostemplate.
+proxmox_lxc_rebuild_on_release_mismatch: false

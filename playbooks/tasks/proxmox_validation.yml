@@ -203,6 +203,216 @@
     - validation
     - proxmox
 
+- name: Build desired ostemplate lookup for release checks
+  ansible.builtin.set_fact:
+    lxc_desired_ostemplate_map: "{{ lxc_desired_ostemplate_map | default({}) | combine({item: _lxc_desired_ostemplate}) }}"
+    lxc_desired_release_map: "{{ lxc_desired_release_map | default({}) | combine({item: (_lxc_desired_release_candidates | first | default(''))}) }}"
+  vars:
+    _lxc_desired_ostemplate: >-
+      {{
+        hostvars[item].proxmox_lxc.ostemplate
+        | default(
+            hostvars[item].proxmox_lxc_overrides.ostemplate
+            | default(
+                hostvars[item].proxmox_lxc_global_defaults.ostemplate
+                | default(proxmox_default_ostemplate, true),
+                true
+              ),
+            true
+          )
+      }}
+    _lxc_desired_release_candidates: "{{ _lxc_desired_ostemplate | regex_findall('debian-([0-9]+)-') }}"
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  tags:
+    - validation
+    - proxmox
+
+- name: Fail when desired ostemplate cannot be mapped to a Debian release
+  ansible.builtin.assert:
+    that:
+      - (lxc_desired_release_map[item] | default('')) | length > 0
+    fail_msg: >-
+      Host '{{ item }}' uses ostemplate '{{ lxc_desired_ostemplate_map[item] | default('undefined') }}',
+      which does not match the expected Debian template naming pattern 'debian-<major>-...'.
+      Update the template value before enabling release-based rebuilds.
+    quiet: true
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  when: proxmox_lxc_rebuild_on_release_mismatch | default(false) | bool
+  tags:
+    - validation
+    - proxmox
+
+- name: Query runtime state for matched LXCs
+  ansible.builtin.command:
+    cmd: "pct status {{ hostvars[item].proxmox_lxc_overrides.vmid }}"
+  register: lxc_pct_status_results
+  changed_when: false
+  failed_when: false
+  delegate_to: "{{ proxmox_pct_delegate_host }}"
+  vars:
+    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - lxc_validation_results[item].type == 'match_ok'
+  tags:
+    - validation
+    - proxmox
+
+- name: Build runtime state lookup for matched LXCs
+  ansible.builtin.set_fact:
+    lxc_runtime_state_map: >-
+      {{
+        lxc_runtime_state_map | default({}) | combine({
+          item.item: (
+            item.stdout | regex_search('running|stopped') | default('unknown', true)
+          )
+        })
+      }}
+  loop: "{{ lxc_pct_status_results.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.rc == 0
+  tags:
+    - validation
+    - proxmox
+
+- name: Query guest Debian release for running matched LXCs
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ hostvars[item].proxmox_lxc_overrides.vmid | string }}"
+      - --
+      - sh
+      - -c
+      - ". /etc/os-release && printf '%s' \"$VERSION_ID\""
+  register: lxc_release_probe_results
+  changed_when: false
+  delegate_to: "{{ proxmox_pct_delegate_host }}"
+  vars:
+    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - lxc_validation_results[item].type == 'match_ok'
+    - lxc_runtime_state_map[item] | default('unknown') == 'running'
+  tags:
+    - validation
+    - proxmox
+
+- name: Build guest release lookup for running matched LXCs
+  ansible.builtin.set_fact:
+    lxc_actual_release_map: >-
+      {{
+        lxc_actual_release_map | default({}) | combine({
+          item.item: (
+            item.stdout | regex_findall('([0-9]+)') | first | default('')
+          )
+        })
+      }}
+  loop: "{{ lxc_release_probe_results.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.rc == 0
+  tags:
+    - validation
+    - proxmox
+
+- name: Build list of release probe failures
+  ansible.builtin.set_fact:
+    lxc_release_probe_failed_hosts: "{{ lxc_release_probe_failed_hosts | default([]) + [item.item] }}"
+  loop: "{{ lxc_release_probe_results.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.rc != 0 or ((item.stdout | regex_findall('([0-9]+)') | first | default('')) | length == 0)
+  tags:
+    - validation
+    - proxmox
+
+- name: Enrich validation results with guest release status
+  ansible.builtin.set_fact:
+    lxc_validation_results: >-
+      {{
+        lxc_validation_results | combine({
+          item: lxc_validation_results[item] | combine({
+            'desired_release': _desired_release,
+            'actual_release': _actual_release,
+            'runtime_state': _runtime_state,
+            'release_probe_state': _probe_state,
+            'release_mismatch': _release_mismatch,
+            'rebuild_eligible': _rebuild_eligible,
+            'message': _message,
+            'remediation': _remediation
+          }, recursive=True)
+        }, recursive=True)
+      }}
+  vars:
+    _current_result: "{{ lxc_validation_results[item] }}"
+    _desired_release: "{{ lxc_desired_release_map[item] | default('') }}"
+    _actual_release: "{{ lxc_actual_release_map[item] | default('') }}"
+    _runtime_state: "{{ lxc_runtime_state_map[item] | default('absent' if _current_result.type == 'absent_ok' else 'unknown') }}"
+    _probe_state: >-
+      {%- if _current_result.type == 'absent_ok' -%}
+      absent
+      {%- elif _current_result.status == 'mismatch' -%}
+      skipped_conflict
+      {%- elif _runtime_state == 'stopped' -%}
+      skipped_stopped
+      {%- elif item in (lxc_release_probe_failed_hosts | default([])) -%}
+      probe_failed
+      {%- elif _actual_release | length > 0 -%}
+      probed
+      {%- else -%}
+      probe_failed
+      {%- endif -%}
+    _release_mismatch: >-
+      {{
+        _current_result.type == 'match_ok'
+        and _probe_state == 'probed'
+        and _desired_release | length > 0
+        and _actual_release != _desired_release
+      }}
+    _rebuild_eligible: "{{ _release_mismatch | bool }}"
+    _message: >-
+      {%- if _current_result.status == 'mismatch' -%}
+      {{ _current_result.message }}
+      {%- elif _current_result.type == 'absent_ok' -%}
+      Container does not exist in Proxmox (will be created from Debian {{ _desired_release }} template)
+      {%- elif _probe_state == 'skipped_stopped' -%}
+      Host '{{ item }}': Container is stopped, so guest release inspection was skipped and automatic rebuild is disabled for stopped containers.
+      {%- elif _probe_state == 'probe_failed' -%}
+      Host '{{ item }}': Failed to determine the running guest release from /etc/os-release; automatic rebuild is skipped.
+      {%- elif _release_mismatch -%}
+      Host '{{ item }}': Guest release {{ _actual_release }} does not match desired Debian {{ _desired_release }} and requires destroy/recreate to apply the new template.
+      {%- else -%}
+      Host '{{ item }}': VMID/name match Proxmox state and guest release matches desired Debian {{ _desired_release }}.
+      {%- endif -%}
+    _remediation: >-
+      {%- set remediation = (_current_result.remediation | default([]))[:] -%}
+      {%- if _release_mismatch -%}
+      {%-   set _ = remediation.append('Set proxmox_lxc_rebuild_on_release_mismatch: true and rerun site.yml (or playbooks/provision-lxcs.yml) to rebuild automatically') -%}
+      {%-   set _ = remediation.append('OR destroy the container manually and rerun site.yml to recreate it from the desired template') -%}
+      {%- elif _probe_state == 'skipped_stopped' -%}
+      {%-   set _ = remediation.append('Start the container and rerun validation/provisioning to inspect its guest release') -%}
+      {%-   set _ = remediation.append('Automatic rebuild will not destroy stopped containers') -%}
+      {%- elif _probe_state == 'probe_failed' -%}
+      {%-   set _ = remediation.append('Check pct exec access and /etc/os-release inside the container, then rerun validation') -%}
+      {%- endif -%}
+      {{ remediation }}
+  loop: "{{ groups['lxcs'] | default([]) }}"
+  tags:
+    - validation
+    - proxmox
+
 - name: Display VMID/name mismatch conflicts
   ansible.builtin.debug:
     msg: |
@@ -226,6 +436,59 @@
     - validation
     - proxmox
 
+- name: Build guest release summary lists
+  ansible.builtin.set_fact:
+    lxc_release_mismatch_hosts: >-
+      {{
+        lxc_validation_results | dict2items
+        | selectattr('value.release_mismatch', 'defined')
+        | selectattr('value.release_mismatch')
+        | map(attribute='key')
+        | list
+      }}
+    lxc_release_rebuild_eligible_hosts: >-
+      {{
+        lxc_validation_results | dict2items
+        | selectattr('value.rebuild_eligible', 'defined')
+        | selectattr('value.rebuild_eligible')
+        | map(attribute='key')
+        | list
+      }}
+    lxc_release_skipped_stopped_hosts: >-
+      {{
+        lxc_validation_results | dict2items
+        | selectattr('value.release_probe_state', 'defined')
+        | selectattr('value.release_probe_state', 'equalto', 'skipped_stopped')
+        | map(attribute='key')
+        | list
+      }}
+  tags:
+    - validation
+    - proxmox
+
+- name: Display guest release mismatch results
+  ansible.builtin.debug:
+    msg: |
+      {% if lxc_release_mismatch_hosts | length > 0 %}
+      ========================================
+      GUEST RELEASE MISMATCHES DETECTED
+      ========================================
+      {% for host in lxc_release_mismatch_hosts %}
+      
+      {{ lxc_validation_results[host].message }}
+      Remediation options:
+      {% for rem in lxc_validation_results[host].remediation %}
+        - {{ rem }}
+      {% endfor %}
+      {% endfor %}
+      ========================================
+      {% else %}
+      All running matched containers either match the desired Debian release or were not eligible for release checks.
+      {% endif %}
+  tags:
+    - validation
+    - proxmox
+
 - name: Report validation summary
   ansible.builtin.debug:
     msg: |
@@ -233,8 +496,17 @@
         Total managed LXCs: {{ groups['lxcs'] | default([]) | length }}
         Eligible for operations: {{ (groups['lxcs'] | default([]) | length) - (lxc_validation_failed_hosts | length) }}
         Skipped due to conflicts: {{ lxc_validation_failed_hosts | length }}
+        Guest release mismatches: {{ lxc_release_mismatch_hosts | length }}
+        Auto-rebuild eligible: {{ lxc_release_rebuild_eligible_hosts | length }}
+        Skipped release checks because stopped: {{ lxc_release_skipped_stopped_hosts | length }}
       {% if lxc_validation_failed_hosts | length > 0 %}
         Conflicting hosts: {{ lxc_validation_failed_hosts | join(', ') }}
+      {% endif %}
+      {% if lxc_release_mismatch_hosts | length > 0 %}
+        Release mismatch hosts: {{ lxc_release_mismatch_hosts | join(', ') }}
+      {% endif %}
+      {% if lxc_release_skipped_stopped_hosts | length > 0 %}
+        Stopped hosts not auto-rebuilt: {{ lxc_release_skipped_stopped_hosts | join(', ') }}
       {% endif %}
   tags:
     - validation
@@ -261,6 +533,9 @@
     name: "{{ item }}"
     lxc_validation_failed_hosts: "{{ lxc_validation_failed_hosts }}"
     lxc_validation_results: "{{ lxc_validation_results }}"
+    lxc_release_mismatch_hosts: "{{ lxc_release_mismatch_hosts }}"
+    lxc_release_rebuild_eligible_hosts: "{{ lxc_release_rebuild_eligible_hosts }}"
+    lxc_release_skipped_stopped_hosts: "{{ lxc_release_skipped_stopped_hosts }}"
   loop: "{{ groups['lxcs'] | default([]) }}"
   tags:
     - validation
