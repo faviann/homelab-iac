@@ -1,0 +1,54 @@
+---
+- name: Test shared SSH public key resolver
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Create temp SSH public keys
+      ansible.builtin.copy:
+        dest: "{{ item.path }}"
+        content: "{{ item.content }}\n"
+        mode: "0644"
+      loop:
+        - path: "{{ temp_root }}/explicit.pub"
+          content: "ssh-ed25519 AAAAEXPLICIT explicit@test"
+        - path: "{{ temp_root }}/fallback.pub"
+          content: "ssh-ed25519 AAAAFALLBACK fallback@test"
+
+    - name: Resolve explicit SSH public key path first
+      ansible.builtin.include_role:
+        name: infrastructure/ssh_key_shared
+        tasks_from: resolve_pubkey
+      vars:
+        ssh_key_shared_explicit_path: "{{ temp_root }}/explicit.pub"
+        ssh_key_shared_additional_candidates:
+          - "{{ temp_root }}/fallback.pub"
+
+    - name: Assert explicit path wins
+      ansible.builtin.assert:
+        that:
+          - ssh_key_shared_resolved_public_key_path == (temp_root ~ '/explicit.pub')
+          - ssh_key_shared_public_key_content == 'ssh-ed25519 AAAAEXPLICIT explicit@test'
+        fail_msg: "Shared resolver did not prefer the explicit SSH public key path"
+
+    - name: Reset shared resolver facts
+      ansible.builtin.set_fact:
+        ssh_key_shared_public_key_candidates: []
+        ssh_key_shared_resolved_public_key_path: ""
+        ssh_key_shared_public_key_content: ""
+
+    - name: Resolve first existing fallback SSH public key path
+      ansible.builtin.include_role:
+        name: infrastructure/ssh_key_shared
+        tasks_from: resolve_pubkey
+      vars:
+        ssh_key_shared_additional_candidates:
+          - "{{ temp_root }}/missing.pub"
+          - "{{ temp_root }}/fallback.pub"
+
+    - name: Assert first existing fallback path wins
+      ansible.builtin.assert:
+        that:
+          - ssh_key_shared_resolved_public_key_path == (temp_root ~ '/fallback.pub')
+          - ssh_key_shared_public_key_content == 'ssh-ed25519 AAAAFALLBACK fallback@test'
+        fail_msg: "Shared resolver did not choose the first existing fallback SSH public key path"

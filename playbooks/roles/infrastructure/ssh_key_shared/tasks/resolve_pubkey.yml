@@ -1,0 +1,73 @@
+---
+- name: Build control-node SSH public key candidate paths
+  ansible.builtin.set_fact:
+    ssh_key_shared_public_key_candidates: >-
+      {{
+        (
+          [ssh_key_shared_explicit_path]
+          if (ssh_key_shared_explicit_path | default('') | length > 0)
+          else []
+        )
+        + (ssh_key_shared_additional_candidates | default([]))
+        + (
+          [
+            [
+              (lookup('env', 'VIRTUAL_ENV') | dirname | dirname),
+              '.ansible',
+              'ssh',
+              'proxmox_lxc.pub'
+            ] | path_join
+          ]
+          if (lookup('env', 'VIRTUAL_ENV') | default('') | length > 0)
+          else []
+        )
+        + [
+            [playbook_dir, '.ansible', 'ssh', 'proxmox_lxc.pub'] | path_join,
+            [playbook_dir, '..', '.ansible', 'ssh', 'proxmox_lxc.pub'] | path_join
+          ]
+        | unique
+      }}
+  delegate_to: localhost
+  become: false
+
+- name: Check control-node SSH public key candidate paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ ssh_key_shared_public_key_candidates }}"
+  loop_control:
+    label: "{{ item }}"
+  register: ssh_key_shared_public_key_candidate_stats
+  delegate_to: localhost
+  become: false
+
+- name: Resolve control-node SSH public key path
+  ansible.builtin.set_fact:
+    ssh_key_shared_resolved_public_key_path: >-
+      {{
+        (
+          ssh_key_shared_public_key_candidate_stats.results
+          | selectattr('stat.exists')
+          | map(attribute='item')
+          | list
+          | first
+        ) | default('')
+      }}
+  delegate_to: localhost
+  become: false
+
+- name: Assert control-node SSH public key path exists
+  ansible.builtin.assert:
+    that:
+      - ssh_key_shared_resolved_public_key_path | length > 0
+    fail_msg: >-
+      Could not find the control node SSH public key. Checked:
+      {{ ssh_key_shared_public_key_candidates | join(', ') }}
+  delegate_to: localhost
+  become: false
+
+- name: Load control-node SSH public key content
+  ansible.builtin.set_fact:
+    ssh_key_shared_public_key_content: "{{ lookup('file', ssh_key_shared_resolved_public_key_path) | trim }}"
+  delegate_to: localhost
+  become: false
+  no_log: true

@@ -4,11 +4,11 @@
 # Based on working POC that uses sshpass for password-based initial connection
 
 - name: Ensure SSH key exists on control node
-  ansible.builtin.stat:
-    path: "{{ proxmox_ssh_key_public }}"
-  register: ssh_pubkey_stat
-  failed_when: not ssh_pubkey_stat.stat.exists
-  delegate_to: localhost
+  ansible.builtin.include_role:
+    name: infrastructure/ssh_key_shared
+    tasks_from: resolve_pubkey
+  vars:
+    ssh_key_shared_explicit_path: "{{ proxmox_ssh_key_public }}"
 
 - name: Ensure SSH private key exists on control node
   ansible.builtin.stat:
@@ -72,15 +72,9 @@
       register: proxmox_root_password
       delegate_to: localhost
 
-    - name: Read SSH public key content
-      ansible.builtin.slurp:
-        src: "{{ proxmox_ssh_key_public }}"
-      register: ssh_pubkey_content
-      delegate_to: localhost
-
     - name: Display public key fingerprint
       ansible.builtin.command:
-        cmd: ssh-keygen -lf {{ proxmox_ssh_key_public }}
+        cmd: ssh-keygen -lf {{ ssh_key_shared_resolved_public_key_path }}
       register: pubkey_fingerprint
       changed_when: false
       delegate_to: localhost
@@ -128,7 +122,7 @@
           sshpass -p "{{ proxmox_root_password.user_input }}"
           ssh -o StrictHostKeyChecking=accept-new
           {{ proxmox_ssh_user }}@{{ proxmox_host }}
-          "grep -F '{{ ssh_pubkey_content.content | b64decode | trim }}' /root/.ssh/authorized_keys 2>/dev/null"
+          "grep -qxF -- '{{ ssh_key_shared_public_key_content }}' /root/.ssh/authorized_keys 2>/dev/null"
       register: key_exists_check
       changed_when: false
       failed_when: false
@@ -140,7 +134,7 @@
         cmd: |
           sshpass -p "{{ proxmox_root_password.user_input }}" \
           ssh -o StrictHostKeyChecking=accept-new {{ proxmox_ssh_user }}@{{ proxmox_host }} \
-          "echo '{{ ssh_pubkey_content.content | b64decode | trim }}' >> /root/.ssh/authorized_keys"
+          "echo '{{ ssh_key_shared_public_key_content }}' >> /root/.ssh/authorized_keys"
       changed_when: true
       no_log: true
       delegate_to: localhost
@@ -170,16 +164,18 @@
           sshpass -p "{{ proxmox_root_password.user_input }}"
           ssh -o StrictHostKeyChecking=accept-new
           {{ proxmox_ssh_user }}@{{ proxmox_host }}
-          "grep -F '{{ ssh_pubkey_content.content | b64decode | trim }}' /root/.ssh/authorized_keys"
-      register: key_verification
+          "grep -cxF -- '{{ ssh_key_shared_public_key_content }}' /root/.ssh/authorized_keys"
+      register: key_verification_count
       changed_when: false
-      failed_when: key_verification.rc != 0
+      failed_when:
+        - key_verification_count.rc != 0
+        - (key_verification_count.stdout | default('0') | trim | int) < 1
       no_log: true
       delegate_to: localhost
 
     - name: Key successfully configured
       ansible.builtin.debug:
-        msg: "✓ SSH public key {{ 'added to' if key_exists_check.rc != 0 else 'verified in' }} {{ proxmox_host }}:/root/.ssh/authorized_keys"
+        msg: "✓ SSH public key {{ 'added to' if key_exists_check.rc != 0 else 'verified in' }} {{ proxmox_host }}:/root/.ssh/authorized_keys ({{ key_verification_count.stdout | trim }} occurrence(s))"
 
     # Wait briefly for SSH to process changes
     - name: Wait for SSH to process changes

@@ -2,72 +2,29 @@
 # Main tasks file for lxc_ssh_key_injector role
 # Injects control node SSH public key into LXC container via Proxmox pct commands
 
-- name: Build candidate SSH public key paths
+- name: Use compiled guest-bootstrap pubkey when available
   ansible.builtin.set_fact:
-    _lxc_ssh_key_injector_pubkey_candidates: >-
-      {{
-        (
-          [lxc_ssh_key_injector_pubkey_path]
-          if (lxc_ssh_key_injector_pubkey_path | default('') | length > 0)
-          else []
-        )
-        + (
-          [
-            [
-              (lookup('env', 'VIRTUAL_ENV') | dirname | dirname),
-              '.ansible',
-              'ssh',
-              'proxmox_lxc.pub'
-            ] | path_join
-          ]
-          if (lookup('env', 'VIRTUAL_ENV') | default('') | length > 0)
-          else []
-        )
-      | unique }}
+    lxc_ssh_key_injector_pubkey_content: "{{ proxmox_lxc_contract.guest_bootstrap.pubkey }}"
   delegate_to: localhost
-  run_once: true
-
-- name: Check candidate SSH public key paths
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop: "{{ _lxc_ssh_key_injector_pubkey_candidates }}"
-  loop_control:
-    label: "{{ item }}"
-  register: _lxc_ssh_key_injector_pubkey_candidate_stats
-  delegate_to: localhost
-  run_once: true
-
-- name: Resolve SSH public key path
-  ansible.builtin.set_fact:
-    _lxc_ssh_key_injector_resolved_pubkey_path: >-
-      {{
-        (
-          _lxc_ssh_key_injector_pubkey_candidate_stats.results
-          | selectattr('stat.exists')
-          | map(attribute='item')
-          | list
-          | first
-        ) | default('')
-      }}
-  delegate_to: localhost
-  run_once: true
-
-- name: Assert SSH public key path exists
-  ansible.builtin.assert:
-    that:
-      - _lxc_ssh_key_injector_resolved_pubkey_path | length > 0
-    fail_msg: >-
-      Could not find the control node SSH public key. Checked:
-      {{ _lxc_ssh_key_injector_pubkey_candidates | join(', ') }}
-  delegate_to: localhost
-  run_once: true
-
-- name: Load control node SSH public key
-  ansible.builtin.set_fact:
-    lxc_ssh_key_injector_pubkey_content: "{{ lookup('file', _lxc_ssh_key_injector_resolved_pubkey_path) | trim }}"
-  delegate_to: localhost
-  run_once: true
   no_log: true
+  when:
+    - proxmox_lxc_contract is defined
+    - proxmox_lxc_contract.guest_bootstrap.pubkey | default('') | length > 0
+
+- name: Resolve control-node SSH public key when contract pubkey is unavailable
+  ansible.builtin.include_role:
+    name: infrastructure/ssh_key_shared
+    tasks_from: resolve_pubkey
+  vars:
+    ssh_key_shared_explicit_path: "{{ lxc_ssh_key_injector_pubkey_path | default('') }}"
+  when: lxc_ssh_key_injector_pubkey_content is not defined
+
+- name: Load resolved SSH public key into injector
+  ansible.builtin.set_fact:
+    lxc_ssh_key_injector_pubkey_content: "{{ ssh_key_shared_public_key_content }}"
+  delegate_to: localhost
+  no_log: true
+  when: lxc_ssh_key_injector_pubkey_content is not defined
 
 - name: Ensure container VMID is defined
   ansible.builtin.assert:
