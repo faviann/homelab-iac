@@ -44,6 +44,8 @@
             proxmox_lxc_host_config_enabled: true
             proxmox_lifecycle_rebuilt: false
 
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
 
@@ -74,6 +76,8 @@
             proxmox_lxc_host_config_enabled: true
             proxmox_lifecycle_rebuilt: false
 
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
 
@@ -103,6 +107,8 @@
             proxmox_lxc_host_config_enabled: true
             proxmox_lifecycle_rebuilt: false
 
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
 
@@ -115,3 +121,149 @@
               - lxc_lifecycle_result.cache_actions == ['clear_fact_cache', 'remove_known_hosts']
               - lxc_lifecycle_result.internal_snapshot.action_decisions.host == proxmox_lifecycle_host_actions
             fail_msg: "Release mismatch lifecycle scenario did not publish rebuild and cleanup decisions as expected"
+
+    - name: Scenario 4 - provision-only on running container plans ensure and host reconciliation
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: provision_only
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Lifecycle actions completed
+            proxmox_lifecycle_runtime_state: running
+            proxmox_lifecycle_actual_release: "12"
+            proxmox_lifecycle_release_probe_state: probed
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - proxmox_lifecycle_host_actions == ['ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
+              - proxmox_lifecycle_guest_actions == []
+              - lxc_lifecycle_result.status == 'ensured'
+            fail_msg: "Provision-only running-container scenario did not produce the expected action plan"
+
+    - name: Scenario 5 - provision-only with absent desired state plans destruction
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: provision_only
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_contract: "{{ _base_contract | combine({'api_spec': {'state': 'absent'}}, recursive=True) }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Lifecycle actions completed
+            proxmox_lifecycle_runtime_state: running
+            proxmox_lifecycle_actual_release: "12"
+            proxmox_lifecycle_release_probe_state: probed
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - proxmox_lifecycle_host_actions == ['ensure_absent']
+              - proxmox_lifecycle_guest_actions == []
+              - lxc_lifecycle_result.status == 'ensured'
+            fail_msg: "Provision-only absent-state scenario did not plan destruction"
+
+    - name: Scenario 6 - configure-only on running container refreshes host config and guest setup
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: configure_only
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Lifecycle actions completed
+            proxmox_lifecycle_runtime_state: running
+            proxmox_lifecycle_actual_release: "12"
+            proxmox_lifecycle_release_probe_state: probed
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - proxmox_lifecycle_host_actions == ['reconcile_host_config', 'ensure_ssh_key']
+              - proxmox_lifecycle_guest_actions == ['wait_for_connection', 'gather_facts', 'configure_guest', 'reboot_if_required']
+              - lxc_lifecycle_result.status == 'configured'
+            fail_msg: "Configure-only running-container scenario did not produce the expected action plan"
+
+    - name: Scenario 7 - validate-only produces no actions
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: validate_only
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Validation completed
+            proxmox_lifecycle_runtime_state: running
+            proxmox_lifecycle_actual_release: "12"
+            proxmox_lifecycle_release_probe_state: probed
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - proxmox_lifecycle_host_actions == []
+              - proxmox_lifecycle_guest_actions == []
+              - lxc_lifecycle_result.status == 'validated'
+            fail_msg: "Validate-only scenario did not produce empty action lists"
+
+    - name: Scenario 8 - validation failure suppresses all actions
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: full
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: mismatch
+              message: Invalid DNS configuration detected
+            proxmox_lifecycle_runtime_state: running
+            proxmox_lifecycle_actual_release: "12"
+            proxmox_lifecycle_release_probe_state: probed
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - proxmox_lifecycle_host_actions == []
+              - proxmox_lifecycle_guest_actions == []
+              - lxc_lifecycle_result.status == 'validation_failed'
+              - lxc_lifecycle_result.validation_status == 'mismatch'
+            fail_msg: "Validation-failed scenario did not suppress lifecycle actions"

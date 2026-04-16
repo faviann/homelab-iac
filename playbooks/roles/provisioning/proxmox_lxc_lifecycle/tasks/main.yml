@@ -22,6 +22,9 @@
 - name: Inspect current lifecycle state
   ansible.builtin.include_tasks: inspect.yml
 
+- name: Validate inspection state is complete and well-typed
+  ansible.builtin.include_tasks: validate_state.yml
+
 - name: Decide lifecycle actions
   ansible.builtin.include_tasks: decide.yml
 

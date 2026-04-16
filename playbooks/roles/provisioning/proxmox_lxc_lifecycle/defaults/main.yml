@@ -8,3 +8,5 @@ proxmox_lifecycle_policy_default:
   skip_stopped_release_checks: true
 
 proxmox_lifecycle_policy: {}
+
+proxmox_lifecycle_desired_release: ""

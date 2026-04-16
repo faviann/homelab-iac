@@ -55,26 +55,23 @@
       }}
     proxmox_lifecycle_host_actions: >-
       {%- set actions = [] -%}
+      {%- set _desired_present = proxmox_lxc_contract.api_spec.state | default('present') == 'present' -%}
       {%- set _skip_provision = (not proxmox_lifecycle_should_provision) or (proxmox_lifecycle_validation_failed | bool) -%}
+      {%- set _configure_existing = proxmox_lifecycle_intent == 'configure_only'
+        and not (proxmox_lifecycle_validation_failed | bool)
+        and _desired_present
+        and proxmox_lifecycle_runtime_state != 'absent' -%}
       {%- if not _skip_provision -%}
       {%-   if proxmox_lifecycle_rebuild_required | bool -%}
       {%-     set _ = actions.extend(['stop_container', 'destroy_container']) -%}
       {%-   endif -%}
-      {%-   if proxmox_lxc_contract.api_spec.state | default('present') == 'present' -%}
+      {%-   if _desired_present -%}
       {%-     set _ = actions.append('ensure_container') -%}
-      {%-     if proxmox_lxc_host_config_enabled | default(true) -%}
-      {%-       set _ = actions.append('reconcile_host_config') -%}
-      {%-     endif -%}
-      {%-     set _ = actions.append('ensure_ssh_key') -%}
       {%-   else -%}
       {%-     set _ = actions.append('ensure_absent') -%}
       {%-   endif -%}
       {%- endif -%}
-          {#- configure_only still refreshes host-side settings when the container already exists -#}
-      {%- if proxmox_lifecycle_intent == 'configure_only'
-             and not (proxmox_lifecycle_validation_failed | bool)
-                  and proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-             and proxmox_lifecycle_runtime_state != 'absent' -%}
+      {%- if _desired_present and ((not _skip_provision) or _configure_existing) -%}
       {%-   if proxmox_lxc_host_config_enabled | default(true) -%}
       {%-     set _ = actions.append('reconcile_host_config') -%}
       {%-   endif -%}

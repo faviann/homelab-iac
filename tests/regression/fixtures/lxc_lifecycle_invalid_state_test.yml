@@ -1,0 +1,54 @@
+---
+- name: Test lifecycle decision rejects invalid inspection state
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _base_policy:
+      strict_validation: false
+      rebuild_on_release_mismatch: true
+      cleanup_rebuilt_state: true
+    _base_contract:
+      api_spec:
+        state: present
+        hostname: invalid-host
+        vmid: 4999
+        node: pve-a
+        ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+      host_config:
+        vmid: 4999
+        hostname: invalid-host
+        bind_mounts: {}
+        idmap: []
+        features: []
+      guest_bootstrap:
+        vmid: 4999
+        hostname: invalid-host
+        pubkey: ""
+  tasks:
+    - name: Invalid runtime state causes validation failure
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: full
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Build succeeded
+            proxmox_lifecycle_runtime_state: BANANAS
+            proxmox_lifecycle_actual_release: "12"
+            proxmox_lifecycle_release_probe_state: probed
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+
+        - ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
+
+        - ansible.builtin.fail:
+            msg: validate_state.yml should have failed but did not
+      rescue:
+        - name: Verify the failure mentions the invalid runtime state
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg is search('BANANAS')
+            fail_msg: "Expected the validation failure to mention the invalid runtime state"
