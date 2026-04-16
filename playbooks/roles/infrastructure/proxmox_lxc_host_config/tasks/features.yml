@@ -64,45 +64,12 @@
   become: "{{ proxmox_lxc_host_config_become }}"
   when: _target_features_string != (_current_features_list | join(','))
 
-- name: Check container runtime status
-  proxmox_pct:
-    vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
-    command: status
-  register: _container_status
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: "{{ proxmox_lxc_host_config_become }}"
-  when: _pct_set_result is changed
-
-- name: Restart container to apply feature changes
-  proxmox_pct:
-    vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
-    command: reboot
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: "{{ proxmox_lxc_host_config_become }}"
-  when:
-    - _pct_set_result is changed
-    - _container_status is defined
-    - _container_status.status | default('') == 'running'
-  register: _container_restart
-
-- name: Wait for container to complete reboot
-  ansible.builtin.pause:
-    seconds: 15
-    prompt: "Waiting for container {{ proxmox_lxc_host_config_spec.vmid }} to complete reboot and start SSH service"
-  when: _container_restart is changed
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-
-- name: Feature changes applied (restart required)
+- name: Feature changes applied
   ansible.builtin.debug:
-    msg: "Container {{ proxmox_lxc_host_config_spec.vmid }} feature changes applied. Start the container to activate them."
-  when:
-    - _pct_set_result is changed
-    - _container_status is defined
-    - _container_status.status | default('') != 'running'
-
-- name: Feature changes applied and activated
-  ansible.builtin.debug:
-    msg: "Applied features to container {{ proxmox_lxc_host_config_spec.vmid }}: {{ _target_features_string }}{{ ' (container restarted)' if _container_restart is changed else '' }}"
+    msg: >-
+      Applied features to container {{ proxmox_lxc_host_config_spec.vmid }}:
+      {{ _target_features_string }}. Host reconciliation will restart the
+      container if runtime state requires it.
   when: _pct_set_result is changed
 
 - name: Features already in sync
@@ -120,12 +87,7 @@
               'components': {
                 'features': {
                   'changed': (_pct_set_result is changed),
-                  'restart_required': (
-                    (_pct_set_result is changed)
-                    and (_container_status is defined)
-                    and (_container_status.status | default('') != 'running')
-                  ),
-                  'restart_applied': (_container_restart is changed)
+                  'restart_required': (_pct_set_result is changed)
                 }
               }
             },

@@ -115,5 +115,4 @@
           - proxmox_lxc_host_config_result.components.wireguard.changed
           - proxmox_lxc_host_config_result.components.sysctls.changed
           - proxmox_lxc_host_config_result.components.features.changed
-          - proxmox_lxc_host_config_result.components.features.restart_applied
         fail_msg: "Host config boundary result did not capture component changes and restart semantics"

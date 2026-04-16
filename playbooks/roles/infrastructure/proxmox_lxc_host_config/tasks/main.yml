@@ -58,7 +58,6 @@
         features:
           changed: false
           restart_required: false
-          restart_applied: false
       overall_changed: false
       restart_required: false
       restart_applied: false
@@ -91,19 +90,14 @@
                 | list
                 | length > 0
               ),
-              'restart_applied': (
-                proxmox_lxc_host_config_result.components.features.restart_applied | default(false)
-              ),
               'restart_required': (
-                (
-                  proxmox_lxc_host_config_result.components
-                  | dict2items
-                  | selectattr('value.restart_required')
-                  | list
-                  | length > 0
-                )
-                and not (proxmox_lxc_host_config_result.components.features.restart_applied | default(false))
-              )
+                proxmox_lxc_host_config_result.components
+                | dict2items
+                | selectattr('value.restart_required')
+                | list
+                | length > 0
+              ),
+              'restart_applied': false
             },
             recursive=True
           )
