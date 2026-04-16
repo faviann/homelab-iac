@@ -124,3 +124,36 @@
     - proxmox_lxc_spec.pubkey is not defined
     - proxmox_lxc_controller_pubkey_content is defined
     - proxmox_lxc_controller_pubkey_content | default('', true) | length > 0
+
+# ==============================================================================
+# PHASE 6: Spec Validation
+# Asserts all required fields are present before handing off to downstream roles.
+# Fails fast here rather than inside provisioning with a cryptic API error.
+# ==============================================================================
+
+- name: Validate assembled LXC spec
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_spec.vmid is defined
+      - proxmox_lxc_spec.vmid | int > 0
+      - proxmox_lxc_spec.hostname is defined
+      - proxmox_lxc_spec.hostname | length > 0
+      - proxmox_lxc_spec.node is defined
+      - proxmox_lxc_spec.node | length > 0
+      - proxmox_lxc_spec.ostemplate is defined
+      - proxmox_lxc_spec.ostemplate | length > 0
+      - proxmox_lxc_spec.cores is defined
+      - proxmox_lxc_spec.cores | int >= 1
+      - proxmox_lxc_spec.memory is defined
+      - proxmox_lxc_spec.memory | int >= 64
+      - proxmox_lxc_spec.disk is defined
+      - proxmox_lxc_spec.disk | length > 0
+      - proxmox_lxc_spec.netif is defined
+      - proxmox_lxc_spec.netif | length > 0
+      - proxmox_lxc_spec.state in ['present', 'absent']
+    fail_msg: >-
+      Invalid LXC spec for {{ inventory_hostname }}.
+      Assembled spec: {{ proxmox_lxc_spec | to_nice_yaml }}
+      Check: host_vars/{{ inventory_hostname }}.yml for vmid/hostname,
+      group_vars/all/proxmox.yml for node/ostemplate,
+      group_vars/tier_*/vars.yml for cores/memory/disk/network_bridge.
