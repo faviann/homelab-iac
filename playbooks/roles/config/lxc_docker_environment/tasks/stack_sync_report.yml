@@ -1,0 +1,159 @@
+---
+# Report: aggregate all sub-task register results into lxc_docker_env_deployment_report.
+# Inputs:  all _stack_sync_* registers from quarantine, materialize, start;
+#          all _managed_assets_* registers from managed_assets.yml
+# Outputs: lxc_docker_env_deployment_report
+
+- name: Publish stack sync deployment report
+  ansible.builtin.set_fact:
+    lxc_docker_env_deployment_report:
+      changed: >-
+        {{
+          (
+            ([_copy_dockge_result] if _copy_dockge_result is defined else [])
+            + (_managed_assets_legacy_stack_removals.results | default([]))
+            + ([_managed_assets_legacy_admin_removal] if _managed_assets_legacy_admin_removal is defined else [])
+            + ([_managed_assets_docker_agents_stack_removal] if _managed_assets_docker_agents_stack_removal is defined else [])
+            + ([_template_docker_agents_env_result] if _template_docker_agents_env_result is defined else [])
+            + ([_managed_assets_docker_agents_env_removal] if _managed_assets_docker_agents_env_removal is defined else [])
+            + ([_template_docker_agents_compose_result] if _template_docker_agents_compose_result is defined else [])
+            + ([_template_docker_agents_override_result] if _template_docker_agents_override_result is defined else [])
+            + ([_managed_assets_docker_agents_override_removal] if _managed_assets_docker_agents_override_removal is defined else [])
+            + ([_copy_docker_agents_assets_result] if _copy_docker_agents_assets_result is defined else [])
+            + (_managed_assets_docs_removal.results | default([]))
+            + ([_managed_assets_ownership_normalization] if _managed_assets_ownership_normalization is defined else [])
+            + ([_managed_assets_stacks_dir] if _managed_assets_stacks_dir is defined else [])
+            + (_stack_sync_quarantine_results.results | default([]))
+            + (_stack_sync_stack_dir_results.results | default([]))
+            + (_stack_sync_template_results.results | default([]))
+            + (_stack_sync_copy_results.results | default([]))
+            + (_stack_sync_prereq_dir_results.results | default([]))
+            + (_stack_sync_ownership_override_results.results | default([]))
+            + (_stack_sync_managed_file_create_results.results | default([]))
+            + (_stack_sync_managed_file_permission_results.results | default([]))
+            + (_stack_sync_network_create.results | default([]))
+            + (_stack_sync_stack_up_results.results | default([]))
+          )
+          | selectattr('changed', 'defined')
+          | selectattr('changed')
+          | list
+          | length > 0
+        }}
+      discovered_stacks: >-
+        {{
+          lxc_docker_env_desired_top_level_stack_dirs | default([])
+        }}
+      created_dirs: >-
+        {{
+          (
+            (
+              (_stack_sync_stack_dir_results.results | default([]))
+              + (_stack_sync_prereq_dir_results.results | default([]))
+              + (_stack_sync_ownership_override_results.results | default([]))
+            )
+            | selectattr('changed', 'defined')
+            | selectattr('changed')
+            | map(attribute='path')
+            | list
+          )
+          | difference(
+              (
+                (_stack_sync_stack_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_prereq_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_ownership_override_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item.path')
+                | list
+              )
+            )
+        }}
+      updated_dirs: >-
+        {{
+          (
+            (
+              (_stack_sync_stack_dir_results.results | default([]))
+              + (_stack_sync_prereq_dir_results.results | default([]))
+              + (_stack_sync_ownership_override_results.results | default([]))
+            )
+            | selectattr('changed', 'defined')
+            | selectattr('changed')
+            | map(attribute='path')
+            | list
+          )
+          | intersect(
+              (
+                (_stack_sync_stack_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_prereq_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_ownership_override_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item.path')
+                | list
+              )
+            )
+        }}
+      created_networks: >-
+        {{
+          _stack_sync_network_create.results | default([])
+          | selectattr('changed', 'defined')
+          | selectattr('changed')
+          | map(attribute='item')
+          | list
+        }}
+      quarantined_stacks: "{{ lxc_docker_env_stale_top_level_stack_dirs | default([]) }}"
+      started_stacks: >-
+        {{
+          _stack_sync_stack_up_results.results | default([])
+          | selectattr('changed', 'defined')
+          | selectattr('changed')
+          | map(attribute='item.path')
+          | map('dirname')
+          | map('basename')
+          | list
+        }}
+      unchanged_stacks: >-
+        {{
+          _stack_sync_stack_up_results.results | default([])
+          | rejectattr('skipped', 'defined')
+          | selectattr('changed', 'defined')
+          | rejectattr('changed')
+          | map(attribute='item.path')
+          | map('dirname')
+          | map('basename')
+          | list
+        }}
+      skipped_stacks: >-
+        {{
+          _stack_sync_stack_up_results.results | default([])
+          | selectattr('skipped', 'defined')
+          | selectattr('skipped')
+          | map(attribute='item.path')
+          | map('dirname')
+          | map('basename')
+          | list
+        }}
