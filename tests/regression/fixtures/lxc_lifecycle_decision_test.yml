@@ -1,0 +1,183 @@
+---
+- name: Test lifecycle decision and publish boundary scenarios
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _base_policy:
+      strict_validation: false
+      rebuild_on_release_mismatch: true
+      cleanup_rebuilt_state: true
+    _base_spec:
+      state: present
+      hostname: contract-host
+      vmid: 4201
+      node: pve-a
+      ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+  tasks:
+    - name: Scenario 1 - full lifecycle on absent container plans create and configure
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: full
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_spec: "{{ _base_spec }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Lifecycle actions completed
+            proxmox_lifecycle_runtime_state: absent
+            proxmox_lifecycle_actual_release: ""
+            proxmox_lifecycle_release_probe_state: absent
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+            _lxc_lifecycle_state:
+              intent: full
+              policy_effective: "{{ _base_policy }}"
+              compiled_spec: "{{ _base_spec }}"
+              compiled_contract: {}
+              desired_release: "12"
+              validation_snapshot:
+                status: ok
+                message: Lifecycle actions completed
+              validation_failed: false
+              runtime_state: absent
+              actual_release: ""
+              release_probe_state: absent
+              release_mismatch: false
+              should_provision: false
+              should_configure: false
+              rebuild_required: false
+              skip_provision: false
+              skip_configure: false
+              actions:
+                host: []
+                guest: []
+                cache: []
+              rebuilt: false
+              status: ""
+              reason: ""
+
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - _lxc_lifecycle_state.actions.host == ['ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
+              - _lxc_lifecycle_state.actions.guest == ['wait_for_connection', 'gather_facts', 'configure_guest', 'reboot_if_required']
+              - _lxc_lifecycle_state.actions.cache == []
+              - lxc_lifecycle_result.status == 'configured'
+              - not lxc_lifecycle_result.skip_provision
+              - not lxc_lifecycle_result.skip_configure
+            fail_msg: "Full absent-container lifecycle scenario did not publish the expected action plan or result"
+
+    - name: Scenario 2 - configure-only on absent container skips cleanly
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: configure_only
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_spec: "{{ _base_spec }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Lifecycle actions completed
+            proxmox_lifecycle_runtime_state: absent
+            proxmox_lifecycle_actual_release: ""
+            proxmox_lifecycle_release_probe_state: absent
+            proxmox_lifecycle_release_mismatch: false
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+            _lxc_lifecycle_state:
+              intent: configure_only
+              policy_effective: "{{ _base_policy }}"
+              compiled_spec: "{{ _base_spec }}"
+              compiled_contract: {}
+              desired_release: "12"
+              validation_snapshot:
+                status: ok
+                message: Lifecycle actions completed
+              validation_failed: false
+              runtime_state: absent
+              actual_release: ""
+              release_probe_state: absent
+              release_mismatch: false
+              should_provision: false
+              should_configure: false
+              rebuild_required: false
+              skip_provision: false
+              skip_configure: false
+              actions:
+                host: []
+                guest: []
+                cache: []
+              rebuilt: false
+              status: ""
+              reason: ""
+
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - _lxc_lifecycle_state.actions.host == []
+              - _lxc_lifecycle_state.actions.guest == []
+              - lxc_lifecycle_result.status == 'skipped'
+              - lxc_lifecycle_skip_host
+              - lxc_lifecycle_result.reason is search('configure-only was skipped')
+            fail_msg: "Configure-only absent-container lifecycle scenario did not skip as expected"
+
+    - name: Scenario 3 - release mismatch plans rebuild and cleanup
+      block:
+        - ansible.builtin.set_fact:
+            proxmox_lifecycle_intent: full
+            proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
+            proxmox_lxc_spec: "{{ _base_spec }}"
+            proxmox_lifecycle_validation_snapshot:
+              status: ok
+              message: Lifecycle actions completed
+            proxmox_lifecycle_runtime_state: running
+            proxmox_lifecycle_actual_release: "11"
+            proxmox_lifecycle_release_probe_state: probed
+            proxmox_lifecycle_release_mismatch: true
+            proxmox_lifecycle_desired_release: "12"
+            proxmox_lxc_host_config_enabled: true
+            proxmox_lifecycle_rebuilt: false
+            _lxc_lifecycle_state:
+              intent: full
+              policy_effective: "{{ _base_policy }}"
+              compiled_spec: "{{ _base_spec }}"
+              compiled_contract: {}
+              desired_release: "12"
+              validation_snapshot:
+                status: ok
+                message: Lifecycle actions completed
+              validation_failed: false
+              runtime_state: running
+              actual_release: "11"
+              release_probe_state: probed
+              release_mismatch: true
+              should_provision: false
+              should_configure: false
+              rebuild_required: false
+              skip_provision: false
+              skip_configure: false
+              actions:
+                host: []
+                guest: []
+                cache: []
+              rebuilt: false
+              status: ""
+              reason: ""
+
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
+
+        - ansible.builtin.assert:
+            that:
+              - _lxc_lifecycle_state.rebuild_required
+              - _lxc_lifecycle_state.actions.host == ['stop_container', 'destroy_container', 'ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
+              - _lxc_lifecycle_state.actions.cache == ['clear_fact_cache', 'remove_known_hosts']
+              - lxc_lifecycle_result.rebuild_required
+              - lxc_lifecycle_result.cache_actions == ['clear_fact_cache', 'remove_known_hosts']
+              - lxc_lifecycle_result.internal_snapshot.action_decisions.host == _lxc_lifecycle_state.actions.host
+            fail_msg: "Release mismatch lifecycle scenario did not publish rebuild and cleanup decisions as expected"

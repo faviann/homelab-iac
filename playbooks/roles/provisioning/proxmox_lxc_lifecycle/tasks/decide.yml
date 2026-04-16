@@ -86,3 +86,26 @@
       {%-   set _ = actions.extend(['clear_fact_cache', 'remove_known_hosts']) -%}
       {%- endif -%}
       {{ actions }}
+
+- name: Publish lifecycle decisions to state boundary
+  ansible.builtin.set_fact:
+    _lxc_lifecycle_state: >-
+      {{
+        _lxc_lifecycle_state
+        | combine(
+            {
+              'validation_failed': proxmox_lifecycle_validation_failed | bool,
+              'should_provision': proxmox_lifecycle_should_provision | bool,
+              'should_configure': proxmox_lifecycle_should_configure | bool,
+              'rebuild_required': proxmox_lifecycle_rebuild_required | bool,
+              'skip_provision': proxmox_lifecycle_skip_provision | bool,
+              'skip_configure': proxmox_lifecycle_skip_configure | bool,
+              'actions': {
+                'host': proxmox_lifecycle_host_actions | default([]),
+                'guest': proxmox_lifecycle_guest_actions | default([]),
+                'cache': proxmox_lifecycle_cache_actions | default([])
+              }
+            },
+            recursive=True
+          )
+      }}

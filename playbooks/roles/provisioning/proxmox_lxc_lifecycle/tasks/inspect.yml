@@ -167,3 +167,20 @@
         and proxmox_lifecycle_actual_release | length > 0
         and proxmox_lifecycle_actual_release != proxmox_lifecycle_desired_release
       }}
+
+- name: Publish inspection state to lifecycle boundary
+  ansible.builtin.set_fact:
+    _lxc_lifecycle_state: >-
+      {{
+        _lxc_lifecycle_state
+        | combine(
+            {
+              'validation_snapshot': proxmox_lifecycle_validation_snapshot | default({}),
+              'runtime_state': proxmox_lifecycle_runtime_state | default('unknown'),
+              'actual_release': proxmox_lifecycle_actual_release | default(''),
+              'release_probe_state': proxmox_lifecycle_release_probe_state | default('unavailable'),
+              'release_mismatch': proxmox_lifecycle_release_mismatch | default(false)
+            },
+            recursive=True
+          )
+      }}

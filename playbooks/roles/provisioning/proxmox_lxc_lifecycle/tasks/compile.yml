@@ -3,15 +3,44 @@
   ansible.builtin.include_role:
     name: provisioning/lxc_spec_builder
 
+- name: Publish compiled contract into lifecycle state
+  ansible.builtin.set_fact:
+    _lxc_lifecycle_state: >-
+      {{
+        _lxc_lifecycle_state
+        | combine(
+            {
+              'compiled_spec': proxmox_lxc_spec,
+              'compiled_contract': proxmox_lxc_contract
+            },
+            recursive=True
+          )
+      }}
+
 - name: Derive desired Debian release from compiled spec
   ansible.builtin.set_fact:
+    _lxc_lifecycle_state: >-
+      {{
+        _lxc_lifecycle_state
+        | combine(
+            {
+              'desired_release': (
+                proxmox_lxc_contract.api_spec.ostemplate
+                | regex_findall('debian-([0-9]+)-')
+                | first
+                | default('')
+              )
+            },
+            recursive=True
+          )
+      }}
     proxmox_lifecycle_desired_release_candidates: "{{ proxmox_lxc_contract.api_spec.ostemplate | regex_findall('debian-([0-9]+)-') }}"
     proxmox_lifecycle_desired_release: "{{ (proxmox_lxc_contract.api_spec.ostemplate | regex_findall('debian-([0-9]+)-') | first | default('')) }}"
 
 - name: Validate desired Debian release can be derived when rebuilds are enabled
   ansible.builtin.assert:
     that:
-      - proxmox_lifecycle_desired_release | length > 0
+      - _lxc_lifecycle_state.desired_release | length > 0
     fail_msg: >-
       Cannot derive desired Debian release from ostemplate '{{ proxmox_lxc_contract.api_spec.ostemplate }}'.
       Expected a template name like 'debian-<major>-...'.

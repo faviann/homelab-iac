@@ -1,22 +1,17 @@
 ---
-- name: Build lifecycle result payload
+- name: Finalize lifecycle outcome state
   ansible.builtin.set_fact:
-    lxc_lifecycle_result:
-      status: "{{ _lifecycle_status }}"
-      reason: "{{ _lifecycle_reason }}"
-      compiled_spec: "{{ proxmox_lxc_spec }}"
-      validation_status: "{{ proxmox_lifecycle_validation_snapshot.status | default('ok') }}"
-      runtime_state: "{{ proxmox_lifecycle_runtime_state }}"
-      release_probe_state: "{{ proxmox_lifecycle_release_probe_state }}"
-      release_mismatch: "{{ proxmox_lifecycle_release_mismatch | bool }}"
-      rebuild_required: "{{ proxmox_lifecycle_rebuild_required | bool }}"
-      skip_provision: "{{ proxmox_lifecycle_skip_provision | bool }}"
-      skip_configure: "{{ proxmox_lifecycle_skip_configure | bool }}"
-      host_actions: "{{ proxmox_lifecycle_host_actions }}"
-      guest_actions: "{{ proxmox_lifecycle_guest_actions }}"
-      cache_actions: "{{ proxmox_lifecycle_cache_actions }}"
-    proxmox_lxc_rebuilt: "{{ proxmox_lifecycle_rebuilt | bool }}"
-    lxc_lifecycle_skip_host: "{{ proxmox_lifecycle_skip_provision | bool and proxmox_lifecycle_skip_configure | bool }}"
+    _lxc_lifecycle_state: >-
+      {{
+        _lxc_lifecycle_state
+        | combine(
+            {
+              'status': _lifecycle_status,
+              'reason': _lifecycle_reason
+            },
+            recursive=True
+          )
+      }}
   vars:
     _lifecycle_status: >-
       {%- if proxmox_lifecycle_validation_failed | bool -%}
@@ -40,6 +35,33 @@
       {%- else -%}
       {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle actions completed') }}
       {%- endif -%}
+
+- name: Build lifecycle result payload
+  ansible.builtin.set_fact:
+    lxc_lifecycle_result:
+      status: "{{ _lxc_lifecycle_state.status }}"
+      reason: "{{ _lxc_lifecycle_state.reason }}"
+      intent: "{{ _lxc_lifecycle_state.intent }}"
+      compiled_spec: "{{ _lxc_lifecycle_state.compiled_spec }}"
+      validation_status: "{{ _lxc_lifecycle_state.validation_snapshot.status | default('ok') }}"
+      runtime_state: "{{ _lxc_lifecycle_state.runtime_state }}"
+      release_probe_state: "{{ _lxc_lifecycle_state.release_probe_state }}"
+      release_mismatch: "{{ _lxc_lifecycle_state.release_mismatch | bool }}"
+      rebuild_required: "{{ _lxc_lifecycle_state.rebuild_required | bool }}"
+      skip_provision: "{{ _lxc_lifecycle_state.skip_provision | bool }}"
+      skip_configure: "{{ _lxc_lifecycle_state.skip_configure | bool }}"
+      host_actions: "{{ _lxc_lifecycle_state.actions.host }}"
+      guest_actions: "{{ _lxc_lifecycle_state.actions.guest }}"
+      cache_actions: "{{ _lxc_lifecycle_state.actions.cache }}"
+      internal_snapshot:
+        validation_snapshot: "{{ _lxc_lifecycle_state.validation_snapshot }}"
+        policy_effective: "{{ _lxc_lifecycle_state.policy_effective }}"
+        action_decisions:
+          host: "{{ _lxc_lifecycle_state.actions.host }}"
+          guest: "{{ _lxc_lifecycle_state.actions.guest }}"
+          cache: "{{ _lxc_lifecycle_state.actions.cache }}"
+    proxmox_lxc_rebuilt: "{{ _lxc_lifecycle_state.rebuilt | bool }}"
+    lxc_lifecycle_skip_host: "{{ _lxc_lifecycle_state.skip_provision | bool and _lxc_lifecycle_state.skip_configure | bool }}"
 
 - name: Report lifecycle outcome
   ansible.builtin.debug:
