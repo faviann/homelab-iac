@@ -6,7 +6,7 @@
   ansible.builtin.shell: |
     grep '^mp[0-9]\+:' {{ _lxc_config_file }} | sort
   delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
+  become: "{{ proxmox_lxc_host_config_become }}"
   register: _current_mounts
   changed_when: false
   failed_when: false
@@ -24,7 +24,7 @@
         regexp: '^mp\d+:'
         state: absent
       delegate_to: "{{ proxmox_host_config_delegate }}"
-      become: true
+      become: "{{ proxmox_lxc_host_config_become }}"
 
     - name: Apply bind mount points
       ansible.builtin.lineinfile:
@@ -33,5 +33,23 @@
         insertafter: '^rootfs:'
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
-      become: true
+      become: "{{ proxmox_lxc_host_config_become }}"
       loop: "{{ proxmox_lxc_host_config_spec.bind_mounts | dict2items | sort(attribute='key') }}"
+
+- name: Publish bind-mount reconciliation result
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result: >-
+      {{
+        proxmox_lxc_host_config_result
+        | combine(
+            {
+              'components': {
+                'bind_mounts': {
+                  'changed': (_current_mounts.stdout != _desired_mounts),
+                  'restart_required': (_current_mounts.stdout != _desired_mounts)
+                }
+              }
+            },
+            recursive=True
+          )
+      }}

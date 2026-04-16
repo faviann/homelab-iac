@@ -10,4 +10,23 @@
     state: "{{ 'present' if (wireguard_kernel_module_access | default(false) | bool) else 'absent' }}"
     create: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
+  become: "{{ proxmox_lxc_host_config_become }}"
+  register: _wireguard_result
+
+- name: Publish WireGuard reconciliation result
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result: >-
+      {{
+        proxmox_lxc_host_config_result
+        | combine(
+            {
+              'components': {
+                'wireguard': {
+                  'changed': (_wireguard_result.changed | default(false)),
+                  'restart_required': (_wireguard_result.changed | default(false))
+                }
+              }
+            },
+            recursive=True
+          )
+      }}

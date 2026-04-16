@@ -6,7 +6,7 @@
   ansible.builtin.shell: |
     grep '^lxc\.idmap:' {{ _lxc_config_file }} | sed 's/^lxc\.idmap:\s*//' | sort
   delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
+  become: "{{ proxmox_lxc_host_config_become }}"
   register: _current_idmap
   changed_when: false
   failed_when: false
@@ -24,7 +24,7 @@
         regexp: '^lxc\.idmap:'
         state: absent
       delegate_to: "{{ proxmox_host_config_delegate }}"
-      become: true
+      become: "{{ proxmox_lxc_host_config_become }}"
 
     - name: Apply UID/GID ID mappings
       ansible.builtin.lineinfile:
@@ -33,5 +33,23 @@
         insertafter: '^unprivileged:'
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
-      become: true
+      become: "{{ proxmox_lxc_host_config_become }}"
       loop: "{{ proxmox_lxc_host_config_spec.idmap | sort }}"
+
+- name: Publish idmap reconciliation result
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result: >-
+      {{
+        proxmox_lxc_host_config_result
+        | combine(
+            {
+              'components': {
+                'idmap': {
+                  'changed': (_current_idmap.stdout != _desired_idmap),
+                  'restart_required': (_current_idmap.stdout != _desired_idmap)
+                }
+              }
+            },
+            recursive=True
+          )
+      }}

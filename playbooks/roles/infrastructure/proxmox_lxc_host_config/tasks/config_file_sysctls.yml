@@ -16,7 +16,8 @@
   when:
     - lxc_custom_sysctls is defined
     - lxc_custom_sysctls | length > 0
-  notify: restart_lxc
+  become: "{{ proxmox_lxc_host_config_become }}"
+  register: _sysctl_results
 
 - name: Disable AppArmor for Docker compatibility
   ansible.builtin.lineinfile:
@@ -27,7 +28,43 @@
     create: false
     backup: true
   delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
+  become: "{{ proxmox_lxc_host_config_become }}"
   when:
     - lxc_disable_apparmor | default(false) | bool
-  notify: restart_lxc
+  register: _apparmor_result
+
+- name: Publish sysctl reconciliation result
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result: >-
+      {{
+        proxmox_lxc_host_config_result
+        | combine(
+            {
+              'components': {
+                'sysctls': {
+                  'changed': (
+                    (
+                      _sysctl_results.results | default([])
+                      | selectattr('changed', 'defined')
+                      | selectattr('changed')
+                      | list
+                      | length > 0
+                    )
+                    or (_apparmor_result.changed | default(false))
+                  ),
+                  'restart_required': (
+                    (
+                      _sysctl_results.results | default([])
+                      | selectattr('changed', 'defined')
+                      | selectattr('changed')
+                      | list
+                      | length > 0
+                    )
+                    or (_apparmor_result.changed | default(false))
+                  )
+                }
+              }
+            },
+            recursive=True
+          )
+      }}

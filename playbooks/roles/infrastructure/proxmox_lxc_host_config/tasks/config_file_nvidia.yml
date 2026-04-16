@@ -6,7 +6,7 @@
   ansible.builtin.shell: |
     grep -E '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file }} | sort || true
   delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: true
+  become: "{{ proxmox_lxc_host_config_become }}"
   register: _current_nvidia_config
   changed_when: false
   failed_when: false
@@ -34,7 +34,7 @@
         regexp: "{{ item }}"
         state: absent
       delegate_to: "{{ proxmox_host_config_delegate }}"
-      become: true
+      become: "{{ proxmox_lxc_host_config_become }}"
       loop:
         - '^lxc\.hook\.pre-start:.*nvidia-modprobe'
         - '^lxc\.environment:.*NVIDIA_VISIBLE_DEVICES'
@@ -48,10 +48,28 @@
         insertafter: EOF
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
-      become: true
+      become: "{{ proxmox_lxc_host_config_become }}"
       loop:
         - "lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'"
         - "lxc.environment: NVIDIA_VISIBLE_DEVICES=all"
         - "lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
         - "lxc.hook.mount: /usr/share/lxc/hooks/nvidia"
       when: configure_nvidia_runtime | default(false) | bool
+
+- name: Publish NVIDIA reconciliation result
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result: >-
+      {{
+        proxmox_lxc_host_config_result
+        | combine(
+            {
+              'components': {
+                'nvidia': {
+                  'changed': (_current_nvidia_config.stdout != _desired_nvidia_config),
+                  'restart_required': (_current_nvidia_config.stdout != _desired_nvidia_config)
+                }
+              }
+            },
+            recursive=True
+          )
+      }}

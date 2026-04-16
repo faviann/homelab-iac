@@ -25,6 +25,35 @@
       - proxmox_lxc_host_config_spec.vmid is defined
     fail_msg: "proxmox_lxc_host_config_spec with hostname and vmid is required"
 
+- name: Initialize host reconciliation result
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result:
+      vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
+      hostname: "{{ proxmox_lxc_host_config_spec.hostname }}"
+      components:
+        idmap:
+          changed: false
+          restart_required: false
+        bind_mounts:
+          changed: false
+          restart_required: false
+        nvidia:
+          changed: false
+          restart_required: false
+        wireguard:
+          changed: false
+          restart_required: false
+        sysctls:
+          changed: false
+          restart_required: false
+        features:
+          changed: false
+          restart_required: false
+          restart_applied: false
+      overall_changed: false
+      restart_required: false
+      restart_applied: false
+
 - name: Apply LXC config file modifications
   ansible.builtin.include_tasks: config_file.yml
   tags:
@@ -38,3 +67,35 @@
   when: proxmox_lxc_host_config_spec.features | default([]) | length > 0
   tags:
     - features
+
+- name: Finalize host reconciliation result
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result: >-
+      {{
+        proxmox_lxc_host_config_result
+        | combine(
+            {
+              'overall_changed': (
+                proxmox_lxc_host_config_result.components
+                | dict2items
+                | selectattr('value.changed')
+                | list
+                | length > 0
+              ),
+              'restart_applied': (
+                proxmox_lxc_host_config_result.components.features.restart_applied | default(false)
+              ),
+              'restart_required': (
+                (
+                  proxmox_lxc_host_config_result.components
+                  | dict2items
+                  | selectattr('value.restart_required')
+                  | list
+                  | length > 0
+                )
+                and not (proxmox_lxc_host_config_result.components.features.restart_applied | default(false))
+              )
+            },
+            recursive=True
+          )
+      }}

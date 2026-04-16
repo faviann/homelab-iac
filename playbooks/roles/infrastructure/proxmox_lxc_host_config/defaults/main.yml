@@ -5,3 +5,11 @@
 # Delegation target for host-side operations (pct commands)
 # pct commands must run on the Proxmox host itself
 proxmox_host_config_delegate: "{{ proxmox_pct_delegate_host | default(proxmox_api_host) }}"
+
+# Host-side reconciliation normally requires privilege escalation on the Proxmox host.
+# Regression fixtures can disable this when exercising the role against temp files on localhost.
+proxmox_lxc_host_config_become: true
+
+# Root directory containing Proxmox LXC config files.
+# Overridable for regression fixtures that exercise the role without a live Proxmox host.
+proxmox_lxc_host_config_path_root: /etc/pve/lxc
