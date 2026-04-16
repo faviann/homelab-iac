@@ -1,0 +1,20 @@
+---
+# Stack sync sequencer.
+# Orchestrates the focused stack reconciliation subtasks in order.
+
+- name: Discover desired and stale stacks
+  ansible.builtin.include_tasks: discover.yml
+
+- name: Quarantine stale stacks
+  ansible.builtin.include_tasks: quarantine.yml
+  when: lxc_docker_env_stale_top_level_stack_dirs | default([]) | length > 0
+
+- name: Materialize desired stack assets
+  ansible.builtin.include_tasks: materialize.yml
+  when: lxc_stack_sync_source_exists | default(false)
+
+- name: Start desired stacks
+  ansible.builtin.include_tasks: start.yml
+
+- name: Publish reconciliation report
+  ansible.builtin.include_tasks: report.yml

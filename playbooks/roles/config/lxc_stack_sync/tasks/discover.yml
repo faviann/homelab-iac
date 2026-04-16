@@ -1,11 +1,9 @@
 ---
 # Discovery: find source stacks, compute desired/stale sets, guard against missing source.
-# Outputs: lxc_docker_env_desired_top_level_stack_dirs, lxc_docker_env_stale_top_level_stack_dirs,
-#          _per_host_stacks_dir, _per_host_j2_files, _per_host_static_files,
-#          _per_host_dirs, _per_host_top_level_dirs, _deployed_top_level_stack_dirs
 
 - name: Initialize stack sync state
   ansible.builtin.set_fact:
+    lxc_stack_sync_source_exists: false
     lxc_docker_env_desired_top_level_stack_dirs: []
     lxc_docker_env_stale_top_level_stack_dirs: []
     lxc_docker_env_templated_outputs: []
@@ -28,6 +26,10 @@
   register: _per_host_stacks_dir
   delegate_to: localhost
   become: false
+
+- name: Record whether per-host stack source exists
+  ansible.builtin.set_fact:
+    lxc_stack_sync_source_exists: "{{ _per_host_stacks_dir.stat.exists | default(false) }}"
 
 - name: Find template files (.j2) in per-host stacks
   ansible.builtin.find:
@@ -147,20 +149,3 @@
         | list
       }}
   when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Publish discovery results to reconciliation boundary
-  ansible.builtin.set_fact:
-    _lxc_docker_env_reconciliation: >-
-      {{
-        (_lxc_docker_env_reconciliation | default({}))
-        | combine(
-            {
-              'discovery': {
-                'desired_stacks': lxc_docker_env_desired_top_level_stack_dirs | default([]),
-                'stale_stacks': lxc_docker_env_stale_top_level_stack_dirs | default([]),
-                'source_exists': _per_host_stacks_dir.stat.exists | default(false)
-              }
-            },
-            recursive=True
-          )
-      }}

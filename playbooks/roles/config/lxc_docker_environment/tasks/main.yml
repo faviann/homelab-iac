@@ -1,16 +1,20 @@
 ---
 # Main tasks file for lxc_docker_environment role
 # Configures the Docker host contract, then delegates repo-managed stack
-# reconciliation to the internal stack sync boundary.
+# reconciliation to the standalone stack sync role.
 
 - name: Verify required packages are installed
   ansible.builtin.package_facts:
     manager: apt
+  tags:
+    - docker_host_setup
 
 - name: Fail if sudo is not installed
   ansible.builtin.fail:
     msg: "sudo package must be installed before Docker environment configuration. Please run lxc_base_system role first."
   when: "'sudo' not in ansible_facts.packages"
+  tags:
+    - docker_host_setup
 
 - name: Build internal Docker environment contract
   ansible.builtin.set_fact:
@@ -35,6 +39,8 @@
     path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
     state: directory
     mode: '0755'
+  tags:
+    - docker_host_setup
 
 - name: Copy Dockge templates to shared directory
   ansible.builtin.copy:
@@ -46,6 +52,8 @@
     directory_mode: '0755'
   register: _copy_dockge_result
   notify: restart dockge
+  tags:
+    - docker_host_setup
 
 - name: Materialize managed Docker assets
   ansible.builtin.include_tasks: managed_assets.yml
@@ -55,6 +63,8 @@
     path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}"
     state: directory
     mode: '0755'
+  tags:
+    - docker_host_setup
 
 - name: Check if bind mount already exists
   ansible.builtin.command:
@@ -62,6 +72,8 @@
   register: _mount_check
   changed_when: false
   failed_when: false
+  tags:
+    - docker_host_setup
 
 - name: Create bind mount for Docker config
   ansible.posix.mount:
@@ -71,6 +83,8 @@
     state: mounted
     fstype: none
   when: _mount_check.rc != 0
+  tags:
+    - docker_host_setup
 
 - name: Ensure bind mount is in fstab
   ansible.posix.mount:
@@ -81,12 +95,16 @@
     fstype: none
     dump: '0'
     passno: '0'
+  tags:
+    - docker_host_setup
 
 - name: Ensure docker group exists
   ansible.builtin.group:
     name: docker
     state: present
     system: true
+  tags:
+    - docker_host_setup
 
 - name: Create Docker user
   ansible.builtin.user:
@@ -102,6 +120,8 @@
     password_lock: true
     comment: "Docker user managed by Ansible"
   register: _docker_user_result
+  tags:
+    - docker_host_setup
 
 - name: Ensure Docker user can use sudo without password
   ansible.builtin.lineinfile:
@@ -110,11 +130,15 @@
     create: true
     mode: '0440'
     validate: 'visudo -cf %s'
+  tags:
+    - docker_host_setup
 
 - name: Check if Dockge directory exists
   ansible.builtin.stat:
     path: "{{ lxc_docker_environment_internal.dockge_compose_dir }}"
   register: _dockge_dir_stat
+  tags:
+    - docker_host_setup
 
 - name: Check if Dockge is already running
   ansible.builtin.command:
@@ -125,6 +149,8 @@
   failed_when: false
   check_mode: false
   when: _dockge_dir_stat.stat.exists and _dockge_dir_stat.stat.isdir
+  tags:
+    - docker_host_setup
 
 - name: Start Dockge with docker compose
   ansible.builtin.command:
@@ -137,11 +163,16 @@
     - _dockge_dir_stat.stat.isdir
     - (_dockge_status.stdout | default('') | length == 0)
   register: _dockge_start_result
+  tags:
+    - docker_host_setup
 
 - name: Display Dockge startup result
   ansible.builtin.debug:
     msg: "Dockge {{ _dockge_start_result.changed | default(false) | ternary('started', 'already running or not configured') }}"
   when: _dockge_dir_stat.stat.exists
+  tags:
+    - docker_host_setup
 
 - name: Reconcile repo-managed stacks
-  ansible.builtin.include_tasks: stack_sync.yml
+  ansible.builtin.include_role:
+    name: config/lxc_stack_sync

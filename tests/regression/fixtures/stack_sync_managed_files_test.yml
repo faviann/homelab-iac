@@ -72,7 +72,7 @@
         lxc_docker_env_prereq_dirs: []
 
     - name: Include materialize
-      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_materialize.yml"
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
 
     - name: Assert managed file was created at resolved path
       ansible.builtin.stat:
@@ -99,7 +99,7 @@
         lxc_docker_env_source_compose_specs: []
 
     - name: Re-run materialize to verify existing files are not overwritten
-      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_materialize.yml"
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
 
     - name: Assert content was preserved (force:false)
       ansible.builtin.slurp:
@@ -110,10 +110,10 @@
           - "'existing-content' in (_preserved_content.content | b64decode)"
         fail_msg: "Managed file content was overwritten — force:false not honoured"
 
-    - name: Assert reconciliation boundary captured managed file planning
+    - name: Assert managed file planning was registered
       ansible.builtin.assert:
         that:
-          - _lxc_docker_env_reconciliation.materialize.managed_files | length == 1
-          - _lxc_docker_env_reconciliation.materialize.managed_file_parent_dir_results | length > 0
-          - _lxc_docker_env_reconciliation.materialize.managed_file_create_results | length > 0
-        fail_msg: "Managed file results were not published to the reconciliation boundary"
+          - _stack_sync_managed_files | length == 1
+          - _stack_sync_managed_file_parent_dir_results.results | length > 0
+          - _stack_sync_managed_file_create_results.results | length > 0
+        fail_msg: "Managed file results were not registered"

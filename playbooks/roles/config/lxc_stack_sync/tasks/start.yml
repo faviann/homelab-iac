@@ -1,7 +1,5 @@
 ---
 # Start: create external Docker networks and bring up all desired stacks.
-# Inputs:  lxc_docker_environment_internal, lxc_docker_env_desired_top_level_stack_dirs
-# Outputs: _stack_sync_network_create, _stack_compose_files, _stack_sync_stack_up_results
 
 - name: Create external Docker networks
   ansible.builtin.command:
@@ -32,19 +30,3 @@
   register: _stack_sync_stack_up_results
   changed_when: "'Started' in _stack_sync_stack_up_results.stderr or 'Created' in _stack_sync_stack_up_results.stderr"
   when: (item.path | dirname | basename) in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
-
-- name: Publish start results to reconciliation boundary
-  ansible.builtin.set_fact:
-    _lxc_docker_env_reconciliation: >-
-      {{
-        (_lxc_docker_env_reconciliation | default({}))
-        | combine(
-            {
-              'start': {
-                'network_results': _stack_sync_network_create.results | default([]),
-                'stack_up_results': _stack_sync_stack_up_results.results | default([])
-              }
-            },
-            recursive=True
-          )
-      }}

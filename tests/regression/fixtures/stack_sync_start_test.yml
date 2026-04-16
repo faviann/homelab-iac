@@ -40,7 +40,7 @@
 
     - name: Include start with mock docker on PATH
       block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_start.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/start.yml"
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
 
@@ -69,10 +69,10 @@
           - _compose_up_calls | int == 1
         fail_msg: "Expected 1 compose up call (myapp only), got {{ _compose_up_calls }}. Log: {{ _docker_log.content | b64decode }}"
 
-    - name: Assert reconciliation boundary captured start results
+    - name: Assert start results were registered
       ansible.builtin.assert:
         that:
-          - _lxc_docker_env_reconciliation.start.network_results | length == 1
-          - (_lxc_docker_env_reconciliation.start.stack_up_results | rejectattr('skipped', 'defined') | list | length) == 1
-          - (_lxc_docker_env_reconciliation.start.stack_up_results | selectattr('skipped', 'defined') | list | length) == 1
-        fail_msg: "Start results were not published to the reconciliation boundary"
+          - _stack_sync_network_create.results | length == 1
+          - (_stack_sync_stack_up_results.results | rejectattr('skipped', 'defined') | list | length) == 1
+          - (_stack_sync_stack_up_results.results | selectattr('skipped', 'defined') | list | length) == 1
+        fail_msg: "Start results were not registered"

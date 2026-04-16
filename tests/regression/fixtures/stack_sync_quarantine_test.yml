@@ -44,7 +44,7 @@
 
     - name: Include quarantine with mock docker on PATH
       block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_quarantine.yml"
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/quarantine.yml"
       environment:
         PATH: "{{ temp_root }}:{{ ansible_env.PATH }}"
 
@@ -87,9 +87,9 @@
           - "'compose down' in (_docker_log.content | b64decode)"
         fail_msg: "docker compose down was not called"
 
-    - name: Assert reconciliation boundary captured quarantine results
+    - name: Assert quarantine results were registered
       ansible.builtin.assert:
         that:
-          - _lxc_docker_env_reconciliation.quarantine.results | length == 1
-          - _lxc_docker_env_reconciliation.quarantine.results[0].changed
-        fail_msg: "Quarantine results were not published to the reconciliation boundary"
+          - _stack_sync_quarantine_results.results | length == 1
+          - _stack_sync_quarantine_results.results[0].changed
+        fail_msg: "Quarantine results were not registered"

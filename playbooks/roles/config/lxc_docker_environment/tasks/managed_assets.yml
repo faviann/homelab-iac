@@ -179,32 +179,19 @@
     mode: '0755'
   register: _managed_assets_stacks_dir
 
-- name: Publish managed asset results to reconciliation boundary
+- name: Publish managed asset results for stack sync
   ansible.builtin.set_fact:
-    _lxc_docker_env_reconciliation: >-
-      {{
-        (
-          _lxc_docker_env_reconciliation
-          | default({})
-        )
-        | combine(
-            {
-              'managed_assets': {
-                'dockge_copy': _copy_dockge_result | default({}),
-                'legacy_stack_removals': _managed_assets_legacy_stack_removals.results | default([]),
-                'legacy_admin_removal': _managed_assets_legacy_admin_removal | default({}),
-                'docker_agents_stack_removal': _managed_assets_docker_agents_stack_removal | default({}),
-                'docker_agents_env': _template_docker_agents_env_result | default({}),
-                'docker_agents_env_removal': _managed_assets_docker_agents_env_removal | default({}),
-                'docker_agents_compose': _template_docker_agents_compose_result | default({}),
-                'docker_agents_override': _template_docker_agents_override_result | default({}),
-                'docker_agents_override_removal': _managed_assets_docker_agents_override_removal | default({}),
-                'docker_agents_assets': _copy_docker_agents_assets_result | default({}),
-                'docs_removal': _managed_assets_docs_removal.results | default([]),
-                'ownership_normalization': _managed_assets_ownership_normalization | default({}),
-                'stacks_dir': _managed_assets_stacks_dir | default({})
-              }
-            },
-            recursive=True
-          )
-      }}
+    lxc_stack_sync_managed_assets:
+      dockge_copy: "{{ _copy_dockge_result | default({}) }}"
+      legacy_stack_removals: "{{ _managed_assets_legacy_stack_removals.results | default([]) }}"
+      legacy_admin_removal: "{{ _managed_assets_legacy_admin_removal | default({}) }}"
+      docker_agents_stack_removal: "{{ _managed_assets_docker_agents_stack_removal | default({}) }}"
+      docker_agents_env: "{{ _template_docker_agents_env_result | default({}) }}"
+      docker_agents_env_removal: "{{ _managed_assets_docker_agents_env_removal | default({}) }}"
+      docker_agents_compose: "{{ _template_docker_agents_compose_result | default({}) }}"
+      docker_agents_override: "{{ _template_docker_agents_override_result | default({}) }}"
+      docker_agents_override_removal: "{{ _managed_assets_docker_agents_override_removal | default({}) }}"
+      docker_agents_assets: "{{ _copy_docker_agents_assets_result | default({}) }}"
+      docs_removal: "{{ _managed_assets_docs_removal.results | default([]) }}"
+      ownership_normalization: "{{ _managed_assets_ownership_normalization | default({}) }}"
+      stacks_dir: "{{ _managed_assets_stacks_dir | default({}) }}"

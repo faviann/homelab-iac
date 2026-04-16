@@ -1,9 +1,5 @@
 ---
 # Quarantine: stop and move stale deployed top-level stacks.
-# Inputs:  lxc_docker_env_stale_top_level_stack_dirs, _deployed_top_level_stack_dirs,
-#          lxc_docker_environment_internal
-# Outputs: _stack_sync_quarantine_results
-# Guard:   include_tasks caller checks lxc_docker_env_stale_top_level_stack_dirs | length > 0
 
 - name: Ensure stale stack quarantine directory exists
   ansible.builtin.file:
@@ -35,18 +31,3 @@
     label: "{{ item.path | basename }}"
   register: _stack_sync_quarantine_results
   when: (item.path | basename) in lxc_docker_env_stale_top_level_stack_dirs
-
-- name: Publish quarantine results to reconciliation boundary
-  ansible.builtin.set_fact:
-    _lxc_docker_env_reconciliation: >-
-      {{
-        (_lxc_docker_env_reconciliation | default({}))
-        | combine(
-            {
-              'quarantine': {
-                'results': _stack_sync_quarantine_results.results | default([])
-              }
-            },
-            recursive=True
-          )
-      }}

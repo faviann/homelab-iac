@@ -37,7 +37,7 @@
         - "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
 
     - name: Include stack sync discover
-      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_discover.yml"
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/discover.yml"
 
     - name: Assert stale list contains only stale-app
       ansible.builtin.assert:
@@ -57,10 +57,10 @@
           - "'stale-app' not in lxc_docker_env_desired_top_level_stack_dirs"
         fail_msg: "stale-app should not be in desired set"
 
-    - name: Assert reconciliation boundary captured discovery state
+    - name: Assert discovery state is published as plain vars
       ansible.builtin.assert:
         that:
-          - _lxc_docker_env_reconciliation.discovery.desired_stacks == lxc_docker_env_desired_top_level_stack_dirs
-          - _lxc_docker_env_reconciliation.discovery.stale_stacks == lxc_docker_env_stale_top_level_stack_dirs
-          - _lxc_docker_env_reconciliation.discovery.source_exists
-        fail_msg: "Discovery results were not published to the reconciliation boundary"
+          - lxc_stack_sync_source_exists
+          - lxc_docker_env_desired_top_level_stack_dirs == ['myapp']
+          - lxc_docker_env_stale_top_level_stack_dirs == ['stale-app']
+        fail_msg: "Discovery results were not published through the stack sync vars"

@@ -71,7 +71,7 @@
         lxc_docker_env_prereq_dirs: []
 
     - name: Include materialize
-      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_materialize.yml"
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
 
     - name: Assert templated compose file was rendered at target path
       ansible.builtin.stat:
@@ -109,11 +109,11 @@
           - not _j2_source_stat.stat.exists
         fail_msg: "compose.yaml.j2 should not appear at target (it is a template source)"
 
-    - name: Assert reconciliation boundary captured materialize outputs
+    - name: Assert materialize outputs were registered
       ansible.builtin.assert:
         that:
-          - "'myapp/compose.yaml' in (_lxc_docker_env_reconciliation.materialize.templated_outputs | default([]))"
-          - _lxc_docker_env_reconciliation.materialize.stack_dirs.results | length > 0
-          - _lxc_docker_env_reconciliation.materialize.templates | length > 0
-          - _lxc_docker_env_reconciliation.materialize.copies | length > 0
-        fail_msg: "Materialize results were not published to the reconciliation boundary"
+          - "'myapp/compose.yaml' in (lxc_docker_env_templated_outputs | default([]))"
+          - _stack_sync_stack_dir_results.results | length > 0
+          - _stack_sync_template_results.results | length > 0
+          - _stack_sync_copy_results.results | length > 0
+        fail_msg: "Materialize results were not registered"

@@ -1,17 +1,5 @@
 ---
 # Materialize: sync source files to deployed location, create prereq dirs and managed files.
-# Inputs:  _per_host_j2_files, _per_host_static_files, _per_host_dirs,
-#          lxc_docker_env_templated_outputs, lxc_docker_env_source_compose_specs,
-#          lxc_docker_environment_internal
-# Outputs: lxc_docker_env_source_compose_specs, lxc_docker_env_prereq_dirs,
-#          _stack_sync_stack_dir_stats, _stack_sync_stack_dir_results,
-#          _stack_sync_template_results, _stack_sync_copy_results,
-#          _stack_sync_prereq_dir_stats, _stack_sync_prereq_dir_results,
-#          _stack_sync_ownership_override_stats, _stack_sync_ownership_override_results,
-#          _stack_sync_managed_files, _stack_sync_managed_file_parent_dir_stats,
-#          _stack_sync_managed_file_parent_dir_results, _stack_sync_managed_file_create_results,
-#          _stack_sync_managed_file_permission_results
-# Guard:   include_tasks caller checks _per_host_stacks_dir.stat.exists
 
 - name: Build list of templated per-host output files
   ansible.builtin.set_fact:
@@ -307,35 +295,3 @@
     label: "{{ item.path }}"
   register: _stack_sync_managed_file_permission_results
   when: (_stack_sync_managed_files | default([])) | length > 0
-
-- name: Publish materialization results to reconciliation boundary
-  ansible.builtin.set_fact:
-    _lxc_docker_env_reconciliation: >-
-      {{
-        (_lxc_docker_env_reconciliation | default({}))
-        | combine(
-            {
-              'materialize': {
-                'templated_outputs': lxc_docker_env_templated_outputs | default([]),
-                'source_compose_specs': lxc_docker_env_source_compose_specs | default([]),
-                'prereq_dirs': lxc_docker_env_prereq_dirs | default([]),
-                'managed_files': _stack_sync_managed_files | default([]),
-                'stack_dirs': {
-                  'stats': _stack_sync_stack_dir_stats.results | default([]),
-                  'results': _stack_sync_stack_dir_results.results | default([])
-                },
-                'templates': _stack_sync_template_results.results | default([]),
-                'copies': _stack_sync_copy_results.results | default([]),
-                'prereq_dir_stats': _stack_sync_prereq_dir_stats.results | default([]),
-                'prereq_dir_results': _stack_sync_prereq_dir_results.results | default([]),
-                'ownership_override_stats': _stack_sync_ownership_override_stats.results | default([]),
-                'ownership_override_results': _stack_sync_ownership_override_results.results | default([]),
-                'managed_file_parent_dir_stats': _stack_sync_managed_file_parent_dir_stats.results | default([]),
-                'managed_file_parent_dir_results': _stack_sync_managed_file_parent_dir_results.results | default([]),
-                'managed_file_create_results': _stack_sync_managed_file_create_results.results | default([]),
-                'managed_file_permission_results': _stack_sync_managed_file_permission_results.results | default([])
-              }
-            },
-            recursive=True
-          )
-      }}
