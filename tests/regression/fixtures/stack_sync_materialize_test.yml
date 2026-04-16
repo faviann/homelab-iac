@@ -108,3 +108,12 @@
         that:
           - not _j2_source_stat.stat.exists
         fail_msg: "compose.yaml.j2 should not appear at target (it is a template source)"
+
+    - name: Assert reconciliation boundary captured materialize outputs
+      ansible.builtin.assert:
+        that:
+          - "'myapp/compose.yaml' in (_lxc_docker_env_reconciliation.materialize.templated_outputs | default([]))"
+          - _lxc_docker_env_reconciliation.materialize.stack_dirs.results | length > 0
+          - _lxc_docker_env_reconciliation.materialize.templates | length > 0
+          - _lxc_docker_env_reconciliation.materialize.copies | length > 0
+        fail_msg: "Materialize results were not published to the reconciliation boundary"

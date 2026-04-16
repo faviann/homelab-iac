@@ -68,3 +68,11 @@
         that:
           - _compose_up_calls | int == 1
         fail_msg: "Expected 1 compose up call (myapp only), got {{ _compose_up_calls }}. Log: {{ _docker_log.content | b64decode }}"
+
+    - name: Assert reconciliation boundary captured start results
+      ansible.builtin.assert:
+        that:
+          - _lxc_docker_env_reconciliation.start.network_results | length == 1
+          - (_lxc_docker_env_reconciliation.start.stack_up_results | rejectattr('skipped', 'defined') | list | length) == 1
+          - (_lxc_docker_env_reconciliation.start.stack_up_results | selectattr('skipped', 'defined') | list | length) == 1
+        fail_msg: "Start results were not published to the reconciliation boundary"

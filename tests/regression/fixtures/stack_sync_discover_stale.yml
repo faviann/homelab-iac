@@ -56,3 +56,11 @@
         that:
           - "'stale-app' not in lxc_docker_env_desired_top_level_stack_dirs"
         fail_msg: "stale-app should not be in desired set"
+
+    - name: Assert reconciliation boundary captured discovery state
+      ansible.builtin.assert:
+        that:
+          - _lxc_docker_env_reconciliation.discovery.desired_stacks == lxc_docker_env_desired_top_level_stack_dirs
+          - _lxc_docker_env_reconciliation.discovery.stale_stacks == lxc_docker_env_stale_top_level_stack_dirs
+          - _lxc_docker_env_reconciliation.discovery.source_exists
+        fail_msg: "Discovery results were not published to the reconciliation boundary"

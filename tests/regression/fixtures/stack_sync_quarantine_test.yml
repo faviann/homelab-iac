@@ -86,3 +86,10 @@
         that:
           - "'compose down' in (_docker_log.content | b64decode)"
         fail_msg: "docker compose down was not called"
+
+    - name: Assert reconciliation boundary captured quarantine results
+      ansible.builtin.assert:
+        that:
+          - _lxc_docker_env_reconciliation.quarantine.results | length == 1
+          - _lxc_docker_env_reconciliation.quarantine.results[0].changed
+        fail_msg: "Quarantine results were not published to the reconciliation boundary"

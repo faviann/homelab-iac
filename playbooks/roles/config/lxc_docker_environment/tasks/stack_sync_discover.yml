@@ -147,3 +147,20 @@
         | list
       }}
   when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Publish discovery results to reconciliation boundary
+  ansible.builtin.set_fact:
+    _lxc_docker_env_reconciliation: >-
+      {{
+        (_lxc_docker_env_reconciliation | default({}))
+        | combine(
+            {
+              'discovery': {
+                'desired_stacks': lxc_docker_env_desired_top_level_stack_dirs | default([]),
+                'stale_stacks': lxc_docker_env_stale_top_level_stack_dirs | default([]),
+                'source_exists': _per_host_stacks_dir.stat.exists | default(false)
+              }
+            },
+            recursive=True
+          )
+      }}

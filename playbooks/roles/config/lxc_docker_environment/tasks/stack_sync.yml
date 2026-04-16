@@ -3,14 +3,61 @@
 # Orchestrates five focused sub-task files in order.
 # See each sub-task file for inputs, outputs, and implementation.
 
-- ansible.builtin.include_tasks: stack_sync_discover.yml
+- name: Initialize stack reconciliation boundary
+  ansible.builtin.set_fact:
+    _lxc_docker_env_reconciliation: >-
+      {{
+        {
+          'managed_assets': {},
+          'discovery': {
+            'desired_stacks': [],
+            'stale_stacks': [],
+            'source_exists': false
+          },
+          'materialize': {
+            'templated_outputs': [],
+            'source_compose_specs': [],
+            'prereq_dirs': [],
+            'managed_files': [],
+            'stack_dirs': {
+              'stats': [],
+              'results': []
+            },
+            'templates': [],
+            'copies': [],
+            'prereq_dir_stats': [],
+            'prereq_dir_results': [],
+            'ownership_override_stats': [],
+            'ownership_override_results': [],
+            'managed_file_parent_dir_stats': [],
+            'managed_file_parent_dir_results': [],
+            'managed_file_create_results': [],
+            'managed_file_permission_results': []
+          },
+          'quarantine': {
+            'results': []
+          },
+          'start': {
+            'network_results': [],
+            'stack_up_results': []
+          }
+        }
+        | combine(_lxc_docker_env_reconciliation | default({}), recursive=True)
+      }}
 
-- ansible.builtin.include_tasks: stack_sync_quarantine.yml
+- name: Discover desired and stale stacks
+  ansible.builtin.include_tasks: stack_sync_discover.yml
+
+- name: Quarantine stale stacks
+  ansible.builtin.include_tasks: stack_sync_quarantine.yml
   when: lxc_docker_env_stale_top_level_stack_dirs | length > 0
 
-- ansible.builtin.include_tasks: stack_sync_materialize.yml
+- name: Materialize desired stack assets
+  ansible.builtin.include_tasks: stack_sync_materialize.yml
   when: _per_host_stacks_dir.stat.exists | default(false)
 
-- ansible.builtin.include_tasks: stack_sync_start.yml
+- name: Start desired stacks
+  ansible.builtin.include_tasks: stack_sync_start.yml
 
-- ansible.builtin.include_tasks: stack_sync_report.yml
+- name: Publish reconciliation report
+  ansible.builtin.include_tasks: stack_sync_report.yml

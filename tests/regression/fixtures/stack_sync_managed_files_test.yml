@@ -109,3 +109,11 @@
         that:
           - "'existing-content' in (_preserved_content.content | b64decode)"
         fail_msg: "Managed file content was overwritten — force:false not honoured"
+
+    - name: Assert reconciliation boundary captured managed file planning
+      ansible.builtin.assert:
+        that:
+          - _lxc_docker_env_reconciliation.materialize.managed_files | length == 1
+          - _lxc_docker_env_reconciliation.materialize.managed_file_parent_dir_results | length > 0
+          - _lxc_docker_env_reconciliation.materialize.managed_file_create_results | length > 0
+        fail_msg: "Managed file results were not published to the reconciliation boundary"
