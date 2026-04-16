@@ -1,0 +1,9 @@
+---
+argument_specs:
+  main:
+    short_description: Install Docker runtime inside an LXC
+    options:
+      docker_user:
+        type: str
+        required: true
+        description: Docker service account username from cap_docker inventory vars.

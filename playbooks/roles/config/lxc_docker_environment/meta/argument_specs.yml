@@ -1,0 +1,17 @@
+---
+argument_specs:
+  main:
+    short_description: Configure Docker environment inside an LXC
+    options:
+      docker_user:
+        type: str
+        required: true
+        description: Docker service account username from cap_docker inventory vars.
+      docker_uid:
+        type: int
+        required: true
+        description: Docker service account UID from cap_docker inventory vars.
+      docker_gid:
+        type: int
+        required: true
+        description: Docker service account GID from cap_docker inventory vars.

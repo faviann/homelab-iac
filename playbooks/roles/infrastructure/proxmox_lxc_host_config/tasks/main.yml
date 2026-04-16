@@ -2,6 +2,17 @@
 # Orchestrates host-side LXC configuration tasks
 # These operations require direct SSH access to the Proxmox host
 
+- name: Validate host-config execution context
+  ansible.builtin.assert:
+    that:
+      - proxmox_host_config_delegate is defined
+      - proxmox_host_config_delegate | string | length > 0
+      - proxmox_lxc_host_config_path_root is defined
+      - proxmox_lxc_host_config_path_root | string | length > 0
+    fail_msg: >-
+      infrastructure/proxmox_lxc_host_config requires proxmox_host_config_delegate and
+      proxmox_lxc_host_config_path_root. Check group_vars/all/proxmox.yml.
+
 - name: Resolve host-config LXC contract slice
   ansible.builtin.assert:
     that:

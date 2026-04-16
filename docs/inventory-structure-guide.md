@@ -63,6 +63,22 @@ proxmox_lxc_overrides:
   hostname: servarr
 ```
 
+## Capability Group Requirements
+
+Capability groups do more than toggle booleans. They also publish role inputs that are
+required by downstream provisioning and configuration roles.
+
+| Group | Variables provided | Roles consuming them |
+|-------|--------------------|----------------------|
+| `cap_docker` | `docker_enabled`, `install_docker`, `docker_user`, `docker_uid`, `docker_gid`, `lxc_features`, `docker_agents_enabled`, `traefik_kop_enabled` | `config/lxc_docker_environment`, `config/lxc_docker_runtime`, `provisioning/lxc_spec_builder` |
+| `cap_wireguard` | `wireguard_enabled` | `infrastructure/proxmox_lxc_host_config` |
+| `cap_gpu` | `gpu_enabled` | `infrastructure/proxmox_lxc_host_config` |
+
+If a host should run Docker, it must be in `cap_docker` so the Docker roles and
+`lxc_spec_builder` receive the expected user and feature variables. Missing membership
+now fails early with a clear validation message instead of an undefined-variable error
+later in the run.
+
 ## Adding New Hosts
 
 ### Step 1: Determine Tier and Capabilities

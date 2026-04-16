@@ -1,4 +1,32 @@
 ---
+- name: Assert required inventory inputs are present
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc is defined or proxmox_lxc_overrides is defined
+      - >-
+        (proxmox_lxc is defined and proxmox_lxc.vmid is defined)
+        or
+        (proxmox_lxc_overrides is defined and proxmox_lxc_overrides.vmid is defined)
+      - >-
+        (proxmox_lxc is defined and proxmox_lxc.hostname is defined)
+        or
+        (proxmox_lxc_overrides is defined and proxmox_lxc_overrides.hostname is defined)
+    fail_msg: >-
+      host_vars/{{ inventory_hostname }}.yml must define vmid and hostname in either
+      proxmox_lxc or proxmox_lxc_overrides. See docs/inventory-structure-guide.md for
+      the expected shape.
+
+- name: Assert Docker capability defaults are present when Docker is enabled
+  ansible.builtin.assert:
+    that:
+      - lxc_features is defined
+      - lxc_features | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} has docker_enabled enabled but lxc_features is missing.
+      Add the host to the cap_docker group in inventory/hosts.yml or define
+      lxc_features explicitly.
+  when: docker_enabled | default(false)
+
 # ==============================================================================
 # PHASE 1: Static Configuration Layering
 # Merges base configuration from least to most specific precedence

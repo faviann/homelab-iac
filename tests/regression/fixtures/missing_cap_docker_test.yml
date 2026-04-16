@@ -1,0 +1,9 @@
+---
+- name: Fail clearly when Docker capability vars are missing
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Include Docker environment role without cap_docker vars
+      ansible.builtin.include_role:
+        name: config/lxc_docker_environment

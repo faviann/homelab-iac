@@ -1,0 +1,19 @@
+---
+argument_specs:
+  main:
+    short_description: Apply host-side LXC configuration on the Proxmox node
+    options:
+      proxmox_host_config_delegate:
+        type: str
+        required: false
+        description: Host that executes pct and config-file mutations.
+      proxmox_lxc_host_config_become:
+        type: bool
+        required: false
+        default: true
+        description: Whether host-side pct operations should use privilege escalation.
+      proxmox_lxc_host_config_path_root:
+        type: str
+        required: false
+        default: /etc/pve/lxc
+        description: Root path containing Proxmox LXC config files.

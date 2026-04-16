@@ -1,6 +1,16 @@
 ---
 # Discovery: find source stacks, compute desired/stale sets, guard against missing source.
 
+- name: Assert stack sync parent role context is present
+  ansible.builtin.assert:
+    that:
+      - lxc_docker_environment_internal is defined
+      - lxc_docker_environment_internal.stacks_source is defined
+    fail_msg: >-
+      config/lxc_stack_sync requires lxc_docker_environment_internal.stacks_source.
+      Call this role from config/lxc_docker_environment or provide that context
+      explicitly for focused tests.
+
 - name: Initialize stack sync state
   ansible.builtin.set_fact:
     lxc_stack_sync_source_exists: false

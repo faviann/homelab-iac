@@ -12,8 +12,8 @@ lxc_docker_env_root_docker_conf_path: "/conf/docker"
 
 # Ownership for files in shared directory (UID:GID)
 # Uses the host-specific docker user UID/GID from cap_docker group vars.
-lxc_docker_env_shared_owner: "{{ docker_uid | default(1000) }}"
-lxc_docker_env_shared_group: "{{ docker_gid | default(1000) }}"
+lxc_docker_env_shared_owner: "{{ docker_uid }}"
+lxc_docker_env_shared_group: "{{ docker_gid }}"
 
 # Dockge compose directory (relative to mount target)
 lxc_docker_env_dockge_compose_dir: "{{ lxc_docker_env_root_docker_conf_path }}/dockge"
