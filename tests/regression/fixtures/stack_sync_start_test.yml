@@ -1,0 +1,70 @@
+---
+- name: Test start creates networks and runs docker compose up only for desired stacks
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      root_docker_conf_path: "{{ temp_root }}/shared"
+      external_networks:
+        - proxy
+    lxc_docker_env_desired_top_level_stack_dirs:
+      - myapp
+  tasks:
+    - name: Place mock docker script that logs calls
+      ansible.builtin.copy:
+        content: |
+          #!/bin/sh
+          echo "$*" >> {{ temp_root }}/docker-calls.log
+          exit 0
+        dest: "{{ temp_root }}/docker"
+        mode: "0755"
+
+    - name: Create stacks dir with compose files for desired and undesired stacks
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/myapp"
+        - "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/not-desired"
+
+    - ansible.builtin.copy:
+        content: "services:\n  app:\n    image: myapp:latest\n"
+        dest: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/myapp/compose.yaml"
+
+    - ansible.builtin.copy:
+        content: "services:\n  other:\n    image: other:latest\n"
+        dest: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/not-desired/compose.yaml"
+
+    - name: Include start with mock docker on PATH
+      block:
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_start.yml"
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Slurp docker call log
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/docker-calls.log"
+      register: _docker_log
+
+    - name: Assert network create was called for proxy
+      ansible.builtin.assert:
+        that:
+          - "'network create proxy' in (_docker_log.content | b64decode)"
+        fail_msg: "docker network create proxy was not called. Log: {{ _docker_log.content | b64decode }}"
+
+    - name: Assert compose up was called at least once
+      ansible.builtin.assert:
+        that:
+          - "(_docker_log.content | b64decode).count('compose up') >= 1"
+        fail_msg: "docker compose up was not called. Log: {{ _docker_log.content | b64decode }}"
+
+    - name: Assert compose up called exactly once (not-desired skipped)
+      ansible.builtin.set_fact:
+        _compose_up_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'compose up') | list | length }}"
+    - ansible.builtin.assert:
+        that:
+          - _compose_up_calls | int == 1
+        fail_msg: "Expected 1 compose up call (myapp only), got {{ _compose_up_calls }}. Log: {{ _docker_log.content | b64decode }}"

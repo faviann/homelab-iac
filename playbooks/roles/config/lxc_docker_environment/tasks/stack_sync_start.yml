@@ -1,0 +1,34 @@
+---
+# Start: create external Docker networks and bring up all desired stacks.
+# Inputs:  lxc_docker_environment_internal, lxc_docker_env_desired_top_level_stack_dirs
+# Outputs: _stack_sync_network_create, _stack_compose_files, _stack_sync_stack_up_results
+
+- name: Create external Docker networks
+  ansible.builtin.command:
+    cmd: "docker network create {{ item }}"
+  loop: "{{ lxc_docker_environment_internal.external_networks }}"
+  register: _stack_sync_network_create
+  changed_when: _stack_sync_network_create.rc == 0
+  failed_when: _stack_sync_network_create.rc != 0 and 'already exists' not in _stack_sync_network_create.stderr
+  when: lxc_docker_environment_internal.external_networks | length > 0
+
+- name: Find all compose files in stacks directory
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks"
+    patterns:
+      - "compose.yml"
+      - "compose.yaml"
+    recurse: true
+    depth: 2
+  register: _stack_compose_files
+
+- name: Ensure all stacks are running
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ item.path | dirname }}"
+  loop: "{{ _stack_compose_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | dirname | basename }}"
+  register: _stack_sync_stack_up_results
+  changed_when: "'Started' in _stack_sync_stack_up_results.stderr or 'Created' in _stack_sync_stack_up_results.stderr"
+  when: (item.path | dirname | basename) in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
