@@ -1,5 +1,22 @@
 ---
-- name: Classify lifecycle decision
+# ==============================================================================
+# LIFECYCLE DECISION MATRIX
+#
+# intent          | desired_state | runtime_state | host_actions                         | guest_actions
+# ----------------|---------------|---------------|--------------------------------------|-------------------------------------------
+# validate_only   | *             | *             | []                                   | []
+# provision_only  | present       | absent        | [ensure_container, ...]              | []
+# provision_only  | present       | running       | [ensure_container, ...]              | [] (rebuild if mismatch)
+# provision_only  | absent        | *             | [ensure_absent]                      | []
+# configure_only  | present       | running       | [reconcile_host_config, ensure_ssh_key] | [wait, gather, configure, reboot]
+# configure_only  | present       | absent        | []                                   | [] (skip: not running)
+# configure_only  | absent        | *             | []                                   | []
+# full            | present       | absent        | [ensure_container, ...]              | [wait, gather, configure, reboot]
+# full            | present       | running       | [ensure_container, ...]              | [wait, gather, configure, reboot]
+# full            | absent        | *             | [ensure_absent]                      | []
+# ==============================================================================
+
+- name: Derive lifecycle intent flags
   ansible.builtin.set_fact:
     proxmox_lifecycle_validation_failed: "{{ proxmox_lifecycle_validation_snapshot.status | default('ok') == 'mismatch' }}"
     proxmox_lifecycle_should_provision: "{{ proxmox_lifecycle_intent in ['provision_only', 'full'] }}"
@@ -19,7 +36,7 @@
     - proxmox_lifecycle_policy_effective.strict_validation | bool
     - proxmox_lifecycle_validation_failed | bool
 
-- name: Compute lifecycle skip flags
+- name: Build lifecycle action lists
   ansible.builtin.set_fact:
     proxmox_lifecycle_skip_provision: >-
       {{
@@ -36,12 +53,10 @@
           and proxmox_lifecycle_runtime_state == 'absent'
         )
       }}
-
-- name: Build lifecycle action lists
-  ansible.builtin.set_fact:
     proxmox_lifecycle_host_actions: >-
       {%- set actions = [] -%}
-      {%- if proxmox_lifecycle_should_provision and not (proxmox_lifecycle_validation_failed | bool) -%}
+      {%- set _skip_provision = (not proxmox_lifecycle_should_provision) or (proxmox_lifecycle_validation_failed | bool) -%}
+      {%- if not _skip_provision -%}
       {%-   if proxmox_lifecycle_rebuild_required | bool -%}
       {%-     set _ = actions.extend(['stop_container', 'destroy_container']) -%}
       {%-   endif -%}
@@ -55,6 +70,7 @@
       {%-     set _ = actions.append('ensure_absent') -%}
       {%-   endif -%}
       {%- endif -%}
+          {#- configure_only still refreshes host-side settings when the container already exists -#}
       {%- if proxmox_lifecycle_intent == 'configure_only'
              and not (proxmox_lifecycle_validation_failed | bool)
              and proxmox_lxc_spec.state | default('present') == 'present'
@@ -67,11 +83,15 @@
       {{ actions }}
     proxmox_lifecycle_guest_actions: >-
       {%- set actions = [] -%}
-      {%- if proxmox_lifecycle_should_configure
-             and not (proxmox_lifecycle_validation_failed | bool)
-             and proxmox_lxc_spec.state | default('present') == 'present'
-             and not (proxmox_lifecycle_intent == 'configure_only'
-                      and proxmox_lifecycle_runtime_state == 'absent') -%}
+      {%- set _skip_configure =
+            (not proxmox_lifecycle_should_configure)
+            or (proxmox_lifecycle_validation_failed | bool)
+            or (proxmox_lxc_spec.state | default('present') != 'present')
+            or (
+              proxmox_lifecycle_intent == 'configure_only'
+              and proxmox_lifecycle_runtime_state == 'absent'
+            ) -%}
+      {%- if not _skip_configure -%}
       {%-   set _ = actions.extend([
               'wait_for_connection',
               'gather_facts',
