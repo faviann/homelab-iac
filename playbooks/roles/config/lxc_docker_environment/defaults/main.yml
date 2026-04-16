@@ -11,9 +11,9 @@ lxc_docker_env_shared_mount_source: "/shared/{{ inventory_hostname }}"
 lxc_docker_env_root_docker_conf_path: "/conf/docker"
 
 # Ownership for files in shared directory (UID:GID)
-# Uses the host-specific docker user UID/GID from inventory/capability vars.
-lxc_docker_env_shared_owner: "{{ lxc_docker_env_uid }}"
-lxc_docker_env_shared_group: "{{ lxc_docker_env_gid }}"
+# Uses the host-specific docker user UID/GID from cap_docker group vars.
+lxc_docker_env_shared_owner: "{{ docker_uid | default(1000) }}"
+lxc_docker_env_shared_group: "{{ docker_gid | default(1000) }}"
 
 # Dockge compose directory (relative to mount target)
 lxc_docker_env_dockge_compose_dir: "{{ lxc_docker_env_root_docker_conf_path }}/dockge"
@@ -35,11 +35,6 @@ lxc_docker_env_legacy_managed_stacks:
 
 # Per-host stacks source directory (project-relative)
 lxc_docker_env_stacks_source: "{{ playbook_dir }}/../stacks/{{ inventory_hostname }}"
-
-# Docker user configuration (inherited from cap_docker group vars)
-lxc_docker_env_user: "{{ docker_user | default('dockeruser') }}"
-lxc_docker_env_uid: "{{ docker_uid | default(1000) }}"
-lxc_docker_env_gid: "{{ docker_gid | default(1000) }}"
 
 # External Docker networks to create before starting stacks
 # Override in host_vars to declare networks required by compose files

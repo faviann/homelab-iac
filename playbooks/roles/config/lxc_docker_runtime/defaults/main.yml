@@ -16,5 +16,3 @@ lxc_docker_runtime_daemon_options:
     max-size: "10m"
     max-file: "3"
 
-# Docker user (inherited from group vars or defaults)
-lxc_docker_runtime_user: "{{ docker_user | default('dockeruser') }}"

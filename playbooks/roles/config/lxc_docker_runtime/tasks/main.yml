@@ -10,7 +10,7 @@
     docker_compose_package: "{{ lxc_docker_runtime_compose_package }}"
     docker_compose_package_state: "{{ lxc_docker_runtime_compose_package_state }}"
     docker_users:
-      - "{{ lxc_docker_runtime_user }}"
+      - "{{ docker_user | default('dockeruser') }}"
     docker_daemon_options: "{{ lxc_docker_runtime_daemon_options }}"
 
 - name: Ensure Docker service is started and enabled

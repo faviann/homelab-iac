@@ -120,6 +120,14 @@
   when: docker_agents_enabled | default(false) and not (traefik_kop_enabled | default(false))
   register: _managed_assets_docker_agents_override_removal
 
+- name: Check whether Docker agents static assets exist on the controller
+  ansible.builtin.stat:
+    path: "{{ role_path }}/templates/files/stacks/docker-agents"
+  register: _docker_agents_static_assets
+  delegate_to: localhost
+  become: false
+  when: docker_agents_enabled | default(false)
+
 - name: Copy Docker agents stack assets to shared directory
   ansible.builtin.copy:
     src: "templates/files/stacks/docker-agents/"
@@ -128,7 +136,9 @@
     group: "{{ lxc_docker_environment_internal.shared_group }}"
     mode: '0644'
     directory_mode: '0755'
-  when: docker_agents_enabled | default(false)
+  when:
+    - docker_agents_enabled | default(false)
+    - _docker_agents_static_assets.stat.exists | default(false)
   register: _copy_docker_agents_assets_result
 
 - name: Find markdown/docs in deployed docker config

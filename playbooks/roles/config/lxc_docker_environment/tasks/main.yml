@@ -26,9 +26,9 @@
       docker_agents_stack_dir: "{{ lxc_docker_env_docker_agents_stack_dir }}"
       legacy_managed_stacks: "{{ lxc_docker_env_legacy_managed_stacks }}"
       dockge_compose_dir: "{{ lxc_docker_env_dockge_compose_dir }}"
-      docker_user: "{{ lxc_docker_env_user }}"
-      docker_uid: "{{ lxc_docker_env_uid }}"
-      docker_gid: "{{ lxc_docker_env_gid }}"
+      docker_user: "{{ docker_user | default('dockeruser') }}"
+      docker_uid: "{{ docker_uid | default(1000) }}"
+      docker_gid: "{{ docker_gid | default(1000) }}"
 
 - name: Ensure shared mount source directory exists on host
   ansible.builtin.file:
