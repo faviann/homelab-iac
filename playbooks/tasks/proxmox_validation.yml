@@ -243,11 +243,11 @@
     - proxmox
 
 - name: Query runtime state for matched LXCs
-  ansible.builtin.command:
-    cmd: "pct status {{ hostvars[item].proxmox_lxc_overrides.vmid }}"
+  proxmox_pct:
+    vmid: "{{ hostvars[item].proxmox_lxc_overrides.vmid }}"
+    command: status
   register: lxc_pct_status_results
-  changed_when: false
-  failed_when: false
+  ignore_errors: true
   delegate_to: "{{ proxmox_pct_delegate_host }}"
   vars:
     ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
@@ -265,9 +265,7 @@
     lxc_runtime_state_map: >-
       {{
         lxc_runtime_state_map | default({}) | combine({
-          item.item: (
-            item.stdout | regex_search('running|stopped') | default('unknown', true)
-          )
+          item.item: (item.status | default('unknown', true))
         })
       }}
   loop: "{{ lxc_pct_status_results.results | default([]) }}"
@@ -281,17 +279,12 @@
     - proxmox
 
 - name: Query guest Debian release for running matched LXCs
-  ansible.builtin.command:
-    argv:
-      - pct
-      - exec
-      - "{{ hostvars[item].proxmox_lxc_overrides.vmid | string }}"
-      - --
-      - sh
-      - -c
-      - ". /etc/os-release && printf '%s' \"$VERSION_ID\""
+  proxmox_pct:
+    vmid: "{{ hostvars[item].proxmox_lxc_overrides.vmid }}"
+    command: exec
+    exec_command: ". /etc/os-release && printf '%s' \"$VERSION_ID\""
   register: lxc_release_probe_results
-  changed_when: false
+  ignore_errors: true
   delegate_to: "{{ proxmox_pct_delegate_host }}"
   vars:
     ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"

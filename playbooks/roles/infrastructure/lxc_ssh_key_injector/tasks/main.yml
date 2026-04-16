@@ -34,14 +34,14 @@
     fail_msg: "VMID not defined for {{ inventory_hostname }}"
 
 - name: Check if container exists on Proxmox
-  ansible.builtin.command:
-    cmd: "pct status {{ proxmox_lxc_overrides.vmid }}"
+  proxmox_pct:
+    vmid: "{{ proxmox_lxc_overrides.vmid }}"
+    command: status
   register: _container_status
   delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
   vars:
     ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
-  changed_when: false
-  failed_when: false
+  ignore_errors: true
 
 - name: Derive container runtime state from pct status
   ansible.builtin.set_fact:
@@ -52,7 +52,7 @@
         else (
         'absent'
         if _container_status.rc != 0
-        else (_container_status.stdout | regex_search('running|stopped') | default('unknown', true))
+        else (_container_status.status | default('unknown', true))
         )
       }}
 

@@ -45,11 +45,11 @@
       }}
 
 - name: Query current container runtime state when validation data is unavailable
-  ansible.builtin.command:
-    cmd: "pct status {{ proxmox_lxc_contract.api_spec.vmid }}"
+  proxmox_pct:
+    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
+    command: status
   register: proxmox_lifecycle_pct_status_result
-  changed_when: false
-  failed_when: false
+  ignore_errors: true
   delegate_to: "{{ proxmox_pct_delegate_host }}"
   vars:
     ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
@@ -63,11 +63,7 @@
       {{
         'absent'
         if proxmox_lifecycle_pct_status_result.rc != 0
-        else (
-          proxmox_lifecycle_pct_status_result.stdout
-          | regex_search('running|stopped')
-          | default('unknown', true)
-        )
+        else (proxmox_lifecycle_pct_status_result.status | default('unknown', true))
       }}
   when:
     - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
@@ -114,18 +110,12 @@
     - proxmox_lifecycle_runtime_state == 'absent'
 
 - name: Probe guest Debian release from running container
-  ansible.builtin.command:
-    argv:
-      - pct
-      - exec
-      - "{{ proxmox_lxc_contract.api_spec.vmid | string }}"
-      - --
-      - sh
-      - -c
-      - ". /etc/os-release && printf '%s' \"$VERSION_ID\""
+  proxmox_pct:
+    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
+    command: exec
+    exec_command: ". /etc/os-release && printf '%s' \"$VERSION_ID\""
   register: proxmox_lifecycle_release_probe_result
-  changed_when: false
-  failed_when: false
+  ignore_errors: true
   delegate_to: "{{ proxmox_pct_delegate_host }}"
   vars:
     ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"

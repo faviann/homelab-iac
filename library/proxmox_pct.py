@@ -13,7 +13,7 @@ module: proxmox_pct
 short_description: Manage Proxmox LXC containers via pct command
 description:
     - Execute pct commands against Proxmox LXC containers
-    - Wraps common pct operations: status, config, set, exec, start, stop, restart
+    - "Wraps common pct operations: status, config, set, exec, start, stop, restart, reboot, shutdown"
 version_added: "1.0.0"
 author:
     - "ServerManagementScripts"
@@ -28,10 +28,11 @@ options:
             - The pct command to execute
         required: true
         type: str
-        choices: ['status', 'config', 'set', 'exec', 'start', 'stop', 'restart', 'shutdown']
+        choices: ['status', 'config', 'set', 'exec', 'start', 'stop', 'restart', 'reboot', 'shutdown']
     exec_command:
         description:
             - Command to execute inside the container (when command=exec)
+            - Passed to C(sh -c) so shell syntax and quoting are preserved
         required: false
         type: str
     config_options:
@@ -87,6 +88,11 @@ EXAMPLES = r'''
   proxmox_pct:
     vmid: 100
     command: restart
+
+- name: Reboot container
+    proxmox_pct:
+        vmid: 100
+        command: reboot
 '''
 
 RETURN = r'''
@@ -171,7 +177,7 @@ def main():
             command=dict(
                 type='str',
                 required=True,
-                choices=['status', 'config', 'set', 'exec', 'start', 'stop', 'restart', 'shutdown']
+                choices=['status', 'config', 'set', 'exec', 'start', 'stop', 'restart', 'reboot', 'shutdown']
             ),
             exec_command=dict(type='str', required=False),
             config_options=dict(type='dict', required=False),
@@ -203,7 +209,7 @@ def main():
     elif command == 'exec':
         if not exec_command:
             module.fail_json(msg="exec_command required for 'exec' command")
-        cmd_args = ['exec', str(vmid), '--'] + exec_command.split()
+        cmd_args = ['exec', str(vmid), '--', 'sh', '-c', exec_command]
         changed = False
     elif command == 'start':
         cmd_args = ['start', str(vmid)]
@@ -213,6 +219,9 @@ def main():
         changed = True
     elif command == 'restart':
         cmd_args = ['restart', str(vmid), '--timeout', str(timeout)]
+        changed = True
+    elif command == 'reboot':
+        cmd_args = ['reboot', str(vmid)]
         changed = True
     elif command == 'shutdown':
         cmd_args = ['shutdown', str(vmid), '--timeout', str(timeout)]

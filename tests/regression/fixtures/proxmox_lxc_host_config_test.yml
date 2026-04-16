@@ -99,7 +99,7 @@
       ansible.builtin.assert:
         that:
           - "'config 4201' in (_pct_calls.content | b64decode)"
-          - "'set 4201 -features keyctl=1,nesting=1' in (_pct_calls.content | b64decode)"
+          - "'set 4201 --features keyctl=1,nesting=1' in (_pct_calls.content | b64decode)"
           - "'status 4201' in (_pct_calls.content | b64decode)"
           - "'reboot 4201' in (_pct_calls.content | b64decode)"
         fail_msg: "Feature reconciliation did not invoke the expected pct commands"
