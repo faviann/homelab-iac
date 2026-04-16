@@ -1,6 +1,7 @@
 x-prereq-dirs:
-  - ./appdata/jellyfin/cache
   - ./appdata/jellyfin/config
+  - /ephemeral/jellyfin/cache
+  - /ephemeral/jellyfin/metadata
 
 services:
   jellyfin:
@@ -14,8 +15,9 @@ services:
       - TZ=${TZ}
       - JELLYFIN_PublishedServerUrl=https://${HOMEPAGE_FQDN}
     volumes:
-      - ./appdata/jellyfin/cache:/cache
+      - /ephemeral/jellyfin/cache:/cache
       - ./appdata/jellyfin/config:/config
+      - /ephemeral/jellyfin/metadata:/config/metadata
       - /data/media:/data/media
     ports:
       - 8096:8096
