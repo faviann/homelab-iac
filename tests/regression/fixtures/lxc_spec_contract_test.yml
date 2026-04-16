@@ -1,5 +1,5 @@
 ---
-- name: Test compiled LXC contract shape and compatibility aliases
+- name: Test compiled LXC contract shape
   hosts: localhost
   connection: local
   gather_facts: false
@@ -95,11 +95,3 @@
           - proxmox_lxc_contract.guest_bootstrap.hostname == 'contract-host'
           - proxmox_lxc_contract.guest_bootstrap.pubkey == 'ssh-ed25519 AAAATEST contract@test'
         fail_msg: "Guest-bootstrap slice did not capture the expected pubkey details"
-
-    - name: Assert compatibility aliases still match the compiled contract
-      ansible.builtin.assert:
-        that:
-          - proxmox_lxc_spec == proxmox_lxc_contract.api_spec
-          - proxmox_lxc_bind_mounts == proxmox_lxc_contract.host_config.bind_mounts
-          - proxmox_lxc_idmap == proxmox_lxc_contract.host_config.idmap
-        fail_msg: "Compatibility aliases no longer reflect the compiled contract"

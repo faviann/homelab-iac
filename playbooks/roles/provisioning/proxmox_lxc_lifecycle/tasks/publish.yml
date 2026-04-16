@@ -30,7 +30,7 @@
       {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}
       {%- elif proxmox_lifecycle_intent == 'configure_only' and proxmox_lifecycle_runtime_state == 'absent' -%}
       Container does not exist in Proxmox, so configure-only was skipped.
-      {%- elif proxmox_lxc_spec.state | default('present') != 'present' -%}
+      {%- elif proxmox_lxc_contract.api_spec.state | default('present') != 'present' -%}
       Desired state is absent, so guest configuration was skipped.
       {%- else -%}
       {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle actions completed') }}
@@ -42,7 +42,7 @@
       status: "{{ _lxc_lifecycle_state.status }}"
       reason: "{{ _lxc_lifecycle_state.reason }}"
       intent: "{{ _lxc_lifecycle_state.intent }}"
-      compiled_spec: "{{ _lxc_lifecycle_state.compiled_spec }}"
+      compiled_spec: "{{ _lxc_lifecycle_state.compiled_contract.api_spec }}"
       validation_status: "{{ _lxc_lifecycle_state.validation_snapshot.status | default('ok') }}"
       runtime_state: "{{ _lxc_lifecycle_state.runtime_state }}"
       release_probe_state: "{{ _lxc_lifecycle_state.release_probe_state }}"

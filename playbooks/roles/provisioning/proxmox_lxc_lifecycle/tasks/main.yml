@@ -21,7 +21,6 @@
     _lxc_lifecycle_state:
       intent: "{{ proxmox_lifecycle_intent }}"
       policy_effective: "{{ proxmox_lifecycle_policy_effective }}"
-      compiled_spec: {}
       compiled_contract: {}
       desired_release: ""
       validation_snapshot: {}

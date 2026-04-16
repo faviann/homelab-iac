@@ -14,13 +14,25 @@
       vmid: 4201
       node: pve-a
       ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+    _base_contract:
+      api_spec: "{{ _base_spec }}"
+      host_config:
+        vmid: "{{ _base_spec.vmid }}"
+        hostname: "{{ _base_spec.hostname }}"
+        bind_mounts: {}
+        idmap: []
+        features: []
+      guest_bootstrap:
+        vmid: "{{ _base_spec.vmid }}"
+        hostname: "{{ _base_spec.hostname }}"
+        pubkey: ""
   tasks:
     - name: Scenario 1 - full lifecycle on absent container plans create and configure
       block:
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: full
             proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
-            proxmox_lxc_spec: "{{ _base_spec }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
             proxmox_lifecycle_validation_snapshot:
               status: ok
               message: Lifecycle actions completed
@@ -34,8 +46,7 @@
             _lxc_lifecycle_state:
               intent: full
               policy_effective: "{{ _base_policy }}"
-              compiled_spec: "{{ _base_spec }}"
-              compiled_contract: {}
+              compiled_contract: "{{ _base_contract }}"
               desired_release: "12"
               validation_snapshot:
                 status: ok
@@ -76,7 +87,7 @@
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: configure_only
             proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
-            proxmox_lxc_spec: "{{ _base_spec }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
             proxmox_lifecycle_validation_snapshot:
               status: ok
               message: Lifecycle actions completed
@@ -90,8 +101,7 @@
             _lxc_lifecycle_state:
               intent: configure_only
               policy_effective: "{{ _base_policy }}"
-              compiled_spec: "{{ _base_spec }}"
-              compiled_contract: {}
+              compiled_contract: "{{ _base_contract }}"
               desired_release: "12"
               validation_snapshot:
                 status: ok
@@ -131,7 +141,7 @@
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: full
             proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
-            proxmox_lxc_spec: "{{ _base_spec }}"
+            proxmox_lxc_contract: "{{ _base_contract }}"
             proxmox_lifecycle_validation_snapshot:
               status: ok
               message: Lifecycle actions completed
@@ -145,8 +155,7 @@
             _lxc_lifecycle_state:
               intent: full
               policy_effective: "{{ _base_policy }}"
-              compiled_spec: "{{ _base_spec }}"
-              compiled_contract: {}
+              compiled_contract: "{{ _base_contract }}"
               desired_release: "12"
               validation_snapshot:
                 status: ok

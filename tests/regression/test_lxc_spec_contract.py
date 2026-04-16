@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test for the compiled LXC contract shape and compatibility aliases."""
+"""Regression test for the compiled LXC contract shape."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def main() -> int:
         print(output, file=sys.stderr)
         return 1
 
-    print("ok: compiled LXC contract preserves slices and compatibility aliases")
+    print("ok: compiled LXC contract preserves expected slices")
     return 0
 
 

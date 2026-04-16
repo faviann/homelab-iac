@@ -3,19 +3,17 @@
 # These operations require direct SSH access to the Proxmox host
 
 - name: Resolve host-config LXC contract slice
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_contract is defined
+      - proxmox_lxc_contract.host_config is defined
+      - proxmox_lxc_contract.host_config.hostname is defined
+      - proxmox_lxc_contract.host_config.vmid is defined
+    fail_msg: "proxmox_lxc_contract.host_config with hostname and vmid is required"
+
+- name: Resolve host-config LXC contract slice
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_spec: >-
-      {{
-        proxmox_lxc_contract.host_config
-        if (proxmox_lxc_contract is defined and proxmox_lxc_contract.host_config is defined)
-        else {
-          'vmid': proxmox_lxc_spec.vmid,
-          'hostname': proxmox_lxc_spec.hostname,
-          'bind_mounts': proxmox_lxc_bind_mounts | default({}),
-          'idmap': proxmox_lxc_idmap | default([]),
-          'features': lxc_features | default([])
-        }
-      }}
+    proxmox_lxc_host_config_spec: "{{ proxmox_lxc_contract.host_config }}"
 
 - name: Validate required context
   ansible.builtin.assert:

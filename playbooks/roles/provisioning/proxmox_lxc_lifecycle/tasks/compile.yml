@@ -10,7 +10,6 @@
         _lxc_lifecycle_state
         | combine(
             {
-              'compiled_spec': proxmox_lxc_spec,
               'compiled_contract': proxmox_lxc_contract
             },
             recursive=True

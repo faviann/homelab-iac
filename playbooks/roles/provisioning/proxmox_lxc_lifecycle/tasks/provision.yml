@@ -2,7 +2,7 @@
 - name: Report planned release-based rebuild in check mode
   ansible.builtin.debug:
     msg: >-
-      Check mode: would destroy and recreate {{ proxmox_lxc_spec.hostname }} (vmid {{ proxmox_lxc_spec.vmid }})
+      Check mode: would destroy and recreate {{ proxmox_lxc_contract.api_spec.hostname }} (vmid {{ proxmox_lxc_contract.api_spec.vmid }})
       because guest release {{ proxmox_lifecycle_actual_release }} differs from desired Debian {{ proxmox_lifecycle_desired_release }}.
   when:
     - ansible_check_mode
@@ -16,8 +16,8 @@
     api_token_id: "{{ proxmox_api_token_id }}"
     api_token_secret: "{{ proxmox_api_token_secret }}"
     validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
-    node: "{{ proxmox_lxc_spec.node }}"
-    vmid: "{{ proxmox_lxc_spec.vmid }}"
+    node: "{{ proxmox_lxc_contract.api_spec.node }}"
+    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
     state: stopped
   delegate_to: "{{ proxmox_api_delegate_host }}"
   become: false
@@ -34,8 +34,8 @@
     api_token_id: "{{ proxmox_api_token_id }}"
     api_token_secret: "{{ proxmox_api_token_secret }}"
     validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
-    node: "{{ proxmox_lxc_spec.node }}"
-    vmid: "{{ proxmox_lxc_spec.vmid }}"
+    node: "{{ proxmox_lxc_contract.api_spec.node }}"
+    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
     state: absent
   delegate_to: "{{ proxmox_api_delegate_host }}"
   become: false

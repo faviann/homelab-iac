@@ -24,7 +24,7 @@
     proxmox_lifecycle_rebuild_required: >-
       {{
         proxmox_lifecycle_intent in ['provision_only', 'full']
-        and proxmox_lxc_spec.state | default('present') == 'present'
+        and proxmox_lxc_contract.api_spec.state | default('present') == 'present'
         and proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
         and proxmox_lifecycle_release_mismatch | bool
       }}
@@ -47,7 +47,7 @@
       {{
         (not proxmox_lifecycle_should_configure)
         or (proxmox_lifecycle_validation_failed | bool)
-        or (proxmox_lxc_spec.state | default('present') != 'present')
+        or (proxmox_lxc_contract.api_spec.state | default('present') != 'present')
         or (
           proxmox_lifecycle_intent == 'configure_only'
           and proxmox_lifecycle_runtime_state == 'absent'
@@ -60,7 +60,7 @@
       {%-   if proxmox_lifecycle_rebuild_required | bool -%}
       {%-     set _ = actions.extend(['stop_container', 'destroy_container']) -%}
       {%-   endif -%}
-      {%-   if proxmox_lxc_spec.state | default('present') == 'present' -%}
+      {%-   if proxmox_lxc_contract.api_spec.state | default('present') == 'present' -%}
       {%-     set _ = actions.append('ensure_container') -%}
       {%-     if proxmox_lxc_host_config_enabled | default(true) -%}
       {%-       set _ = actions.append('reconcile_host_config') -%}
@@ -73,7 +73,7 @@
           {#- configure_only still refreshes host-side settings when the container already exists -#}
       {%- if proxmox_lifecycle_intent == 'configure_only'
              and not (proxmox_lifecycle_validation_failed | bool)
-             and proxmox_lxc_spec.state | default('present') == 'present'
+                  and proxmox_lxc_contract.api_spec.state | default('present') == 'present'
              and proxmox_lifecycle_runtime_state != 'absent' -%}
       {%-   if proxmox_lxc_host_config_enabled | default(true) -%}
       {%-     set _ = actions.append('reconcile_host_config') -%}
@@ -86,7 +86,7 @@
       {%- set _skip_configure =
             (not proxmox_lifecycle_should_configure)
             or (proxmox_lifecycle_validation_failed | bool)
-            or (proxmox_lxc_spec.state | default('present') != 'present')
+            or (proxmox_lxc_contract.api_spec.state | default('present') != 'present')
             or (
               proxmox_lifecycle_intent == 'configure_only'
               and proxmox_lifecycle_runtime_state == 'absent'

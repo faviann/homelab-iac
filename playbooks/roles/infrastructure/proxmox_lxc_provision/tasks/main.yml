@@ -6,7 +6,7 @@
 
 - name: Resolve API-facing LXC contract slice
   ansible.builtin.set_fact:
-    proxmox_lxc_api_spec: "{{ proxmox_lxc_contract.api_spec | default(proxmox_lxc_spec) }}"
+    proxmox_lxc_api_spec: "{{ proxmox_lxc_contract.api_spec }}"
 
 - name: Allow explicit start override per host
   when: proxmox_lxc_start_on_create is defined
