@@ -25,13 +25,13 @@
 - name: Decide lifecycle actions
   ansible.builtin.include_tasks: decide.yml
 
-- name: Execute provisioning actions
+- name: Execute host-side actions
   ansible.builtin.include_tasks: provision.yml
-  when: proxmox_lifecycle_intent in ['provision_only', 'full']
+  when: proxmox_lifecycle_host_actions | length > 0
 
 - name: Execute guest configuration actions
   ansible.builtin.include_tasks: configure.yml
-  when: proxmox_lifecycle_intent in ['configure_only', 'full']
+  when: proxmox_lifecycle_guest_actions | length > 0
 
 - name: Publish lifecycle results
   ansible.builtin.include_tasks: publish.yml

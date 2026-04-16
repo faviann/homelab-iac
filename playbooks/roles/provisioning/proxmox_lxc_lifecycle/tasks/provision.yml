@@ -6,8 +6,7 @@
       because guest release {{ proxmox_lifecycle_actual_release }} differs from desired Debian {{ proxmox_lifecycle_desired_release }}.
   when:
     - ansible_check_mode
-    - proxmox_lifecycle_rebuild_required | bool
-    - not (proxmox_lifecycle_skip_provision | bool)
+    - "'stop_container' in proxmox_lifecycle_host_actions"
 
 - name: Stop mismatched running container before rebuild
   community.proxmox.proxmox:
@@ -25,8 +24,7 @@
   no_log: true
   when:
     - not ansible_check_mode
-    - proxmox_lifecycle_rebuild_required | bool
-    - not (proxmox_lifecycle_skip_provision | bool)
+    - "'stop_container' in proxmox_lifecycle_host_actions"
 
 - name: Destroy mismatched container before recreate
   community.proxmox.proxmox:
@@ -44,8 +42,7 @@
   no_log: true
   when:
     - not ansible_check_mode
-    - proxmox_lifecycle_rebuild_required | bool
-    - not (proxmox_lifecycle_skip_provision | bool)
+    - "'destroy_container' in proxmox_lifecycle_host_actions"
 
 - name: Mark host as rebuilt after destroy/recreate path
   ansible.builtin.set_fact:
@@ -53,13 +50,14 @@
     ansible_python_interpreter: auto_silent
   when:
     - not ansible_check_mode
-    - proxmox_lifecycle_rebuild_required | bool
-    - not (proxmox_lifecycle_skip_provision | bool)
+    - "'destroy_container' in proxmox_lifecycle_host_actions"
 
 - name: Ensure desired Proxmox LXC state
   ansible.builtin.include_role:
     name: infrastructure/proxmox_lxc_provision
-  when: not (proxmox_lifecycle_skip_provision | bool)
+  when: >-
+    ('ensure_container' in proxmox_lifecycle_host_actions) or
+    ('ensure_absent' in proxmox_lifecycle_host_actions)
 
 - name: Reconcile Proxmox host-side LXC configuration
   ansible.builtin.include_role:
@@ -70,19 +68,14 @@
   vars:
     ansible_host: "{{ proxmox_pct_delegate_host }}"
     ansible_user: root
-  when:
-    - not (proxmox_lifecycle_skip_provision | bool)
-    - proxmox_lxc_spec.state | default('present') == 'present'
-    - proxmox_lxc_host_config_enabled | default(true)
+  when: "'reconcile_host_config' in proxmox_lifecycle_host_actions"
 
 - name: Ensure controller SSH key is installed in the guest
   ansible.builtin.include_role:
     name: infrastructure/lxc_ssh_key_injector
   vars:
     lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir | dirname }}/.ansible/ssh/proxmox_lxc.pub"
-  when:
-    - not (proxmox_lifecycle_skip_provision | bool)
-    - proxmox_lxc_spec.state | default('present') == 'present'
+  when: "'ensure_ssh_key' in proxmox_lifecycle_host_actions"
 
 - name: Find cached facts for rebuilt host
   ansible.builtin.find:

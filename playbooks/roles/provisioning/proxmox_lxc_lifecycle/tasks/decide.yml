@@ -41,7 +41,7 @@
   ansible.builtin.set_fact:
     proxmox_lifecycle_host_actions: >-
       {%- set actions = [] -%}
-      {%- if not (proxmox_lifecycle_skip_provision | bool) -%}
+      {%- if proxmox_lifecycle_should_provision and not (proxmox_lifecycle_validation_failed | bool) -%}
       {%-   if proxmox_lifecycle_rebuild_required | bool -%}
       {%-     set _ = actions.extend(['stop_container', 'destroy_container']) -%}
       {%-   endif -%}
@@ -55,7 +55,10 @@
       {%-     set _ = actions.append('ensure_absent') -%}
       {%-   endif -%}
       {%- endif -%}
-      {%- if proxmox_lifecycle_intent == 'configure_only' and not (proxmox_lifecycle_skip_configure | bool) -%}
+      {%- if proxmox_lifecycle_intent == 'configure_only'
+             and not (proxmox_lifecycle_validation_failed | bool)
+             and proxmox_lxc_spec.state | default('present') == 'present'
+             and proxmox_lifecycle_runtime_state != 'absent' -%}
       {%-   if proxmox_lxc_host_config_enabled | default(true) -%}
       {%-     set _ = actions.append('reconcile_host_config') -%}
       {%-   endif -%}
@@ -64,7 +67,11 @@
       {{ actions }}
     proxmox_lifecycle_guest_actions: >-
       {%- set actions = [] -%}
-      {%- if not (proxmox_lifecycle_skip_configure | bool) -%}
+      {%- if proxmox_lifecycle_should_configure
+             and not (proxmox_lifecycle_validation_failed | bool)
+             and proxmox_lxc_spec.state | default('present') == 'present'
+             and not (proxmox_lifecycle_intent == 'configure_only'
+                      and proxmox_lifecycle_runtime_state == 'absent') -%}
       {%-   set _ = actions.extend([
               'wait_for_connection',
               'gather_facts',

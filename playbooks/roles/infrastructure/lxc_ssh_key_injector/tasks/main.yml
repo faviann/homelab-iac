@@ -90,10 +90,21 @@
   ansible.builtin.set_fact:
     _lxc_ssh_key_injector_container_state: >-
       {{
+        'check_mode'
+        if ansible_check_mode | bool
+        else (
         'absent'
         if _container_status.rc != 0
         else (_container_status.stdout | regex_search('running|stopped') | default('unknown', true))
+        )
       }}
+
+- name: Skip runtime-sensitive SSH key injection in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Check mode skips pct runtime inspection and in-guest SSH key injection for
+      container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}).
+  when: _lxc_ssh_key_injector_container_state == 'check_mode'
 
 - name: Skip non-existent containers
   ansible.builtin.debug:
@@ -129,7 +140,7 @@
       Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) returned an unknown pct status:
       {{ _container_status.stdout | default('') | trim }}
   when:
-    - _lxc_ssh_key_injector_container_state not in ['absent', 'stopped', 'running']
+    - _lxc_ssh_key_injector_container_state not in ['absent', 'stopped', 'running', 'check_mode']
 
 - name: Ensure SSH public key is installed idempotently
   ansible.builtin.command:
