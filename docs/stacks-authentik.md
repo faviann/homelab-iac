@@ -37,6 +37,7 @@ For public apps that should stay edge-open and handle login themselves:
 
 - do not add `protected-edge-auth@file` to the Traefik router
 - create an Authentik OAuth2/OpenID provider plus application
+- select an Authentik signing key explicitly in the provider so the JWKS endpoint publishes keys for the client
 - add the app's OIDC environment variables via `.env.j2`
 - keep the redirect URI exact: `https://<host>/api/oauth/openid`
 
@@ -51,3 +52,5 @@ RomM-specific notes from the official docs:
 - `OIDC_SERVER_APPLICATION_URL` should use the Authentik application URL with its trailing slash intact
 - the user's email in RomM must match the user's email in Authentik
 - first-time OIDC users are created in RomM with viewer permissions
+- if the provider is left on Authentik's symmetric default signing mode, metadata may advertise `HS256` and the JWKS endpoint may return `{}`, which breaks RomM's OIDC login flow
+- repo-managed RomM OIDC uses `auth_romm_oidc_signing_certificate_name` from `inventory/host_vars/auth.yml`; the referenced certificate/keypair must exist in Authentik

@@ -40,6 +40,7 @@ entries:
     access_token_validity: hours=24
     refresh_token_validity: days=30
     include_claims_in_id_token: true
+    signing_key: !Find [authentik_crypto.certificatekeypair, [name, {{ auth_romm_oidc_signing_certificate_name | tojson }}]]
     redirect_uris:
     - matching_mode: strict
       url: https://romm.public.faviann.com/api/oauth/openid
