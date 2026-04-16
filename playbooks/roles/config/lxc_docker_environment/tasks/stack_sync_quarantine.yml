@@ -1,0 +1,37 @@
+---
+# Quarantine: stop and move stale deployed top-level stacks.
+# Inputs:  lxc_docker_env_stale_top_level_stack_dirs, _deployed_top_level_stack_dirs,
+#          lxc_docker_environment_internal
+# Outputs: _stack_sync_quarantine_results
+# Guard:   include_tasks caller checks lxc_docker_env_stale_top_level_stack_dirs | length > 0
+
+- name: Ensure stale stack quarantine directory exists
+  ansible.builtin.file:
+    path: "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}"
+    state: directory
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
+    mode: '0755'
+
+- name: Stop stale deployed top-level stack projects
+  ansible.builtin.command:
+    cmd: docker compose down --remove-orphans
+    chdir: "{{ item.path }}"
+  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  failed_when: false
+  changed_when: false
+  when: (item.path | basename) in lxc_docker_env_stale_top_level_stack_dirs
+
+- name: Quarantine stale deployed top-level stack directories
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ item.path }}"
+      - "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}/{{ item.path | basename }}-{{ ansible_date_time.iso8601_basic_short }}"
+  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: _stack_sync_quarantine_results
+  when: (item.path | basename) in lxc_docker_env_stale_top_level_stack_dirs

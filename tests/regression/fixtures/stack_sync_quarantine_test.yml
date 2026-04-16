@@ -1,0 +1,88 @@
+---
+- name: Test quarantine stops and moves stale stacks
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      stale_stack_quarantine_root: "{{ temp_root }}/shared/stale-stacks"
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+    lxc_docker_env_stale_top_level_stack_dirs:
+      - stale-app
+  tasks:
+    - name: Create deployed stacks root with stale-app
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app"
+
+    - name: Create a sentinel file in stale-app to verify dir is moved not deleted
+      ansible.builtin.copy:
+        content: "sentinel"
+        dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app/compose.yaml"
+
+    - name: Place mock docker script on PATH
+      ansible.builtin.copy:
+        content: |
+          #!/bin/sh
+          echo "mock docker called: $*" >> {{ temp_root }}/docker-calls.log
+          exit 0
+        dest: "{{ temp_root }}/docker"
+        mode: "0755"
+
+    - name: Set _deployed_top_level_stack_dirs to match filesystem
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+        recurse: false
+        file_type: directory
+      register: _deployed_top_level_stack_dirs
+
+    - name: Include quarantine with mock docker on PATH
+      block:
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_quarantine.yml"
+      environment:
+        PATH: "{{ temp_root }}:{{ ansible_env.PATH }}"
+
+    - name: Assert quarantine directory was created
+      ansible.builtin.stat:
+        path: "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}"
+      register: _quarantine_dir_stat
+    - ansible.builtin.assert:
+        that:
+          - _quarantine_dir_stat.stat.exists
+        fail_msg: "Quarantine directory was not created"
+
+    - name: Assert stale-app is no longer at its original location
+      ansible.builtin.stat:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app"
+      register: _stale_app_stat
+    - ansible.builtin.assert:
+        that:
+          - not _stale_app_stat.stat.exists
+        fail_msg: "stale-app was not moved out of stacks"
+
+    - name: Find quarantined directories
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}"
+        recurse: false
+        file_type: directory
+      register: _quarantined_dirs
+    - ansible.builtin.assert:
+        that:
+          - _quarantined_dirs.files | length == 1
+          - "'stale-app' in (_quarantined_dirs.files[0].path | basename)"
+        fail_msg: "Expected one quarantined dir starting with stale-app, got {{ _quarantined_dirs.files | map(attribute='path') | list }}"
+
+    - name: Assert docker compose down was called
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/docker-calls.log"
+      register: _docker_log
+    - ansible.builtin.assert:
+        that:
+          - "'compose down' in (_docker_log.content | b64decode)"
+        fail_msg: "docker compose down was not called"
