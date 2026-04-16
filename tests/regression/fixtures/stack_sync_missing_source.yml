@@ -1,0 +1,38 @@
+---
+- name: Reproduce missing-source stack sync regression
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    docker_agents_enabled: false
+    service_agents_enabled: false
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      shared_owner: 1000
+      shared_group: 1000
+      root_docker_conf_path: "{{ temp_root }}/conf/docker"
+      stacks_source: "{{ temp_root }}/missing-source"
+      stale_stack_quarantine_root: "{{ temp_root }}/shared/stale-stacks"
+      external_networks: []
+      path_ownership_overrides: []
+      docker_uid: 1000
+      docker_gid: 1000
+      docker_user: dockeruser
+      docker_agents_stack_dir: "{{ temp_root }}/shared/stacks/docker-agents"
+      dockge_compose_dir: "{{ temp_root }}/shared/dockge"
+      legacy_managed_stacks: []
+  tasks:
+    - name: Create deployed stacks root
+      ansible.builtin.file:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+        state: directory
+        mode: "0755"
+
+    - name: Create unmanaged deployed stack directory
+      ansible.builtin.file:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/rogue"
+        state: directory
+        mode: "0755"
+
+    - name: Include stack sync boundary
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync.yml"

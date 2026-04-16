@@ -2,9 +2,69 @@
 # Main tasks file for lxc_ssh_key_injector role
 # Injects control node SSH public key into LXC container via Proxmox pct commands
 
+- name: Build candidate SSH public key paths
+  ansible.builtin.set_fact:
+    _lxc_ssh_key_injector_pubkey_candidates: >-
+      {{
+        (
+          [lxc_ssh_key_injector_pubkey_path]
+          if (lxc_ssh_key_injector_pubkey_path | default('') | length > 0)
+          else []
+        )
+        + (
+          [
+            [
+              (lookup('env', 'VIRTUAL_ENV') | dirname | dirname),
+              '.ansible',
+              'ssh',
+              'proxmox_lxc.pub'
+            ] | path_join
+          ]
+          if (lookup('env', 'VIRTUAL_ENV') | default('') | length > 0)
+          else []
+        )
+      | unique }}
+  delegate_to: localhost
+  run_once: true
+
+- name: Check candidate SSH public key paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ _lxc_ssh_key_injector_pubkey_candidates }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _lxc_ssh_key_injector_pubkey_candidate_stats
+  delegate_to: localhost
+  run_once: true
+
+- name: Resolve SSH public key path
+  ansible.builtin.set_fact:
+    _lxc_ssh_key_injector_resolved_pubkey_path: >-
+      {{
+        (
+          _lxc_ssh_key_injector_pubkey_candidate_stats.results
+          | selectattr('stat.exists')
+          | map(attribute='item')
+          | list
+          | first
+        ) | default('')
+      }}
+  delegate_to: localhost
+  run_once: true
+
+- name: Assert SSH public key path exists
+  ansible.builtin.assert:
+    that:
+      - _lxc_ssh_key_injector_resolved_pubkey_path | length > 0
+    fail_msg: >-
+      Could not find the control node SSH public key. Checked:
+      {{ _lxc_ssh_key_injector_pubkey_candidates | join(', ') }}
+  delegate_to: localhost
+  run_once: true
+
 - name: Load control node SSH public key
   ansible.builtin.set_fact:
-    lxc_ssh_key_injector_pubkey_content: "{{ lookup('file', lxc_ssh_key_injector_pubkey_path) | trim }}"
+    lxc_ssh_key_injector_pubkey_content: "{{ lookup('file', _lxc_ssh_key_injector_resolved_pubkey_path) | trim }}"
   delegate_to: localhost
   run_once: true
   no_log: true

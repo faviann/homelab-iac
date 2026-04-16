@@ -1,6 +1,7 @@
 ---
 # Main tasks file for lxc_docker_environment role
-# Configures Docker environment: users, mounts, and Dockge deployment
+# Configures the Docker host contract, then delegates repo-managed stack
+# reconciliation to the internal stack sync boundary.
 
 - name: Verify required packages are installed
   ansible.builtin.package_facts:
@@ -11,527 +12,70 @@
     msg: "sudo package must be installed before Docker environment configuration. Please run lxc_base_system role first."
   when: "'sudo' not in ansible_facts.packages"
 
+- name: Build internal Docker environment contract
+  ansible.builtin.set_fact:
+    lxc_docker_environment_internal:
+      external_networks: "{{ lxc_docker_env_external_networks | default([]) }}"
+      path_ownership_overrides: "{{ lxc_docker_env_path_ownership_overrides | default([]) }}"
+      shared_mount_source: "{{ lxc_docker_env_shared_mount_source }}"
+      shared_owner: "{{ lxc_docker_env_shared_owner }}"
+      shared_group: "{{ lxc_docker_env_shared_group }}"
+      root_docker_conf_path: "{{ lxc_docker_env_root_docker_conf_path }}"
+      stacks_source: "{{ lxc_docker_env_stacks_source }}"
+      stale_stack_quarantine_root: "{{ lxc_docker_env_stale_stack_quarantine_root }}"
+      docker_agents_stack_dir: "{{ lxc_docker_env_docker_agents_stack_dir }}"
+      legacy_managed_stacks: "{{ lxc_docker_env_legacy_managed_stacks }}"
+      dockge_compose_dir: "{{ lxc_docker_env_dockge_compose_dir }}"
+      docker_user: "{{ lxc_docker_env_user }}"
+      docker_uid: "{{ lxc_docker_env_uid }}"
+      docker_gid: "{{ lxc_docker_env_gid }}"
+
 - name: Ensure shared mount source directory exists on host
   ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}"
+    path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
     state: directory
     mode: '0755'
 
 - name: Copy Dockge templates to shared directory
   ansible.builtin.copy:
     src: "templates/files/dockge/"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/dockge/"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
+    dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/dockge/"
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
     mode: '0644'
     directory_mode: '0755'
   register: _copy_dockge_result
   notify: restart dockge
 
-- name: Check legacy managed stack compose files
-  ansible.builtin.stat:
-    path: "{{ item.dir }}/{{ item.compose_file }}"
-  loop: "{{ lxc_docker_env_legacy_managed_stacks }}"
-  loop_control:
-    label: "{{ item.name }}"
-  register: _legacy_managed_stack_compose_files
-
-- name: Stop legacy managed stacks
-  ansible.builtin.command:
-    cmd: docker compose down --remove-orphans
-    chdir: "{{ item.item.dir }}"
-  loop: "{{ _legacy_managed_stack_compose_files.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.name }}"
-  when: item.stat.exists
-  failed_when: false
-
-- name: Remove legacy managed stack directories
-  ansible.builtin.file:
-    path: "{{ item.dir }}"
-    state: absent
-  loop: "{{ lxc_docker_env_legacy_managed_stacks }}"
-  loop_control:
-    label: "{{ item.name }}"
-
-- name: Initialize portal instance host list
-  ansible.builtin.set_fact:
-    lxc_docker_env_portal_hosts: []
-  when: traefik_kop_enabled | default(false)
-
-- name: Collect portal instance hosts from inventory
-  ansible.builtin.set_fact:
-    lxc_docker_env_portal_hosts: "{{ lxc_docker_env_portal_hosts + [item] }}"
-  loop: "{{ groups['lxcs'] | default([]) }}"
-  when:
-    - traefik_kop_enabled | default(false)
-    - hostvars[item].portal_instance | default(false)
-
-- name: Validate Docker agents override variables
-  ansible.builtin.assert:
-    that:
-      - lxc_docker_env_portal_hosts | length == 1
-      - default_domain is defined
-      - default_domain | length > 0
-    fail_msg: >-
-      Traefik-integrated Docker hosts require exactly one host with portal_instance=true and a
-      default_domain value defined in host_vars.
-  when: traefik_kop_enabled | default(false)
-
-- name: Ensure Docker agents stack directory exists
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_docker_agents_stack_dir }}"
-    state: directory
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0755'
-  when: docker_agents_enabled | default(false)
-
-- name: Remove legacy root admin directory
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}/admin"
-    state: absent
-
-- name: Remove Docker agents stack for disabled hosts
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_docker_agents_stack_dir }}"
-    state: absent
-  when: docker_enabled | default(false) and not (docker_agents_enabled | default(false))
-
-- name: Render Docker agents override environment file
-  ansible.builtin.template:
-    src: "files/docker-agents/.env.j2"
-    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/.env"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0644'
-  when:
-    - docker_agents_enabled | default(false)
-    - traefik_kop_enabled | default(false)
-  register: _template_docker_agents_env_result
-
-- name: Remove Docker agents override environment file when not needed
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_docker_agents_stack_dir }}/.env"
-    state: absent
-  when: docker_agents_enabled | default(false) and not (traefik_kop_enabled | default(false))
-
-- name: Render Docker agents base compose template
-  ansible.builtin.template:
-    src: "files/docker-agents/compose.yml.j2"
-    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/compose.yml"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0644'
-  when: docker_agents_enabled | default(false)
-  register: _template_docker_agents_compose_result
-
-- name: Render Docker agents override compose template
-  ansible.builtin.template:
-    src: "files/docker-agents/compose.override.yaml.j2"
-    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/compose.override.yaml"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0644'
-  when:
-    - docker_agents_enabled | default(false)
-    - traefik_kop_enabled | default(false)
-  register: _template_docker_agents_override_result
-
-- name: Remove Docker agents override compose when not needed
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_docker_agents_stack_dir }}/compose.override.yaml"
-    state: absent
-  when: docker_agents_enabled | default(false) and not (traefik_kop_enabled | default(false))
-
-- name: Copy Docker agents stack assets to shared directory
-  ansible.builtin.copy:
-    src: "templates/files/stacks/docker-agents/"
-    dest: "{{ lxc_docker_env_docker_agents_stack_dir }}/"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0644'
-    directory_mode: '0755'
-  when: docker_agents_enabled | default(false)
-  register: _copy_docker_agents_assets_result
-
-- name: Find markdown/docs in deployed docker config
-  ansible.builtin.find:
-    paths:
-      - "{{ lxc_docker_env_shared_mount_source }}"
-    patterns:
-      - "README*"
-      - "*.md"
-    recurse: true
-    file_type: file
-  register: _docker_env_docs
-  failed_when: false
-
-- name: Remove markdown/docs from deployed docker config
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: absent
-  loop: "{{ _docker_env_docs.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path }}"
-
-- name: Normalize Docker config ownership for existing files
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    recurse: true
-    state: directory
-
-- name: Ensure stacks directory exists
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks"
-    state: directory
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0755'
-
-# ==============================================================================
-# Per-Host Stacks: Deploy compose stacks from stacks/<hostname>/
-# ==============================================================================
-- name: Check if per-host stacks source exists
-  ansible.builtin.stat:
-    path: "{{ lxc_docker_env_stacks_source }}"
-  register: _per_host_stacks_dir
-  delegate_to: localhost
-  become: false
-
-- name: Find template files (.j2) in per-host stacks
-  ansible.builtin.find:
-    paths: "{{ lxc_docker_env_stacks_source }}"
-    patterns: "*.j2"
-    hidden: true
-    recurse: true
-    file_type: file
-  register: _per_host_j2_files
-  delegate_to: localhost
-  become: false
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Find static files in per-host stacks
-  ansible.builtin.find:
-    paths: "{{ lxc_docker_env_stacks_source }}"
-    patterns: "*"
-    excludes: "*.j2,.gitkeep"
-    hidden: true
-    recurse: true
-    file_type: file
-  register: _per_host_static_files
-  delegate_to: localhost
-  become: false
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Find directories in per-host stacks
-  ansible.builtin.find:
-    paths: "{{ lxc_docker_env_stacks_source }}"
-    recurse: true
-    file_type: directory
-  register: _per_host_dirs
-  delegate_to: localhost
-  become: false
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Find top-level directories in per-host stacks
-  ansible.builtin.find:
-    paths: "{{ lxc_docker_env_stacks_source }}"
-    recurse: false
-    file_type: directory
-  register: _per_host_top_level_dirs
-  delegate_to: localhost
-  become: false
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Find deployed top-level stack directories
-  ansible.builtin.find:
-    paths: "{{ lxc_docker_env_shared_mount_source }}/stacks"
-    recurse: false
-    file_type: directory
-  register: _deployed_top_level_stack_dirs
-
-- name: Build list of desired top-level stack directories
-  ansible.builtin.set_fact:
-    lxc_docker_env_desired_top_level_stack_dirs: >-
-      {%- set desired = [] -%}
-      {%- for directory in _per_host_top_level_dirs.files | default([]) -%}
-      {%- set _ = desired.append(directory.path | basename) -%}
-      {%- endfor -%}
-      {%- set _ = desired.append('docker-agents') -%}
-      {%- if service_agents_enabled | default(false) -%}
-      {%- set _ = desired.append('admin') -%}
-      {%- endif -%}
-      {{ desired | unique }}
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Ensure stale stack quarantine directory exists
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_stale_stack_quarantine_root }}"
-    state: directory
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0755'
-  when:
-    - _per_host_stacks_dir.stat.exists | default(false)
-    - _deployed_top_level_stack_dirs.files | default([]) | map(attribute='path') | map('basename') | difference(lxc_docker_env_desired_top_level_stack_dirs | default([])) | list | length > 0
-
-- name: Stop stale deployed top-level stack projects
-  ansible.builtin.command:
-    cmd: docker compose down --remove-orphans
-    chdir: "{{ item.path }}"
-  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path | basename }}"
-  failed_when: false
-  changed_when: false
-  when:
-    - _per_host_stacks_dir.stat.exists | default(false)
-    - (item.path | basename) not in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
-
-- name: Quarantine stale deployed top-level stack directories
-  ansible.builtin.command:
-    argv:
-      - mv
-      - "{{ item.path }}"
-      - "{{ lxc_docker_env_stale_stack_quarantine_root }}/{{ item.path | basename }}-{{ ansible_date_time.iso8601_basic_short }}"
-  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path | basename }}"
-  when:
-    - _per_host_stacks_dir.stat.exists | default(false)
-    - (item.path | basename) not in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
-
-- name: Build list of templated per-host output files
-  ansible.builtin.set_fact:
-    lxc_docker_env_templated_outputs: >-
-      {%- set outputs = [] -%}
-      {%- for file in _per_host_j2_files.files | default([]) -%}
-      {%- set _ = outputs.append(file.path | relpath(lxc_docker_env_stacks_source) | regex_replace('\.j2$', '')) -%}
-      {%- endfor -%}
-      {{ outputs }}
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Initialize per-host stack compose manifest facts
-  ansible.builtin.set_fact:
-    lxc_docker_env_source_compose_specs: []
-    lxc_docker_env_prereq_dirs: []
-
-- name: Build source compose spec list for per-host stacks
-  ansible.builtin.set_fact:
-    _lxc_docker_env_source_compose_specs_unrendered: >-
-      {%- set specs = [] -%}
-      {%- set compose_names = ['compose.yml', 'compose.yaml', 'compose.override.yml', 'compose.override.yaml'] -%}
-      {%- for file in _per_host_j2_files.files | default([]) -%}
-      {%- set relative_path = file.path | relpath(lxc_docker_env_stacks_source) | regex_replace('\.j2$', '') -%}
-      {%- if (relative_path | basename) in compose_names -%}
-      {%- set target_path = lxc_docker_env_shared_mount_source ~ '/stacks/' ~ relative_path -%}
-      {%- set _ = specs.append({
-        'source_path': file.path,
-        'relative_path': relative_path,
-        'target_path': target_path,
-        'target_dir': target_path | dirname,
-        'is_templated': true,
-        'stack_name': relative_path.split('/')[0]
-      }) -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {%- for file in _per_host_static_files.files | default([]) -%}
-      {%- set relative_path = file.path | relpath(lxc_docker_env_stacks_source) -%}
-      {%- if (relative_path | basename) in compose_names and relative_path not in (lxc_docker_env_templated_outputs | default([])) -%}
-      {%- set target_path = lxc_docker_env_shared_mount_source ~ '/stacks/' ~ relative_path -%}
-      {%- set _ = specs.append({
-        'source_path': file.path,
-        'relative_path': relative_path,
-        'target_path': target_path,
-        'target_dir': target_path | dirname,
-        'is_templated': false,
-        'stack_name': relative_path.split('/')[0]
-      }) -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {{ specs }}
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Render source compose manifest entries for prereq dir discovery
-  ansible.builtin.set_fact:
-    lxc_docker_env_source_compose_specs: >-
-      {{
-        lxc_docker_env_source_compose_specs
-        + [
-            item
-            | combine({
-                'content': (
-                  lookup('template', item.source_path)
-                  if item.is_templated
-                  else lookup('file', item.source_path)
-                )
-              })
-          ]
-      }}
-  vars:
-    stack_name: "{{ item.stack_name }}"
-  loop: "{{ _lxc_docker_env_source_compose_specs_unrendered | default([]) }}"
-  loop_control:
-    label: "{{ item.relative_path }}"
-  when:
-    - _per_host_stacks_dir.stat.exists | default(false)
-    - (_lxc_docker_env_source_compose_specs_unrendered | default([])) | length > 0
-
-- name: Create per-host stack directories
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
-    state: directory
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0755'
-  loop: "{{ _per_host_dirs.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Render templated files (.j2) for per-host stacks
-  ansible.builtin.template:
-    src: "{{ item.path }}"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) | regex_replace('\\.j2$', '') }}"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0644'
-  vars:
-    # Match Traefik's compose project naming by deriving stack name from folder path.
-    stack_name: "{{ (item.path | relpath(lxc_docker_env_stacks_source)).split('/')[0] }}"
-  loop: "{{ _per_host_j2_files.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
-  when: _per_host_stacks_dir.stat.exists | default(false)
-
-- name: Copy static files for per-host stacks
-  ansible.builtin.copy:
-    src: "{{ item.path }}"
-    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0644'
-  loop: "{{ _per_host_static_files.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path | relpath(lxc_docker_env_stacks_source) }}"
-  when:
-    - _per_host_stacks_dir.stat.exists | default(false)
-    - (item.path | relpath(lxc_docker_env_stacks_source)) not in (lxc_docker_env_templated_outputs | default([]))
-
-- name: Collect prereq dirs from source stack compose files
-  ansible.builtin.set_fact:
-    lxc_docker_env_prereq_dirs: >-
-      {%- set dirs = [] -%}
-      {%- set override_paths = lxc_docker_env_path_ownership_overrides | default([]) | map(attribute='path') | list -%}
-      {%- for compose_spec in lxc_docker_env_source_compose_specs | default([]) -%}
-      {%- set compose = compose_spec.content | from_yaml -%}
-      {%- if compose is mapping -%}
-      {%- set prereq_dirs = compose.get('x-prereq-dirs', []) -%}
-      {%- if prereq_dirs is sequence and prereq_dirs is not string and prereq_dirs is not mapping -%}
-      {%- for prereq_dir in prereq_dirs -%}
-      {%- if prereq_dir is string -%}
-      {%- if prereq_dir.startswith('./') -%}
-      {%- set resolved_prereq_dir = compose_spec.target_dir + '/' + prereq_dir[2:] -%}
-      {%- else -%}
-      {%- set resolved_prereq_dir = prereq_dir -%}
-      {%- endif -%}
-      {%- if resolved_prereq_dir not in override_paths -%}
-      {%- set _ = dirs.append(resolved_prereq_dir) -%}
-      {%- endif -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {%- endif -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {{ dirs | unique }}
-  when:
-    - (lxc_docker_env_source_compose_specs | default([])) | length > 0
-
-- name: Ensure stack prereq dirs exist
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ lxc_docker_env_uid }}"
-    group: "{{ lxc_docker_env_gid }}"
-    mode: '0755'
-  loop: "{{ lxc_docker_env_prereq_dirs | default([]) }}"
-  loop_control:
-    label: "{{ item }}"
-  when: (lxc_docker_env_prereq_dirs | default([])) | length > 0
-
-- name: Apply path-specific ownership overrides for stack data
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    recurse: "{{ item.recurse | default(false) }}"
-  loop: "{{ lxc_docker_env_path_ownership_overrides }}"
-  loop_control:
-    label: "{{ item.path }}"
-  when: lxc_docker_env_path_ownership_overrides | length > 0
-
-- name: Check if Traefik cert directory exists
-  ansible.builtin.stat:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs"
-  register: _traefik_cert_dir
-
-- name: Check if Traefik ACME storage file exists
-  ansible.builtin.stat:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
-  register: _traefik_acme_storage
-  when: _traefik_cert_dir.stat.exists | default(false)
-
-- name: Create Traefik ACME storage file when missing
-  ansible.builtin.copy:
-    content: ""
-    dest: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
-    force: false
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0600'
-  when:
-    - _traefik_cert_dir.stat.exists | default(false)
-    - not (_traefik_acme_storage.stat.exists | default(false))
-
-- name: Ensure Traefik ACME storage permissions are correct
-  ansible.builtin.file:
-    path: "{{ lxc_docker_env_shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
-    state: file
-    owner: "{{ lxc_docker_env_shared_owner }}"
-    group: "{{ lxc_docker_env_shared_group }}"
-    mode: '0600'
-  when: _traefik_cert_dir.stat.exists | default(false)
+- name: Materialize managed Docker assets
+  ansible.builtin.include_tasks: managed_assets.yml
 
 - name: Ensure Docker config mount target exists
   ansible.builtin.file:
-    path: "{{ lxc_docker_env_root_docker_conf_path }}"
+    path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}"
     state: directory
     mode: '0755'
 
 - name: Check if bind mount already exists
   ansible.builtin.command:
-    cmd: "mountpoint -q {{ lxc_docker_env_root_docker_conf_path }}"
+    cmd: "mountpoint -q {{ lxc_docker_environment_internal.root_docker_conf_path }}"
   register: _mount_check
   changed_when: false
   failed_when: false
 
 - name: Create bind mount for Docker config
   ansible.posix.mount:
-    path: "{{ lxc_docker_env_root_docker_conf_path }}"
-    src: "{{ lxc_docker_env_shared_mount_source }}"
+    path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}"
+    src: "{{ lxc_docker_environment_internal.shared_mount_source }}"
     opts: bind
     state: mounted
     fstype: none
-  when: _mount_check.rc != 0  # rc=0 means IS mounted, rc!=0 means NOT mounted
+  when: _mount_check.rc != 0
 
 - name: Ensure bind mount is in fstab
   ansible.posix.mount:
-    path: "{{ lxc_docker_env_root_docker_conf_path }}"
-    src: "{{ lxc_docker_env_shared_mount_source }}"
+    path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}"
+    src: "{{ lxc_docker_environment_internal.shared_mount_source }}"
     opts: bind
     state: present
     fstype: none
@@ -546,36 +90,36 @@
 
 - name: Create Docker user
   ansible.builtin.user:
-    name: "{{ lxc_docker_env_user }}"
-    uid: "{{ lxc_docker_env_uid }}"
-    group: "{{ lxc_docker_env_gid }}"
+    name: "{{ lxc_docker_environment_internal.docker_user }}"
+    uid: "{{ lxc_docker_environment_internal.docker_uid }}"
+    group: "{{ lxc_docker_environment_internal.docker_gid }}"
     groups:
       - docker
       - sudo
     append: true
     shell: /bin/bash
     create_home: true
-    password_lock: true  # Lock password for security
+    password_lock: true
     comment: "Docker user managed by Ansible"
   register: _docker_user_result
 
 - name: Ensure Docker user can use sudo without password
   ansible.builtin.lineinfile:
-    path: /etc/sudoers.d/{{ lxc_docker_env_user }}
-    line: "{{ lxc_docker_env_user }} ALL=(ALL) NOPASSWD:ALL"
+    path: "/etc/sudoers.d/{{ lxc_docker_environment_internal.docker_user }}"
+    line: "{{ lxc_docker_environment_internal.docker_user }} ALL=(ALL) NOPASSWD:ALL"
     create: true
     mode: '0440'
     validate: 'visudo -cf %s'
 
 - name: Check if Dockge directory exists
   ansible.builtin.stat:
-    path: "{{ lxc_docker_env_dockge_compose_dir }}"
+    path: "{{ lxc_docker_environment_internal.dockge_compose_dir }}"
   register: _dockge_dir_stat
 
 - name: Check if Dockge is already running
   ansible.builtin.command:
     cmd: docker compose ps -q
-    chdir: "{{ lxc_docker_env_dockge_compose_dir }}"
+    chdir: "{{ lxc_docker_environment_internal.dockge_compose_dir }}"
   register: _dockge_status
   changed_when: false
   failed_when: false
@@ -585,9 +129,9 @@
 - name: Start Dockge with docker compose
   ansible.builtin.command:
     cmd: docker compose up -d
-    chdir: "{{ lxc_docker_env_dockge_compose_dir }}"
+    chdir: "{{ lxc_docker_environment_internal.dockge_compose_dir }}"
   become: true
-  become_user: "{{ lxc_docker_env_user }}"
+  become_user: "{{ lxc_docker_environment_internal.docker_user }}"
   when:
     - _dockge_dir_stat.stat.exists
     - _dockge_dir_stat.stat.isdir
@@ -599,34 +143,5 @@
     msg: "Dockge {{ _dockge_start_result.changed | default(false) | ternary('started', 'already running or not configured') }}"
   when: _dockge_dir_stat.stat.exists
 
-# ==============================================================================
-# Stack Lifecycle: Discover and start all deployed compose stacks
-# ==============================================================================
-- name: Create external Docker networks
-  ansible.builtin.command:
-    cmd: "docker network create {{ item }}"
-  loop: "{{ lxc_docker_env_external_networks }}"
-  register: _network_create
-  changed_when: _network_create.rc == 0
-  failed_when: _network_create.rc != 0 and 'already exists' not in _network_create.stderr
-  when: lxc_docker_env_external_networks | length > 0
-
-- name: Find all compose files in stacks directory
-  ansible.builtin.find:
-    paths: "{{ lxc_docker_env_root_docker_conf_path }}/stacks"
-    patterns:
-      - "compose.yml"
-      - "compose.yaml"
-    recurse: true
-    depth: 2
-  register: _stack_compose_files
-
-- name: Ensure all stacks are running
-  ansible.builtin.command:
-    cmd: docker compose up -d
-    chdir: "{{ item.path | dirname }}"
-  loop: "{{ _stack_compose_files.files | default([]) }}"
-  loop_control:
-    label: "{{ item.path | dirname | basename }}"
-  register: _stack_up_results
-  changed_when: "'Started' in _stack_up_results.stderr or 'Created' in _stack_up_results.stderr"
+- name: Reconcile repo-managed stacks
+  ansible.builtin.include_tasks: stack_sync.yml

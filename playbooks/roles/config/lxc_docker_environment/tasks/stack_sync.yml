@@ -1,0 +1,613 @@
+---
+# Internal stack sync boundary.
+# Treat repo stacks, deployed files, and Docker runtime operations as one
+# reconciliation unit so behavior can be tested at this interface.
+
+- name: Initialize stack sync state
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: []
+    lxc_docker_env_stale_top_level_stack_dirs: []
+    lxc_docker_env_templated_outputs: []
+    lxc_docker_env_source_compose_specs: []
+    lxc_docker_env_prereq_dirs: []
+    lxc_docker_env_deployment_report:
+      changed: false
+      discovered_stacks: []
+      created_dirs: []
+      updated_dirs: []
+      created_networks: []
+      quarantined_stacks: []
+      started_stacks: []
+      unchanged_stacks: []
+      skipped_stacks: []
+
+- name: Check if per-host stacks source exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_environment_internal.stacks_source }}"
+  register: _per_host_stacks_dir
+  delegate_to: localhost
+  become: false
+
+- name: Find template files (.j2) in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    patterns: "*.j2"
+    hidden: true
+    recurse: true
+    file_type: file
+  register: _per_host_j2_files
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find static files in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    patterns: "*"
+    excludes: "*.j2,.gitkeep"
+    hidden: true
+    recurse: true
+    file_type: file
+  register: _per_host_static_files
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find directories in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    recurse: true
+    file_type: directory
+  register: _per_host_dirs
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find top-level directories in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    recurse: false
+    file_type: directory
+  register: _per_host_top_level_dirs
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find deployed top-level stack directories
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+    recurse: false
+    file_type: directory
+  register: _deployed_top_level_stack_dirs
+
+- name: Initialize desired top-level stack directories from managed assets
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: >-
+      {%- set desired = [] -%}
+      {%- if docker_agents_enabled | default(false) -%}
+      {%- set _ = desired.append('docker-agents') -%}
+      {%- endif -%}
+      {%- if service_agents_enabled | default(false) -%}
+      {%- set _ = desired.append('admin') -%}
+      {%- endif -%}
+      {{ desired | unique }}
+
+- name: Append per-host repo stack directories to desired stack set
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: >-
+      {{
+        (
+          lxc_docker_env_desired_top_level_stack_dirs
+          + (
+            _per_host_top_level_dirs.files | default([])
+            | map(attribute='path')
+            | map('basename')
+            | list
+          )
+        )
+        | unique
+      }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Fail when repo stack source is missing but unmanaged deployed stacks exist
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          _deployed_top_level_stack_dirs.files | default([])
+          | map(attribute='path')
+          | map('basename')
+          | difference(lxc_docker_env_desired_top_level_stack_dirs | default([]))
+          | list
+          | length
+        ) == 0
+    fail_msg: >-
+      Missing per-host stack source directory at
+      {{ lxc_docker_environment_internal.stacks_source }} while unmanaged deployed
+      stack directories still exist:
+      {{
+        _deployed_top_level_stack_dirs.files | default([])
+        | map(attribute='path')
+        | map('basename')
+        | difference(lxc_docker_env_desired_top_level_stack_dirs | default([]))
+        | list
+        | join(', ')
+      }}
+  when: not (_per_host_stacks_dir.stat.exists | default(false))
+
+- name: Build list of stale deployed top-level stack directories
+  ansible.builtin.set_fact:
+    lxc_docker_env_stale_top_level_stack_dirs: >-
+      {{
+        _deployed_top_level_stack_dirs.files | default([])
+        | map(attribute='path')
+        | map('basename')
+        | difference(lxc_docker_env_desired_top_level_stack_dirs | default([]))
+        | list
+      }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Ensure stale stack quarantine directory exists
+  ansible.builtin.file:
+    path: "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}"
+    state: directory
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
+    mode: '0755'
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - lxc_docker_env_stale_top_level_stack_dirs | length > 0
+
+- name: Stop stale deployed top-level stack projects
+  ansible.builtin.command:
+    cmd: docker compose down --remove-orphans
+    chdir: "{{ item.path }}"
+  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  failed_when: false
+  changed_when: false
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (item.path | basename) in lxc_docker_env_stale_top_level_stack_dirs
+
+- name: Quarantine stale deployed top-level stack directories
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ item.path }}"
+      - "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}/{{ item.path | basename }}-{{ ansible_date_time.iso8601_basic_short }}"
+  loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: _stack_sync_quarantine_results
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (item.path | basename) in lxc_docker_env_stale_top_level_stack_dirs
+
+- name: Build list of templated per-host output files
+  ansible.builtin.set_fact:
+    lxc_docker_env_templated_outputs: >-
+      {%- set outputs = [] -%}
+      {%- for file in _per_host_j2_files.files | default([]) -%}
+      {%- set _ = outputs.append(file.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '')) -%}
+      {%- endfor -%}
+      {{ outputs }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Build source compose spec list for per-host stacks
+  ansible.builtin.set_fact:
+    _lxc_docker_env_source_compose_specs_unrendered: >-
+      {%- set specs = [] -%}
+      {%- set compose_names = ['compose.yml', 'compose.yaml', 'compose.override.yml', 'compose.override.yaml'] -%}
+      {%- for file in _per_host_j2_files.files | default([]) -%}
+      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '') -%}
+      {%- if (relative_path | basename) in compose_names -%}
+      {%- set target_path = lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path -%}
+      {%- set _ = specs.append({
+        'source_path': file.path,
+        'relative_path': relative_path,
+        'target_path': target_path,
+        'target_dir': target_path | dirname,
+        'is_templated': true,
+        'stack_name': relative_path.split('/')[0]
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- for file in _per_host_static_files.files | default([]) -%}
+      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
+      {%- if (relative_path | basename) in compose_names and relative_path not in (lxc_docker_env_templated_outputs | default([])) -%}
+      {%- set target_path = lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path -%}
+      {%- set _ = specs.append({
+        'source_path': file.path,
+        'relative_path': relative_path,
+        'target_path': target_path,
+        'target_dir': target_path | dirname,
+        'is_templated': false,
+        'stack_name': relative_path.split('/')[0]
+      }) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ specs }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Render source compose manifest entries for prereq dir discovery
+  ansible.builtin.set_fact:
+    lxc_docker_env_source_compose_specs: >-
+      {{
+        lxc_docker_env_source_compose_specs
+        + [
+            item
+            | combine({
+                'content': (
+                  lookup('template', item.source_path)
+                  if item.is_templated
+                  else lookup('file', item.source_path)
+                )
+              })
+          ]
+      }}
+  vars:
+    stack_name: "{{ item.stack_name }}"
+  loop: "{{ _lxc_docker_env_source_compose_specs_unrendered | default([]) }}"
+  loop_control:
+    label: "{{ item.relative_path }}"
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (_lxc_docker_env_source_compose_specs_unrendered | default([])) | length > 0
+
+- name: Build target per-host stack directory list
+  ansible.builtin.set_fact:
+    _stack_sync_target_stack_dirs: >-
+      {%- set target_dirs = [] -%}
+      {%- for directory in _per_host_dirs.files | default([]) -%}
+      {%- set _ = target_dirs.append(
+        lxc_docker_environment_internal.shared_mount_source
+        ~ '/stacks/'
+        ~ (directory.path | relpath(lxc_docker_environment_internal.stacks_source))
+      ) -%}
+      {%- endfor -%}
+      {{ target_dirs }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Check which per-host stack directories already exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ _stack_sync_target_stack_dirs | default([]) }}"
+  loop_control:
+    label: "{{ item | relpath(lxc_docker_environment_internal.shared_mount_source ~ '/stacks') }}"
+  register: _stack_sync_stack_dir_stats
+  when: (_stack_sync_target_stack_dirs | default([])) | length > 0
+
+- name: Create per-host stack directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
+    mode: '0755'
+  loop: "{{ _stack_sync_target_stack_dirs | default([]) }}"
+  loop_control:
+    label: "{{ item | relpath(lxc_docker_environment_internal.shared_mount_source ~ '/stacks') }}"
+  register: _stack_sync_stack_dir_results
+  when: (_stack_sync_target_stack_dirs | default([])) | length > 0
+
+- name: Render templated files (.j2) for per-host stacks
+  ansible.builtin.template:
+    src: "{{ item.path }}"
+    dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\\.j2$', '') }}"
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
+    mode: '0644'
+  vars:
+    stack_name: "{{ (item.path | relpath(lxc_docker_environment_internal.stacks_source)).split('/')[0] }}"
+  loop: "{{ _per_host_j2_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) }}"
+  register: _stack_sync_template_results
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Copy static files for per-host stacks
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) }}"
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
+    mode: '0644'
+  loop: "{{ _per_host_static_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) }}"
+  register: _stack_sync_copy_results
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - (item.path | relpath(lxc_docker_environment_internal.stacks_source)) not in (lxc_docker_env_templated_outputs | default([]))
+
+- name: Collect prereq dirs from source stack compose files
+  ansible.builtin.set_fact:
+    lxc_docker_env_prereq_dirs: >-
+      {%- set dirs = [] -%}
+      {%- set override_paths = lxc_docker_environment_internal.path_ownership_overrides | default([]) | map(attribute='path') | list -%}
+      {%- for compose_spec in lxc_docker_env_source_compose_specs | default([]) -%}
+      {%- set compose = compose_spec.content | from_yaml -%}
+      {%- if compose is mapping -%}
+      {%- set prereq_dirs = compose.get('x-prereq-dirs', []) -%}
+      {%- if prereq_dirs is sequence and prereq_dirs is not string and prereq_dirs is not mapping -%}
+      {%- for prereq_dir in prereq_dirs -%}
+      {%- if prereq_dir is string -%}
+      {%- if prereq_dir.startswith('./') -%}
+      {%- set resolved_prereq_dir = compose_spec.target_dir + '/' + prereq_dir[2:] -%}
+      {%- else -%}
+      {%- set resolved_prereq_dir = prereq_dir -%}
+      {%- endif -%}
+      {%- if resolved_prereq_dir not in override_paths -%}
+      {%- set _ = dirs.append(resolved_prereq_dir) -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ dirs | unique }}
+  when: (lxc_docker_env_source_compose_specs | default([])) | length > 0
+
+- name: Check which stack prereq dirs already exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ lxc_docker_env_prereq_dirs | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _stack_sync_prereq_dir_stats
+  when: (lxc_docker_env_prereq_dirs | default([])) | length > 0
+
+- name: Ensure stack prereq dirs exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ lxc_docker_environment_internal.docker_uid }}"
+    group: "{{ lxc_docker_environment_internal.docker_gid }}"
+    mode: '0755'
+  loop: "{{ lxc_docker_env_prereq_dirs | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _stack_sync_prereq_dir_results
+  when: (lxc_docker_env_prereq_dirs | default([])) | length > 0
+
+- name: Check which ownership override paths already exist
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ lxc_docker_environment_internal.path_ownership_overrides }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: _stack_sync_ownership_override_stats
+  when: lxc_docker_environment_internal.path_ownership_overrides | length > 0
+
+- name: Apply path-specific ownership overrides for stack data
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    recurse: "{{ item.recurse | default(false) }}"
+  loop: "{{ lxc_docker_environment_internal.path_ownership_overrides }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: _stack_sync_ownership_override_results
+  when: lxc_docker_environment_internal.path_ownership_overrides | length > 0
+
+- name: Check if Traefik cert directory exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs"
+  register: _traefik_cert_dir
+
+- name: Check if Traefik ACME storage file exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
+  register: _traefik_acme_storage
+  when: _traefik_cert_dir.stat.exists | default(false)
+
+- name: Create Traefik ACME storage file when missing
+  ansible.builtin.copy:
+    content: ""
+    dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
+    force: false
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
+    mode: '0600'
+  register: _stack_sync_traefik_acme_file_create
+  when:
+    - _traefik_cert_dir.stat.exists | default(false)
+    - not (_traefik_acme_storage.stat.exists | default(false))
+
+- name: Ensure Traefik ACME storage permissions are correct
+  ansible.builtin.file:
+    path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/traefik3/appdata/traefik3/data/certs/cloudflare-acme.json"
+    state: file
+    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+    group: "{{ lxc_docker_environment_internal.shared_group }}"
+    mode: '0600'
+  register: _stack_sync_traefik_acme_permissions
+  when: _traefik_cert_dir.stat.exists | default(false)
+
+- name: Create external Docker networks
+  ansible.builtin.command:
+    cmd: "docker network create {{ item }}"
+  loop: "{{ lxc_docker_environment_internal.external_networks }}"
+  register: _stack_sync_network_create
+  changed_when: _stack_sync_network_create.rc == 0
+  failed_when: _stack_sync_network_create.rc != 0 and 'already exists' not in _stack_sync_network_create.stderr
+  when: lxc_docker_environment_internal.external_networks | length > 0
+
+- name: Find all compose files in stacks directory
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks"
+    patterns:
+      - "compose.yml"
+      - "compose.yaml"
+    recurse: true
+    depth: 2
+  register: _stack_compose_files
+
+- name: Ensure all stacks are running
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ item.path | dirname }}"
+  loop: "{{ _stack_compose_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | dirname | basename }}"
+  register: _stack_sync_stack_up_results
+  changed_when: "'Started' in _stack_sync_stack_up_results.stderr or 'Created' in _stack_sync_stack_up_results.stderr"
+  when: (item.path | dirname | basename) in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
+
+- name: Publish stack sync deployment report
+  ansible.builtin.set_fact:
+    lxc_docker_env_deployment_report:
+      changed: >-
+        {{
+          (
+            ([_copy_dockge_result] if _copy_dockge_result is defined else [])
+            + (_managed_assets_legacy_stack_removals.results | default([]))
+            + ([_managed_assets_legacy_admin_removal] if _managed_assets_legacy_admin_removal is defined else [])
+            + ([_managed_assets_docker_agents_stack_removal] if _managed_assets_docker_agents_stack_removal is defined else [])
+            + ([_template_docker_agents_env_result] if _template_docker_agents_env_result is defined else [])
+            + ([_managed_assets_docker_agents_env_removal] if _managed_assets_docker_agents_env_removal is defined else [])
+            + ([_template_docker_agents_compose_result] if _template_docker_agents_compose_result is defined else [])
+            + ([_template_docker_agents_override_result] if _template_docker_agents_override_result is defined else [])
+            + ([_managed_assets_docker_agents_override_removal] if _managed_assets_docker_agents_override_removal is defined else [])
+            + ([_copy_docker_agents_assets_result] if _copy_docker_agents_assets_result is defined else [])
+            + (_managed_assets_docs_removal.results | default([]))
+            + ([_managed_assets_ownership_normalization] if _managed_assets_ownership_normalization is defined else [])
+            + ([_managed_assets_stacks_dir] if _managed_assets_stacks_dir is defined else [])
+            + (_stack_sync_quarantine_results.results | default([]))
+            + (_stack_sync_stack_dir_results.results | default([]))
+            + (_stack_sync_template_results.results | default([]))
+            + (_stack_sync_copy_results.results | default([]))
+            + (_stack_sync_prereq_dir_results.results | default([]))
+            + (_stack_sync_ownership_override_results.results | default([]))
+            + ([_stack_sync_traefik_acme_file_create] if _stack_sync_traefik_acme_file_create is defined else [])
+            + ([_stack_sync_traefik_acme_permissions] if _stack_sync_traefik_acme_permissions is defined else [])
+            + (_stack_sync_network_create.results | default([]))
+            + (_stack_sync_stack_up_results.results | default([]))
+          )
+          | selectattr('changed', 'defined')
+          | selectattr('changed')
+          | list
+          | length > 0
+        }}
+      discovered_stacks: >-
+        {{
+          lxc_docker_env_desired_top_level_stack_dirs | default([])
+        }}
+      created_dirs: >-
+        {{
+          (
+            (
+              (_stack_sync_stack_dir_results.results | default([]))
+              + (_stack_sync_prereq_dir_results.results | default([]))
+              + (_stack_sync_ownership_override_results.results | default([]))
+            )
+            | selectattr('changed', 'defined')
+            | selectattr('changed')
+            | map(attribute='path')
+            | list
+          )
+          | difference(
+              (
+                (_stack_sync_stack_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_prereq_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_ownership_override_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item.path')
+                | list
+              )
+            )
+        }}
+      updated_dirs: >-
+        {{
+          (
+            (
+              (_stack_sync_stack_dir_results.results | default([]))
+              + (_stack_sync_prereq_dir_results.results | default([]))
+              + (_stack_sync_ownership_override_results.results | default([]))
+            )
+            | selectattr('changed', 'defined')
+            | selectattr('changed')
+            | map(attribute='path')
+            | list
+          )
+          | intersect(
+              (
+                (_stack_sync_stack_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_prereq_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item')
+                | list
+              )
+              + (
+                (_stack_sync_ownership_override_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item.path')
+                | list
+              )
+            )
+        }}
+      created_networks: >-
+        {{
+          _stack_sync_network_create.results | default([])
+          | selectattr('changed', 'defined')
+          | selectattr('changed')
+          | map(attribute='item')
+          | list
+        }}
+      quarantined_stacks: "{{ lxc_docker_env_stale_top_level_stack_dirs | default([]) }}"
+      started_stacks: >-
+        {{
+          _stack_sync_stack_up_results.results | default([])
+          | selectattr('changed', 'defined')
+          | selectattr('changed')
+          | map(attribute='item.path')
+          | map('dirname')
+          | map('basename')
+          | list
+        }}
+      unchanged_stacks: >-
+        {{
+          _stack_sync_stack_up_results.results | default([])
+          | rejectattr('skipped', 'defined')
+          | selectattr('changed', 'defined')
+          | rejectattr('changed')
+          | map(attribute='item.path')
+          | map('dirname')
+          | map('basename')
+          | list
+        }}
+      skipped_stacks: >-
+        {{
+          _stack_sync_stack_up_results.results | default([])
+          | selectattr('skipped', 'defined')
+          | selectattr('skipped')
+          | map(attribute='item.path')
+          | map('dirname')
+          | map('basename')
+          | list
+        }}
