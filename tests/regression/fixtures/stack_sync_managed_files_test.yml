@@ -1,0 +1,111 @@
+---
+- name: Test x-managed-files creates files with correct permissions
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      stacks_source: "{{ temp_root }}/stacks-source"
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+      docker_uid: "{{ ansible_user_uid }}"
+      docker_gid: "{{ ansible_user_gid }}"
+      path_ownership_overrides: []
+  tasks:
+    - name: Create source and target dirs
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.stacks_source }}/testapp"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs"
+
+    - name: Create compose.yaml with x-managed-files declaration
+      ansible.builtin.copy:
+        content: |
+          services:
+            app:
+              image: testapp:latest
+          x-managed-files:
+            - path: ./data/certs/secret.json
+              mode: "0600"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/testapp/compose.yaml"
+
+    - name: Run actual find ops to populate discover registers
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+        patterns: "*.j2"
+        hidden: true
+        recurse: true
+        file_type: file
+      register: _per_host_j2_files
+      delegate_to: localhost
+      become: false
+
+    - ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+        patterns: "*"
+        excludes: "*.j2,.gitkeep"
+        hidden: true
+        recurse: true
+        file_type: file
+      register: _per_host_static_files
+      delegate_to: localhost
+      become: false
+
+    - ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+        recurse: true
+        file_type: directory
+      register: _per_host_dirs
+      delegate_to: localhost
+      become: false
+
+    - name: Seed remaining state
+      ansible.builtin.set_fact:
+        lxc_docker_env_desired_top_level_stack_dirs: ['testapp']
+        lxc_docker_env_stale_top_level_stack_dirs: []
+        lxc_docker_env_templated_outputs: []
+        lxc_docker_env_source_compose_specs: []
+        lxc_docker_env_prereq_dirs: []
+
+    - name: Include materialize
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_materialize.yml"
+
+    - name: Assert managed file was created at resolved path
+      ansible.builtin.stat:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs/secret.json"
+      register: _managed_file_stat
+    - ansible.builtin.assert:
+        that:
+          - _managed_file_stat.stat.exists
+        fail_msg: "Managed file was not created at resolved target path"
+
+    - name: Assert managed file has correct mode
+      ansible.builtin.assert:
+        that:
+          - _managed_file_stat.stat.mode == '0600'
+        fail_msg: "Expected mode 0600, got {{ _managed_file_stat.stat.mode }}"
+
+    - name: Place content in the managed file to test force:false
+      ansible.builtin.copy:
+        content: "existing-content"
+        dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs/secret.json"
+
+    - name: Reset source_compose_specs so materialize re-parses them
+      ansible.builtin.set_fact:
+        lxc_docker_env_source_compose_specs: []
+
+    - name: Re-run materialize to verify existing files are not overwritten
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_materialize.yml"
+
+    - name: Assert content was preserved (force:false)
+      ansible.builtin.slurp:
+        src: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs/secret.json"
+      register: _preserved_content
+    - ansible.builtin.assert:
+        that:
+          - "'existing-content' in (_preserved_content.content | b64decode)"
+        fail_msg: "Managed file content was overwritten — force:false not honoured"

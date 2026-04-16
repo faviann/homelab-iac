@@ -40,3 +40,7 @@ networks:
     driver: bridge
   proxy:
     external: true #CAREFUL check .env
+
+x-managed-files:
+  - path: ./appdata/traefik3/data/certs/cloudflare-acme.json
+    mode: "0600"
