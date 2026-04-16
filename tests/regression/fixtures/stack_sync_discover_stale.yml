@@ -1,0 +1,58 @@
+---
+- name: Test discover identifies stale stack directories
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    docker_agents_enabled: false
+    service_agents_enabled: false
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      stacks_source: "{{ temp_root }}/stacks-source"
+      stale_stack_quarantine_root: "{{ temp_root }}/shared/stale-stacks"
+      external_networks: []
+      path_ownership_overrides: []
+      shared_owner: "1000"
+      shared_group: "1000"
+      docker_uid: "1000"
+      docker_gid: "1000"
+  tasks:
+    - name: Create deployed stacks root with desired and stale dirs
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app"
+
+    - name: Create source stacks dir with myapp only (stale-app not in source = stale)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.stacks_source }}"
+        - "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
+
+    - name: Include stack sync discover
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_discover.yml"
+
+    - name: Assert stale list contains only stale-app
+      ansible.builtin.assert:
+        that:
+          - lxc_docker_env_stale_top_level_stack_dirs == ['stale-app']
+        fail_msg: "Expected stale=['stale-app'], got {{ lxc_docker_env_stale_top_level_stack_dirs }}"
+
+    - name: Assert desired list contains myapp
+      ansible.builtin.assert:
+        that:
+          - "'myapp' in lxc_docker_env_desired_top_level_stack_dirs"
+        fail_msg: "Expected myapp in desired, got {{ lxc_docker_env_desired_top_level_stack_dirs }}"
+
+    - name: Assert stale-app not in desired list
+      ansible.builtin.assert:
+        that:
+          - "'stale-app' not in lxc_docker_env_desired_top_level_stack_dirs"
+        fail_msg: "stale-app should not be in desired set"

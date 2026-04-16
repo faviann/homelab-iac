@@ -1,0 +1,149 @@
+---
+# Discovery: find source stacks, compute desired/stale sets, guard against missing source.
+# Outputs: lxc_docker_env_desired_top_level_stack_dirs, lxc_docker_env_stale_top_level_stack_dirs,
+#          _per_host_stacks_dir, _per_host_j2_files, _per_host_static_files,
+#          _per_host_dirs, _per_host_top_level_dirs, _deployed_top_level_stack_dirs
+
+- name: Initialize stack sync state
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: []
+    lxc_docker_env_stale_top_level_stack_dirs: []
+    lxc_docker_env_templated_outputs: []
+    lxc_docker_env_source_compose_specs: []
+    lxc_docker_env_prereq_dirs: []
+    lxc_docker_env_deployment_report:
+      changed: false
+      discovered_stacks: []
+      created_dirs: []
+      updated_dirs: []
+      created_networks: []
+      quarantined_stacks: []
+      started_stacks: []
+      unchanged_stacks: []
+      skipped_stacks: []
+
+- name: Check if per-host stacks source exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_environment_internal.stacks_source }}"
+  register: _per_host_stacks_dir
+  delegate_to: localhost
+  become: false
+
+- name: Find template files (.j2) in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    patterns: "*.j2"
+    hidden: true
+    recurse: true
+    file_type: file
+  register: _per_host_j2_files
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find static files in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    patterns: "*"
+    excludes: "*.j2,.gitkeep"
+    hidden: true
+    recurse: true
+    file_type: file
+  register: _per_host_static_files
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find directories in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    recurse: true
+    file_type: directory
+  register: _per_host_dirs
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find top-level directories in per-host stacks
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+    recurse: false
+    file_type: directory
+  register: _per_host_top_level_dirs
+  delegate_to: localhost
+  become: false
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Find deployed top-level stack directories
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+    recurse: false
+    file_type: directory
+  register: _deployed_top_level_stack_dirs
+
+- name: Initialize desired top-level stack directories from managed assets
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: >-
+      {%- set desired = [] -%}
+      {%- if docker_agents_enabled | default(false) -%}
+      {%- set _ = desired.append('docker-agents') -%}
+      {%- endif -%}
+      {%- if service_agents_enabled | default(false) -%}
+      {%- set _ = desired.append('admin') -%}
+      {%- endif -%}
+      {{ desired | unique }}
+
+- name: Append per-host repo stack directories to desired stack set
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: >-
+      {{
+        (
+          lxc_docker_env_desired_top_level_stack_dirs
+          + (
+            _per_host_top_level_dirs.files | default([])
+            | map(attribute='path')
+            | map('basename')
+            | list
+          )
+        )
+        | unique
+      }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Fail when repo stack source is missing but unmanaged deployed stacks exist
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          _deployed_top_level_stack_dirs.files | default([])
+          | map(attribute='path')
+          | map('basename')
+          | difference(lxc_docker_env_desired_top_level_stack_dirs | default([]))
+          | list
+          | length
+        ) == 0
+    fail_msg: >-
+      Missing per-host stack source directory at
+      {{ lxc_docker_environment_internal.stacks_source }} while unmanaged deployed
+      stack directories still exist:
+      {{
+        _deployed_top_level_stack_dirs.files | default([])
+        | map(attribute='path')
+        | map('basename')
+        | difference(lxc_docker_env_desired_top_level_stack_dirs | default([]))
+        | list
+        | join(', ')
+      }}
+  when: not (_per_host_stacks_dir.stat.exists | default(false))
+
+- name: Build list of stale deployed top-level stack directories
+  ansible.builtin.set_fact:
+    lxc_docker_env_stale_top_level_stack_dirs: >-
+      {{
+        _deployed_top_level_stack_dirs.files | default([])
+        | map(attribute='path')
+        | map('basename')
+        | difference(lxc_docker_env_desired_top_level_stack_dirs | default([]))
+        | list
+      }}
+  when: _per_host_stacks_dir.stat.exists | default(false)

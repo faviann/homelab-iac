@@ -34,5 +34,5 @@
         state: directory
         mode: "0755"
 
-    - name: Include stack sync boundary
-      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync.yml"
+    - name: Include stack sync discover
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/stack_sync_discover.yml"
