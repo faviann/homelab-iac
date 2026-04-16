@@ -2,11 +2,10 @@
 # Resource tier: tiny
 # Targets minimal footprint workloads (light monitoring, lightweight proxies).
 
-# LXC resource specifications
-lxc_cores: 1
-lxc_memory: 1024  # MB
-lxc_disk: "8"    # GB
-lxc_swap: 256    # MB
-
-# Network configuration
-lxc_network_bridge: vmbr1
+proxmox_lxc_group_defaults:
+  cores: 1
+  memory: 1024  # MB
+  disk: "8"    # GB
+  swap: 256     # MB
+  netif:
+    net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth"

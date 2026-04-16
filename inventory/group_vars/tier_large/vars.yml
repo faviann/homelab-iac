@@ -2,11 +2,10 @@
 # Resource tier: large
 # Provisioned for heavier services and media workloads requiring headroom.
 
-# LXC resource specifications
-lxc_cores: 8
-lxc_memory: 32768  # MB (32GB)
-lxc_disk: "8"      # GB
-lxc_swap: 2048     # MB
-
-# Network configuration
-lxc_network_bridge: vmbr1
+proxmox_lxc_group_defaults:
+  cores: 8
+  memory: 32768  # MB (32GB)
+  disk: "8"      # GB
+  swap: 2048     # MB
+  netif:
+    net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth"

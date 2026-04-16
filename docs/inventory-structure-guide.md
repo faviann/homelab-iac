@@ -48,9 +48,10 @@ proxmox_api_host: "proxmox.lan"
 proxmox_default_node: "proxmox"
 
 # 2. group_vars/tier_medium/vars.yml
-lxc_cores: 4
-lxc_memory: 16384
-lxc_disk: "8"
+proxmox_lxc_group_defaults:
+  cores: 4
+  memory: 16384
+  disk: "8"
 
 # 3. group_vars/cap_docker/vars.yml
 install_docker: true
@@ -60,8 +61,6 @@ lxc_features: [nesting=1, keyctl=1]
 proxmox_lxc_overrides:
   vmid: 303
   hostname: servarr
-  cores: "{{ lxc_cores }}"    # inherited: 4
-  memory: "{{ lxc_memory }}"  # inherited: 16384
 ```
 
 ## Adding New Hosts

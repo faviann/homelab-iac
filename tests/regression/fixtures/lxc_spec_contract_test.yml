@@ -13,6 +13,12 @@
     proxmox_lxc_group_defaults:
       description: group-description
       tags: group-managed
+      cores: 2
+      memory: 1024
+      swap: 512
+      disk: "16"
+      netif:
+        net0: name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth
     proxmox_lxc_capability_defaults:
       description: capability-description
       onboot: false
@@ -36,11 +42,6 @@
     lxc_features:
       - nesting=1
       - keyctl=1
-    lxc_cores: 2
-    lxc_memory: 1024
-    lxc_swap: 512
-    lxc_disk: 16
-    lxc_network_bridge: vmbr1
     lxc_hwaddr: 'AA:BB:CC:DD:EE:FF'
     proxmox_lxc_controller_pubkey_enabled: false
     proxmox_lxc_disable_root_password: true

@@ -2,11 +2,10 @@
 # Resource tier: small
 # Balanced for lightweight services and development tooling.
 
-# LXC resource specifications
-lxc_cores: 2
-lxc_memory: 4096  # MB (4GB)
-lxc_disk: "8"     # GB
-lxc_swap: 512     # MB
-
-# Network configuration
-lxc_network_bridge: vmbr1
+proxmox_lxc_group_defaults:
+  cores: 2
+  memory: 4096  # MB (4GB)
+  disk: "8"    # GB
+  swap: 512     # MB
+  netif:
+    net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth"

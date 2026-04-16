@@ -24,56 +24,48 @@
   loop: "{{ proxmox_lxc_spec_layers }}"
 
 # ==============================================================================
-# PHASE 2: Dynamic Tier-Based Configuration
-# Adds resource allocations based on tier group membership (tiny/small/medium/large)
+# PHASE 2: Spec Normalization
+# Normalizes layered values that still need storage or host-specific expansion
 # ==============================================================================
 
-- name: Initialize dynamic defaults from tier and capability data
+- name: Normalize size-only disk values into Proxmox storage syntax
   ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: {}
+    proxmox_lxc_spec: >-
+      {{
+        proxmox_lxc_spec
+        | combine(
+            {
+              'disk': (proxmox_default_storage | default('local-zfs')) + ':' + (proxmox_lxc_spec.disk | string)
+            },
+            recursive=True
+          )
+      }}
+  when:
+    - proxmox_lxc_spec.disk is defined
+    - proxmox_lxc_spec.disk | string is not search(':')
 
-- name: Ensure tier variables are defined
-  ansible.builtin.assert:
-    that:
-      - lxc_cores is defined
-      - lxc_memory is defined
-      - lxc_swap is defined
-      - lxc_disk is defined
-      - lxc_network_bridge is defined
-    fail_msg: >-
-      Missing tier variables required to build the LXC specification. Check tier group vars for cores, memory, swap, disk, and network bridge.
-
-- name: Include CPU core defaults
+- name: Inject host-specific hardware address into primary network interface
   ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'cores': (lxc_cores | int)}) }}"
-
-- name: Include memory defaults
-  ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'memory': (lxc_memory | int)}) }}"
-
-- name: Include swap defaults
-  ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'swap': (lxc_swap | int)}) }}"
-
-- name: Include disk defaults
-  ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'disk': (proxmox_default_storage | default('local-zfs')) + ':' + (lxc_disk | string)}) }}"
-
-- name: Include network defaults
-  ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: >-
-      {{ proxmox_lxc_dynamic_defaults | combine({
-        'netif': {
-          'net0': 'name=eth0,bridge=' + (lxc_network_bridge) + ',firewall=0'
-                  + (',hwaddr=' + lxc_hwaddr if lxc_hwaddr is defined else '')
-                  + ',ip=dhcp,ip6=auto,type=veth'
-        }
-      }, recursive=True) }}
-
-- name: Merge dynamic defaults into spec
-  ansible.builtin.set_fact:
-    proxmox_lxc_spec: "{{ proxmox_lxc_spec | combine(proxmox_lxc_dynamic_defaults, recursive=True) }}"
-  when: proxmox_lxc_dynamic_defaults | length > 0
+    proxmox_lxc_spec: >-
+      {{
+        proxmox_lxc_spec
+        | combine(
+            {
+              'netif': {
+                'net0': (
+                  proxmox_lxc_spec.netif.net0
+                  | regex_replace(',ip=dhcp', ',hwaddr=' + lxc_hwaddr + ',ip=dhcp')
+                )
+              }
+            },
+            recursive=True
+          )
+      }}
+  when:
+    - lxc_hwaddr is defined
+    - proxmox_lxc_spec.netif is defined
+    - proxmox_lxc_spec.netif.net0 is defined
+    - proxmox_lxc_spec.netif.net0 is not search(',hwaddr=')
 
 # ==============================================================================
 # PHASE 3: Mount Point Configuration
@@ -176,7 +168,7 @@
       Assembled spec: {{ proxmox_lxc_spec | to_nice_yaml }}
       Check: host_vars/{{ inventory_hostname }}.yml for vmid/hostname,
       group_vars/all/proxmox.yml for node/ostemplate,
-      group_vars/tier_*/vars.yml for cores/memory/disk/network_bridge.
+      group_vars/tier_*/vars.yml for proxmox_lxc_group_defaults resource defaults.
 
 - name: Validate compiled LXC contract
   ansible.builtin.assert:

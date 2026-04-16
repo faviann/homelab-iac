@@ -2,11 +2,10 @@
 # Resource tier: medium
 # Suited for application servers and moderate media workloads.
 
-# LXC resource specifications
-lxc_cores: 4
-lxc_memory: 16384  # MB (16GB)
-lxc_disk: "8"     # GB
-lxc_swap: 1024    # MB
-
-# Network configuration
-lxc_network_bridge: vmbr1
+proxmox_lxc_group_defaults:
+  cores: 4
+  memory: 16384  # MB (16GB)
+  disk: "8"     # GB
+  swap: 1024     # MB
+  netif:
+    net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth"

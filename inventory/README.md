@@ -75,10 +75,12 @@ Tier and capability inputs:
 
 ```yaml
 # group_vars/tier_medium/vars.yml
-lxc_cores: 4
-lxc_memory: 16384
-lxc_disk: "8"
-lxc_network_bridge: vmbr1
+proxmox_lxc_group_defaults:
+  cores: 4
+  memory: 16384
+  disk: "8"
+  netif:
+    net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth"
 
 # group_vars/cap_docker/vars.yml
 install_docker: true
