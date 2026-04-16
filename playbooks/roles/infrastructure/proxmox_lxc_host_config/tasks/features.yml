@@ -6,7 +6,7 @@
 
 - name: Get current container features configuration
   ansible.builtin.command:
-    cmd: "pct config {{ proxmox_lxc_spec.vmid }}"
+    cmd: "pct config {{ proxmox_lxc_host_config_spec.vmid }}"
   register: _pct_config
   changed_when: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
@@ -43,7 +43,7 @@
   ansible.builtin.set_fact:
     _target_features_list: >-
       {{
-        (_current_features_list + (lxc_features | default([])))
+        (_current_features_list + (proxmox_lxc_host_config_spec.features | default([])))
         | reject('match', '^features:.*')
         | select()
         | unique
@@ -58,13 +58,13 @@
 - name: Display features operation
   ansible.builtin.debug:
     msg:
-      - "Container VMID: {{ proxmox_lxc_spec.vmid }}"
+      - "Container VMID: {{ proxmox_lxc_host_config_spec.vmid }}"
       - "Current features: {{ _current_features_list | join(',') if _current_features_list | length > 0 else '(none)' }}"
       - "Target features: {{ _target_features_string }}"
 
 - name: Apply feature flags via pct set
   ansible.builtin.command:
-    cmd: "pct set {{ proxmox_lxc_spec.vmid }} -features {{ _target_features_string }}"
+    cmd: "pct set {{ proxmox_lxc_host_config_spec.vmid }} -features {{ _target_features_string }}"
   register: _pct_set_result
   changed_when: _pct_set_result.rc == 0
   delegate_to: "{{ proxmox_host_config_delegate }}"
@@ -73,7 +73,7 @@
 
 - name: Check container runtime status
   ansible.builtin.command:
-    cmd: "pct status {{ proxmox_lxc_spec.vmid }}"
+    cmd: "pct status {{ proxmox_lxc_host_config_spec.vmid }}"
   register: _container_status
   changed_when: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
@@ -82,7 +82,7 @@
 
 - name: Restart container to apply feature changes
   ansible.builtin.command:
-    cmd: "pct reboot {{ proxmox_lxc_spec.vmid }}"
+    cmd: "pct reboot {{ proxmox_lxc_host_config_spec.vmid }}"
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: true
   when:
@@ -94,13 +94,13 @@
 - name: Wait for container to complete reboot
   ansible.builtin.pause:
     seconds: 15
-    prompt: "Waiting for container {{ proxmox_lxc_spec.vmid }} to complete reboot and start SSH service"
+    prompt: "Waiting for container {{ proxmox_lxc_host_config_spec.vmid }} to complete reboot and start SSH service"
   when: _container_restart is changed
   delegate_to: "{{ proxmox_host_config_delegate }}"
 
 - name: Feature changes applied (restart required)
   ansible.builtin.debug:
-    msg: "⚠ Container {{ proxmox_lxc_spec.vmid }} feature changes applied. Start the container to activate them."
+    msg: "Container {{ proxmox_lxc_host_config_spec.vmid }} feature changes applied. Start the container to activate them."
   when:
     - _pct_set_result is changed
     - _container_status is defined
@@ -108,10 +108,10 @@
 
 - name: Feature changes applied and activated
   ansible.builtin.debug:
-    msg: "✓ Applied features to container {{ proxmox_lxc_spec.vmid }}: {{ _target_features_string }}{{ ' (container restarted)' if _container_restart is changed else '' }}"
+    msg: "Applied features to container {{ proxmox_lxc_host_config_spec.vmid }}: {{ _target_features_string }}{{ ' (container restarted)' if _container_restart is changed else '' }}"
   when: _pct_set_result is changed
 
 - name: Features already in sync
   ansible.builtin.debug:
-    msg: "✓ Container {{ proxmox_lxc_spec.vmid }} features already configured correctly"
+    msg: "Container {{ proxmox_lxc_host_config_spec.vmid }} features already configured correctly"
   when: _pct_set_result is not changed

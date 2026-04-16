@@ -5,7 +5,7 @@
 
 - name: Determine LXC configuration file path
   ansible.builtin.set_fact:
-    _lxc_config_file: "/etc/pve/lxc/{{ proxmox_lxc_spec.vmid }}.conf"
+    _lxc_config_file: "/etc/pve/lxc/{{ proxmox_lxc_host_config_spec.vmid }}.conf"
 
 - name: Check if LXC configuration file exists
   ansible.builtin.stat:
@@ -22,16 +22,16 @@
 - name: Apply UID/GID ID mappings
   ansible.builtin.include_tasks: config_file_idmap.yml
   when:
-    - proxmox_lxc_idmap is defined
-    - proxmox_lxc_idmap | length > 0
+    - proxmox_lxc_host_config_spec.idmap is defined
+    - proxmox_lxc_host_config_spec.idmap | length > 0
   tags:
     - idmap
 
 - name: Apply bind mount points
   ansible.builtin.include_tasks: config_file_bind_mounts.yml
   when:
-    - proxmox_lxc_bind_mounts is defined
-    - proxmox_lxc_bind_mounts | length > 0
+    - proxmox_lxc_host_config_spec.bind_mounts is defined
+    - proxmox_lxc_host_config_spec.bind_mounts | length > 0
   tags:
     - bind_mounts
     - mounts

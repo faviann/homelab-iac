@@ -13,7 +13,7 @@
 
 - name: Determine desired bind mounts (sorted)
   ansible.builtin.set_fact:
-    _desired_mounts: "{{ proxmox_lxc_bind_mounts | dict2items | map(attribute='key') | zip(proxmox_lxc_bind_mounts | dict2items | map(attribute='value')) | map('join', ': ') | list | sort | join('\n') }}"
+    _desired_mounts: "{{ proxmox_lxc_host_config_spec.bind_mounts | dict2items | map(attribute='key') | zip(proxmox_lxc_host_config_spec.bind_mounts | dict2items | map(attribute='value')) | map('join', ': ') | list | sort | join('\n') }}"
 
 - name: Update bind mounts only if different
   when: _current_mounts.stdout != _desired_mounts
@@ -34,4 +34,4 @@
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
       become: true
-      loop: "{{ proxmox_lxc_bind_mounts | dict2items }}"
+      loop: "{{ proxmox_lxc_host_config_spec.bind_mounts | dict2items | sort(attribute='key') }}"

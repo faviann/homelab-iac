@@ -1,8 +1,7 @@
 ---
 # Dependencies for proxmox_lxc_host_config role
 # This role requires the LXC spec to be built first to access:
-#   - proxmox_lxc_bind_mounts (mp0-mp3 mount points)
-#   - proxmox_lxc_idmap (UID/GID mappings)
-#   - proxmox_lxc_spec (VMID and hostname)
+#   - proxmox_lxc_contract.host_config (VMID, hostname, bind mounts, idmap, features)
+# Compatibility aliases remain available during the contract migration.
 dependencies:
   - role: provisioning/lxc_spec_builder

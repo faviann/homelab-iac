@@ -1,0 +1,104 @@
+---
+- name: Test compiled LXC contract shape and compatibility aliases
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_default_storage: local-lvm
+    proxmox_lxc_global_defaults:
+      node: pve-a
+      ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+      description: global-description
+      timezone: UTC
+    proxmox_lxc_group_defaults:
+      description: group-description
+      tags: group-managed
+    proxmox_lxc_capability_defaults:
+      description: capability-description
+      onboot: false
+    proxmox_lxc_overrides:
+      vmid: 4201
+      hostname: override-host
+      description: override-description
+      password: super-secret
+    proxmox_lxc:
+      hostname: contract-host
+      description: host-description
+      pubkey: ssh-ed25519 AAAATEST contract@test
+    proxmox_default_bind_mounts:
+      mp0: /srv/media,mp=/media
+      mp1: /srv/config,mp=/config
+    proxmox_lxc_bind_mounts_overrides:
+      mp1: /srv/custom-config,mp=/config
+    proxmox_default_idmap:
+      - u 0 100000 65536
+      - g 0 100000 65536
+    lxc_features:
+      - nesting=1
+      - keyctl=1
+    lxc_cores: 2
+    lxc_memory: 1024
+    lxc_swap: 512
+    lxc_disk: 16
+    lxc_network_bridge: vmbr1
+    lxc_hwaddr: 'AA:BB:CC:DD:EE:FF'
+    proxmox_lxc_controller_pubkey_enabled: false
+    proxmox_lxc_disable_root_password: true
+  tasks:
+    - name: Build compiled LXC contract
+      ansible.builtin.include_role:
+        name: provisioning/lxc_spec_builder
+
+    - name: Assert compiled contract slices exist
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.api_spec is mapping
+          - proxmox_lxc_contract.host_config is mapping
+          - proxmox_lxc_contract.guest_bootstrap is mapping
+        fail_msg: "Compiled LXC contract did not expose the expected slices"
+
+    - name: Assert API slice keeps precedence and tier-derived defaults
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.api_spec.vmid == 4201
+          - proxmox_lxc_contract.api_spec.hostname == 'contract-host'
+          - proxmox_lxc_contract.api_spec.description == 'host-description'
+          - proxmox_lxc_contract.api_spec.node == 'pve-a'
+          - proxmox_lxc_contract.api_spec.ostemplate == 'local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst'
+          - proxmox_lxc_contract.api_spec.cores == 2
+          - proxmox_lxc_contract.api_spec.memory == 1024
+          - proxmox_lxc_contract.api_spec.swap == 512
+          - proxmox_lxc_contract.api_spec.disk == 'local-lvm:16'
+          - proxmox_lxc_contract.api_spec.netif.net0 is search('bridge=vmbr1')
+          - proxmox_lxc_contract.api_spec.netif.net0 is search('hwaddr=AA:BB:CC:DD:EE:FF')
+          - proxmox_lxc_contract.api_spec.onboot == false
+          - proxmox_lxc_contract.api_spec.password is not defined
+          - proxmox_lxc_contract.api_spec.features is not defined
+        fail_msg: "API slice did not preserve precedence, tier defaults, or host-only field stripping"
+
+    - name: Assert host-config slice owns bind mounts, idmap, and features
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.host_config.vmid == 4201
+          - proxmox_lxc_contract.host_config.hostname == 'contract-host'
+          - proxmox_lxc_contract.host_config.bind_mounts.mp0 == '/srv/media,mp=/media'
+          - proxmox_lxc_contract.host_config.bind_mounts.mp1 == '/srv/custom-config,mp=/config'
+          - proxmox_lxc_contract.host_config.idmap == proxmox_default_idmap
+          - proxmox_lxc_contract.host_config.features | sort == lxc_features | sort
+        fail_msg: "Host-config slice did not capture bind mounts, idmap, or features"
+
+    - name: Assert guest-bootstrap slice owns pubkey injection details
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.guest_bootstrap.vmid == 4201
+          - proxmox_lxc_contract.guest_bootstrap.hostname == 'contract-host'
+          - proxmox_lxc_contract.guest_bootstrap.pubkey == 'ssh-ed25519 AAAATEST contract@test'
+        fail_msg: "Guest-bootstrap slice did not capture the expected pubkey details"
+
+    - name: Assert compatibility aliases still match the compiled contract
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_spec == proxmox_lxc_contract.api_spec
+          - proxmox_lxc_bind_mounts == proxmox_lxc_contract.host_config.bind_mounts
+          - proxmox_lxc_idmap == proxmox_lxc_contract.host_config.idmap
+        fail_msg: "Compatibility aliases no longer reflect the compiled contract"

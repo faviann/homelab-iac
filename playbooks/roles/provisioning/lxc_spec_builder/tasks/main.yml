@@ -70,11 +70,6 @@
         }
       }, recursive=True) }}
 
-- name: Include feature defaults (will be applied via host_prep, not API)
-  ansible.builtin.set_fact:
-    proxmox_lxc_dynamic_defaults: "{{ proxmox_lxc_dynamic_defaults | combine({'features': []}, recursive=True) }}"
-  when: lxc_features is defined
-
 - name: Merge dynamic defaults into spec
   ansible.builtin.set_fact:
     proxmox_lxc_spec: "{{ proxmox_lxc_spec | combine(proxmox_lxc_dynamic_defaults, recursive=True) }}"
@@ -125,6 +120,31 @@
     - proxmox_lxc_controller_pubkey_content is defined
     - proxmox_lxc_controller_pubkey_content | default('', true) | length > 0
 
+- name: Compile explicit LXC deployment contract
+  ansible.builtin.set_fact:
+    proxmox_lxc_contract:
+      api_spec: >-
+        {{
+          (proxmox_lxc_spec | dict2items | rejectattr('key', 'equalto', 'features') | list)
+          | items2dict
+        }}
+      host_config:
+        vmid: "{{ proxmox_lxc_spec.vmid }}"
+        hostname: "{{ proxmox_lxc_spec.hostname }}"
+        bind_mounts: "{{ proxmox_lxc_bind_mounts | default({}) }}"
+        idmap: "{{ proxmox_lxc_idmap | default([]) }}"
+        features: "{{ lxc_features | default([]) }}"
+      guest_bootstrap:
+        vmid: "{{ proxmox_lxc_spec.vmid }}"
+        hostname: "{{ proxmox_lxc_spec.hostname }}"
+        pubkey: "{{ proxmox_lxc_spec.pubkey | default('') }}"
+
+- name: Refresh compatibility aliases from compiled contract
+  ansible.builtin.set_fact:
+    proxmox_lxc_spec: "{{ proxmox_lxc_contract.api_spec }}"
+    proxmox_lxc_bind_mounts: "{{ proxmox_lxc_contract.host_config.bind_mounts }}"
+    proxmox_lxc_idmap: "{{ proxmox_lxc_contract.host_config.idmap }}"
+
 # ==============================================================================
 # PHASE 6: Spec Validation
 # Asserts all required fields are present before handing off to downstream roles.
@@ -157,3 +177,16 @@
       Check: host_vars/{{ inventory_hostname }}.yml for vmid/hostname,
       group_vars/all/proxmox.yml for node/ostemplate,
       group_vars/tier_*/vars.yml for cores/memory/disk/network_bridge.
+
+- name: Validate compiled LXC contract
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_contract.api_spec is mapping
+      - proxmox_lxc_contract.host_config is mapping
+      - proxmox_lxc_contract.guest_bootstrap is mapping
+      - proxmox_lxc_contract.host_config.vmid == proxmox_lxc_spec.vmid
+      - proxmox_lxc_contract.host_config.hostname == proxmox_lxc_spec.hostname
+      - proxmox_lxc_contract.guest_bootstrap.vmid == proxmox_lxc_spec.vmid
+    fail_msg: >-
+      Invalid compiled LXC contract for {{ inventory_hostname }}.
+      Contract: {{ proxmox_lxc_contract | to_nice_yaml }}

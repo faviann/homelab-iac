@@ -13,7 +13,7 @@
 
 - name: Determine desired ID mappings (sorted)
   ansible.builtin.set_fact:
-    _desired_idmap: "{{ proxmox_lxc_idmap | sort | join('\n') }}"
+    _desired_idmap: "{{ proxmox_lxc_host_config_spec.idmap | sort | join('\n') }}"
 
 - name: Update ID mappings only if different
   when: _current_idmap.stdout != _desired_idmap
@@ -34,4 +34,4 @@
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
       become: true
-      loop: "{{ proxmox_lxc_idmap }}"
+      loop: "{{ proxmox_lxc_host_config_spec.idmap | sort }}"
