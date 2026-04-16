@@ -1,0 +1,73 @@
+---
+- name: Test LXC spec layer merge precedence
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_default_storage: local-lvm
+    proxmox_lxc_global_defaults:
+      node: pve-a
+      ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+      memory: 2048
+    proxmox_lxc_group_defaults:
+      cores: 2
+      memory: 1024
+      disk: "16"
+      netif:
+        net0: name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth
+    proxmox_lxc_capability_defaults:
+      features:
+        - nesting=1
+        - keyctl=1
+    proxmox_lxc_overrides:
+      vmid: 4201
+      memory: 8192
+    proxmox_lxc:
+      hostname: merge-test-host
+      pubkey: ssh-ed25519 AAAATEST merge@test
+    lxc_hwaddr: 'AA:BB:CC:DD:EE:FF'
+    proxmox_lxc_controller_pubkey_enabled: false
+    proxmox_lxc_disable_root_password: true
+  tasks:
+    - name: Build compiled LXC contract
+      ansible.builtin.include_role:
+        name: provisioning/lxc_spec_builder
+
+    - name: Assert global defaults contribute node and ostemplate
+      ansible.builtin.assert:
+        that:
+          - _proxmox_lxc_compiled_spec.node == 'pve-a'
+          - _proxmox_lxc_compiled_spec.ostemplate == 'local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst'
+        fail_msg: "Global defaults did not flow into the compiled spec"
+
+    - name: Assert group defaults contribute cores and normalized disk
+      ansible.builtin.assert:
+        that:
+          - _proxmox_lxc_compiled_spec.cores == 2
+          - _proxmox_lxc_compiled_spec.disk == 'local-lvm:16'
+        fail_msg: "Group defaults did not flow into the compiled spec"
+
+    - name: Assert capability defaults contribute features
+      ansible.builtin.assert:
+        that:
+          - _proxmox_lxc_compiled_spec.features | sort == proxmox_lxc_capability_defaults.features | sort
+        fail_msg: "Capability defaults did not flow into the compiled spec"
+
+    - name: Assert overrides beat group defaults
+      ansible.builtin.assert:
+        that:
+          - _proxmox_lxc_compiled_spec.memory == 8192
+        fail_msg: "Host overrides did not beat group defaults"
+
+    - name: Assert host spec provides highest-precedence hostname
+      ansible.builtin.assert:
+        that:
+          - _proxmox_lxc_compiled_spec.hostname == 'merge-test-host'
+          - _proxmox_lxc_compiled_spec.vmid == 4201
+        fail_msg: "Host-level spec fields did not win precedence"
+
+    - name: Assert host-config contract features come from compiled spec
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.host_config.features | sort == proxmox_lxc_capability_defaults.features | sort
+        fail_msg: "Contract host_config features did not come from the compiled spec"

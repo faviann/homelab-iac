@@ -39,9 +39,12 @@
     proxmox_default_idmap:
       - u 0 100000 65536
       - g 0 100000 65536
-    lxc_features:
-      - nesting=1
-      - keyctl=1
+    proxmox_lxc_capability_defaults:
+      description: capability-description
+      onboot: false
+      features:
+        - nesting=1
+        - keyctl=1
     lxc_hwaddr: 'AA:BB:CC:DD:EE:FF'
     proxmox_lxc_controller_pubkey_enabled: false
     proxmox_lxc_disable_root_password: true
@@ -85,7 +88,7 @@
           - proxmox_lxc_contract.host_config.bind_mounts.mp0 == '/srv/media,mp=/media'
           - proxmox_lxc_contract.host_config.bind_mounts.mp1 == '/srv/custom-config,mp=/config'
           - proxmox_lxc_contract.host_config.idmap == proxmox_default_idmap
-          - proxmox_lxc_contract.host_config.features | sort == lxc_features | sort
+          - proxmox_lxc_contract.host_config.features | sort == proxmox_lxc_capability_defaults.features | sort
         fail_msg: "Host-config slice did not capture bind mounts, idmap, or features"
 
     - name: Assert guest-bootstrap slice owns pubkey injection details

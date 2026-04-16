@@ -55,7 +55,8 @@ proxmox_lxc_group_defaults:
 
 # 3. group_vars/cap_docker/vars.yml
 install_docker: true
-lxc_features: [nesting=1, keyctl=1]
+proxmox_lxc_capability_defaults:
+  features: [nesting=1, keyctl=1]
 
 # 4. host_vars/servarr.yml
 proxmox_lxc_overrides:
@@ -70,7 +71,7 @@ required by downstream provisioning and configuration roles.
 
 | Group | Variables provided | Roles consuming them |
 |-------|--------------------|----------------------|
-| `cap_docker` | `docker_enabled`, `install_docker`, `docker_user`, `docker_uid`, `docker_gid`, `lxc_features`, `docker_agents_enabled`, `traefik_kop_enabled` | `config/lxc_docker_environment`, `config/lxc_docker_runtime`, `provisioning/lxc_spec_builder` |
+| `cap_docker` | `docker_enabled`, `install_docker`, `docker_user`, `docker_uid`, `docker_gid`, `proxmox_lxc_capability_defaults.features`, `docker_agents_enabled`, `traefik_kop_enabled` | `config/lxc_docker_environment`, `config/lxc_docker_runtime`, `provisioning/lxc_spec_builder` |
 | `cap_wireguard` | `wireguard_enabled` | `infrastructure/proxmox_lxc_host_config` |
 | `cap_gpu` | `gpu_enabled` | `infrastructure/proxmox_lxc_host_config` |
 

@@ -1,4 +1,18 @@
 ---
+# ==============================================================================
+# LXC SPEC LAYER PRECEDENCE (lowest -> highest)
+# ==============================================================================
+#
+# Layer 1: proxmox_lxc_defaults           (this file - role baseline)
+# Layer 2: proxmox_lxc_global_defaults    (group_vars/all/proxmox.yml)
+# Layer 3: proxmox_lxc_group_defaults     (group_vars/tier_*/vars.yml)
+# Layer 4: proxmox_lxc_capability_defaults (group_vars/cap_*/vars.yml)
+# Layer 5: proxmox_lxc_overrides          (host_vars/<host>.yml - optional)
+# Layer 6: proxmox_lxc                    (host_vars/<host>.yml)
+#
+# To debug a spec value, inspect the layers from 6 -> 1 in descending precedence.
+# ==============================================================================
+
 # Default variables for lxc_spec_builder role
 
 # ==============================================================================

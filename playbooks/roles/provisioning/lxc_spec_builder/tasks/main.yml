@@ -16,17 +16,6 @@
       proxmox_lxc or proxmox_lxc_overrides. See docs/inventory-structure-guide.md for
       the expected shape.
 
-- name: Assert Docker capability defaults are present when Docker is enabled
-  ansible.builtin.assert:
-    that:
-      - lxc_features is defined
-      - lxc_features | length > 0
-    fail_msg: >-
-      {{ inventory_hostname }} has docker_enabled enabled but lxc_features is missing.
-      Add the host to the cap_docker group in inventory/hosts.yml or define
-      lxc_features explicitly.
-  when: docker_enabled | default(false)
-
 # ==============================================================================
 # PHASE 1: Static Configuration Layering
 # Merges base configuration from least to most specific precedence
@@ -51,10 +40,45 @@
     _proxmox_lxc_compiled_spec: "{{ _proxmox_lxc_compiled_spec | default({}) | combine(item, recursive=True) }}"
   loop: "{{ _proxmox_lxc_spec_layers }}"
 
+- name: Show spec layer contributions (run with -t spec_debug to enable)
+  ansible.builtin.debug:
+    msg: |
+      === LXC spec layer contributions for {{ inventory_hostname }} ===
+      Layer 1 (role defaults):       {{ proxmox_lxc_defaults | to_nice_yaml }}
+      Layer 2 (global defaults):     {{ proxmox_lxc_global_defaults | default({}) | to_nice_yaml }}
+      Layer 3 (group/tier defaults): {{ proxmox_lxc_group_defaults | default({}) | to_nice_yaml }}
+      Layer 4 (capability defaults): {{ proxmox_lxc_capability_defaults | default({}) | to_nice_yaml }}
+      Layer 5 (overrides):           {{ proxmox_lxc_overrides | default({}) | to_nice_yaml }}
+      Layer 6 (host spec):           {{ proxmox_lxc | default({}) | to_nice_yaml }}
+      Merged result:                 {{ _proxmox_lxc_compiled_spec | to_nice_yaml }}
+  tags:
+    - never
+    - spec_debug
+
+- name: Assert Docker capability defaults are present when Docker is enabled
+  ansible.builtin.assert:
+    that:
+      - _proxmox_lxc_compiled_spec.features is defined
+      - _proxmox_lxc_compiled_spec.features | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} has docker_enabled enabled but no merged LXC features.
+      Add the host to the cap_docker group in inventory/hosts.yml or define
+      proxmox_lxc_capability_defaults.features explicitly.
+  when: docker_enabled | default(false)
+
 # ==============================================================================
 # PHASE 2: Spec Normalization
 # Normalizes layered values that still need storage or host-specific expansion
 # ==============================================================================
+
+- name: Assert storage backend is configured
+  ansible.builtin.assert:
+    that:
+      - proxmox_default_storage is defined
+      - proxmox_default_storage | length > 0
+    fail_msg: >-
+      proxmox_default_storage must be set in group_vars/all/proxmox.yml.
+      Current value: {{ proxmox_default_storage | default('UNDEFINED') }}
 
 - name: Normalize size-only disk values into Proxmox storage syntax
   ansible.builtin.set_fact:
@@ -63,7 +87,7 @@
         _proxmox_lxc_compiled_spec
         | combine(
             {
-              'disk': (proxmox_default_storage | default('local-zfs')) + ':' + (_proxmox_lxc_compiled_spec.disk | string)
+              'disk': proxmox_default_storage + ':' + (_proxmox_lxc_compiled_spec.disk | string)
             },
             recursive=True
           )
@@ -153,7 +177,7 @@
         hostname: "{{ _proxmox_lxc_compiled_spec.hostname }}"
         bind_mounts: "{{ _proxmox_lxc_bind_mounts | default({}) }}"
         idmap: "{{ _proxmox_lxc_idmap | default([]) }}"
-        features: "{{ lxc_features | default([]) }}"
+        features: "{{ _proxmox_lxc_compiled_spec.features | default([]) }}"
       guest_bootstrap:
         vmid: "{{ _proxmox_lxc_compiled_spec.vmid }}"
         hostname: "{{ _proxmox_lxc_compiled_spec.hostname }}"

@@ -17,7 +17,7 @@ WireGuard, GPU).
 
 | Group | Purpose | Key Variables |
 |-------|---------|---------------|
-| `cap_docker` | Docker runtime, compose, and docker-agents baseline | `install_docker`, `lxc_features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled` |
+| `cap_docker` | Docker runtime, compose, and docker-agents baseline | `install_docker`, `proxmox_lxc_capability_defaults.features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled` |
 | `cap_gpu` | GPU passthrough for hardware acceleration | `enable_gpu_passthrough`, `configure_nvidia_runtime` |
 | `cap_wireguard` | WireGuard kernel support | `enable_wireguard`, `lxc_wireguard_features` |
 
