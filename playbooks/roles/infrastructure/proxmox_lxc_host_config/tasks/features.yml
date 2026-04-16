@@ -43,8 +43,7 @@
   ansible.builtin.set_fact:
     _target_features_list: >-
       {{
-        (_current_features_list + (proxmox_lxc_host_config_spec.features | default([])))
-        | reject('match', '^features:.*')
+        (proxmox_lxc_host_config_spec.features | default([]))
         | select()
         | unique
         | sort

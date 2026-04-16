@@ -99,3 +99,39 @@
             recursive=True
           )
       }}
+
+- name: Check container runtime status for config-file-driven restart
+  ansible.builtin.command:
+    cmd: "pct status {{ proxmox_lxc_host_config_spec.vmid }}"
+  register: _config_container_status
+  changed_when: false
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: "{{ proxmox_lxc_host_config_become }}"
+  when: proxmox_lxc_host_config_result.restart_required
+
+- name: Restart container to apply config file changes
+  ansible.builtin.command:
+    cmd: "pct reboot {{ proxmox_lxc_host_config_spec.vmid }}"
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: "{{ proxmox_lxc_host_config_become }}"
+  when:
+    - proxmox_lxc_host_config_result.restart_required
+    - _config_container_status is defined
+    - "'running' in _config_container_status.stdout"
+  register: _config_container_restart
+
+- name: Wait for container to complete reboot
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: "Waiting for container {{ proxmox_lxc_host_config_spec.vmid }} to complete reboot and start SSH service"
+  when: _config_container_restart is changed
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+
+- name: Update result after config-file-driven restart
+  ansible.builtin.set_fact:
+    proxmox_lxc_host_config_result: >-
+      {{
+        proxmox_lxc_host_config_result
+        | combine({'restart_applied': true, 'restart_required': false}, recursive=True)
+      }}
+  when: _config_container_restart is changed
