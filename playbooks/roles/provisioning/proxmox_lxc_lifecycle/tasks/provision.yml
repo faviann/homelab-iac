@@ -48,7 +48,6 @@
   ansible.builtin.set_fact:
     proxmox_lifecycle_rebuilt: true
     ansible_python_interpreter: auto_silent
-    _lxc_lifecycle_state: "{{ _lxc_lifecycle_state | combine({'rebuilt': true}, recursive=True) }}"
   when:
     - not ansible_check_mode
     - "'destroy_container' in proxmox_lifecycle_host_actions"

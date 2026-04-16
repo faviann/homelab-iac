@@ -16,32 +16,6 @@
       }}
     proxmox_lifecycle_rebuilt: false
 
-- name: Initialize lifecycle state boundary
-  ansible.builtin.set_fact:
-    _lxc_lifecycle_state:
-      intent: "{{ proxmox_lifecycle_intent }}"
-      policy_effective: "{{ proxmox_lifecycle_policy_effective }}"
-      compiled_contract: {}
-      desired_release: ""
-      validation_snapshot: {}
-      validation_failed: false
-      runtime_state: unknown
-      actual_release: ""
-      release_probe_state: unavailable
-      release_mismatch: false
-      should_provision: false
-      should_configure: false
-      rebuild_required: false
-      skip_provision: false
-      skip_configure: false
-      actions:
-        host: []
-        guest: []
-        cache: []
-      rebuilt: false
-      status: ""
-      reason: ""
-
 - name: Compile desired LXC specification
   ansible.builtin.include_tasks: compile.yml
 
@@ -53,11 +27,11 @@
 
 - name: Execute host-side actions
   ansible.builtin.include_tasks: provision.yml
-  when: _lxc_lifecycle_state.actions.host | length > 0
+  when: proxmox_lifecycle_host_actions | default([]) | length > 0
 
 - name: Execute guest configuration actions
   ansible.builtin.include_tasks: configure.yml
-  when: _lxc_lifecycle_state.actions.guest | length > 0
+  when: proxmox_lifecycle_guest_actions | default([]) | length > 0
 
 - name: Publish lifecycle results
   ansible.builtin.include_tasks: publish.yml

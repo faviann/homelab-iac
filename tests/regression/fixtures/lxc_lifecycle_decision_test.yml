@@ -43,40 +43,15 @@
             proxmox_lifecycle_desired_release: "12"
             proxmox_lxc_host_config_enabled: true
             proxmox_lifecycle_rebuilt: false
-            _lxc_lifecycle_state:
-              intent: full
-              policy_effective: "{{ _base_policy }}"
-              compiled_contract: "{{ _base_contract }}"
-              desired_release: "12"
-              validation_snapshot:
-                status: ok
-                message: Lifecycle actions completed
-              validation_failed: false
-              runtime_state: absent
-              actual_release: ""
-              release_probe_state: absent
-              release_mismatch: false
-              should_provision: false
-              should_configure: false
-              rebuild_required: false
-              skip_provision: false
-              skip_configure: false
-              actions:
-                host: []
-                guest: []
-                cache: []
-              rebuilt: false
-              status: ""
-              reason: ""
 
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
 
         - ansible.builtin.assert:
             that:
-              - _lxc_lifecycle_state.actions.host == ['ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
-              - _lxc_lifecycle_state.actions.guest == ['wait_for_connection', 'gather_facts', 'configure_guest', 'reboot_if_required']
-              - _lxc_lifecycle_state.actions.cache == []
+              - proxmox_lifecycle_host_actions == ['ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
+              - proxmox_lifecycle_guest_actions == ['wait_for_connection', 'gather_facts', 'configure_guest', 'reboot_if_required']
+              - proxmox_lifecycle_cache_actions == []
               - lxc_lifecycle_result.status == 'configured'
               - not lxc_lifecycle_result.skip_provision
               - not lxc_lifecycle_result.skip_configure
@@ -98,39 +73,14 @@
             proxmox_lifecycle_desired_release: "12"
             proxmox_lxc_host_config_enabled: true
             proxmox_lifecycle_rebuilt: false
-            _lxc_lifecycle_state:
-              intent: configure_only
-              policy_effective: "{{ _base_policy }}"
-              compiled_contract: "{{ _base_contract }}"
-              desired_release: "12"
-              validation_snapshot:
-                status: ok
-                message: Lifecycle actions completed
-              validation_failed: false
-              runtime_state: absent
-              actual_release: ""
-              release_probe_state: absent
-              release_mismatch: false
-              should_provision: false
-              should_configure: false
-              rebuild_required: false
-              skip_provision: false
-              skip_configure: false
-              actions:
-                host: []
-                guest: []
-                cache: []
-              rebuilt: false
-              status: ""
-              reason: ""
 
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
 
         - ansible.builtin.assert:
             that:
-              - _lxc_lifecycle_state.actions.host == []
-              - _lxc_lifecycle_state.actions.guest == []
+              - proxmox_lifecycle_host_actions == []
+              - proxmox_lifecycle_guest_actions == []
               - lxc_lifecycle_result.status == 'skipped'
               - lxc_lifecycle_skip_host
               - lxc_lifecycle_result.reason is search('configure-only was skipped')
@@ -152,41 +102,16 @@
             proxmox_lifecycle_desired_release: "12"
             proxmox_lxc_host_config_enabled: true
             proxmox_lifecycle_rebuilt: false
-            _lxc_lifecycle_state:
-              intent: full
-              policy_effective: "{{ _base_policy }}"
-              compiled_contract: "{{ _base_contract }}"
-              desired_release: "12"
-              validation_snapshot:
-                status: ok
-                message: Lifecycle actions completed
-              validation_failed: false
-              runtime_state: running
-              actual_release: "11"
-              release_probe_state: probed
-              release_mismatch: true
-              should_provision: false
-              should_configure: false
-              rebuild_required: false
-              skip_provision: false
-              skip_configure: false
-              actions:
-                host: []
-                guest: []
-                cache: []
-              rebuilt: false
-              status: ""
-              reason: ""
 
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/decide.yml"
         - ansible.builtin.include_tasks: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/publish.yml"
 
         - ansible.builtin.assert:
             that:
-              - _lxc_lifecycle_state.rebuild_required
-              - _lxc_lifecycle_state.actions.host == ['stop_container', 'destroy_container', 'ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
-              - _lxc_lifecycle_state.actions.cache == ['clear_fact_cache', 'remove_known_hosts']
+              - proxmox_lifecycle_rebuild_required
+              - proxmox_lifecycle_host_actions == ['stop_container', 'destroy_container', 'ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
+              - proxmox_lifecycle_cache_actions == ['clear_fact_cache', 'remove_known_hosts']
               - lxc_lifecycle_result.rebuild_required
               - lxc_lifecycle_result.cache_actions == ['clear_fact_cache', 'remove_known_hosts']
-              - lxc_lifecycle_result.internal_snapshot.action_decisions.host == _lxc_lifecycle_state.actions.host
+              - lxc_lifecycle_result.internal_snapshot.action_decisions.host == proxmox_lifecycle_host_actions
             fail_msg: "Release mismatch lifecycle scenario did not publish rebuild and cleanup decisions as expected"
