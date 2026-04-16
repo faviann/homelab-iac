@@ -29,6 +29,7 @@
             + (_stack_sync_copy_results.results | default([]))
             + (_stack_sync_prereq_dir_results.results | default([]))
             + (_stack_sync_ownership_override_results.results | default([]))
+            + (_stack_sync_managed_file_parent_dir_results.results | default([]))
             + (_stack_sync_managed_file_create_results.results | default([]))
             + (_stack_sync_managed_file_permission_results.results | default([]))
             + (_stack_sync_network_create.results | default([]))
@@ -50,6 +51,7 @@
               (_stack_sync_stack_dir_results.results | default([]))
               + (_stack_sync_prereq_dir_results.results | default([]))
               + (_stack_sync_ownership_override_results.results | default([]))
+              + (_stack_sync_managed_file_parent_dir_results.results | default([]))
             )
             | selectattr('changed', 'defined')
             | selectattr('changed')
@@ -78,6 +80,13 @@
                 | map(attribute='item.path')
                 | list
               )
+              + (
+                (_stack_sync_managed_file_parent_dir_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item.path')
+                | list
+              )
             )
         }}
       updated_dirs: >-
@@ -87,6 +96,7 @@
               (_stack_sync_stack_dir_results.results | default([]))
               + (_stack_sync_prereq_dir_results.results | default([]))
               + (_stack_sync_ownership_override_results.results | default([]))
+              + (_stack_sync_managed_file_parent_dir_results.results | default([]))
             )
             | selectattr('changed', 'defined')
             | selectattr('changed')
@@ -110,6 +120,13 @@
               )
               + (
                 (_stack_sync_ownership_override_stats.results | default([]))
+                | selectattr('stat.exists', 'defined')
+                | selectattr('stat.exists')
+                | map(attribute='item.path')
+                | list
+              )
+              + (
+                (_stack_sync_managed_file_parent_dir_stats.results | default([]))
                 | selectattr('stat.exists', 'defined')
                 | selectattr('stat.exists')
                 | map(attribute='item.path')

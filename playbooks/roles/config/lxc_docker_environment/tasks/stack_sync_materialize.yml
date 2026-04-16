@@ -8,7 +8,8 @@
 #          _stack_sync_template_results, _stack_sync_copy_results,
 #          _stack_sync_prereq_dir_stats, _stack_sync_prereq_dir_results,
 #          _stack_sync_ownership_override_stats, _stack_sync_ownership_override_results,
-#          _stack_sync_managed_files, _stack_sync_managed_file_create_results,
+#          _stack_sync_managed_files, _stack_sync_managed_file_parent_dir_stats,
+#          _stack_sync_managed_file_parent_dir_results, _stack_sync_managed_file_create_results,
 #          _stack_sync_managed_file_permission_results
 # Guard:   include_tasks caller checks _per_host_stacks_dir.stat.exists
 
@@ -242,6 +243,43 @@
       {%- endfor -%}
       {{ files | unique(attribute='path') }}
   when: (lxc_docker_env_source_compose_specs | default([])) | length > 0
+
+- name: Build managed file parent directory list
+  ansible.builtin.set_fact:
+    _stack_sync_managed_file_parent_dirs: >-
+      {%- set dirs = [] -%}
+      {%- for file in _stack_sync_managed_files | default([]) -%}
+      {%- set _ = dirs.append({
+        'path': file.path | dirname,
+        'owner': file.owner,
+        'group': file.group,
+        'mode': '0755'
+      }) -%}
+      {%- endfor -%}
+      {{ dirs | unique(attribute='path') }}
+  when: (_stack_sync_managed_files | default([])) | length > 0
+
+- name: Check which managed file parent directories already exist
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ _stack_sync_managed_file_parent_dirs | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: _stack_sync_managed_file_parent_dir_stats
+  when: (_stack_sync_managed_file_parent_dirs | default([])) | length > 0
+
+- name: Ensure managed file parent directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ _stack_sync_managed_file_parent_dirs | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: _stack_sync_managed_file_parent_dir_results
+  when: (_stack_sync_managed_file_parent_dirs | default([])) | length > 0
 
 - name: Create managed files when absent
   ansible.builtin.copy:

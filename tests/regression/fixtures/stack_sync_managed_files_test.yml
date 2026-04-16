@@ -20,7 +20,7 @@
         mode: "0755"
       loop:
         - "{{ lxc_docker_environment_internal.stacks_source }}/testapp"
-        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
 
     - name: Create compose.yaml with x-managed-files declaration
       ansible.builtin.copy:
