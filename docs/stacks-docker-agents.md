@@ -12,7 +12,8 @@ Base services:
 Optional when `traefik_kop_enabled: true`:
 - `traefik-kop`: copies Docker labels into portal's Redis for Traefik routing
 
-Optional when `dockhand_hawser_enabled: true`:
-- `hawser`: Standard-mode remote agent for Dockhand multi-host management during the servarr pilot
+Enabled on every non-`portal` Docker host:
+- `hawser`: Standard-mode remote agent for Dockhand multi-host management across the remote fleet
 
 Set `traefik_kop_enabled: false` on `portal`, because portal runs Traefik itself.
+`portal` is also excluded from Hawser because it hosts Dockhand rather than acting as a remote service host.

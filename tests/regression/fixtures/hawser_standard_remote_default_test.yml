@@ -1,0 +1,138 @@
+---
+- name: Seed local test hosts for Hawser Standard remote-default checks
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Add fake remote Docker host
+      ansible.builtin.add_host:
+        name: auth
+        ansible_connection: local
+
+    - name: Add fake portal host
+      ansible.builtin.add_host:
+        name: portal
+        ansible_connection: local
+
+- name: Verify Hawser renders by default on remote Docker hosts
+  hosts: auth
+  connection: local
+  gather_facts: false
+  vars:
+    current_user: "{{ lookup('pipe', 'id -un') }}"
+    current_group: "{{ lookup('pipe', 'id -gn') }}"
+    lxc_docker_environment_role_path: "{{ playbook_dir }}/../../../playbooks/roles/config/lxc_docker_environment"
+    lxc_docker_environment_internal:
+      legacy_managed_stacks: []
+      shared_mount_source: "{{ temp_root }}/auth/shared"
+      shared_owner: "{{ current_user }}"
+      shared_group: "{{ current_group }}"
+      docker_agents_stack_dir: "{{ temp_root }}/auth/shared/stacks/docker-agents"
+      dockhand_hawser_stacks_source_dir: "{{ temp_root }}/auth/shared/dockhand-stacks"
+    docker_agents_enabled: true
+    traefik_kop_enabled: false
+    portal_instance: false
+    dockhand_hawser_token: "fleet$token"
+    dockhand_hawser_stacks_dir: "/conf/docker/dockhand-stacks"
+    homepage_docker_proxy_port: 2375
+  tasks:
+    - name: Create shared mount source root
+      ansible.builtin.file:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
+        state: directory
+        mode: '0755'
+
+    - name: Render managed assets for a remote Docker host
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/managed_assets.yml"
+
+    - name: Read rendered Hawser compose file
+      ansible.builtin.slurp:
+        src: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/compose.yml"
+      register: hawser_remote_compose
+
+    - name: Read rendered Hawser environment file
+      ansible.builtin.slurp:
+        src: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/.env"
+      register: hawser_remote_env
+
+    - name: Assert Hawser renders by default for remote hosts
+      ansible.builtin.assert:
+        that:
+          - "'2376:2376' in (hawser_remote_compose.content | b64decode)"
+          - "'AGENT_NAME=auth' in (hawser_remote_compose.content | b64decode)"
+          - "'TOKEN=${TOKEN}' in (hawser_remote_compose.content | b64decode)"
+          - "(hawser_remote_env.content | b64decode | trim) == 'TOKEN=fleet$$token'"
+        fail_msg: "Remote Docker hosts should render Hawser by default in phase 2"
+
+    - name: Assert missing Hawser token fails closed for remote hosts
+      block:
+        - name: Re-run managed assets with an empty Hawser token
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/managed_assets.yml"
+          vars:
+            dockhand_hawser_token: ""
+
+        - name: Fail because empty token unexpectedly passed validation
+          ansible.builtin.fail:
+            msg: "Expected managed_assets.yml to fail when the shared Hawser token is empty"
+      rescue:
+        - name: Assert failure message mentions the Hawser token requirement
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg is defined
+              - "'dockhand_hawser_token' in ansible_failed_result.msg"
+              - "'Hawser Standard' in ansible_failed_result.msg"
+            fail_msg: "Unexpected failure when verifying Hawser token guardrail"
+
+- name: Verify portal does not render Hawser
+  hosts: portal
+  connection: local
+  gather_facts: false
+  vars:
+    current_user: "{{ lookup('pipe', 'id -un') }}"
+    current_group: "{{ lookup('pipe', 'id -gn') }}"
+    lxc_docker_environment_role_path: "{{ playbook_dir }}/../../../playbooks/roles/config/lxc_docker_environment"
+    lxc_docker_environment_internal:
+      legacy_managed_stacks: []
+      shared_mount_source: "{{ temp_root }}/portal/shared"
+      shared_owner: "{{ current_user }}"
+      shared_group: "{{ current_group }}"
+      docker_agents_stack_dir: "{{ temp_root }}/portal/shared/stacks/docker-agents"
+      dockhand_hawser_stacks_source_dir: "{{ temp_root }}/portal/shared/dockhand-stacks"
+    docker_agents_enabled: true
+    traefik_kop_enabled: false
+    portal_instance: true
+    dockhand_hawser_token: "fleet$token"
+    dockhand_hawser_stacks_dir: "/conf/docker/dockhand-stacks"
+    homepage_docker_proxy_port: 2375
+  tasks:
+    - name: Create shared mount source root
+      ansible.builtin.file:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
+        state: directory
+        mode: '0755'
+
+    - name: Render managed assets for portal
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/managed_assets.yml"
+
+    - name: Read rendered portal compose file
+      ansible.builtin.slurp:
+        src: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/compose.yml"
+      register: hawser_portal_compose
+
+    - name: Check whether portal environment file exists
+      ansible.builtin.stat:
+        path: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/.env"
+      register: hawser_portal_env
+
+    - name: Check whether portal Hawser stacks directory exists
+      ansible.builtin.stat:
+        path: "{{ lxc_docker_environment_internal.dockhand_hawser_stacks_source_dir }}"
+      register: hawser_portal_stacks_dir
+
+    - name: Assert portal excludes Hawser
+      ansible.builtin.assert:
+        that:
+          - "'hawser:' not in (hawser_portal_compose.content | b64decode)"
+          - not hawser_portal_env.stat.exists
+          - not hawser_portal_stacks_dir.stat.exists
+        fail_msg: "Portal should remain excluded from the Hawser remote-agent baseline"

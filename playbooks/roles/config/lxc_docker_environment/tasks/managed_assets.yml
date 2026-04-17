@@ -50,15 +50,20 @@
       default_domain value defined in host_vars.
   when: traefik_kop_enabled | default(false)
 
+- name: Compute Hawser inclusion for remote Docker hosts
+  ansible.builtin.set_fact:
+    lxc_docker_env_hawser_enabled: >-
+      {{ (docker_agents_enabled | default(false)) and not (portal_instance | default(false)) }}
+
 - name: Validate Dockhand Hawser variables
   ansible.builtin.assert:
     that:
       - dockhand_hawser_token is defined
       - dockhand_hawser_token | length > 0
     fail_msg: >-
-      Hawser Standard requires dockhand_hawser_token to be defined and non-empty for the host
-      before enabling dockhand_hawser_enabled.
-  when: dockhand_hawser_enabled | default(false)
+      Hawser Standard requires dockhand_hawser_token to be defined and non-empty for every
+      non-portal Docker host.
+  when: lxc_docker_env_hawser_enabled | default(false)
 
 - name: Ensure Docker agents stack directory exists
   ansible.builtin.file:
@@ -76,7 +81,7 @@
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
     mode: '0755'
-  when: dockhand_hawser_enabled | default(false)
+  when: lxc_docker_env_hawser_enabled | default(false)
 
 - name: Remove legacy root admin directory
   ansible.builtin.file:
@@ -100,7 +105,7 @@
     mode: '0644'
   when:
     - docker_agents_enabled | default(false)
-    - (traefik_kop_enabled | default(false)) or (dockhand_hawser_enabled | default(false))
+    - (traefik_kop_enabled | default(false)) or (lxc_docker_env_hawser_enabled | default(false))
   register: _template_docker_agents_env_result
 
 - name: Remove Docker agents override environment file when not needed
@@ -110,7 +115,7 @@
   when: >-
     docker_agents_enabled | default(false)
     and not (traefik_kop_enabled | default(false))
-    and not (dockhand_hawser_enabled | default(false))
+    and not (lxc_docker_env_hawser_enabled | default(false))
   register: _managed_assets_docker_agents_env_removal
 
 - name: Render Docker agents base compose template

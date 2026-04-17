@@ -26,6 +26,7 @@ Every `cap_docker` host automatically receives the **docker-agents** stack:
 - `dockwatch-socket-proxy` — write-capable proxy for container management
 - `dockwatch` — container monitoring UI
 - `traefik-kop` — Traefik label replication (controlled by `traefik_kop_enabled`, default `true`; set `false` on portal)
+- `hawser` — Standard-mode Dockhand remote agent on every non-`portal` Docker host
 
 Traefik discovery contract: routes are created from service labels. Apply labels only to intentionally exposed user-facing services.
 
@@ -71,7 +72,7 @@ required by downstream provisioning and configuration roles.
 
 | Group | Variables provided | Roles consuming them |
 |-------|--------------------|----------------------|
-| `cap_docker` | `docker_enabled`, `install_docker`, `docker_user`, `docker_uid`, `docker_gid`, `proxmox_lxc_capability_defaults.features`, `docker_agents_enabled`, `traefik_kop_enabled` | `config/lxc_docker_environment`, `config/lxc_docker_runtime`, `provisioning/lxc_spec_builder` |
+| `cap_docker` | `docker_enabled`, `install_docker`, `docker_user`, `docker_uid`, `docker_gid`, `proxmox_lxc_capability_defaults.features`, `docker_agents_enabled`, `traefik_kop_enabled`, `dockhand_hawser_token` | `config/lxc_docker_environment`, `config/lxc_docker_runtime`, `provisioning/lxc_spec_builder` |
 | `cap_wireguard` | `wireguard_enabled` | `infrastructure/proxmox_lxc_host_config` |
 | `cap_gpu` | `gpu_enabled` | `infrastructure/proxmox_lxc_host_config` |
 
@@ -79,6 +80,9 @@ If a host should run Docker, it must be in `cap_docker` so the Docker roles and
 `lxc_spec_builder` receive the expected user and feature variables. Missing membership
 now fails early with a clear validation message instead of an undefined-variable error
 later in the run.
+
+The only long-term exclusion from the Hawser remote-agent baseline is `portal`, identified by
+`portal_instance: true` in host vars.
 
 ## Adding New Hosts
 

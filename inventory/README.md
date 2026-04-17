@@ -17,16 +17,17 @@ WireGuard, GPU).
 
 | Group | Purpose | Key Variables |
 |-------|---------|---------------|
-| `cap_docker` | Docker runtime, compose, and docker-agents baseline | `install_docker`, `proxmox_lxc_capability_defaults.features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled` |
+| `cap_docker` | Docker runtime, compose, docker-agents baseline, and Hawser Standard remote access | `install_docker`, `proxmox_lxc_capability_defaults.features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled`, `dockhand_hawser_token` |
 | `cap_gpu` | GPU passthrough for hardware acceleration | `enable_gpu_passthrough`, `configure_nvidia_runtime` |
 | `cap_wireguard` | WireGuard kernel support | `enable_wireguard`, `lxc_wireguard_features` |
 
-`cap_docker` defaults:
+`cap_docker` baseline:
 - `docker_agents_enabled: true`
 - `traefik_kop_enabled: true`
+- Hawser Standard runs by default on every non-`portal` Docker host
 
-Portal intentionally opts out of `traefik_kop_enabled` in host_vars because it
-runs Traefik itself.
+`portal` is the exception. It sets `portal_instance: true`, disables `traefik_kop_enabled`,
+and does not run Hawser because it hosts Dockhand and Traefik instead of acting as a remote service host.
 
 ## Current Hosts
 

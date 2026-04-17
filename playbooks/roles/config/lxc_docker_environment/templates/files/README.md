@@ -9,9 +9,9 @@ files/
 ├── dockge/               # Dockge Docker Compose configuration
 │   └── compose.yml       # Copied to /shared/<hostname>/dockge/
 ├── docker-agents/        # Universal managed helper stack templates
-│   ├── compose.yml.j2    # Base: metadata-proxy, dockwatch-socket-proxy, dockwatch
+│   ├── compose.yml.j2    # Base: metadata-proxy, dockwatch-socket-proxy, dockwatch, and Hawser on remote hosts
 │   ├── compose.override.yaml.j2  # Override: traefik-kop (only when traefik_kop_enabled)
-│   └── .env.j2           # Override env: REDISURL/DOMAIN and optional Hawser token
+│   └── .env.j2           # Override env: REDISURL/DOMAIN and Hawser token for remote hosts
 └── stacks/
     └── docker-agents/    # Static assets copied into the managed helper stack
         └── appdata/
@@ -30,7 +30,7 @@ The `docker-agents/` templates are rendered to `/shared/<hostname>/stacks/docker
 
 - `compose.yml.j2` → `compose.yml` — **always** rendered when `docker_agents_enabled` is true.
 - `compose.override.yaml.j2` → `compose.override.yaml` — rendered **only** when `traefik_kop_enabled` is true. Docker Compose automatically merges `compose.override.yaml` with `compose.yml`.
-- `.env.j2` → `.env` — rendered when `traefik_kop_enabled` or `dockhand_hawser_enabled` is true. Contains the Redis URL/domain for traefik-kop and the Hawser Standard token when enabled.
+- `.env.j2` → `.env` — rendered when `traefik_kop_enabled` is true or the host is a non-`portal` Docker host. Contains the Redis URL/domain for traefik-kop and the Hawser Standard token on remote hosts.
 
 Static assets from `stacks/docker-agents/` (like the dockwatch appdata directory) are copied alongside the rendered templates.
 

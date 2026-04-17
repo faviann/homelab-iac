@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test for the Hawser Standard servarr pilot configuration."""
+"""Regression test for the Hawser Standard remote-host default configuration."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "hawser_standard_pilot_test.yml"
+PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "hawser_standard_remote_default_test.yml"
 ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
 
 
@@ -20,7 +20,7 @@ def main() -> int:
         print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="hawser-standard-pilot-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="hawser-standard-remote-default-") as temp_root:
         proc = subprocess.run(
             [str(ANSIBLE_PLAYBOOK), str(PLAYBOOK), "-e", f"temp_root={temp_root}"],
             cwd=REPO_ROOT,
@@ -36,7 +36,7 @@ def main() -> int:
         print(output, file=sys.stderr)
         return 1
 
-    print("ok: Hawser Standard pilot renders correctly and fails closed without a token")
+    print("ok: Hawser renders by default on remote Docker hosts and stays disabled on portal")
     return 0
 
 

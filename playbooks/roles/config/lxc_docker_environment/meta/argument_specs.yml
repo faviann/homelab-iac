@@ -15,10 +15,6 @@ argument_specs:
         type: int
         required: true
         description: Docker service account GID from cap_docker inventory vars.
-      dockhand_hawser_enabled:
-        type: bool
-        required: false
-        description: Enable the temporary Hawser Standard pilot agent inside the managed docker-agents stack.
       dockhand_hawser_stacks_dir:
         type: str
         required: false

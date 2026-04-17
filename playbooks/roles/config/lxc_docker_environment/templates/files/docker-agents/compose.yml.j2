@@ -56,7 +56,7 @@ services:
       - ./appdata/dockwatch:/config
     networks:
       - admin
-{% if dockhand_hawser_enabled | default(false) %}
+{% if lxc_docker_env_hawser_enabled | default(false) %}
   hawser:
     container_name: hawser
     image: ghcr.io/finsys/hawser:latest
