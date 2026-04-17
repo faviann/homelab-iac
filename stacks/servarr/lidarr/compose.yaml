@@ -18,7 +18,6 @@ services:
       - 8686:8686
     labels:
       traefik.enable: true
-      diun.enable: "true"
       homepage.instance.admin.group: Media
       homepage.instance.admin.name: Lidarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}

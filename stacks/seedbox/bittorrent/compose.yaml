@@ -64,7 +64,6 @@ services:
     labels:
       deunhealth.restart.on.unhealthy: true
       traefik.enable: true
-      diun.enable: "true"
     environment:
       - PUID=$PUID
       - PGID=$PGID

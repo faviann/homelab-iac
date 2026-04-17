@@ -45,3 +45,28 @@
       socketPath: /var/run/docker.sock
     status_code: [200, 201, 409]
   when: inventory_hostname not in _dockhand_existing_names
+
+- name: Fetch existing Dockhand notification channels
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3004/api/notifications
+    method: GET
+    return_content: true
+    status_code: 200
+  register: _dockhand_existing_notifications
+
+- name: Configure Discord notification channel
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3004/api/notifications
+    method: POST
+    body_format: json
+    body:
+      type: apprise
+      name: Discord
+      config:
+        urls:
+          - "{{ dockhand_discord_webhook_url | regex_replace('^https://discord\\.com/api/webhooks/', 'discord://') }}"
+    status_code: 200
+  when: >-
+    (_dockhand_existing_notifications.json | default([]))
+    | selectattr('name', 'equalto', 'Discord')
+    | list | length == 0

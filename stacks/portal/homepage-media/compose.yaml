@@ -20,6 +20,5 @@ services:
       - proxy
     labels:
       - traefik.enable=true
-      - diun.enable=true
       - traefik.http.routers.homepage-media.rule=Host(`homepage.media.faviann.com`)
       - traefik.http.routers.homepage-media.middlewares=protected-edge-auth@file

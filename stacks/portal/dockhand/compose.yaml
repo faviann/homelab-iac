@@ -32,4 +32,3 @@ services:
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
       homepage.instance.admin.description: Multi-host Docker control plane
       homepage.instance.admin.icon: mdi-docker
-      diun.enable: true

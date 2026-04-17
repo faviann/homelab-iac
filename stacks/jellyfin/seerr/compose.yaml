@@ -19,7 +19,6 @@ services:
       - ./appdata/seerr/config:/app/config
     labels:
       - traefik.enable=true
-      - diun.enable=true
       - traefik.http.routers.seerr.middlewares=protected-edge-auth@file
       - homepage.group=Media
       - homepage.name=${COMPOSE_PROJECT_NAME}
