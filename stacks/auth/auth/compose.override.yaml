@@ -23,6 +23,7 @@ services:
       - AUTHENTIK_COOKIE_DOMAIN=.faviann.com
     labels:
       - traefik.enable=true
+      - diun.enable=true
       - traefik.docker.network=proxy
   worker:
     environment:

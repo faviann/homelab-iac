@@ -58,12 +58,13 @@ services:
   # Healthcheck was added to work with deunhealth to restart container
   # on unhealthy status. labels allows deunhealth to monitor.
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
+    image: lscr.io/linuxserver/qbittorrent:5.1.4
     container_name: qbittorrent
     restart: unless-stopped
     labels:
       deunhealth.restart.on.unhealthy: true
       traefik.enable: true
+      diun.enable: "true"
     environment:
       - PUID=$PUID
       - PGID=$PGID

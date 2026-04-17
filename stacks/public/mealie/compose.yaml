@@ -29,6 +29,7 @@ services:
       - MAX_WORKERS=${MAX_WORKERS}
     labels:
       - traefik.enable=true
+      - diun.enable=true
       - homepage.group=Home
       - homepage.name=${COMPOSE_PROJECT_NAME}
       - homepage.icon=mealie

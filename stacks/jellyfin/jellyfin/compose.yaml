@@ -6,7 +6,7 @@ x-prereq-dirs:
 services:
   jellyfin:
     container_name: jellyfin
-    image: jellyfin/jellyfin
+    image: jellyfin/jellyfin:10.11.8
     restart: unless-stopped
     user: ${PUID}:${PGID}
     environment:
@@ -23,6 +23,7 @@ services:
       - 8096:8096
     labels:
       - traefik.enable=true
+      - diun.enable=true
       - traefik.http.routers.jellyfin.middlewares=protected-edge-auth@file
       - homepage.group=Media
       - homepage.name=${COMPOSE_PROJECT_NAME}

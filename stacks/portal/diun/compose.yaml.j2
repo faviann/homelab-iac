@@ -1,0 +1,19 @@
+x-prereq-dirs:
+{% for host in groups['cap_docker'] | sort %}
+  - ./appdata/{{ host }}
+{% endfor %}
+
+services:
+{% for host in groups['cap_docker'] | sort %}
+  diun-{{ host }}:
+    image: ghcr.io/crazy-max/diun:4
+    container_name: diun-{{ host }}
+    restart: unless-stopped
+    volumes:
+      - ./appdata/diun.yml:/etc/diun/diun.yml:ro
+      - ./appdata/{{ host }}:/data
+    environment:
+      TZ: ${TZ}
+      DIUN_NOTIF_DISCORD_WEBHOOKURL: ${DIUN_DISCORD_WEBHOOK}
+      DIUN_PROVIDERS_DOCKER_ENDPOINT: "tcp://{{ hostvars[host].proxmox_lxc_overrides.hostname | default(host) }}.{{ lxc_dns_domain }}:{{ homepage_docker_proxy_port }}"
+{% endfor %}

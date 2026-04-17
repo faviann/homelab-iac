@@ -3,7 +3,7 @@ x-prereq-dirs:
 
 services:
   radarr:
-    image: lscr.io/linuxserver/radarr:latest
+    image: lscr.io/linuxserver/radarr:6.1.1
     container_name: radarr
     hostname: radarr
     restart: unless-stopped
@@ -18,6 +18,7 @@ services:
       - 7878:7878
     labels:
       traefik.enable: true
+      diun.enable: "true"
       homepage.instance.admin.group: Media
       homepage.instance.admin.name: Radarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}

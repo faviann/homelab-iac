@@ -3,7 +3,7 @@ x-prereq-dirs:
 
 services:
   seerr:
-    image: ghcr.io/seerr-team/seerr:latest
+    image: ghcr.io/seerr-team/seerr:v3.2.0
     container_name: seerr
     init: true
     restart: unless-stopped
@@ -19,6 +19,7 @@ services:
       - ./appdata/seerr/config:/app/config
     labels:
       - traefik.enable=true
+      - diun.enable=true
       - traefik.http.routers.seerr.middlewares=protected-edge-auth@file
       - homepage.group=Media
       - homepage.name=${COMPOSE_PROJECT_NAME}

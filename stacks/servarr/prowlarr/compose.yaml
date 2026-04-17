@@ -3,7 +3,7 @@ x-prereq-dirs:
 
 services:
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:latest
+    image: lscr.io/linuxserver/prowlarr:2.3.5
     container_name: prowlarr
     hostname: prowlarr
     restart: unless-stopped
@@ -20,6 +20,7 @@ services:
       - 9696:9696
     labels:
       traefik.enable: true
+      diun.enable: "true"
       homepage.instance.admin.group: Media
       homepage.instance.admin.name: Prowlarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}

@@ -9,6 +9,7 @@ services:
       - proxy
     labels:
       - traefik.enable=true
+      - diun.enable=true
       - traefik.http.routers.portal-entry.rule=Host(`faviann.com`)
       - traefik.http.routers.portal-entry.middlewares=protected-edge-auth@file
 networks:

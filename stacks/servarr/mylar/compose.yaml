@@ -18,6 +18,7 @@ services:
       - 8090:8090
     labels:
       traefik.enable: true
+      diun.enable: "true"
       homepage.instance.admin.group: Media
       homepage.instance.admin.name: Mylar
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}

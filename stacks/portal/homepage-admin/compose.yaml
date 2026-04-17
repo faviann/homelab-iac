@@ -5,7 +5,7 @@ networks:
 
 services:
   homepage-admin:
-    image: ghcr.io/gethomepage/homepage:latest
+    image: ghcr.io/gethomepage/homepage:v1.12.3
     container_name: homepage-admin
     ports:
       - 3003:3000
@@ -20,5 +20,6 @@ services:
       - proxy
     labels:
       - traefik.enable=true
+      - diun.enable=true
       - traefik.http.routers.homepage-admin.rule=Host(`homepage.admin.faviann.com`)
       - traefik.http.routers.homepage-admin.middlewares=protected-edge-auth@file

@@ -7,6 +7,7 @@ services:
     container_name: sabnzbd
     labels:
       traefik.enable: true
+      diun.enable: "true"
       homepage.instance.admin.group: Downloads
       homepage.instance.admin.name: SABnzbd
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}

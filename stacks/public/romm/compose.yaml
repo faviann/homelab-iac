@@ -7,7 +7,7 @@ x-prereq-dirs:
 
 services:
   romm:
-    image: rommapp/romm:latest
+    image: rommapp/romm:4.8.1
     container_name: romm
     restart: unless-stopped
     environment:
@@ -41,6 +41,7 @@ services:
         condition: service_healthy
     labels:
       - traefik.enable=true
+      - diun.enable=true
       - traefik.http.services.romm.loadbalancer.server.port=8080
       - homepage.group=Gaming
       - homepage.name=${COMPOSE_PROJECT_NAME}
