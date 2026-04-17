@@ -57,7 +57,6 @@
     memory: "{{ proxmox_lxc_api_spec.memory | default(omit) }}"
     swap: "{{ proxmox_lxc_api_spec.swap | default(omit) }}"
     netif: "{{ proxmox_lxc_api_spec.netif | default(omit) }}"
-    features: "{{ proxmox_lxc_api_spec.features | default(omit) }}"
     unprivileged: "{{ proxmox_lxc_api_spec.unprivileged | default(omit) }}"
     onboot: "{{ proxmox_lxc_api_spec.onboot | default(omit) }}"
     timezone: "{{ proxmox_lxc_api_spec.timezone | default(omit) }}"

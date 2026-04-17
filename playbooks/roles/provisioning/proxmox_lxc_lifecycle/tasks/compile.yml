@@ -3,10 +3,10 @@
   ansible.builtin.include_role:
     name: provisioning/lxc_spec_builder
 
-- name: Derive desired Debian release from compiled spec
+- name: Resolve desired Debian release from compiled contract
   ansible.builtin.set_fact:
-    proxmox_lifecycle_desired_release_candidates: "{{ proxmox_lxc_contract.api_spec.ostemplate | regex_findall('debian-([0-9]+)-') }}"
-    proxmox_lifecycle_desired_release: "{{ (proxmox_lxc_contract.api_spec.ostemplate | regex_findall('debian-([0-9]+)-') | first | default('')) }}"
+    proxmox_lifecycle_desired_release_candidates: "{{ proxmox_lxc_contract.derived_metadata.desired_debian_release_candidates }}"
+    proxmox_lifecycle_desired_release: "{{ proxmox_lxc_contract.derived_metadata.desired_debian_release }}"
 
 - name: Validate desired Debian release can be derived when rebuilds are enabled
   ansible.builtin.assert:

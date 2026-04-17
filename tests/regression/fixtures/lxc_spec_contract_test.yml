@@ -56,10 +56,21 @@
     - name: Assert compiled contract slices exist
       ansible.builtin.assert:
         that:
+          - proxmox_lxc_contract.identity is mapping
           - proxmox_lxc_contract.api_spec is mapping
           - proxmox_lxc_contract.host_config is mapping
           - proxmox_lxc_contract.guest_bootstrap is mapping
+          - proxmox_lxc_contract.derived_metadata is mapping
         fail_msg: "Compiled LXC contract did not expose the expected slices"
+
+    - name: Assert identity and derived metadata are published explicitly
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.identity.vmid == 4201
+          - proxmox_lxc_contract.identity.hostname == 'contract-host'
+          - proxmox_lxc_contract.derived_metadata.desired_debian_release == '12'
+          - proxmox_lxc_contract.derived_metadata.desired_debian_release_candidates == ['12']
+        fail_msg: "Compiled LXC contract did not expose explicit identity or derived metadata"
 
     - name: Assert API slice keeps precedence and tier-derived defaults
       ansible.builtin.assert:

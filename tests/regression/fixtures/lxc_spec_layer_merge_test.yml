@@ -33,41 +33,28 @@
       ansible.builtin.include_role:
         name: provisioning/lxc_spec_builder
 
-    - name: Assert global defaults contribute node and ostemplate
+    - name: Assert identity and API contract preserve precedence and normalization
       ansible.builtin.assert:
         that:
-          - _proxmox_lxc_compiled_spec.node == 'pve-a'
-          - _proxmox_lxc_compiled_spec.ostemplate == 'local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst'
-        fail_msg: "Global defaults did not flow into the compiled spec"
-
-    - name: Assert group defaults contribute cores and normalized disk
-      ansible.builtin.assert:
-        that:
-          - _proxmox_lxc_compiled_spec.cores == 2
-          - _proxmox_lxc_compiled_spec.disk == 'local-lvm:16'
-        fail_msg: "Group defaults did not flow into the compiled spec"
-
-    - name: Assert capability defaults contribute features
-      ansible.builtin.assert:
-        that:
-          - _proxmox_lxc_compiled_spec.features | sort == proxmox_lxc_capability_defaults.features | sort
-        fail_msg: "Capability defaults did not flow into the compiled spec"
-
-    - name: Assert overrides beat group defaults
-      ansible.builtin.assert:
-        that:
-          - _proxmox_lxc_compiled_spec.memory == 8192
-        fail_msg: "Host overrides did not beat group defaults"
-
-    - name: Assert host spec provides highest-precedence hostname
-      ansible.builtin.assert:
-        that:
-          - _proxmox_lxc_compiled_spec.hostname == 'merge-test-host'
-          - _proxmox_lxc_compiled_spec.vmid == 4201
-        fail_msg: "Host-level spec fields did not win precedence"
+          - proxmox_lxc_contract.identity.vmid == 4201
+          - proxmox_lxc_contract.identity.hostname == 'merge-test-host'
+          - proxmox_lxc_contract.api_spec.node == 'pve-a'
+          - proxmox_lxc_contract.api_spec.ostemplate == 'local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst'
+          - proxmox_lxc_contract.api_spec.cores == 2
+          - proxmox_lxc_contract.api_spec.disk == 'local-lvm:16'
+          - proxmox_lxc_contract.api_spec.memory == 8192
+          - proxmox_lxc_contract.api_spec.netif.net0 is search('hwaddr=AA:BB:CC:DD:EE:FF')
+        fail_msg: "Identity or API contract did not preserve layered precedence and normalization"
 
     - name: Assert host-config contract features come from compiled spec
       ansible.builtin.assert:
         that:
           - proxmox_lxc_contract.host_config.features | sort == proxmox_lxc_capability_defaults.features | sort
         fail_msg: "Contract host_config features did not come from the compiled spec"
+
+    - name: Assert derived metadata comes from the desired template
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.derived_metadata.desired_debian_release == '12'
+          - proxmox_lxc_contract.derived_metadata.desired_debian_release_candidates == ['12']
+        fail_msg: "Derived metadata did not come from the desired template"
