@@ -31,6 +31,8 @@
           x-managed-files:
             - path: ./data/certs/secret.json
               mode: "0600"
+            - path: ./data/certs/secret.json
+              mode: "0600"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/testapp/compose.yaml"
 
     - name: Run actual find ops to populate discover registers
@@ -63,14 +65,6 @@
       delegate_to: localhost
       become: false
 
-    - name: Seed remaining state
-      ansible.builtin.set_fact:
-        lxc_docker_env_desired_top_level_stack_dirs: ['testapp']
-        lxc_docker_env_stale_top_level_stack_dirs: []
-        lxc_docker_env_templated_outputs: []
-        lxc_docker_env_source_compose_specs: []
-        lxc_docker_env_prereq_dirs: []
-
     - name: Include materialize
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
 
@@ -94,10 +88,6 @@
         content: "existing-content"
         dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs/secret.json"
 
-    - name: Reset source_compose_specs so materialize re-parses them
-      ansible.builtin.set_fact:
-        lxc_docker_env_source_compose_specs: []
-
     - name: Re-run materialize to verify existing files are not overwritten
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
 
@@ -110,10 +100,12 @@
           - "'existing-content' in (_preserved_content.content | b64decode)"
         fail_msg: "Managed file content was overwritten — force:false not honoured"
 
-    - name: Assert managed file planning was registered
+    - name: Assert planner output deduped managed file entries
       ansible.builtin.assert:
         that:
-          - _stack_sync_managed_files | length == 1
+          - lxc_stack_sync_manifest_plan.managed_files | length == 1
+          - lxc_stack_sync_manifest_plan.managed_file_parent_dirs | length == 1
+          - lxc_stack_sync_manifest_plan.managed_files[0].path == (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/testapp/data/certs/secret.json')
           - _stack_sync_managed_file_parent_dir_results.results | length > 0
           - _stack_sync_managed_file_create_results.results | length > 0
-        fail_msg: "Managed file results were not registered"
+        fail_msg: "Planner output did not register the deduped managed file plan"

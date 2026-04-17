@@ -1,94 +1,17 @@
 ---
-# Materialize: sync source files to deployed location, create prereq dirs and managed files.
+# Materialize: execute the compose manifest plan by syncing stack files and creating planned assets.
 
-- name: Build list of templated per-host output files
-  ansible.builtin.set_fact:
-    lxc_docker_env_templated_outputs: >-
-      {%- set outputs = [] -%}
-      {%- for file in _per_host_j2_files.files | default([]) -%}
-      {%- set _ = outputs.append(file.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '')) -%}
-      {%- endfor -%}
-      {{ outputs }}
-
-- name: Build source compose spec list for per-host stacks
-  ansible.builtin.set_fact:
-    _lxc_docker_env_source_compose_specs_unrendered: >-
-      {%- set specs = [] -%}
-      {%- set compose_names = ['compose.yml', 'compose.yaml', 'compose.override.yml', 'compose.override.yaml'] -%}
-      {%- for file in _per_host_j2_files.files | default([]) -%}
-      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '') -%}
-      {%- if (relative_path | basename) in compose_names -%}
-      {%- set target_path = lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path -%}
-      {%- set _ = specs.append({
-        'source_path': file.path,
-        'relative_path': relative_path,
-        'target_path': target_path,
-        'target_dir': target_path | dirname,
-        'is_templated': true,
-        'stack_name': relative_path.split('/')[0]
-      }) -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {%- for file in _per_host_static_files.files | default([]) -%}
-      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
-      {%- if (relative_path | basename) in compose_names and relative_path not in (lxc_docker_env_templated_outputs | default([])) -%}
-      {%- set target_path = lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path -%}
-      {%- set _ = specs.append({
-        'source_path': file.path,
-        'relative_path': relative_path,
-        'target_path': target_path,
-        'target_dir': target_path | dirname,
-        'is_templated': false,
-        'stack_name': relative_path.split('/')[0]
-      }) -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {{ specs }}
-
-- name: Render source compose manifest entries for prereq dir and managed file discovery
-  ansible.builtin.set_fact:
-    lxc_docker_env_source_compose_specs: >-
-      {{
-        lxc_docker_env_source_compose_specs
-        + [
-            item
-            | combine({
-                'content': (
-                  lookup('template', item.source_path)
-                  if item.is_templated
-                  else lookup('file', item.source_path)
-                )
-              })
-          ]
-      }}
-  vars:
-    stack_name: "{{ item.stack_name }}"
-  loop: "{{ _lxc_docker_env_source_compose_specs_unrendered | default([]) }}"
-  loop_control:
-    label: "{{ item.relative_path }}"
-  when: (_lxc_docker_env_source_compose_specs_unrendered | default([])) | length > 0
-
-- name: Build target per-host stack directory list
-  ansible.builtin.set_fact:
-    _stack_sync_target_stack_dirs: >-
-      {%- set target_dirs = [] -%}
-      {%- for directory in _per_host_dirs.files | default([]) -%}
-      {%- set _ = target_dirs.append(
-        lxc_docker_environment_internal.shared_mount_source
-        ~ '/stacks/'
-        ~ (directory.path | relpath(lxc_docker_environment_internal.stacks_source))
-      ) -%}
-      {%- endfor -%}
-      {{ target_dirs }}
+- name: Plan desired stack materialization inputs
+  ansible.builtin.include_tasks: planner.yml
 
 - name: Check which per-host stack directories already exist
   ansible.builtin.stat:
     path: "{{ item }}"
-  loop: "{{ _stack_sync_target_stack_dirs | default([]) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]) }}"
   loop_control:
     label: "{{ item | relpath(lxc_docker_environment_internal.shared_mount_source ~ '/stacks') }}"
   register: _stack_sync_stack_dir_stats
-  when: (_stack_sync_target_stack_dirs | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([])) | length > 0
 
 - name: Create per-host stack directories
   ansible.builtin.file:
@@ -97,97 +20,68 @@
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
     mode: '0755'
-  loop: "{{ _stack_sync_target_stack_dirs | default([]) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]) }}"
   loop_control:
     label: "{{ item | relpath(lxc_docker_environment_internal.shared_mount_source ~ '/stacks') }}"
   register: _stack_sync_stack_dir_results
-  when: (_stack_sync_target_stack_dirs | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([])) | length > 0
 
 - name: Render templated files (.j2) for per-host stacks
   ansible.builtin.template:
-    src: "{{ item.path }}"
-    dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\\.j2$', '') }}"
+    src: "{{ item.source_path }}"
+    dest: "{{ item.dest_path }}"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
     mode: '0644'
   vars:
-    stack_name: "{{ (item.path | relpath(lxc_docker_environment_internal.stacks_source)).split('/')[0] }}"
-  loop: "{{ _per_host_j2_files.files | default([]) }}"
+    stack_name: "{{ item.stack_name }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.files_to_render | default([]) }}"
   loop_control:
-    label: "{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) }}"
+    label: "{{ item.relative_path }}"
   register: _stack_sync_template_results
 
 - name: Copy static files for per-host stacks
   ansible.builtin.copy:
-    src: "{{ item.path }}"
-    dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) }}"
+    src: "{{ item.source_path }}"
+    dest: "{{ item.dest_path }}"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
     mode: '0644'
-  loop: "{{ _per_host_static_files.files | default([]) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.files_to_copy | default([]) }}"
   loop_control:
-    label: "{{ item.path | relpath(lxc_docker_environment_internal.stacks_source) }}"
+    label: "{{ item.relative_path }}"
   register: _stack_sync_copy_results
-  when: (item.path | relpath(lxc_docker_environment_internal.stacks_source)) not in (lxc_docker_env_templated_outputs | default([]))
-
-- name: Collect prereq dirs from source stack compose files
-  ansible.builtin.set_fact:
-    lxc_docker_env_prereq_dirs: >-
-      {%- set dirs = [] -%}
-      {%- set override_paths = lxc_docker_environment_internal.path_ownership_overrides | default([]) | map(attribute='path') | list -%}
-      {%- for compose_spec in lxc_docker_env_source_compose_specs | default([]) -%}
-      {%- set compose = compose_spec.content | from_yaml -%}
-      {%- if compose is mapping -%}
-      {%- set prereq_dirs = compose.get('x-prereq-dirs', []) -%}
-      {%- if prereq_dirs is sequence and prereq_dirs is not string and prereq_dirs is not mapping -%}
-      {%- for prereq_dir in prereq_dirs -%}
-      {%- if prereq_dir is string -%}
-      {%- if prereq_dir.startswith('./') -%}
-      {%- set resolved_prereq_dir = compose_spec.target_dir + '/' + prereq_dir[2:] -%}
-      {%- else -%}
-      {%- set resolved_prereq_dir = prereq_dir -%}
-      {%- endif -%}
-      {%- if resolved_prereq_dir not in override_paths -%}
-      {%- set _ = dirs.append(resolved_prereq_dir) -%}
-      {%- endif -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {%- endif -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {{ dirs | unique }}
-  when: (lxc_docker_env_source_compose_specs | default([])) | length > 0
 
 - name: Check which stack prereq dirs already exist
   ansible.builtin.stat:
-    path: "{{ item }}"
-  loop: "{{ lxc_docker_env_prereq_dirs | default([]) }}"
+    path: "{{ item.path }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.prereq_dirs | default([]) }}"
   loop_control:
-    label: "{{ item }}"
+    label: "{{ item.path }}"
   register: _stack_sync_prereq_dir_stats
-  when: (lxc_docker_env_prereq_dirs | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.prereq_dirs | default([])) | length > 0
 
 - name: Ensure stack prereq dirs exist
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
-    owner: "{{ lxc_docker_environment_internal.docker_uid }}"
-    group: "{{ lxc_docker_environment_internal.docker_gid }}"
-    mode: '0755'
-  loop: "{{ lxc_docker_env_prereq_dirs | default([]) }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.prereq_dirs | default([]) }}"
   loop_control:
-    label: "{{ item }}"
+    label: "{{ item.path }}"
   register: _stack_sync_prereq_dir_results
-  when: (lxc_docker_env_prereq_dirs | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.prereq_dirs | default([])) | length > 0
 
 - name: Check which ownership override paths already exist
   ansible.builtin.stat:
     path: "{{ item.path }}"
-  loop: "{{ lxc_docker_environment_internal.path_ownership_overrides }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.ownership_overrides | default([]) }}"
   loop_control:
     label: "{{ item.path }}"
   register: _stack_sync_ownership_override_stats
-  when: lxc_docker_environment_internal.path_ownership_overrides | length > 0
+  when: (lxc_stack_sync_manifest_plan.ownership_overrides | default([])) | length > 0
 
 - name: Apply path-specific ownership overrides for stack data
   ansible.builtin.file:
@@ -196,65 +90,20 @@
     owner: "{{ item.owner }}"
     group: "{{ item.group }}"
     recurse: "{{ item.recurse | default(false) }}"
-  loop: "{{ lxc_docker_environment_internal.path_ownership_overrides }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.ownership_overrides | default([]) }}"
   loop_control:
     label: "{{ item.path }}"
   register: _stack_sync_ownership_override_results
-  when: lxc_docker_environment_internal.path_ownership_overrides | length > 0
-
-- name: Collect managed files from source stack compose files
-  ansible.builtin.set_fact:
-    _stack_sync_managed_files: >-
-      {%- set files = [] -%}
-      {%- for compose_spec in lxc_docker_env_source_compose_specs | default([]) -%}
-      {%- set compose = compose_spec.content | from_yaml -%}
-      {%- if compose is mapping -%}
-      {%- set managed_files = compose.get('x-managed-files', []) -%}
-      {%- if managed_files is sequence and managed_files is not string and managed_files is not mapping -%}
-      {%- for entry in managed_files -%}
-      {%- if entry is mapping and entry.path is defined -%}
-      {%- if entry.path.startswith('./') -%}
-      {%- set resolved = compose_spec.target_dir + '/' + entry.path[2:] -%}
-      {%- else -%}
-      {%- set resolved = entry.path -%}
-      {%- endif -%}
-      {%- set _ = files.append({
-        'path': resolved,
-        'owner': entry.owner | default(lxc_docker_environment_internal.shared_owner),
-        'group': entry.group | default(lxc_docker_environment_internal.shared_group),
-        'mode': entry.mode | default('0644')
-      }) -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {%- endif -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {{ files | unique(attribute='path') }}
-  when: (lxc_docker_env_source_compose_specs | default([])) | length > 0
-
-- name: Build managed file parent directory list
-  ansible.builtin.set_fact:
-    _stack_sync_managed_file_parent_dirs: >-
-      {%- set dirs = [] -%}
-      {%- for file in _stack_sync_managed_files | default([]) -%}
-      {%- set _ = dirs.append({
-        'path': file.path | dirname,
-        'owner': file.owner,
-        'group': file.group,
-        'mode': '0755'
-      }) -%}
-      {%- endfor -%}
-      {{ dirs | unique(attribute='path') }}
-  when: (_stack_sync_managed_files | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.ownership_overrides | default([])) | length > 0
 
 - name: Check which managed file parent directories already exist
   ansible.builtin.stat:
     path: "{{ item.path }}"
-  loop: "{{ _stack_sync_managed_file_parent_dirs | default([]) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.managed_file_parent_dirs | default([]) }}"
   loop_control:
     label: "{{ item.path }}"
   register: _stack_sync_managed_file_parent_dir_stats
-  when: (_stack_sync_managed_file_parent_dirs | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.managed_file_parent_dirs | default([])) | length > 0
 
 - name: Ensure managed file parent directories exist
   ansible.builtin.file:
@@ -263,11 +112,11 @@
     owner: "{{ item.owner }}"
     group: "{{ item.group }}"
     mode: "{{ item.mode }}"
-  loop: "{{ _stack_sync_managed_file_parent_dirs | default([]) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.managed_file_parent_dirs | default([]) }}"
   loop_control:
     label: "{{ item.path }}"
   register: _stack_sync_managed_file_parent_dir_results
-  when: (_stack_sync_managed_file_parent_dirs | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.managed_file_parent_dirs | default([])) | length > 0
 
 - name: Create managed files when absent
   ansible.builtin.copy:
@@ -277,11 +126,11 @@
     owner: "{{ item.owner }}"
     group: "{{ item.group }}"
     mode: "{{ item.mode }}"
-  loop: "{{ _stack_sync_managed_files | default([]) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.managed_files | default([]) }}"
   loop_control:
     label: "{{ item.path }}"
   register: _stack_sync_managed_file_create_results
-  when: (_stack_sync_managed_files | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.managed_files | default([])) | length > 0
 
 - name: Ensure managed file permissions are correct
   ansible.builtin.file:
@@ -290,8 +139,8 @@
     owner: "{{ item.owner }}"
     group: "{{ item.group }}"
     mode: "{{ item.mode }}"
-  loop: "{{ _stack_sync_managed_files | default([]) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.managed_files | default([]) }}"
   loop_control:
     label: "{{ item.path }}"
   register: _stack_sync_managed_file_permission_results
-  when: (_stack_sync_managed_files | default([])) | length > 0
+  when: (lxc_stack_sync_manifest_plan.managed_files | default([])) | length > 0

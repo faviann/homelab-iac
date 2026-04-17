@@ -11,7 +11,11 @@
       shared_group: "{{ ansible_user_gid }}"
       docker_uid: "{{ ansible_user_uid }}"
       docker_gid: "{{ ansible_user_gid }}"
-      path_ownership_overrides: []
+      path_ownership_overrides:
+        - path: "{{ temp_root }}/shared/stacks/myapp/data/cache"
+          owner: "{{ ansible_user_uid }}"
+          group: "{{ ansible_user_gid }}"
+          recurse: false
   tasks:
     - name: Create source stack layout
       ansible.builtin.file:
@@ -24,7 +28,14 @@
 
     - name: Create a templated compose file (.j2)
       ansible.builtin.copy:
-        content: "# stack: {{ '{{' }} stack_name {{ '}}' }}\nservices:\n  app:\n    image: myapp:latest\n"
+        content: |
+          # stack: {{ '{{' }} stack_name {{ '}}' }}
+          services:
+            app:
+              image: myapp:latest
+          x-prereq-dirs:
+            - ./data/uploads
+            - ./data/cache
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/compose.yaml.j2"
 
     - name: Create a static config file
@@ -61,14 +72,6 @@
       register: _per_host_dirs
       delegate_to: localhost
       become: false
-
-    - name: Seed remaining discover outputs
-      ansible.builtin.set_fact:
-        lxc_docker_env_desired_top_level_stack_dirs: ['myapp']
-        lxc_docker_env_stale_top_level_stack_dirs: []
-        lxc_docker_env_templated_outputs: []
-        lxc_docker_env_source_compose_specs: []
-        lxc_docker_env_prereq_dirs: []
 
     - name: Include materialize
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
@@ -109,11 +112,14 @@
           - not _j2_source_stat.stat.exists
         fail_msg: "compose.yaml.j2 should not appear at target (it is a template source)"
 
-    - name: Assert materialize outputs were registered
+    - name: Assert planner output captures stack assets and prereq dirs
       ansible.builtin.assert:
         that:
-          - "'myapp/compose.yaml' in (lxc_docker_env_templated_outputs | default([]))"
-          - _stack_sync_stack_dir_results.results | length > 0
-          - _stack_sync_template_results.results | length > 0
-          - _stack_sync_copy_results.results | length > 0
-        fail_msg: "Materialize results were not registered"
+          - "'myapp/compose.yaml' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
+          - lxc_stack_sync_manifest_plan.stack_dirs_to_create | length > 0
+          - lxc_stack_sync_manifest_plan.files_to_render | length == 1
+          - lxc_stack_sync_manifest_plan.files_to_copy | length == 1
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp/data/uploads') in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp/data/cache') not in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+          - lxc_stack_sync_manifest_plan.ownership_overrides | length == 1
+        fail_msg: "Planner output did not capture the expected stack assets and prereq dirs"

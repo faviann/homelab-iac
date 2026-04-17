@@ -16,9 +16,16 @@
     lxc_stack_sync_source_exists: false
     lxc_docker_env_desired_top_level_stack_dirs: []
     lxc_docker_env_stale_top_level_stack_dirs: []
-    lxc_docker_env_templated_outputs: []
-    lxc_docker_env_source_compose_specs: []
-    lxc_docker_env_prereq_dirs: []
+    lxc_stack_sync_manifest_plan:
+      templated_outputs: []
+      source_compose_specs: []
+      stack_dirs_to_create: []
+      files_to_render: []
+      files_to_copy: []
+      prereq_dirs: []
+      ownership_overrides: []
+      managed_files: []
+      managed_file_parent_dirs: []
     lxc_docker_env_deployment_report:
       changed: false
       discovered_stacks: []
