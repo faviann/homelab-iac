@@ -79,16 +79,14 @@
 
 - name: Publish feature reconciliation result
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_result: >-
+    _proxmox_lxc_host_config_component_results: >-
       {{
-        proxmox_lxc_host_config_result
+        _proxmox_lxc_host_config_component_results
         | combine(
             {
-              'components': {
-                'features': {
-                  'changed': (_pct_set_result is changed),
-                  'restart_required': (_pct_set_result is changed)
-                }
+              'features': {
+                'changed': (_pct_set_result is changed),
+                'restart_required': (_pct_set_result is changed)
               }
             },
             recursive=True

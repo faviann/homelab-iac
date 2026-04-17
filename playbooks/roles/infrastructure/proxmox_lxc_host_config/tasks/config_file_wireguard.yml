@@ -15,16 +15,14 @@
 
 - name: Publish WireGuard reconciliation result
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_result: >-
+    _proxmox_lxc_host_config_component_results: >-
       {{
-        proxmox_lxc_host_config_result
+        _proxmox_lxc_host_config_component_results
         | combine(
             {
-              'components': {
-                'wireguard': {
-                  'changed': (_wireguard_result.changed | default(false)),
-                  'restart_required': (_wireguard_result.changed | default(false))
-                }
+              'wireguard': {
+                'changed': (_wireguard_result.changed | default(false)),
+                'restart_required': (_wireguard_result.changed | default(false))
               }
             },
             recursive=True

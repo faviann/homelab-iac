@@ -38,16 +38,14 @@
 
 - name: Publish idmap reconciliation result
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_result: >-
+    _proxmox_lxc_host_config_component_results: >-
       {{
-        proxmox_lxc_host_config_result
+        _proxmox_lxc_host_config_component_results
         | combine(
             {
-              'components': {
-                'idmap': {
-                  'changed': (_current_idmap.stdout != _desired_idmap),
-                  'restart_required': (_current_idmap.stdout != _desired_idmap)
-                }
+              'idmap': {
+                'changed': (_current_idmap.stdout != _desired_idmap),
+                'restart_required': (_current_idmap.stdout != _desired_idmap)
               }
             },
             recursive=True

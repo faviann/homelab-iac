@@ -58,16 +58,14 @@
 
 - name: Publish NVIDIA reconciliation result
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_result: >-
+    _proxmox_lxc_host_config_component_results: >-
       {{
-        proxmox_lxc_host_config_result
+        _proxmox_lxc_host_config_component_results
         | combine(
             {
-              'components': {
-                'nvidia': {
-                  'changed': (_current_nvidia_config.stdout != _desired_nvidia_config),
-                  'restart_required': (_current_nvidia_config.stdout != _desired_nvidia_config)
-                }
+              'nvidia': {
+                'changed': (_current_nvidia_config.stdout != _desired_nvidia_config),
+                'restart_required': (_current_nvidia_config.stdout != _desired_nvidia_config)
               }
             },
             recursive=True
