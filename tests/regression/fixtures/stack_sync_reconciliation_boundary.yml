@@ -1,0 +1,96 @@
+---
+- name: Test stack sync reconciliation boundary
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    docker_agents_enabled: false
+    service_agents_enabled: false
+    lxc_stack_sync_managed_assets:
+      changed_results: []
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      root_docker_conf_path: "{{ temp_root }}/shared"
+      stacks_source: "{{ temp_root }}/stacks-source"
+      stale_stack_quarantine_root: "{{ temp_root }}/shared/stale-stacks"
+      external_networks:
+        - proxy
+      path_ownership_overrides: []
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+      docker_uid: "{{ ansible_user_uid }}"
+      docker_gid: "{{ ansible_user_gid }}"
+  tasks:
+    - name: Create source and deployed stack roots
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app"
+        - "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
+
+    - name: Seed desired stack compose source
+      ansible.builtin.copy:
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/compose.yaml"
+        mode: "0644"
+        content: |
+          services:
+            app:
+              image: myapp:latest
+
+    - name: Seed stale deployed stack compose file
+      ansible.builtin.copy:
+        dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app/compose.yaml"
+        mode: "0644"
+        content: |
+          services:
+            old:
+              image: old:latest
+
+    - name: Place mock docker script on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/docker"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "$*" >> "{{ temp_root }}/docker-calls.log"
+          case "$1 $2" in
+            "compose up")
+              echo "Started" >&2
+              ;;
+            *)
+              ;;
+          esac
+          exit 0
+
+    - name: Include stack sync main with mock docker on PATH
+      block:
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Read docker call log
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/docker-calls.log"
+      register: _docker_log
+
+    - name: Assert final deployment report is populated from the reconciler boundary
+      ansible.builtin.assert:
+        that:
+          - lxc_docker_env_deployment_report.changed
+          - lxc_docker_env_deployment_report.discovered_stacks == ['myapp']
+          - lxc_docker_env_deployment_report.quarantined_stacks == ['stale-app']
+          - lxc_docker_env_deployment_report.created_networks == ['proxy']
+          - lxc_docker_env_deployment_report.started_stacks == ['myapp']
+          - lxc_docker_env_deployment_report.skipped_stacks == []
+        fail_msg: "Final deployment report did not reflect the expected reconciliation outcome"
+
+    - name: Assert docker commands covered quarantine and startup
+      ansible.builtin.assert:
+        that:
+          - "'compose down --remove-orphans' in (_docker_log.content | b64decode)"
+          - "'network create proxy' in (_docker_log.content | b64decode)"
+          - "'compose up -d' in (_docker_log.content | b64decode)"
+        fail_msg: "Expected docker quarantine/start commands were not issued"

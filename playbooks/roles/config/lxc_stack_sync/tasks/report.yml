@@ -1,182 +1,27 @@
 ---
-# Report: publish a stable deployment report from the stack sync phase variables.
+# Report: publish a stable deployment report from the stack reconciliation accumulator.
 
 - name: Publish stack sync deployment report
   ansible.builtin.set_fact:
     lxc_docker_env_deployment_report:
       changed: >-
         {{
-          stack_sync_changed_results
+          (
+            (_lxc_docker_env_reconciliation.managed_assets.changed_results | default([]))
+            + (_lxc_docker_env_reconciliation.materialized.changed_results | default([]))
+            + (_lxc_docker_env_reconciliation.quarantined.changed_results | default([]))
+            + (_lxc_docker_env_reconciliation.started.changed_results | default([]))
+          )
           | selectattr('changed', 'defined')
           | selectattr('changed')
           | list
           | length > 0
         }}
-      discovered_stacks: "{{ lxc_docker_env_desired_top_level_stack_dirs | default([]) }}"
-      created_dirs: >-
-        {{
-          changed_dir_paths
-          | difference(existing_dir_paths)
-        }}
-      updated_dirs: >-
-        {{
-          changed_dir_paths
-          | intersect(existing_dir_paths)
-        }}
-      created_networks: >-
-        {{
-          network_results
-          | selectattr('changed', 'defined')
-          | selectattr('changed')
-          | map(attribute='item')
-          | list
-        }}
-      quarantined_stacks: "{{ lxc_docker_env_stale_top_level_stack_dirs | default([]) }}"
-      started_stacks: >-
-        {{
-          stack_up_results
-          | selectattr('changed', 'defined')
-          | selectattr('changed')
-          | map(attribute='item.path')
-          | map('dirname')
-          | map('basename')
-          | list
-        }}
-      unchanged_stacks: >-
-        {{
-          stack_up_results
-          | rejectattr('skipped', 'defined')
-          | selectattr('changed', 'defined')
-          | rejectattr('changed')
-          | map(attribute='item.path')
-          | map('dirname')
-          | map('basename')
-          | list
-        }}
-      skipped_stacks: >-
-        {{
-          stack_up_results
-          | selectattr('skipped', 'defined')
-          | selectattr('skipped')
-          | map(attribute='item.path')
-          | map('dirname')
-          | map('basename')
-          | list
-        }}
-  vars:
-    managed_assets: "{{ lxc_stack_sync_managed_assets | default({}) }}"
-    quarantine_results: "{{ ((_stack_sync_quarantine_results | default({})).results | default([])) }}"
-    stack_dir_stats: "{{ ((_stack_sync_stack_dir_stats | default({})).results | default([])) }}"
-    stack_dir_results: "{{ ((_stack_sync_stack_dir_results | default({})).results | default([])) }}"
-    template_results: "{{ ((_stack_sync_template_results | default({})).results | default([])) }}"
-    copy_results: "{{ ((_stack_sync_copy_results | default({})).results | default([])) }}"
-    prereq_dir_stats: "{{ ((_stack_sync_prereq_dir_stats | default({})).results | default([])) }}"
-    prereq_dir_results: "{{ ((_stack_sync_prereq_dir_results | default({})).results | default([])) }}"
-    ownership_override_stats: "{{ ((_stack_sync_ownership_override_stats | default({})).results | default([])) }}"
-    ownership_override_results: "{{ ((_stack_sync_ownership_override_results | default({})).results | default([])) }}"
-    managed_file_parent_dir_stats: "{{ ((_stack_sync_managed_file_parent_dir_stats | default({})).results | default([])) }}"
-    managed_file_parent_dir_results: "{{ ((_stack_sync_managed_file_parent_dir_results | default({})).results | default([])) }}"
-    managed_file_create_results: "{{ ((_stack_sync_managed_file_create_results | default({})).results | default([])) }}"
-    managed_file_permission_results: "{{ ((_stack_sync_managed_file_permission_results | default({})).results | default([])) }}"
-    network_results: "{{ ((_stack_sync_network_create | default({})).results | default([])) }}"
-    stack_up_results: "{{ ((_stack_sync_stack_up_results | default({})).results | default([])) }}"
-    stack_sync_changed_results: >-
-      {{
-        (managed_assets.legacy_stack_removals | default([]))
-        + (
-          [managed_assets.legacy_admin_removal]
-          if managed_assets.legacy_admin_removal is defined else []
-        )
-        + (
-          [managed_assets.docker_agents_stack_removal]
-          if managed_assets.docker_agents_stack_removal is defined else []
-        )
-        + (
-          [managed_assets.docker_agents_env]
-          if managed_assets.docker_agents_env is defined else []
-        )
-        + (
-          [managed_assets.docker_agents_env_removal]
-          if managed_assets.docker_agents_env_removal is defined else []
-        )
-        + (
-          [managed_assets.docker_agents_compose]
-          if managed_assets.docker_agents_compose is defined else []
-        )
-        + (
-          [managed_assets.docker_agents_override]
-          if managed_assets.docker_agents_override is defined else []
-        )
-        + (
-          [managed_assets.docker_agents_override_removal]
-          if managed_assets.docker_agents_override_removal is defined else []
-        )
-        + (
-          [managed_assets.docker_agents_assets]
-          if managed_assets.docker_agents_assets is defined else []
-        )
-        + (managed_assets.docs_removal | default([]))
-        + (
-          [managed_assets.ownership_normalization]
-          if managed_assets.ownership_normalization is defined else []
-        )
-        + (
-          [managed_assets.stacks_dir]
-          if managed_assets.stacks_dir is defined else []
-        )
-        + quarantine_results
-        + stack_dir_results
-        + template_results
-        + copy_results
-        + prereq_dir_results
-        + ownership_override_results
-        + managed_file_parent_dir_results
-        + managed_file_create_results
-        + managed_file_permission_results
-        + network_results
-        + stack_up_results
-      }}
-    changed_dir_paths: >-
-      {{
-        (
-          stack_dir_results
-          + prereq_dir_results
-          + ownership_override_results
-          + managed_file_parent_dir_results
-        )
-        | selectattr('changed', 'defined')
-        | selectattr('changed')
-        | map(attribute='path')
-        | list
-      }}
-    existing_dir_paths: >-
-      {{
-        (
-          stack_dir_stats
-          | selectattr('stat.exists', 'defined')
-          | selectattr('stat.exists')
-          | map(attribute='item')
-          | list
-        )
-        + (
-          prereq_dir_stats
-          | selectattr('stat.exists', 'defined')
-          | selectattr('stat.exists')
-          | map(attribute='item')
-          | list
-        )
-        + (
-          ownership_override_stats
-          | selectattr('stat.exists', 'defined')
-          | selectattr('stat.exists')
-          | map(attribute='item.path')
-          | list
-        )
-        + (
-          managed_file_parent_dir_stats
-          | selectattr('stat.exists', 'defined')
-          | selectattr('stat.exists')
-          | map(attribute='item.path')
-          | list
-        )
-      }}
+      discovered_stacks: "{{ _lxc_docker_env_reconciliation.discovered_stacks | default([]) }}"
+      created_dirs: "{{ _lxc_docker_env_reconciliation.materialized.created_dirs | default([]) }}"
+      updated_dirs: "{{ _lxc_docker_env_reconciliation.materialized.updated_dirs | default([]) }}"
+      created_networks: "{{ _lxc_docker_env_reconciliation.started.created_networks | default([]) }}"
+      quarantined_stacks: "{{ _lxc_docker_env_reconciliation.quarantined.stacks | default([]) }}"
+      started_stacks: "{{ _lxc_docker_env_reconciliation.started.started_stacks | default([]) }}"
+      unchanged_stacks: "{{ _lxc_docker_env_reconciliation.started.unchanged_stacks | default([]) }}"
+      skipped_stacks: "{{ _lxc_docker_env_reconciliation.started.skipped_stacks | default([]) }}"

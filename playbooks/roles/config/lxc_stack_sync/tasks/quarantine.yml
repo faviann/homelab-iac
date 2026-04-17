@@ -31,3 +31,26 @@
     label: "{{ item.path | basename }}"
   register: _stack_sync_quarantine_results
   when: (item.path | basename) in lxc_docker_env_stale_top_level_stack_dirs
+
+- name: Publish quarantine slice into stack reconciliation
+  ansible.builtin.set_fact:
+    _lxc_docker_env_reconciliation: >-
+      {{
+        (_lxc_docker_env_reconciliation | default({}))
+        | combine(
+            {
+              'quarantined': {
+                'changed_results': (((_stack_sync_quarantine_results | default({})).results | default([]))),
+                'stacks': (
+                  (((_stack_sync_quarantine_results | default({})).results | default([]))
+                  | selectattr('changed', 'defined')
+                  | selectattr('changed')
+                  | map(attribute='item.path')
+                  | map('basename')
+                  | list)
+                )
+              }
+            },
+            recursive=True
+          )
+      }}

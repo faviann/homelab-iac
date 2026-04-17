@@ -1,2 +1,3 @@
 ---
-lxc_stack_sync_managed_assets: {}
+lxc_stack_sync_managed_assets:
+	changed_results: []

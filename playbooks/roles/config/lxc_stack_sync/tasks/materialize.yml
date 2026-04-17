@@ -144,3 +144,82 @@
     label: "{{ item.path }}"
   register: _stack_sync_managed_file_permission_results
   when: (lxc_stack_sync_manifest_plan.managed_files | default([])) | length > 0
+
+- name: Publish materialization slice into stack reconciliation
+  ansible.builtin.set_fact:
+    _lxc_docker_env_reconciliation: >-
+      {{
+        (_lxc_docker_env_reconciliation | default({}))
+        | combine(
+            {
+              'materialized': {
+                'changed_results': (
+                  ((_stack_sync_stack_dir_results | default({})).results | default([]))
+                  + ((_stack_sync_template_results | default({})).results | default([]))
+                  + ((_stack_sync_copy_results | default({})).results | default([]))
+                  + ((_stack_sync_prereq_dir_results | default({})).results | default([]))
+                  + ((_stack_sync_ownership_override_results | default({})).results | default([]))
+                  + ((_stack_sync_managed_file_parent_dir_results | default({})).results | default([]))
+                  + ((_stack_sync_managed_file_create_results | default({})).results | default([]))
+                  + ((_stack_sync_managed_file_permission_results | default({})).results | default([]))
+                ),
+                'created_dirs': (
+                  changed_dir_paths | difference(existing_dir_paths)
+                ),
+                'updated_dirs': (
+                  changed_dir_paths | intersect(existing_dir_paths)
+                )
+              }
+            },
+            recursive=True
+          )
+      }}
+  vars:
+    stack_dir_stats: "{{ ((_stack_sync_stack_dir_stats | default({})).results | default([])) }}"
+    prereq_dir_stats: "{{ ((_stack_sync_prereq_dir_stats | default({})).results | default([])) }}"
+    ownership_override_stats: "{{ ((_stack_sync_ownership_override_stats | default({})).results | default([])) }}"
+    managed_file_parent_dir_stats: "{{ ((_stack_sync_managed_file_parent_dir_stats | default({})).results | default([])) }}"
+    changed_dir_paths: >-
+      {{
+        (
+          ((_stack_sync_stack_dir_results | default({})).results | default([]))
+          + ((_stack_sync_prereq_dir_results | default({})).results | default([]))
+          + ((_stack_sync_ownership_override_results | default({})).results | default([]))
+          + ((_stack_sync_managed_file_parent_dir_results | default({})).results | default([]))
+        )
+        | selectattr('changed', 'defined')
+        | selectattr('changed')
+        | map(attribute='path')
+        | list
+      }}
+    existing_dir_paths: >-
+      {{
+        (
+          stack_dir_stats
+          | selectattr('stat.exists', 'defined')
+          | selectattr('stat.exists')
+          | map(attribute='item')
+          | list
+        )
+        + (
+          prereq_dir_stats
+          | selectattr('stat.exists', 'defined')
+          | selectattr('stat.exists')
+          | map(attribute='item.path')
+          | list
+        )
+        + (
+          ownership_override_stats
+          | selectattr('stat.exists', 'defined')
+          | selectattr('stat.exists')
+          | map(attribute='item.path')
+          | list
+        )
+        + (
+          managed_file_parent_dir_stats
+          | selectattr('stat.exists', 'defined')
+          | selectattr('stat.exists')
+          | map(attribute='item.path')
+          | list
+        )
+      }}

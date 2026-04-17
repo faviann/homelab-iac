@@ -16,6 +16,25 @@
     lxc_stack_sync_source_exists: false
     lxc_docker_env_desired_top_level_stack_dirs: []
     lxc_docker_env_stale_top_level_stack_dirs: []
+    _lxc_docker_env_reconciliation:
+      source_exists: false
+      discovered_stacks: []
+      stale_stacks: []
+      managed_assets:
+        changed_results: "{{ lxc_stack_sync_managed_assets.changed_results | default([]) }}"
+      materialized:
+        changed_results: []
+        created_dirs: []
+        updated_dirs: []
+      quarantined:
+        changed_results: []
+        stacks: []
+      started:
+        changed_results: []
+        created_networks: []
+        started_stacks: []
+        unchanged_stacks: []
+        skipped_stacks: []
     lxc_stack_sync_manifest_plan:
       templated_outputs: []
       source_compose_specs: []
@@ -166,3 +185,18 @@
         | list
       }}
   when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Publish discovery slice into stack reconciliation
+  ansible.builtin.set_fact:
+    _lxc_docker_env_reconciliation: >-
+      {{
+        (_lxc_docker_env_reconciliation | default({}))
+        | combine(
+            {
+              'source_exists': (lxc_stack_sync_source_exists | default(false)),
+              'discovered_stacks': (lxc_docker_env_desired_top_level_stack_dirs | default([])),
+              'stale_stacks': (lxc_docker_env_stale_top_level_stack_dirs | default([]))
+            },
+            recursive=True
+          )
+      }}

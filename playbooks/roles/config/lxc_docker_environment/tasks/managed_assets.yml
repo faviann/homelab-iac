@@ -209,15 +209,18 @@
 - name: Publish managed asset results for stack sync
   ansible.builtin.set_fact:
     lxc_stack_sync_managed_assets:
-      legacy_stack_removals: "{{ _managed_assets_legacy_stack_removals.results | default([]) }}"
-      legacy_admin_removal: "{{ _managed_assets_legacy_admin_removal | default({}) }}"
-      docker_agents_stack_removal: "{{ _managed_assets_docker_agents_stack_removal | default({}) }}"
-      docker_agents_env: "{{ _template_docker_agents_env_result | default({}) }}"
-      docker_agents_env_removal: "{{ _managed_assets_docker_agents_env_removal | default({}) }}"
-      docker_agents_compose: "{{ _template_docker_agents_compose_result | default({}) }}"
-      docker_agents_override: "{{ _template_docker_agents_override_result | default({}) }}"
-      docker_agents_override_removal: "{{ _managed_assets_docker_agents_override_removal | default({}) }}"
-      docker_agents_assets: "{{ _copy_docker_agents_assets_result | default({}) }}"
-      docs_removal: "{{ _managed_assets_docs_removal.results | default([]) }}"
-      ownership_normalization: "{{ _managed_assets_ownership_normalization | default({}) }}"
-      stacks_dir: "{{ _managed_assets_stacks_dir | default({}) }}"
+      changed_results: >-
+        {{
+          (_managed_assets_legacy_stack_removals.results | default([]))
+          + ([_managed_assets_legacy_admin_removal] if _managed_assets_legacy_admin_removal is defined else [])
+          + ([_managed_assets_docker_agents_stack_removal] if _managed_assets_docker_agents_stack_removal is defined else [])
+          + ([_template_docker_agents_env_result] if _template_docker_agents_env_result is defined else [])
+          + ([_managed_assets_docker_agents_env_removal] if _managed_assets_docker_agents_env_removal is defined else [])
+          + ([_template_docker_agents_compose_result] if _template_docker_agents_compose_result is defined else [])
+          + ([_template_docker_agents_override_result] if _template_docker_agents_override_result is defined else [])
+          + ([_managed_assets_docker_agents_override_removal] if _managed_assets_docker_agents_override_removal is defined else [])
+          + ([_copy_docker_agents_assets_result] if _copy_docker_agents_assets_result is defined else [])
+          + (_managed_assets_docs_removal.results | default([]))
+          + ([_managed_assets_ownership_normalization] if _managed_assets_ownership_normalization is defined else [])
+          + ([_managed_assets_stacks_dir] if _managed_assets_stacks_dir is defined else [])
+        }}

@@ -30,3 +30,56 @@
   register: _stack_sync_stack_up_results
   changed_when: "'Started' in _stack_sync_stack_up_results.stderr or 'Created' in _stack_sync_stack_up_results.stderr"
   when: (item.path | dirname | basename) in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
+
+- name: Publish start slice into stack reconciliation
+  ansible.builtin.set_fact:
+    _lxc_docker_env_reconciliation: >-
+      {{
+        (_lxc_docker_env_reconciliation | default({}))
+        | combine(
+            {
+              'started': {
+                'changed_results': (
+                  (((_stack_sync_network_create | default({})).results | default([])))
+                  + (((_stack_sync_stack_up_results | default({})).results | default([])))
+                ),
+                'created_networks': (
+                  (((_stack_sync_network_create | default({})).results | default([]))
+                  | selectattr('changed', 'defined')
+                  | selectattr('changed')
+                  | map(attribute='item')
+                  | list)
+                ),
+                'started_stacks': (
+                  (((_stack_sync_stack_up_results | default({})).results | default([]))
+                  | selectattr('changed', 'defined')
+                  | selectattr('changed')
+                  | map(attribute='item.path')
+                  | map('dirname')
+                  | map('basename')
+                  | list)
+                ),
+                'unchanged_stacks': (
+                  (((_stack_sync_stack_up_results | default({})).results | default([]))
+                  | rejectattr('skipped', 'defined')
+                  | selectattr('changed', 'defined')
+                  | rejectattr('changed')
+                  | map(attribute='item.path')
+                  | map('dirname')
+                  | map('basename')
+                  | list)
+                ),
+                'skipped_stacks': (
+                  (((_stack_sync_stack_up_results | default({})).results | default([]))
+                  | selectattr('skipped', 'defined')
+                  | selectattr('skipped')
+                  | map(attribute='item.path')
+                  | map('dirname')
+                  | map('basename')
+                  | list)
+                )
+              }
+            },
+            recursive=True
+          )
+      }}
