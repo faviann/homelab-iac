@@ -4,7 +4,6 @@
 
 lxc_hwaddr: "BC:24:11:A1:82:92"
 default_domain: public.faviann.com
-dockhand_hawser_token: "{{ vault_jellyfin_dockhand_hawser_token }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:

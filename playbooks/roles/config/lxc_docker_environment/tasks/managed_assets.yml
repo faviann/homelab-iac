@@ -53,13 +53,11 @@
 - name: Validate Dockhand Hawser variables
   ansible.builtin.assert:
     that:
-      - dockhand_hawser_server_url is defined
-      - dockhand_hawser_server_url | length > 0
       - dockhand_hawser_token is defined
       - dockhand_hawser_token | length > 0
     fail_msg: >-
-      Hawser Edge requires dockhand_hawser_server_url and dockhand_hawser_token to be defined for
-      the host before enabling dockhand_hawser_enabled.
+      Hawser Standard requires dockhand_hawser_token to be defined and non-empty for the host
+      before enabling dockhand_hawser_enabled.
   when: dockhand_hawser_enabled | default(false)
 
 - name: Ensure Docker agents stack directory exists
@@ -95,7 +93,7 @@
 
 - name: Render Docker agents override environment file
   ansible.builtin.template:
-    src: "files/docker-agents/.env.j2"
+    src: "{{ lxc_docker_environment_role_path | default(role_path) }}/templates/files/docker-agents/.env.j2"
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/.env"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
@@ -117,7 +115,7 @@
 
 - name: Render Docker agents base compose template
   ansible.builtin.template:
-    src: "files/docker-agents/compose.yml.j2"
+    src: "{{ lxc_docker_environment_role_path | default(role_path) }}/templates/files/docker-agents/compose.yml.j2"
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/compose.yml"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
@@ -127,7 +125,7 @@
 
 - name: Render Docker agents override compose template
   ansible.builtin.template:
-    src: "files/docker-agents/compose.override.yaml.j2"
+    src: "{{ lxc_docker_environment_role_path | default(role_path) }}/templates/files/docker-agents/compose.override.yaml.j2"
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/compose.override.yaml"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
@@ -146,7 +144,7 @@
 
 - name: Check whether Docker agents static assets exist on the controller
   ansible.builtin.stat:
-    path: "{{ role_path }}/templates/files/stacks/docker-agents"
+    path: "{{ lxc_docker_environment_role_path | default(role_path) }}/templates/files/stacks/docker-agents"
   register: _docker_agents_static_assets
   delegate_to: localhost
   become: false
@@ -154,7 +152,7 @@
 
 - name: Copy Docker agents stack assets to shared directory
   ansible.builtin.copy:
-    src: "templates/files/stacks/docker-agents/"
+    src: "{{ lxc_docker_environment_role_path | default(role_path) }}/templates/files/stacks/docker-agents/"
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"

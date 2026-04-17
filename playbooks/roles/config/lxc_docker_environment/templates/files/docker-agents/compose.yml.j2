@@ -61,15 +61,18 @@ services:
     container_name: hawser
     image: ghcr.io/finsys/hawser:latest
     restart: unless-stopped
+    ports:
+      - 2376:2376
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - {{ dockhand_hawser_stacks_dir }}:{{ dockhand_hawser_stacks_dir }}
     environment:
-      - DOCKER_SOCKET=/var/run/docker.sock
-      - DOCKHAND_SERVER_URL=${DOCKHAND_SERVER_URL}
+      - PORT=2376
+      - BIND_ADDRESS=0.0.0.0
       - TOKEN=${TOKEN}
-      - AGENT_NAME={{ inventory_hostname }}
+      - DOCKER_SOCKET=/var/run/docker.sock
       - STACKS_DIR={{ dockhand_hawser_stacks_dir }}
+      - AGENT_NAME={{ inventory_hostname }}
       - LOG_LEVEL=info
     networks:
       - admin

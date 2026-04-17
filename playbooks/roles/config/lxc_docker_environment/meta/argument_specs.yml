@@ -18,11 +18,7 @@ argument_specs:
       dockhand_hawser_enabled:
         type: bool
         required: false
-        description: Enable the Hawser Edge agent inside the managed docker-agents stack.
-      dockhand_hawser_server_url:
-        type: str
-        required: false
-        description: WebSocket endpoint used by Hawser Edge to connect back to Dockhand.
+        description: Enable the temporary Hawser Standard pilot agent inside the managed docker-agents stack.
       dockhand_hawser_stacks_dir:
         type: str
         required: false
@@ -31,4 +27,4 @@ argument_specs:
         type: str
         required: false
         no_log: true
-        description: Per-host Hawser authentication token sourced from vault.
+        description: Shared Hawser authentication token sourced from vault for the Standard-mode pilot.

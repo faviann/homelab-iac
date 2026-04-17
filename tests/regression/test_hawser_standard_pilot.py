@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Regression test for the Hawser Standard servarr pilot configuration."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "hawser_standard_pilot_test.yml"
+ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
+
+
+def main() -> int:
+    if not ANSIBLE_PLAYBOOK.exists():
+        print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
+        return 1
+
+    with tempfile.TemporaryDirectory(prefix="hawser-standard-pilot-") as temp_root:
+        proc = subprocess.run(
+            [str(ANSIBLE_PLAYBOOK), str(PLAYBOOK), "-e", f"temp_root={temp_root}"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            env=os.environ.copy(),
+        )
+
+    output = f"{proc.stdout}\n{proc.stderr}"
+
+    if proc.returncode != 0:
+        print("playbook failed unexpectedly", file=sys.stderr)
+        print(output, file=sys.stderr)
+        return 1
+
+    print("ok: Hawser Standard pilot renders correctly and fails closed without a token")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

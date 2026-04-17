@@ -25,7 +25,7 @@ docker_gid: 1000
 docker_agents_enabled: true
 traefik_kop_enabled: true
 dockhand_hawser_enabled: false
-dockhand_hawser_server_url: "wss://dockhand.admin.faviann.com/api/hawser/connect"
+dockhand_hawser_token: "{{ vault_dockhand_hawser_token }}"
 dockhand_hawser_stacks_dir: "/conf/docker/dockhand-stacks"
 
 # Homepage Docker discovery proxy

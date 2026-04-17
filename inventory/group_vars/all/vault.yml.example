@@ -55,9 +55,5 @@ vault_public_romm_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
 # Portal Dockhand
 vault_portal_dockhand_encryption_key: "REPLACE_WITH_BASE64_32_BYTE_KEY"
 
-# Dockhand Hawser Edge tokens
-vault_auth_dockhand_hawser_token: "REPLACE_ME"
-vault_jellyfin_dockhand_hawser_token: "REPLACE_ME"
-vault_public_dockhand_hawser_token: "REPLACE_ME"
-vault_seedbox_dockhand_hawser_token: "REPLACE_ME"
-vault_servarr_dockhand_hawser_token: "REPLACE_ME"
+# Dockhand Hawser Standard pilot token
+vault_dockhand_hawser_token: "REPLACE_ME"
