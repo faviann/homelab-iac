@@ -15,9 +15,6 @@ lxc_docker_env_root_docker_conf_path: "/conf/docker"
 lxc_docker_env_shared_owner: "{{ docker_uid }}"
 lxc_docker_env_shared_group: "{{ docker_gid }}"
 
-# Dockge compose directory (relative to mount target)
-lxc_docker_env_dockge_compose_dir: "{{ lxc_docker_env_root_docker_conf_path }}/dockge"
-
 # Managed Docker agents stack
 lxc_docker_env_docker_agents_stack_dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/docker-agents"
 lxc_docker_env_dockhand_hawser_stacks_source_dir: "{{ lxc_docker_env_shared_mount_source }}/dockhand-stacks"

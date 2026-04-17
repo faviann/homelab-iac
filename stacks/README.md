@@ -2,7 +2,7 @@
 
 This directory defines repo-managed Docker Compose stacks, grouped by `inventory_hostname`. The role deploys `stacks/<host>/` to `/conf/docker/stacks/` inside the target container and starts every discovered `compose.yml` / `compose.yaml`.
 
-Manual Dockge stacks are separate and are not managed here.
+This directory is only for repo-managed stacks that Ansible deploys and reconciles.
 
 ## Stack Contract
 
@@ -195,6 +195,5 @@ HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 
 ## Notes
 
-- Dockge is deployed separately and is not part of this directory.
 - The role discovers both `compose.yml` and `compose.yaml`.
 - A host with no folder here is not an error.

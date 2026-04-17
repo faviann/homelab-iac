@@ -89,14 +89,6 @@ http:
       middlewares:
         - sslheader
 
-    dockge:
-      rule: "Host(`dockge.local.faviann.com`)"
-      entryPoints: websecure
-      service: dockge
-      priority: 1000
-      middlewares:
-        - local-ip-restriction
-
   services:
     proxmoxve:
       loadBalancer:
@@ -106,10 +98,6 @@ http:
       loadBalancer:
         servers:
           - url: "http://auth.faviann.vms:9000"
-    dockge:
-      loadBalancer:
-        servers:
-          - url: "http://frontend.faviann.vms:5001"
     noop:
       loadBalancer:
         servers: []

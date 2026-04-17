@@ -209,7 +209,6 @@
 - name: Publish managed asset results for stack sync
   ansible.builtin.set_fact:
     lxc_stack_sync_managed_assets:
-      dockge_copy: "{{ _copy_dockge_result | default({}) }}"
       legacy_stack_removals: "{{ _managed_assets_legacy_stack_removals.results | default([]) }}"
       legacy_admin_removal: "{{ _managed_assets_legacy_admin_removal | default({}) }}"
       docker_agents_stack_removal: "{{ _managed_assets_docker_agents_stack_removal | default({}) }}"

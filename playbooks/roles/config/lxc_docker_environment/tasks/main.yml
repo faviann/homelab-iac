@@ -42,29 +42,50 @@
       docker_agents_stack_dir: "{{ lxc_docker_env_docker_agents_stack_dir }}"
       dockhand_hawser_stacks_source_dir: "{{ lxc_docker_env_dockhand_hawser_stacks_source_dir }}"
       legacy_managed_stacks: "{{ lxc_docker_env_legacy_managed_stacks }}"
-      dockge_compose_dir: "{{ lxc_docker_env_dockge_compose_dir }}"
       docker_user: "{{ docker_user }}"
       docker_uid: "{{ docker_uid }}"
       docker_gid: "{{ docker_gid }}"
+
+- name: Check if Dockge directory exists
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/dockge"
+  register: _dockge_dir_stat
+  tags:
+    - docker_host_setup
+
+- name: Stop Dockge before cleanup
+  ansible.builtin.command:
+    cmd: docker compose down --remove-orphans
+    chdir: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/dockge"
+  become: true
+  become_user: "{{ lxc_docker_environment_internal.docker_user }}"
+  failed_when: false
+  when:
+    - _dockge_dir_stat.stat.exists
+    - _dockge_dir_stat.stat.isdir
+    - not ansible_check_mode
+  tags:
+    - docker_host_setup
+
+- name: Remove Dockge directory from mounted Docker config
+  ansible.builtin.file:
+    path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/dockge"
+    state: absent
+  tags:
+    - docker_host_setup
+
+- name: Remove Dockge directory from shared storage
+  ansible.builtin.file:
+    path: "{{ lxc_docker_environment_internal.shared_mount_source }}/dockge"
+    state: absent
+  tags:
+    - docker_host_setup
 
 - name: Ensure shared mount source directory exists on host
   ansible.builtin.file:
     path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
     state: directory
     mode: '0755'
-  tags:
-    - docker_host_setup
-
-- name: Copy Dockge templates to shared directory
-  ansible.builtin.copy:
-    src: "templates/files/dockge/"
-    dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/dockge/"
-    owner: "{{ lxc_docker_environment_internal.shared_owner }}"
-    group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0644'
-    directory_mode: '0755'
-  register: _copy_dockge_result
-  notify: restart dockge
   tags:
     - docker_host_setup
 
@@ -143,46 +164,6 @@
     create: true
     mode: '0440'
     validate: 'visudo -cf %s'
-  tags:
-    - docker_host_setup
-
-- name: Check if Dockge directory exists
-  ansible.builtin.stat:
-    path: "{{ lxc_docker_environment_internal.dockge_compose_dir }}"
-  register: _dockge_dir_stat
-  tags:
-    - docker_host_setup
-
-- name: Check if Dockge is already running
-  ansible.builtin.command:
-    cmd: docker compose ps -q
-    chdir: "{{ lxc_docker_environment_internal.dockge_compose_dir }}"
-  register: _dockge_status
-  changed_when: false
-  failed_when: false
-  check_mode: false
-  when: _dockge_dir_stat.stat.exists and _dockge_dir_stat.stat.isdir
-  tags:
-    - docker_host_setup
-
-- name: Start Dockge with docker compose
-  ansible.builtin.command:
-    cmd: docker compose up -d
-    chdir: "{{ lxc_docker_environment_internal.dockge_compose_dir }}"
-  become: true
-  become_user: "{{ lxc_docker_environment_internal.docker_user }}"
-  when:
-    - _dockge_dir_stat.stat.exists
-    - _dockge_dir_stat.stat.isdir
-    - (_dockge_status.stdout | default('') | length == 0)
-  register: _dockge_start_result
-  tags:
-    - docker_host_setup
-
-- name: Display Dockge startup result
-  ansible.builtin.debug:
-    msg: "Dockge {{ _dockge_start_result.changed | default(false) | ternary('started', 'already running or not configured') }}"
-  when: _dockge_dir_stat.stat.exists
   tags:
     - docker_host_setup
 

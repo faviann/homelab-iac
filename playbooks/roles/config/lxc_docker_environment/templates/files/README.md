@@ -6,8 +6,6 @@ This directory contains template files and folders that the `lxc_docker_environm
 
 ```
 files/
-├── dockge/               # Dockge Docker Compose configuration
-│   └── compose.yml       # Copied to /shared/<hostname>/dockge/
 ├── docker-agents/        # Universal managed helper stack templates
 │   ├── compose.yml.j2    # Base: metadata-proxy, dockwatch-socket-proxy, dockwatch, and Hawser on remote hosts
 │   ├── compose.override.yaml.j2  # Override: traefik-kop (only when traefik_kop_enabled)
@@ -19,10 +17,6 @@ files/
 ```
 
 ## How It Works
-
-### Dockge
-
-The `dockge/` folder is copied to `/shared/<hostname>/dockge/` and started separately. Dockge provides a web UI for managing stacks and discovers all compose files under `/conf/docker/stacks/`.
 
 ### Docker Agents (Managed Stack)
 

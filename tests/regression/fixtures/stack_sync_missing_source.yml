@@ -19,7 +19,6 @@
       docker_gid: 1000
       docker_user: dockeruser
       docker_agents_stack_dir: "{{ temp_root }}/shared/stacks/docker-agents"
-      dockge_compose_dir: "{{ temp_root }}/shared/dockge"
       legacy_managed_stacks: []
   tasks:
     - name: Create deployed stacks root

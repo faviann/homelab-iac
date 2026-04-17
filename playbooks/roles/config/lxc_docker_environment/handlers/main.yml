@@ -1,9 +1,0 @@
----
-# Handlers for lxc_docker_environment role
-
-- name: Restart Dockge
-  ansible.builtin.shell:
-    cmd: docker compose up -d --force-recreate
-    chdir: "{{ lxc_docker_env_dockge_compose_dir }}"
-  when: lxc_docker_env_dockge_compose_dir is defined
-  listen: restart dockge

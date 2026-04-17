@@ -82,10 +82,7 @@
     stack_up_results: "{{ ((_stack_sync_stack_up_results | default({})).results | default([])) }}"
     stack_sync_changed_results: >-
       {{
-        (
-          [managed_assets.dockge_copy] if managed_assets.dockge_copy is defined else []
-        )
-        + (managed_assets.legacy_stack_removals | default([]))
+        (managed_assets.legacy_stack_removals | default([]))
         + (
           [managed_assets.legacy_admin_removal]
           if managed_assets.legacy_admin_removal is defined else []
