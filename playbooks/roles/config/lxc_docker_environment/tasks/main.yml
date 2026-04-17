@@ -170,3 +170,7 @@
 - name: Reconcile repo-managed stacks
   ansible.builtin.include_role:
     name: config/lxc_stack_sync
+
+- name: Seed Dockhand environments
+  ansible.builtin.include_tasks: dockhand_environments.yml
+  when: portal_instance | default(false)

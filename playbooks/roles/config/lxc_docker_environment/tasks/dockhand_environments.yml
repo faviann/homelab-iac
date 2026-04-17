@@ -1,0 +1,47 @@
+---
+# Seed Dockhand with a Hawser Standard environment entry for each non-portal
+# Docker host. Runs only on portal. Idempotent: 409 = already exists = ok.
+
+- name: Fetch existing Dockhand environments
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3004/api/environments
+    method: GET
+    return_content: true
+    status_code: 200
+  register: _dockhand_existing_envs
+
+- name: Compute remote Hawser host list
+  ansible.builtin.set_fact:
+    _dockhand_hawser_hosts: "{{ groups['cap_docker'] | difference([inventory_hostname]) | list }}"
+
+- name: Compute existing environment names
+  ansible.builtin.set_fact:
+    _dockhand_existing_names: "{{ (_dockhand_existing_envs.json | default([])) | map(attribute='name') | list }}"
+
+- name: Create missing Hawser environments in Dockhand
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3004/api/environments
+    method: POST
+    body_format: json
+    body:
+      name: "{{ item }}"
+      connectionType: hawser-standard
+      host: "{{ item }}.{{ lxc_dns_domain }}"
+      port: 2376
+      protocol: http
+      hawserToken: "{{ dockhand_hawser_token }}"
+    status_code: [200, 201, 409]
+  loop: "{{ _dockhand_hawser_hosts }}"
+  when: item not in _dockhand_existing_names
+
+- name: Create local socket environment for portal itself
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3004/api/environments
+    method: POST
+    body_format: json
+    body:
+      name: "{{ inventory_hostname }}"
+      connectionType: socket
+      socketPath: /var/run/docker.sock
+    status_code: [200, 201, 409]
+  when: inventory_hostname not in _dockhand_existing_names
