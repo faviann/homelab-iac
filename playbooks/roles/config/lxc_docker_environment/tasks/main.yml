@@ -40,6 +40,7 @@
       stacks_source: "{{ lxc_docker_env_stacks_source }}"
       stale_stack_quarantine_root: "{{ lxc_docker_env_stale_stack_quarantine_root }}"
       docker_agents_stack_dir: "{{ lxc_docker_env_docker_agents_stack_dir }}"
+      dockhand_hawser_stacks_source_dir: "{{ lxc_docker_env_dockhand_hawser_stacks_source_dir }}"
       legacy_managed_stacks: "{{ lxc_docker_env_legacy_managed_stacks }}"
       dockge_compose_dir: "{{ lxc_docker_env_dockge_compose_dir }}"
       docker_user: "{{ docker_user }}"

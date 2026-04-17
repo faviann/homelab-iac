@@ -20,6 +20,7 @@ lxc_docker_env_dockge_compose_dir: "{{ lxc_docker_env_root_docker_conf_path }}/d
 
 # Managed Docker agents stack
 lxc_docker_env_docker_agents_stack_dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/docker-agents"
+lxc_docker_env_dockhand_hawser_stacks_source_dir: "{{ lxc_docker_env_shared_mount_source }}/dockhand-stacks"
 
 # Quarantine location for stale managed stacks removed from source control.
 lxc_docker_env_stale_stack_quarantine_root: "{{ lxc_docker_env_shared_mount_source }}/stale-stacks"

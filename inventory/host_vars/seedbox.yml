@@ -15,6 +15,7 @@ seedbox_qbit_password: "{{ vault_seedbox_qbit_password }}"
 seedbox_ws_username: "{{ vault_seedbox_ws_username }}"
 seedbox_ws_password: "{{ vault_seedbox_ws_password }}"
 seedbox_ws_session_cookie: "{{ vault_seedbox_ws_session_cookie }}"
+dockhand_hawser_token: "{{ vault_seedbox_dockhand_hawser_token }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:

@@ -12,4 +12,7 @@ Base services:
 Optional when `traefik_kop_enabled: true`:
 - `traefik-kop`: copies Docker labels into portal's Redis for Traefik routing
 
+Optional when `dockhand_hawser_enabled: true`:
+- `hawser`: outbound agent for Dockhand multi-host management
+
 Set `traefik_kop_enabled: false` on `portal`, because portal runs Traefik itself.

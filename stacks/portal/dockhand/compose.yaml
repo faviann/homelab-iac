@@ -1,0 +1,35 @@
+x-prereq-dirs:
+  - ./appdata/data
+
+networks:
+  proxy:
+    external: true
+
+services:
+  dockhand:
+    image: fnsys/dockhand:v1.0.24
+    container_name: dockhand
+    restart: unless-stopped
+    user: "0:0"
+    ports:
+      - "127.0.0.1:3004:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./appdata/data:/app/data
+    environment:
+      TZ: ${TZ}
+      PUID: ${PUID}
+      PGID: ${PGID}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    networks:
+      - proxy
+    labels:
+      traefik.enable: true
+      traefik.domain: admin.faviann.com
+      traefik.http.routers.dockhand.middlewares: protected-edge-auth@file
+      homepage.instance.admin.group: Infrastructure
+      homepage.instance.admin.name: Dockhand
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Multi-host Docker control plane
+      homepage.instance.admin.icon: mdi-docker
+      diun.enable: true

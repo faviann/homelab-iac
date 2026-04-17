@@ -24,6 +24,9 @@ docker_gid: 1000
 # Universal Docker agents managed stack
 docker_agents_enabled: true
 traefik_kop_enabled: true
+dockhand_hawser_enabled: false
+dockhand_hawser_server_url: "wss://dockhand.admin.faviann.com/api/hawser/connect"
+dockhand_hawser_stacks_dir: "/conf/docker/dockhand-stacks"
 
 # Homepage Docker discovery proxy
 homepage_docker_proxy_port: 2375

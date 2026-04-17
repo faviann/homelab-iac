@@ -15,3 +15,20 @@ argument_specs:
         type: int
         required: true
         description: Docker service account GID from cap_docker inventory vars.
+      dockhand_hawser_enabled:
+        type: bool
+        required: false
+        description: Enable the Hawser Edge agent inside the managed docker-agents stack.
+      dockhand_hawser_server_url:
+        type: str
+        required: false
+        description: WebSocket endpoint used by Hawser Edge to connect back to Dockhand.
+      dockhand_hawser_stacks_dir:
+        type: str
+        required: false
+        description: Host path mirrored into Hawser for Dockhand-managed remote stack files.
+      dockhand_hawser_token:
+        type: str
+        required: false
+        no_log: true
+        description: Per-host Hawser authentication token sourced from vault.

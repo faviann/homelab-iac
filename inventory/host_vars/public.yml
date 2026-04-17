@@ -16,6 +16,7 @@ lxc_docker_env_path_ownership_overrides:
 
 # Mealie stack secrets (resolved from vault)
 public_mealie_smtp_password: "{{ vault_public_mealie_smtp_password }}"
+dockhand_hawser_token: "{{ vault_public_dockhand_hawser_token }}"
 
 # RomM stack secrets (resolved from vault)
 public_romm_db_passwd: "{{ vault_public_romm_db_passwd }}"

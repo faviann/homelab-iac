@@ -4,6 +4,7 @@
 
 default_domain: admin.faviann.com
 lxc_hwaddr: "BC:24:11:77:E5:FC"
+dockhand_hawser_token: "{{ vault_servarr_dockhand_hawser_token }}"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:

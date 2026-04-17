@@ -8,6 +8,7 @@ traefik_kop_enabled: false
 lxc_hwaddr: "BC:24:11:BA:09:16"
 
 portal_diun_discord_webhook: "{{ vault_portal_diun_discord_webhook }}"
+portal_dockhand_encryption_key: "{{ vault_portal_dockhand_encryption_key }}"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:

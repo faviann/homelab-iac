@@ -56,6 +56,24 @@ services:
       - ./appdata/dockwatch:/config
     networks:
       - admin
+{% if dockhand_hawser_enabled | default(false) %}
+  hawser:
+    container_name: hawser
+    image: ghcr.io/finsys/hawser:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - {{ dockhand_hawser_stacks_dir }}:{{ dockhand_hawser_stacks_dir }}
+    environment:
+      - DOCKER_SOCKET=/var/run/docker.sock
+      - DOCKHAND_SERVER_URL=${DOCKHAND_SERVER_URL}
+      - TOKEN=${TOKEN}
+      - AGENT_NAME={{ inventory_hostname }}
+      - STACKS_DIR={{ dockhand_hawser_stacks_dir }}
+      - LOG_LEVEL=info
+    networks:
+      - admin
+{% endif %}
 networks:
   admin:
     driver: bridge
