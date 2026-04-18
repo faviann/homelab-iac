@@ -1,0 +1,27 @@
+x-prereq-dirs:
+  - ./appdata/config
+  - ./appdata/metadata
+
+services:
+  audiobookshelf:
+    image: advplyr/audiobookshelf:2.33.1
+    container_name: audiobookshelf
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      PUID: ${PUID}
+      PGID: ${PGID}
+    volumes:
+      - ./appdata/config:/config
+      - ./appdata/metadata:/metadata
+      - /data/media/audiobooks:/audiobooks:ro
+    ports:
+      - "13378:80"
+    labels:
+      traefik.enable: true
+      traefik.http.services.audiobookshelf.loadbalancer.server.port: 13378
+      homepage.group: Media
+      homepage.name: Audiobookshelf
+      homepage.icon: audiobookshelf
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Audiobook server

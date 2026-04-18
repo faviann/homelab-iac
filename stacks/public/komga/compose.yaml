@@ -1,0 +1,23 @@
+services:
+  komga:
+    image: gotson/komga:1.24.3
+    container_name: komga
+    restart: unless-stopped
+    user: "${PUID}:${PGID}"
+    environment:
+      TZ: ${TZ}
+      PUID: ${PUID}
+      PGID: ${PGID}
+      SERVER_PORT: ${SERVER_PORT}
+    volumes:
+      - ./appdata/config:/config
+      - /data/media/comics:/data:ro
+    ports:
+      - "25600:25600"
+    labels:
+      traefik.enable: true
+      homepage.group: Media
+      homepage.name: Komga
+      homepage.icon: komga
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Comics and manga server

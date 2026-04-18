@@ -1,0 +1,28 @@
+x-prereq-dirs:
+  - ./appdata/config
+  - /ephemeral/calibre-web-automated/ingest
+
+services:
+  calibre-web-automated:
+    image: ghcr.io/crocodilestick/calibre-web-automated:v4.0.6
+    container_name: calibre-web-automated
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      NETWORK_SHARE_MODE: ${NETWORK_SHARE_MODE}
+      CWA_PORT_OVERRIDE: ${CWA_PORT_OVERRIDE}
+    volumes:
+      - ./appdata/config:/config
+      - /ephemeral/calibre-web-automated/ingest:/cwa-book-ingest
+      - /data/media/books:/calibre-library
+    ports:
+      - "8083:8083"
+    labels:
+      traefik.enable: true
+      homepage.group: Media
+      homepage.name: Calibre-Web Automated
+      homepage.icon: calibre-web
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: eBook library
