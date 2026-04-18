@@ -8,6 +8,7 @@ default_domain: faviann.com
 # Notifiarr integration
 auth_notifiarr_webhook_url: "{{ vault_notifiarr_authentik_webhook_url }}"
 auth_discord_approval_webhook_url: "{{ vault_authentik_discord_approval_webhook_url }}"
+auth_navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
 auth_romm_oidc_client_secret: "{{ vault_public_romm_oidc_client_secret }}"
 auth_romm_oidc_signing_certificate_name: "authentik Self-signed Certificate"
 auth_audiobookshelf_oidc_client_secret: "{{ vault_public_audiobookshelf_oidc_client_secret }}"

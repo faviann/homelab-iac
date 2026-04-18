@@ -241,6 +241,19 @@ class OidcBlueprintPlanTests(unittest.TestCase):
         names = [name for name, _ in plan]
         self.assertGreater(names.index("repo-auth-oidc-apps"), names.index("repo-auth-outposts"))
 
+    def test_navidrome_password_change_sync_blueprint_precedes_providers(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertIn("repo-auth-navidrome-password-change-sync", names)
+        self.assertGreater(
+            names.index("repo-auth-navidrome-password-change-sync"),
+            names.index("repo-auth-registration-approval-flow"),
+        )
+        self.assertLess(
+            names.index("repo-auth-navidrome-password-change-sync"),
+            names.index("repo-auth-providers"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

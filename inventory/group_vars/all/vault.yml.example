@@ -48,6 +48,8 @@ vault_seedbox_ws_session_cookie: "REPLACE_WITH_WINDSCRIBE_SESSION_COOKIE"
 
 # Authentik registration approval notifications
 vault_authentik_discord_approval_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
+vault_authentik_reconciler_token: "REPLACE_WITH_AUTHENTIK_RECONCILER_TOKEN"
+vault_navidrome_automation_password: "REPLACE_WITH_NAVIDROME_AUTOMATION_PASSWORD"
 
 # Public RomM OIDC
 vault_public_romm_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"

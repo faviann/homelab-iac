@@ -195,6 +195,121 @@ entries:
       )
       return True
 
+- id: navidrome-registration-sync-policy
+  model: authentik_policies_expression.expressionpolicy
+  state: present
+  identifiers:
+    name: navidrome-registration-sync-policy
+  attrs:
+    name: navidrome-registration-sync-policy
+    expression: |-
+      import json
+      import os
+      from urllib import error as urllib_error
+      from urllib import request as urllib_request
+
+      def _clean(value):
+          return str(value or "").strip()
+
+      def _request_json(method, url, headers, payload=None):
+          data = None
+          request_headers = dict(headers)
+          if payload is not None:
+              request_headers["Content-Type"] = "application/json"
+              data = json.dumps(payload).encode("utf-8")
+
+          req = urllib_request.Request(url, headers=request_headers, data=data, method=method)
+          try:
+              with urllib_request.urlopen(req, timeout=5) as response:
+                  body = response.read()
+          except urllib_error.HTTPError as exc:
+              detail = exc.read().decode("utf-8", errors="replace")
+              raise RuntimeError(f"{method} {url} failed with {exc.code}: {detail}") from exc
+
+          if not body:
+              return None
+          return json.loads(body)
+
+      def _navidrome_headers(base_url, username, password):
+          payload = _request_json(
+              "POST",
+              f"{base_url.rstrip('/')}/auth/login",
+              {},
+              {"username": username, "password": password},
+          )
+          if not isinstance(payload, dict):
+              raise RuntimeError("Unexpected Navidrome /auth/login response shape")
+
+          token = _clean(payload.get("token"))
+          if not token:
+              raise RuntimeError("Navidrome /auth/login did not return a token")
+
+          return {
+              "Accept": "application/json",
+              "X-ND-Authorization": f"Bearer {token}",
+          }
+
+      navidrome_url = _clean(os.environ.get("NAVIDROME_URL")).rstrip("/")
+      admin_user = _clean(os.environ.get("NAVIDROME_ADMIN_USER"))
+      admin_pass = _clean(os.environ.get("NAVIDROME_ADMIN_PASSWORD"))
+
+      if not all([navidrome_url, admin_user, admin_pass]):
+          ak_logger.warning("navidrome-sync: missing env vars, skipping")
+          return True
+
+      prompt_data = request.context.get("prompt_data", {})
+      flow_user = request.context.get("pending_user") or getattr(request, "user", None)
+      username = _clean(prompt_data.get("username") or getattr(flow_user, "username", ""))
+      email = _clean(prompt_data.get("email") or getattr(flow_user, "email", ""))
+      password = _clean(prompt_data.get("password"))
+
+      if not username or not password:
+          ak_logger.warning("navidrome-sync: missing username or password in prompt_data, skipping")
+          return True
+
+      try:
+          headers = _navidrome_headers(navidrome_url, admin_user, admin_pass)
+          users = _request_json(
+              "GET",
+              f"{navidrome_url}/api/user",
+              headers,
+          )
+          existing_user = next((user for user in users if user.get("userName") == username), None)
+
+          if existing_user:
+              payload = {
+                  "userName": username,
+                  "password": password,
+                  "email": email or _clean(existing_user.get("email")),
+                  "isAdmin": bool(existing_user.get("isAdmin", False)),
+              }
+              if "isDisabled" in existing_user:
+                  payload["isDisabled"] = bool(existing_user.get("isDisabled", False))
+              _request_json(
+                  "PUT",
+                  f"{navidrome_url}/api/user/{existing_user['id']}",
+                  headers,
+                  payload,
+              )
+              ak_logger.info(f"navidrome-sync: updated password for {username}")
+          else:
+              _request_json(
+                  "POST",
+                  f"{navidrome_url}/api/user",
+                  headers,
+                  {
+                      "userName": username,
+                      "password": password,
+                      "email": email,
+                      "isAdmin": False,
+                  },
+              )
+              ak_logger.info(f"navidrome-sync: created user {username}")
+      except Exception as exc:
+          ak_logger.error(f"navidrome-sync: failed for {username}: {exc}")
+
+      return True
+
 - id: self-service-registration-details-binding
   model: authentik_flows.flowstagebinding
   state: present
@@ -284,3 +399,19 @@ entries:
     enabled: true
     negate: false
     timeout: 30
+
+# If a future enrollment flow collects a password, bind this policy to that password prompt stage.
+- id: navidrome-registration-sync-binding
+  model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf self-service-registration-user-write-binding
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, navidrome-registration-sync-policy]]
+    order: 0
+  attrs:
+    target: !KeyOf self-service-registration-user-write-binding
+    policy: !Find [authentik_policies_expression.expressionpolicy, [name, navidrome-registration-sync-policy]]
+    order: 0
+    enabled: true
+    negate: false
+    timeout: 10

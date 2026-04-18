@@ -1,0 +1,47 @@
+x-prereq-dirs:
+  - ./appdata/navidrome
+
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    restart: unless-stopped
+    user: "${PUID}:${PGID}"
+    ports:
+      - "4533:4533"
+    environment:
+      TZ: ${TZ}
+      ND_MUSICFOLDER: ${ND_MUSICFOLDER}
+      ND_DATAFOLDER: /data
+      ND_LOGLEVEL: info
+      ND_EXTAUTH_TRUSTEDSOURCES: ${ND_EXTAUTH_TRUSTEDSOURCES}
+      ND_EXTAUTH_USERHEADER: X-authentik-username
+      ND_ENABLEUSEREDITING: "false"
+    volumes:
+      - ./appdata/navidrome:/data
+      - ${MUSIC_LIBRARY_PATH}:${ND_MUSICFOLDER}:ro
+    labels:
+      traefik.enable: true
+      traefik.http.services.music.loadbalancer.server.port: "4533"
+      homepage.group: Media
+      homepage.name: Navidrome
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Music streaming server
+      homepage.icon: navidrome
+
+  reconciler:
+    image: python:3.12-slim
+    container_name: navidrome-reconciler
+    restart: unless-stopped
+    depends_on:
+      - navidrome
+    environment:
+      AUTHENTIK_URL: ${AUTHENTIK_URL}
+      AUTHENTIK_TOKEN: ${AUTHENTIK_TOKEN}
+      NAVIDROME_URL: http://navidrome:4533
+      NAVIDROME_ADMIN_USER: ${NAVIDROME_ADMIN_USER}
+      NAVIDROME_ADMIN_PASSWORD: ${NAVIDROME_ADMIN_PASSWORD}
+      SYNC_INTERVAL_SECONDS: "600"
+    volumes:
+      - ./reconciler:/app:ro
+    command: python /app/reconciler.py

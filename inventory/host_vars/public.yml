@@ -16,6 +16,8 @@ lxc_docker_env_path_ownership_overrides:
 
 # Mealie stack secrets (resolved from vault)
 public_mealie_smtp_password: "{{ vault_public_mealie_smtp_password }}"
+public_authentik_reconciler_token: "{{ vault_authentik_reconciler_token }}"
+public_navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
 
 # RomM stack secrets (resolved from vault)
 public_romm_db_passwd: "{{ vault_public_romm_db_passwd }}"
