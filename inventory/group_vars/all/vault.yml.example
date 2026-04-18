@@ -51,6 +51,9 @@ vault_authentik_discord_approval_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 
 # Public RomM OIDC
 vault_public_romm_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
+vault_public_audiobookshelf_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
+vault_public_komga_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
+vault_public_calibre_web_automated_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
 
 # Portal Dockhand
 vault_portal_dockhand_encryption_key: "REPLACE_WITH_BASE64_32_BYTE_KEY"
