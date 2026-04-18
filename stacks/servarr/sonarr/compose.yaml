@@ -18,7 +18,7 @@ services:
       - 8989:8989
     labels:
       traefik.enable: true
-      homepage.instance.admin.group: Media
+      homepage.instance.admin.group: Arr
       homepage.instance.admin.name: Sonarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
       homepage.instance.admin.description: TV series management

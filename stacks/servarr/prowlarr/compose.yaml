@@ -20,7 +20,7 @@ services:
       - 9696:9696
     labels:
       traefik.enable: true
-      homepage.instance.admin.group: Media
+      homepage.instance.admin.group: Arr
       homepage.instance.admin.name: Prowlarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
       homepage.instance.admin.description: Indexer management
