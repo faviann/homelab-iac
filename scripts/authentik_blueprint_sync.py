@@ -33,6 +33,11 @@ SERVICE_ACCOUNTS_FILE = BLUEPRINT_ROOT / "50-service-accounts.yaml"
 OUTPOSTS_FILE = BLUEPRINT_ROOT / "60-outposts.yaml"
 NOTIFICATIONS_TEMPLATE_FILE = BLUEPRINT_ROOT / "70-notifications.yaml.j2"
 
+OIDC_MANIFEST_FILE = REPO_ROOT / "stacks" / "auth" / "auth" / "appdata" / "authentik" / "oidc-apps.yaml"
+OIDC_BLUEPRINT_FILE = BLUEPRINT_ROOT / "80-oidc-apps.yaml.j2"
+OIDC_BLUEPRINT_DEPLOYED_NAME = "80-oidc-apps.yaml"
+OIDC_BLUEPRINT_INSTANCE_NAME = "repo-auth-oidc-apps"
+
 CUSTOM_BLUEPRINT_FILES = [
     {
         "name": "repo-auth-brand-flows",
@@ -67,6 +72,189 @@ class FindRef:
 @dataclass(frozen=True)
 class KeyOfRef:
     identifier: str
+
+
+def load_oidc_manifest() -> list[dict[str, Any]]:
+    data = yaml.safe_load(OIDC_MANIFEST_FILE.read_text(encoding="utf-8"))
+    return data.get("apps", [])
+
+
+def validate_oidc_manifest(apps: list[dict[str, Any]]) -> None:
+    required_fields = (
+        "name", "slug", "provider_name", "launch_url",
+        "client_id", "client_secret_var", "signing_certificate_var", "redirect_uris",
+    )
+    slugs: set[str] = set()
+    client_ids: set[str] = set()
+    scope_mappings: dict[str, dict[str, Any]] = {}
+    for app in apps:
+        for field in required_fields:
+            if field not in app:
+                raise ValueError(f"App entry missing required field {field!r}: {app!r}")
+        slug = app["slug"]
+        if slug in slugs:
+            raise ValueError(f"Duplicate slug in OIDC manifest: {slug!r}")
+        slugs.add(slug)
+        client_id = app["client_id"]
+        if client_id in client_ids:
+            raise ValueError(f"Duplicate client_id in OIDC manifest: {client_id!r}")
+        client_ids.add(client_id)
+        for uri in app["redirect_uris"]:
+            if not uri.startswith("https://"):
+                raise ValueError(
+                    f"Redirect URI must be absolute https:// in app {slug!r}: {uri!r}"
+                )
+        for mapping in app.get("custom_scope_mappings", []):
+            name = mapping["name"]
+            existing = scope_mappings.get(name)
+            if existing is None:
+                scope_mappings[name] = mapping
+            elif existing != mapping:
+                raise ValueError(
+                    f"Scope mapping name {name!r} appears in multiple apps with conflicting definitions"
+                )
+
+
+def _expr_block(expression: str, indent: int) -> list[str]:
+    pad = " " * indent
+    content_pad = " " * (indent + 2)
+    lines = [f"{pad}expression: |-"]
+    for line in expression.splitlines():
+        lines.append(f"{content_pad}{line}")
+    return lines
+
+
+def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
+    lines = [
+        "version: 1",
+        "metadata:",
+        f"  name: {OIDC_BLUEPRINT_INSTANCE_NAME}",
+        "  labels:",
+        "    blueprints.goauthentik.io/instantiate: 'false'",
+        f"    blueprints.goauthentik.io/description: {DESCRIPTION_LABEL}",
+        "entries:",
+    ]
+
+    seen_scope_mappings: dict[str, dict[str, Any]] = {}
+    ordered_scope_names: list[str] = []
+    for app in apps:
+        for mapping in app.get("custom_scope_mappings", []):
+            name = mapping["name"]
+            if name not in seen_scope_mappings:
+                seen_scope_mappings[name] = mapping
+                ordered_scope_names.append(name)
+
+    scope_id_for_name: dict[str, str] = {
+        name: f"scope-{slugify(name)}" for name in ordered_scope_names
+    }
+
+    for name in ordered_scope_names:
+        mapping = seen_scope_mappings[name]
+        scope_id = scope_id_for_name[name]
+        lines += [
+            f"- id: {scope_id}",
+            "  model: authentik_providers_oauth2.scopemapping",
+            "  state: present",
+            "  identifiers:",
+            f"    name: {name}",
+            "  attrs:",
+            f"    name: {name}",
+            f"    scope_name: {mapping['scope_name']}",
+        ]
+        if mapping.get("description"):
+            lines.append(f"    description: {mapping['description']}")
+        lines += _expr_block(mapping["expression"], 4)
+        lines.append("")
+
+    for app in apps:
+        slug = app["slug"]
+        provider_id = f"provider-{slug}"
+        app_id = f"app-{slug}"
+        secret_var = app["client_secret_var"]
+        cert_var = app["signing_certificate_var"]
+        policy = app.get("policy", "always-allow")
+        sub_mode = app.get("sub_mode", "user_email")
+        issuer_mode = app.get("issuer_mode", "global")
+
+        lines += [
+            f"- id: {provider_id}",
+            "  model: authentik_providers_oauth2.oauth2provider",
+            "  state: present",
+            "  identifiers:",
+            f"    name: {app['provider_name']}",
+            "  attrs:",
+            f"    name: {app['provider_name']}",
+            "    authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]",
+            "    invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]",
+            "    property_mappings:",
+            "    - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]",
+            "    - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]",
+        ]
+        for mapping in app.get("custom_scope_mappings", []):
+            scope_id = scope_id_for_name[mapping["name"]]
+            lines.append(f"    - !KeyOf {scope_id}")
+        lines += [
+            "    client_type: confidential",
+            f"    client_id: {app['client_id']}",
+            f"    client_secret: \"{{{{ {secret_var} | replace('$', '$$') }}}}\"",
+            "    access_code_validity: minutes=1",
+            "    access_token_validity: hours=24",
+            "    refresh_token_validity: days=30",
+            "    include_claims_in_id_token: true",
+            f"    signing_key: !Find [authentik_crypto.certificatekeypair, [name, {{{{ {cert_var} | tojson }}}}]]",
+            "    redirect_uris:",
+        ]
+        for uri in app["redirect_uris"]:
+            lines += [
+                "    - matching_mode: strict",
+                f"      url: {uri}",
+            ]
+        lines += [
+            f"    sub_mode: {sub_mode}",
+            f"    issuer_mode: {issuer_mode}",
+            "",
+            f"- id: {app_id}",
+            "  model: authentik_core.application",
+            "  state: present",
+            "  identifiers:",
+            f"    slug: {slug}",
+            "  attrs:",
+            f"    name: {app['name']}",
+            f"    slug: {slug}",
+            f"    provider: !KeyOf {provider_id}",
+            "    policy_engine_mode: any",
+            f"    launch_url: {app['launch_url']}",
+            "    open_in_new_tab: false",
+            "    meta_launch_url: ''",
+            "    meta_publisher: ''",
+            "    meta_description: ''",
+            "",
+            "- model: authentik_policies.policybinding",
+            "  state: present",
+            "  identifiers:",
+            f"    target: !KeyOf {app_id}",
+            "    order: 0",
+            "  attrs:",
+            f"    target: !KeyOf {app_id}",
+            "    order: 0",
+            "    enabled: true",
+            "    negate: false",
+            "    failure_result: false",
+            "    timeout: 30",
+            f"    policy: !Find [authentik_policies_expression.expressionpolicy, [name, {policy}]]",
+            "",
+        ]
+
+    return "\n".join(lines) + "\n"
+
+
+def generate_oidc_blueprint_file() -> Path:
+    apps = load_oidc_manifest()
+    validate_oidc_manifest(apps)
+    content = generate_oidc_blueprint_content(apps)
+    OIDC_BLUEPRINT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    OIDC_BLUEPRINT_FILE.write_text(content, encoding="utf-8")
+    return OIDC_BLUEPRINT_FILE
 
 
 class BlueprintDumper(yaml.SafeDumper):
@@ -445,6 +633,8 @@ def build_applications_blueprint(state: dict[str, Any]) -> dict[str, Any]:
 
     entries: list[dict[str, Any]] = []
     for application in sorted(state["applications"], key=lambda item: item["slug"]):
+        if application["provider"] not in providers_by_pk:
+            continue  # Skip manifest-managed OIDC apps (OAuth2 providers not in export scope)
         provider = providers_by_pk[application["provider"]]
         app_id = f"app-{application['slug']}"
         attrs = {
@@ -610,6 +800,7 @@ def blueprint_plan(flow_slugs: list[str]) -> list[tuple[str, str]]:
             ("repo-auth-applications", "40-applications.yaml"),
             ("repo-auth-service-accounts", "50-service-accounts.yaml"),
             ("repo-auth-outposts", "60-outposts.yaml"),
+            (OIDC_BLUEPRINT_INSTANCE_NAME, OIDC_BLUEPRINT_DEPLOYED_NAME),
         ]
     )
     return steps
@@ -619,6 +810,7 @@ def export_blueprints(client: AuthentikClient) -> dict[str, Any]:
     state = collect_state(client)
     flow_slugs = flow_slug_set(state)
 
+    generate_oidc_blueprint_file()
     write_yaml(GROUPS_FILE, build_groups_blueprint(state))
     flow_paths = export_flow_blueprints(client, flow_slugs)
     clean_stale_flow_files(set(flow_paths))
@@ -637,6 +829,7 @@ def export_blueprints(client: AuthentikClient) -> dict[str, Any]:
             str(APPLICATIONS_FILE.relative_to(REPO_ROOT)),
             str(SERVICE_ACCOUNTS_FILE.relative_to(REPO_ROOT)),
             str(OUTPOSTS_FILE.relative_to(REPO_ROOT)),
+            str(OIDC_BLUEPRINT_FILE.relative_to(REPO_ROOT)),
         ],
     }
 
@@ -756,6 +949,7 @@ def main() -> int:
     if args.command == "export":
         result = export_blueprints(client)
     else:
+        generate_oidc_blueprint_file()
         state = collect_state(client)
         result = reconcile_blueprint_instances(client, flow_slug_set(state))
 
