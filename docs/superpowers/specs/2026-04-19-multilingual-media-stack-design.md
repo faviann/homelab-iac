@@ -53,8 +53,10 @@ Rules evaluated most-specific-first:
 | Animation genre + `ko\|ja\|zh` | Radarr anime / Sonarr anime |
 | `original_language = fr` | `movies/fr` or `tv/fr` |
 | `original_language = ko\|ja\|zh` | `movies/foreign` or `tv/asian` |
-| `original_language ≠ en\|fr\|es` | `movies/foreign` or `tv/foreign` |
-| default | `movies/en` or `tv/en` |
+| `original_language = en` | `movies/en` or `tv/en` |
+| default service (no rule match) | `movies/foreign` or `tv/foreign` |
+
+Setting the default service to Foreign acts as a catch-all — Italian, German, Portuguese, and any other unspecified language routes there automatically without listing every language code.
 
 Sister's account: restricted to French service profiles only — she cannot accidentally route to the wrong library.
 
