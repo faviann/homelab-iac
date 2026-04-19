@@ -58,6 +58,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 |---------|---------|
 | `ansible-playbook site.yml` | Full lifecycle — deploy/update all LXCs |
 | `ansible-playbook site.yml --limit <host>` | Target one host |
+| `ansible-playbook site.yml --limit <host> -e stack_filter=<stack>` | Deploy one stack on a host (skips all others) |
 | `ansible-playbook site.yml --check` | Dry run |
 | `ansible-playbook bootstrap.yml` | Recreate venv + SSH keys after clean install |
 | `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
