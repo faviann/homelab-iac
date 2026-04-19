@@ -214,6 +214,31 @@
     lxc_docker_env_stale_top_level_stack_dirs: []
   when: stack_filter is defined
 
+- name: Scope per-host find results to stack_filter
+  ansible.builtin.set_fact:
+    _per_host_j2_files:
+      files: >-
+        {{
+          _per_host_j2_files.files | default([])
+          | selectattr('path', 'search', '/' ~ stack_filter ~ '/')
+          | list
+        }}
+    _per_host_static_files:
+      files: >-
+        {{
+          _per_host_static_files.files | default([])
+          | selectattr('path', 'search', '/' ~ stack_filter ~ '/')
+          | list
+        }}
+    _per_host_dirs:
+      files: >-
+        {{
+          _per_host_dirs.files | default([])
+          | selectattr('path', 'search', '/' ~ stack_filter ~ '/')
+          | list
+        }}
+  when: stack_filter is defined
+
 - name: Publish discovery slice into stack reconciliation
   ansible.builtin.set_fact:
     _lxc_docker_env_reconciliation: >-
