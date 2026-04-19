@@ -119,6 +119,13 @@
   vars:
     target_dirs: >-
       {%- set planned_dirs = [] -%}
+      {%- for stack_name in lxc_docker_env_desired_top_level_stack_dirs | default([]) -%}
+      {%- set _ = planned_dirs.append(
+        lxc_docker_environment_internal.shared_mount_source
+        ~ '/stacks/'
+        ~ stack_name
+      ) -%}
+      {%- endfor -%}
       {%- for directory in _per_host_dirs.files | default([]) -%}
       {%- set _ = planned_dirs.append(
         lxc_docker_environment_internal.shared_mount_source
@@ -126,7 +133,7 @@
         ~ (directory.path | relpath(lxc_docker_environment_internal.stacks_source))
       ) -%}
       {%- endfor -%}
-      {{ planned_dirs }}
+      {{ planned_dirs | unique }}
 
 - name: Build planner file render and copy lists
   ansible.builtin.set_fact:

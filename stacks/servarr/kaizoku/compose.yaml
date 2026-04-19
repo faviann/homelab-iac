@@ -1,0 +1,33 @@
+x-prereq-dirs:
+  - ./appdata/config
+  - /data/media/manga
+
+services:
+  kaizoku-net:
+    image: maxpiva/kaizoku-net:2.0
+    container_name: kaizoku-net
+    restart: unless-stopped
+    environment:
+      UID: ${PUID}
+      PGID: ${PGID}
+      UMASK: ${UMASK}
+      TZ: ${TZ}
+    volumes:
+      - ./appdata/config:/config
+      - /data/media/manga:/series
+    ports:
+      - 9833:9833
+    labels:
+      traefik.enable: true
+      homepage.instance.admin.group: Arr
+      homepage.instance.admin.name: Kaizoku.NET
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Manga and series download manager
+      homepage.instance.admin.icon: mdi-book-open-page-variant
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

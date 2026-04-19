@@ -14,6 +14,7 @@ auth_romm_oidc_signing_certificate_name: "authentik Self-signed Certificate"
 auth_audiobookshelf_oidc_client_secret: "{{ vault_public_audiobookshelf_oidc_client_secret }}"
 auth_komga_oidc_client_secret: "{{ vault_public_komga_oidc_client_secret }}"
 auth_calibre_web_automated_oidc_client_secret: "{{ vault_public_calibre_web_automated_oidc_client_secret }}"
+auth_readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret | default('REPLACE_ME', true) }}"
 auth_public_oidc_signing_certificate_name: "authentik Self-signed Certificate"
 
 # External Docker networks required by compose stacks

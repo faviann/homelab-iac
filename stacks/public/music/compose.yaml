@@ -22,6 +22,11 @@ services:
       - ${MUSIC_LIBRARY_PATH}:${ND_MUSICFOLDER}:ro
     labels:
       traefik.enable: true
+      traefik.http.routers.music-public.rule: Host(`music.public.faviann.com`)
+      traefik.http.routers.music-public.service: music
+      traefik.http.routers.music-browser.rule: Host(`music.media.faviann.com`)
+      traefik.http.routers.music-browser.middlewares: protected-edge-auth@file
+      traefik.http.routers.music-browser.service: music
       traefik.http.services.music.loadbalancer.server.port: "4533"
       homepage.group: Media
       homepage.name: Navidrome

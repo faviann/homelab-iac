@@ -9,6 +9,7 @@ default_domain: public.faviann.com
 proxmox_lxc_overrides:
   vmid: 304
   hostname: jellyfin
+  disk: "16"
   description: "Jellyfin media server"
   tags:
     - ansible

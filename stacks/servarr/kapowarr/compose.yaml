@@ -1,0 +1,34 @@
+x-prereq-dirs:
+  - ./appdata/db
+  - /ephemeral/kapowarr/downloads
+
+services:
+  kapowarr:
+    image: mrcas/kapowarr:v1.3.1
+    container_name: kapowarr
+    hostname: kapowarr
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    volumes:
+      - ./appdata/db:/app/db
+      - /ephemeral/kapowarr/downloads:/app/temp_downloads
+      - /data/media/comics:/comics
+    ports:
+      - 5656:5656
+    labels:
+      traefik.enable: true
+      homepage.instance.admin.group: Arr
+      homepage.instance.admin.name: Kapowarr
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Comic library management
+      homepage.instance.admin.icon: kapowarr
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

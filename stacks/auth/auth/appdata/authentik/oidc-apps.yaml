@@ -84,3 +84,24 @@ apps:
     policy: always-allow
     sub_mode: user_email
     issuer_mode: global
+
+  - name: ReadMeABook
+    slug: readmeabook-public
+    provider_name: readmeabook-public-oidc
+    launch_url: https://readmeabook.public.faviann.com
+    client_id: readmeabook-public
+    client_secret_var: auth_readmeabook_oidc_client_secret
+    signing_certificate_var: auth_public_oidc_signing_certificate_name
+    redirect_uris:
+      - https://readmeabook.public.faviann.com/api/auth/oidc/callback
+    custom_scope_mappings:
+      - name: Reading Apps Email Verification
+        scope_name: email
+        expression: |-
+          return {
+              "email": user.email,
+              "email_verified": True,
+          }
+    policy: always-allow
+    sub_mode: user_email
+    issuer_mode: global

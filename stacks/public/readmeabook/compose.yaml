@@ -1,0 +1,47 @@
+x-prereq-dirs:
+  - ./appdata/config
+  - ./appdata/pgdata
+  - ./appdata/redis
+  - /ephemeral/readmeabook/cache
+  - /data/downloads/readmeabook
+
+services:
+  readmeabook:
+    image: ghcr.io/kikootwo/readmeabook:1.1.7
+    container_name: readmeabook
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      UMASK: ${UMASK}
+      LOG_LEVEL: ${LOG_LEVEL}
+      PUBLIC_URL: https://${HOMEPAGE_FQDN}
+      SETUP_CHECK_BASE_URL: http://127.0.0.1:3030
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./appdata/config:/app/config
+      - /ephemeral/readmeabook/cache:/app/cache
+      - /data/downloads/readmeabook:/downloads
+      - /data/media/audiobooks:/media
+      - ./appdata/pgdata:/var/lib/postgresql/data
+      - ./appdata/redis:/var/lib/redis
+    ports:
+      - "3030:3030"
+    labels:
+      traefik.enable: true
+      traefik.http.services.readmeabook.loadbalancer.server.port: "3030"
+      homepage.group: Media
+      homepage.name: ReadMeABook
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Audiobook request and automation engine
+      homepage.icon: mdi-book-music
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true

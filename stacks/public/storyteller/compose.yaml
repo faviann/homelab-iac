@@ -1,0 +1,28 @@
+x-prereq-dirs:
+  - ./appdata/data
+
+services:
+  storyteller:
+    image: registry.gitlab.com/storyteller-platform/storyteller:web-v2.11.13
+    container_name: storyteller
+    restart: unless-stopped
+    environment:
+      STORYTELLER_SECRET_KEY: ${STORYTELLER_SECRET_KEY}
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./appdata/data:/data
+    networks:
+      - proxy
+    labels:
+      traefik.enable: true
+      traefik.http.services.storyteller.loadbalancer.server.port: "8001"
+      homepage.group: Media
+      homepage.name: Storyteller
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Audiobook and ebook platform
+      homepage.icon: storyteller
+
+networks:
+  proxy:
+    external: true

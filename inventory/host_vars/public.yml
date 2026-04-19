@@ -13,11 +13,18 @@ lxc_docker_env_path_ownership_overrides:
     owner: '999'
     group: '999'
     recurse: true
+  - path: "/shared/{{ inventory_hostname }}/stacks/readmeabook/appdata/pgdata"
+    owner: '103'
+    group: '103'
+    recurse: true
 
 # Mealie stack secrets (resolved from vault)
 public_mealie_smtp_password: "{{ vault_public_mealie_smtp_password }}"
 public_authentik_reconciler_token: "{{ vault_authentik_reconciler_token }}"
 public_navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
+
+# Storyteller stack secrets (resolved from vault)
+public_storyteller_secret_key: "{{ vault_public_storyteller_secret_key }}"
 
 # RomM stack secrets (resolved from vault)
 public_romm_db_passwd: "{{ vault_public_romm_db_passwd }}"
@@ -29,10 +36,17 @@ public_romm_igdb_client_secret: "{{ vault_public_romm_igdb_client_secret }}"
 public_romm_retroachievements_api_key: "{{ vault_public_romm_retroachievements_api_key }}"
 public_romm_steamgriddb_api_key: "{{ vault_public_romm_steamgriddb_api_key }}"
 
+# ReadMeABook stack secrets (resolved from vault)
+public_readmeabook_jwt_secret: "{{ vault_public_readmeabook_jwt_secret | default('REPLACE_ME', true) }}"
+public_readmeabook_jwt_refresh_secret: "{{ vault_public_readmeabook_jwt_refresh_secret | default('REPLACE_ME', true) }}"
+public_readmeabook_config_encryption_key: "{{ vault_public_readmeabook_config_encryption_key | default('REPLACE_ME', true) }}"
+public_readmeabook_postgres_password: "{{ vault_public_readmeabook_postgres_password | default('REPLACE_ME', true) }}"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 305
   hostname: public
+  disk: "16"
   description: "Public service managed via Ansible"
   tags:
     - ansible
