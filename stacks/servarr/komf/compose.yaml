@@ -1,0 +1,21 @@
+services:
+  komf:
+    image: sndxr/komf:latest
+    container_name: komf
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./appdata/config:/config
+    environment:
+      KOMF_KOMGA_BASE_URI: ${KOMF_KOMGA_BASE_URI}
+      KOMF_KOMGA_USER: ${KOMF_KOMGA_USER}
+      KOMF_KOMGA_PASSWORD: ${KOMF_KOMGA_PASSWORD}
+      JAVA_TOOL_OPTIONS: "-XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=compact -XX:ShenandoahGuaranteedGCInterval=3600000 -XX:TrimNativeHeapInterval=3600000"
+    labels:
+      homepage.instance.admin.group: Media Management
+      homepage.instance.admin.name: Komf
+      homepage.instance.admin.href: http://servarr.faviann.vms:8085
+      homepage.instance.admin.description: Komga metadata fetcher
+      homepage.instance.admin.icon: komf

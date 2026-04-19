@@ -1,0 +1,28 @@
+komga:
+  baseUri: ""
+  komgaUser: ""
+  komgaPassword: ""
+  eventListener:
+    enabled: true
+    metadataLibraryFilter: []
+    notificationsLibraryFilter: []
+
+kavita:
+  eventListener:
+    enabled: false
+
+database:
+  file: /config/database.sqlite
+
+metadataProviders:
+  nameMatchingMode: CLOSEST_MATCH
+  defaultProviders:
+    mangaUpdates:
+      priority: 10
+      enabled: true
+      mediaType: MANGA
+
+server:
+  port: 8085
+
+logLevel: INFO
