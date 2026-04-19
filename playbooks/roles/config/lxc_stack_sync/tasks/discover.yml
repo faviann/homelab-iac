@@ -186,9 +186,19 @@
       }}
   when: _per_host_stacks_dir.stat.exists | default(false)
 
+- name: Fail when stack_filter is used but stacks source is absent
+  ansible.builtin.assert:
+    that: lxc_stack_sync_source_exists | bool
+    fail_msg: >-
+      stack_filter '{{ stack_filter }}' was requested but the per-host stacks source
+      directory does not exist at {{ lxc_docker_environment_internal.stacks_source }}.
+  when: stack_filter is defined
+
 - name: Assert stack_filter names a known stack
   ansible.builtin.assert:
-    that: stack_filter in lxc_docker_env_desired_top_level_stack_dirs
+    that:
+      - stack_filter | length > 0
+      - stack_filter in lxc_docker_env_desired_top_level_stack_dirs
     fail_msg: >-
       stack_filter '{{ stack_filter }}' not found. Known stacks:
       {{ lxc_docker_env_desired_top_level_stack_dirs | join(', ') }}
