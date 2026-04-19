@@ -186,6 +186,24 @@
       }}
   when: _per_host_stacks_dir.stat.exists | default(false)
 
+- name: Assert stack_filter names a known stack
+  ansible.builtin.assert:
+    that: stack_filter in lxc_docker_env_desired_top_level_stack_dirs
+    fail_msg: >-
+      stack_filter '{{ stack_filter }}' not found. Known stacks:
+      {{ lxc_docker_env_desired_top_level_stack_dirs | join(', ') }}
+  when: stack_filter is defined
+
+- name: Scope desired stacks to stack_filter
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: "{{ [stack_filter] }}"
+  when: stack_filter is defined
+
+- name: Suppress stale stack list when stack_filter is active
+  ansible.builtin.set_fact:
+    lxc_docker_env_stale_top_level_stack_dirs: []
+  when: stack_filter is defined
+
 - name: Publish discovery slice into stack reconciliation
   ansible.builtin.set_fact:
     _lxc_docker_env_reconciliation: >-
