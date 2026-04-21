@@ -18,8 +18,16 @@ services:
       - 5454:5454
     labels:
       traefik.enable: true
+      traefik.http.routers.notifiarr.middlewares: protected-edge-auth@file
       homepage.instance.admin.group: Operations
       homepage.instance.admin.name: Notifiarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
       homepage.instance.admin.description: Notification and automation companion
       homepage.instance.admin.icon: notifiarr
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

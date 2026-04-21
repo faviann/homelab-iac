@@ -18,6 +18,7 @@ services:
       - 8686:8686
     labels:
       traefik.enable: true
+      traefik.http.routers.lidarr.middlewares: protected-edge-auth@file
       homepage.instance.admin.group: Arr
       homepage.instance.admin.name: Lidarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}

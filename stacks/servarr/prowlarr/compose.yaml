@@ -20,6 +20,7 @@ services:
       - 9696:9696
     labels:
       traefik.enable: true
+      traefik.http.routers.prowlarr.middlewares: protected-edge-auth@file
       homepage.instance.admin.group: Arr
       homepage.instance.admin.name: Prowlarr
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
