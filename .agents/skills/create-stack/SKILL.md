@@ -204,10 +204,17 @@ Use `./appdata/...` form for relative paths; absolute paths for everything else.
 
 Do not create `.gitkeep` files. Dirs with committed config files need no entry; the Ansible copy task handles them.
 
-### Step 12: Authentik Flag
+### Step 12: Auth Middleware and Authentik Flag
 
-If the stack is Traefik-routed, check the exposure tier:
-- Standard routed on `faviann.com` or `admin.faviann.com` — note: "Catch-all auth handles this, no Authentik config needed"
+If the stack is Traefik-routed:
+
+**Auth middleware** — Traefik has no domain-level default middleware. Each router must opt in explicitly:
+- Host's `default_domain` is `admin.faviann.com` (e.g. `servarr`) → **required**: add `traefik.http.routers.<service>.middlewares: protected-edge-auth@file` to the labels
+- Host's `default_domain` is `public.faviann.com` or `media.faviann.com` → omit the middleware (public or self-auth)
+- `faviann.com` (portal-hosted) → add the middleware if the service should be protected
+
+**Authentik app registration** — check the exposure tier:
+- Protected via `protected-edge-auth` (forwardAuth) — note: "Traefik forwardAuth handles SSO, no Authentik app registration needed unless you want group-based access control"
 - Public self-auth on `public.faviann.com` — flag: "This will need a public outpost provider. See `docs/stacks-authentik.md`"
 - Group-restricted access — flag: "This will need a dedicated Authentik provider + application. See `docs/stacks-authentik.md`"
 
@@ -295,3 +302,4 @@ Run this checklist when modifying existing files under `stacks/`. Flag violation
 15. GPU config only on `cap_gpu` hosts
 16. VPN stacks have ports on the VPN container
 17. User-facing service with `traefik.enable=true` has a `ports:` mapping
+18. If host's `default_domain` is `admin.faviann.com` and service has `traefik.enable=true`, verify `traefik.http.routers.<service>.middlewares: protected-edge-auth@file` is present (no domain-level default exists in Traefik)
