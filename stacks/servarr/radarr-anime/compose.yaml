@@ -1,0 +1,35 @@
+x-prereq-dirs:
+  - ./appdata/radarr-anime
+
+services:
+  # TODO: After first boot, register /data/media/movies/anime as a root folder in the Radarr Anime web UI.
+  radarr-anime:
+    image: lscr.io/linuxserver/radarr:6.1.1
+    container_name: radarr-anime
+    hostname: radarr-anime
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/radarr-anime:/config
+      - /data:/data
+    ports:
+      - 7879:7878
+    labels:
+      traefik.enable: true
+      traefik.http.routers.radarr-anime.middlewares: protected-edge-auth@file
+      traefik.http.services.radarr-anime.loadbalancer.server.port: 7879
+      homepage.instance.admin.group: Arr
+      homepage.instance.admin.name: Radarr Anime
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Anime movie management
+      homepage.instance.admin.icon: radarr
+    networks:
+      - servarr-internal
+
+networks:
+  servarr-internal:
+    name: servarr-internal
+    external: true

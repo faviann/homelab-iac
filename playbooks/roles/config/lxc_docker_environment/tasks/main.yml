@@ -167,6 +167,10 @@
   tags:
     - docker_host_setup
 
+- name: Ensure host-level Docker data directories exist
+  ansible.builtin.include_tasks: host_directories.yml
+  when: (lxc_docker_env_host_directories | default([])) | length > 0
+
 - name: Reconcile repo-managed stacks
   ansible.builtin.include_role:
     name: config/lxc_stack_sync

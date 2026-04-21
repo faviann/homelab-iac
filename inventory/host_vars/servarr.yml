@@ -9,6 +9,17 @@ lxc_hwaddr: "BC:24:11:77:E5:FC"
 lxc_docker_env_external_networks:
   - servarr-internal
 
+lxc_docker_env_host_directories:
+  - path: /data/media/movies/en
+  - path: /data/media/movies/fr
+  - path: /data/media/movies/foreign
+  - path: /data/media/movies/anime
+  - path: /data/media/tv/en
+  - path: /data/media/tv/fr
+  - path: /data/media/tv/asian
+  - path: /data/media/tv/foreign
+  - path: /data/media/tv/anime
+
 # Komf stack secrets (resolved from vault)
 servarr_komf_komga_user: "{{ vault_servarr_komf_komga_user }}"
 servarr_komf_komga_password: "{{ vault_servarr_komf_komga_password }}"

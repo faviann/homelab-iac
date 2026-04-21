@@ -41,3 +41,7 @@ lxc_docker_env_external_networks: []
 # Optional path-specific ownership overrides for bind-mounted stack data.
 # Each item supports: path, owner, group, recurse.
 lxc_docker_env_path_ownership_overrides: []
+
+# Optional host-level directories to create before stack reconciliation.
+# Each item supports: path, owner, group, mode.
+lxc_docker_env_host_directories: []
