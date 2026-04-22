@@ -8,11 +8,13 @@ traefik_kop_enabled: false
 lxc_hwaddr: "BC:24:11:BA:09:16"
 
 dockhand_discord_webhook_url: "{{ vault_portal_diun_discord_webhook }}"
-portal_dockhand_encryption_key: "{{ vault_portal_dockhand_encryption_key }}"
 
-# Traefik stack runtime environment
-portal_traefik_cloudflare_dns_api_token: "{{ vault_portal_traefik_cloudflare_dns_api_token }}"
-portal_traefik_dashboard_credentials: "{{ vault_portal_traefik_dashboard_credentials }}"
+lxc_docker_env_stack_vars:
+  dockhand:
+    encryption_key: "{{ vault_portal_dockhand_encryption_key }}"
+  traefik3:
+    cloudflare_dns_api_token: "{{ vault_portal_traefik_cloudflare_dns_api_token }}"
+    dashboard_credentials: "{{ vault_portal_traefik_dashboard_credentials }}"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:
