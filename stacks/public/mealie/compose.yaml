@@ -28,9 +28,9 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - MAX_WORKERS=${MAX_WORKERS}
     labels:
-      - traefik.enable=true
-      - homepage.group=Home
-      - homepage.name=${COMPOSE_PROJECT_NAME}
-      - homepage.icon=mealie
-      - homepage.href=https://${HOMEPAGE_FQDN}
-      - homepage.description=Recipe manager
+      traefik.enable: true
+      homepage.group: Home
+      homepage.name: ${COMPOSE_PROJECT_NAME}
+      homepage.icon: mealie
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Recipe manager

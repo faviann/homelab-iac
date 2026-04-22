@@ -5,19 +5,18 @@ x-prereq-dirs:
 services:
   gluetun:
     image: qmcgaw/gluetun
-    hostname: gluetunn
     container_name: gluetun
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE #to Enable modprob of the Wireguard module
+      - SYS_MODULE
     devices:
       - /dev/net/tun:/dev/net/tun
     ports:
       - $SPEEDTEST_PORT:3000
-      - $QBIT_WEBUI_PORT:$QBIT_WEBUI_PORT # qbittorrent web interface
+      - $QBIT_WEBUI_PORT:$QBIT_WEBUI_PORT
     volumes:
       - ./appdata/gluetun:/gluetun
-      - /lib/modules:/lib/modules:ro #I think it helps loading the wg kernel module
+      - /lib/modules:/lib/modules:ro
     environment:
       - VPN_SERVICE_PROVIDER=windscribe
       - VPN_TYPE=wireguard
@@ -40,9 +39,6 @@ services:
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
       homepage.instance.admin.description: Torrent client
       homepage.instance.admin.icon: qbittorrent
-  #
-  # This is a new addition since creating the tutorial video on this stack.
-  # See the 'qBittorrent Stalls with VPN Timeout' section for more information.
   deunhealth:
     image: qmcgaw/deunhealth
     container_name: deunhealth
@@ -51,12 +47,9 @@ services:
       - LOG_LEVEL=info
       - HEALTH_SERVER_ADDRESS=127.0.0.1:9999
       - TZ=$TZ
-    restart: always
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-  #
-  # Healthcheck was added to work with deunhealth to restart container
-  # on unhealthy status. labels allows deunhealth to monitor.
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:5.1.4
     container_name: qbittorrent
@@ -92,23 +85,21 @@ services:
       - WS_DEBUG=False
       - TZ=${TZ:-UTC}
 
-      # === qBittorrent settings ===
       - QBIT_HOST=127.0.0.1
       - QBIT_PORT=$QBIT_WEBUI_PORT
-      - QBIT_USERNAME=$QBIT_USERNAME # qBittorrent web UI username
-      - QBIT_PASSWORD=$QBIT_PASSWORD # qBittorrent web UI password
-      - QBIT_PRIVATE_TRACKER=true # Disable DHT/PeX/LSD for private trackers
+      - QBIT_USERNAME=$QBIT_USERNAME
+      - QBIT_PASSWORD=$QBIT_PASSWORD
+      - QBIT_PRIVATE_TRACKER=true
 
       # === Gluetun settings ===
-      - GLUETUN_HOST=127.0.0.1 # Gluetun control server host in shared namespace
-      - GLUETUN_PORT=8000 # Gluetun control server port
-      - GLUETUN_AUTH_TYPE=none  # Gluetun type -> none, basic, or apikey
+      - GLUETUN_HOST=127.0.0.1
+      - GLUETUN_PORT=8000
+      - GLUETUN_AUTH_TYPE=none
 
-      # === Schedule settings ===
-      - DAYS=6 # Run every N days
-      - TIME=05:00 # Time of day to run (HH:MM)
-      - ONESHOT=false # Set to true to run once and exit
-      - REQUEST_TIMEOUT=10 # HTTP request timeout in seconds
+      - DAYS=6
+      - TIME=05:00
+      - ONESHOT=false
+      - REQUEST_TIMEOUT=10
     depends_on:
       - gluetun
       - qbittorrent

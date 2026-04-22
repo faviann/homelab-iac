@@ -17,6 +17,19 @@ auth_calibre_web_automated_oidc_client_secret: "{{ vault_public_calibre_web_auto
 auth_readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret | default('REPLACE_ME', true) }}"
 auth_public_oidc_signing_certificate_name: "authentik Self-signed Certificate"
 
+# Authentik stack runtime environment
+auth_postgres_password: "{{ vault_auth_postgres_password }}"
+auth_secret_key: "{{ vault_auth_secret_key }}"
+auth_error_reporting_enabled: "{{ vault_auth_error_reporting_enabled }}"
+auth_email_host: "{{ vault_auth_email_host }}"
+auth_email_port: "{{ vault_auth_email_port }}"
+auth_email_username: "{{ vault_auth_email_username }}"
+auth_email_password: "{{ vault_auth_email_password }}"
+auth_email_use_tls: "{{ vault_auth_email_use_tls }}"
+auth_email_use_ssl: "{{ vault_auth_email_use_ssl }}"
+auth_email_timeout: "{{ vault_auth_email_timeout }}"
+auth_email_from: "{{ vault_auth_email_from }}"
+
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:
   - proxy

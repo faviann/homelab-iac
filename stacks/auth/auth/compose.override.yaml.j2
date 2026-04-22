@@ -25,13 +25,13 @@ services:
       - NAVIDROME_ADMIN_USER=svc-automation
       - NAVIDROME_ADMIN_PASSWORD={{ auth_navidrome_automation_password | replace('$', '$$') }}
     labels:
-      - traefik.enable=true
-      - traefik.docker.network=proxy
-      - homepage.instance.admin.group=Operations
-      - homepage.instance.admin.name=Authentik
-      - homepage.instance.admin.href=https://auth.faviann.com
-      - homepage.instance.admin.description=Identity and access management
-      - homepage.instance.admin.icon=mdi-shield-account
+      traefik.enable: true
+      traefik.docker.network: proxy
+      homepage.instance.admin.group: Operations
+      homepage.instance.admin.name: Authentik
+      homepage.instance.admin.href: https://auth.faviann.com
+      homepage.instance.admin.description: Identity and access management
+      homepage.instance.admin.icon: mdi-shield-account
   worker:
     environment:
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM}

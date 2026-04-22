@@ -13,8 +13,8 @@ services:
       homepage.instance.admin.description: Usenet client
       homepage.instance.admin.icon: sabnzbd
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${PUID}
+      - PGID=${PGID}
       - TZ=America/Montreal
     image: lscr.io/linuxserver/sabnzbd:latest
     restart: unless-stopped

@@ -51,6 +51,19 @@ vault_authentik_discord_approval_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 vault_authentik_reconciler_token: "REPLACE_WITH_AUTHENTIK_RECONCILER_TOKEN"
 vault_navidrome_automation_password: "REPLACE_WITH_NAVIDROME_AUTOMATION_PASSWORD"
 
+# Authentik stack runtime environment
+vault_auth_postgres_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
+vault_auth_secret_key: "REPLACE_WITH_RANDOM_SECRET_KEY"
+vault_auth_error_reporting_enabled: "true"
+vault_auth_email_host: "REPLACE_WITH_SMTP_HOST"
+vault_auth_email_port: "587"
+vault_auth_email_username: "REPLACE_WITH_SMTP_USERNAME"
+vault_auth_email_password: "REPLACE_WITH_SMTP_PASSWORD"
+vault_auth_email_use_tls: "true"
+vault_auth_email_use_ssl: "false"
+vault_auth_email_timeout: "30"
+vault_auth_email_from: "REPLACE_WITH_FROM_EMAIL"
+
 # Public RomM OIDC
 vault_public_romm_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
 vault_public_audiobookshelf_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
@@ -59,6 +72,10 @@ vault_public_calibre_web_automated_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIE
 
 # Portal Dockhand
 vault_portal_dockhand_encryption_key: "REPLACE_WITH_BASE64_32_BYTE_KEY"
+
+# Portal Traefik
+vault_portal_traefik_cloudflare_dns_api_token: "REPLACE_WITH_CLOUDFLARE_DNS_API_TOKEN"
+vault_portal_traefik_dashboard_credentials: "REPLACE_WITH_TRAEFIK_DASHBOARD_CREDENTIALS"
 
 # Dockhand Hawser Standard pilot token
 vault_dockhand_hawser_token: "REPLACE_ME"

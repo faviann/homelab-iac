@@ -7,10 +7,12 @@ Public routers should stay edge-open unless there is a specific reason to protec
 
 The shared proxy providers cover the protected tiers, so most protected services need no per-app Authentik object just to require login.
 
-Create a dedicated Proxy Provider + Application when:
+Create a dedicated Authentik provider + application when:
 - access is group-restricted
 - the hostname needs a non-catch-all provider
 - the service is self-auth and should stay edge-open at Traefik
+
+Use the provider type that matches the integration: Proxy Provider for Authentik forwardAuth/proxy flows, OAuth2/OpenID Provider for apps that do native OIDC.
 
 Repo-specific rules:
 - admin uses shared `admin-wildcard-forwardauth`

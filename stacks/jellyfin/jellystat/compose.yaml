@@ -33,12 +33,12 @@ services:
     ports:
       - 3000:3000
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.jellystat.middlewares=protected-edge-auth@file
-      - homepage.group=Media
-      - homepage.name=${COMPOSE_PROJECT_NAME}
-      - homepage.icon=mdi-chart-line
-      - homepage.href=https://${HOMEPAGE_FQDN}
-      - homepage.description=Jellyfin analytics
+      traefik.enable: true
+      traefik.http.routers.jellystat.middlewares: protected-edge-auth@file
+      homepage.group: Media
+      homepage.name: ${COMPOSE_PROJECT_NAME}
+      homepage.icon: mdi-chart-line
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Jellyfin analytics
     depends_on:
       - jellystat-db

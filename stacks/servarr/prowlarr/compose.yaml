@@ -5,7 +5,6 @@ services:
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:2.3.5
     container_name: prowlarr
-    hostname: prowlarr
     restart: unless-stopped
     depends_on:
       - flaresolverr-custom
@@ -32,7 +31,6 @@ services:
   flaresolverr-custom:
     image: 21hsmw/flaresolverr:nodriver
     container_name: flaresolverr-custom
-    hostname: flaresolverr-servarr
     restart: unless-stopped
     environment:
       - PUID=${PUID}

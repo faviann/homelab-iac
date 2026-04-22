@@ -6,7 +6,6 @@ services:
   kapowarr:
     image: mrcas/kapowarr:v1.3.1
     container_name: kapowarr
-    hostname: kapowarr
     restart: unless-stopped
     environment:
       PUID: ${PUID}

@@ -40,13 +40,13 @@ services:
       romm-db:
         condition: service_healthy
     labels:
-      - traefik.enable=true
-      - traefik.http.services.romm.loadbalancer.server.port=8080
-      - homepage.group=Gaming
-      - homepage.name=${COMPOSE_PROJECT_NAME}
-      - homepage.icon=romm
-      - homepage.href=https://${HOMEPAGE_FQDN}
-      - homepage.description=ROM manager
+      traefik.enable: true
+      traefik.http.services.romm.loadbalancer.server.port: "8080"
+      homepage.group: Gaming
+      homepage.name: ${COMPOSE_PROJECT_NAME}
+      homepage.icon: romm
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: ROM manager
     networks:
       - proxy
       - default

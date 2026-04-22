@@ -5,7 +5,6 @@ services:
   lidarr:
     image: lscr.io/linuxserver/lidarr:3.1.0
     container_name: lidarr
-    hostname: lidarr
     restart: unless-stopped
     environment:
       - PUID=${PUID}

@@ -6,10 +6,10 @@ services:
     ports:
       - 8088:80
     labels:
-      - traefik.enable=true
-      - traefik.http.services.it-tools.loadbalancer.server.port=8088
-      - homepage.group=Tools
-      - homepage.name=${COMPOSE_PROJECT_NAME}
-      - homepage.icon=it-tools
-      - homepage.href=https://${HOMEPAGE_FQDN}
-      - homepage.description=IT Tools for random things
+      traefik.enable: true
+      traefik.http.services.it-tools.loadbalancer.server.port: "8088"
+      homepage.group: Tools
+      homepage.name: ${COMPOSE_PROJECT_NAME}
+      homepage.icon: it-tools
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: IT Tools for random things

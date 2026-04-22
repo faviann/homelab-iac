@@ -5,7 +5,6 @@ services:
   notifiarr:
     image: golift/notifiarr
     container_name: notifiarr
-    hostname: notifiarr-servarr
     restart: unless-stopped
     environment:
       - PUID=${PUID}

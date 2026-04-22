@@ -23,3 +23,4 @@ Rules:
 - never commit real secrets to static `.env`
 - escape `$` as `$$` in rendered `.env` values
 - prefer one source of truth: `.env` or `.env.j2`, not both
+- set container user IDs from inventory with `PUID={{ docker_uid }}` and `PGID={{ docker_gid }}` instead of hardcoding `1000`

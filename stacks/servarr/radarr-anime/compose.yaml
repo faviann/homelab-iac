@@ -6,7 +6,6 @@ services:
   radarr-anime:
     image: lscr.io/linuxserver/radarr:6.1.1
     container_name: radarr-anime
-    hostname: radarr-anime
     restart: unless-stopped
     environment:
       - PUID=${PUID}

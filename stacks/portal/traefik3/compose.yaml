@@ -18,13 +18,8 @@ services:
       - ./appdata/traefik3/data/certs/:/var/traefik/certs/:rw
       - ./appdata/traefik3/logs/:/logs/
     environment:
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # <-- Change this to your Cloudflare API Token
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
       - TRAEFIK_DASHBOARD_CREDENTIALS="${TRAEFIK_DASHBOARD_CREDENTIALS}"
-      #labels: 
-      #- traefik.enable=true
-      #- traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_CREDENTIALS}
-      #- "traefik.http.middlewares.test-ipwhitelist.ipwhitelist.sourcerange=127.0.0.1/32, 192.168.1.7"
-      #- "traefik.http.routers.traefik-secure.middlewares=traefik-auth"
   redis:
     image: bitnami/redis:latest
     container_name: redis

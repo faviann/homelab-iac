@@ -22,6 +22,7 @@ stacks/
 - Other files are copied verbatim.
 - Compose-relative persistent data should live under `./appdata/...`.
 - All bind-mount target directories must exist before first deploy. If they do not, Docker creates them as root on first start, causing permission errors for non-root container processes. Declare dirs that need pre-creation in an `x-prereq-dirs` block in the repo-managed compose definition for the stack; the Ansible role creates them on the LXC with docker user ownership. Use `compose.yaml` by default. If the stack intentionally preserves an upstream vendor `compose.yaml`, place `x-prereq-dirs` in `compose.override.yaml` instead. This applies to empty `./appdata/` dirs, `/ephemeral/<stack>/` paths, and new `/data/` subpaths.
+- Files that must exist before container start with a specific mode can be declared in `x-managed-files`. Relative `./` paths are resolved from the deployed stack directory. This is intended for generated state files such as Traefik ACME storage that must exist with restricted permissions.
 - Dirs that contain committed files do not need an `x-prereq-dirs` entry; Ansible creates them automatically when deploying the files.
 - Do not use `.gitkeep`.
 - If both `.env` and `.env.j2` exist for the same output path, the templated output wins.
@@ -99,7 +100,7 @@ Public services should omit the auth middleware label. Protected tiers add it ex
 
 ### `proxy` Network
 
-Only portal-hosted stacks that Traefik routes need the external `proxy` network:
+Use the external `proxy` network only when a stack explicitly needs to attach a service to the host-local shared proxy bridge:
 
 ```yaml
 services:
@@ -118,6 +119,8 @@ Also declare the external network in host vars:
 lxc_docker_env_external_networks:
   - proxy
 ```
+
+`proxy` is local to each Docker host. Portal-hosted routed services use it so Traefik can reach them directly. Non-portal Traefik labels are replicated by `traefik-kop`; that label replication does not by itself require every routed service to join `proxy`.
 
 ### Domains
 
@@ -183,8 +186,8 @@ services:
 ```
 
 ```jinja2
-PUID=1000
-PGID=1000
+PUID={{ docker_uid }}
+PGID={{ docker_gid }}
 TZ=America/Montreal
 HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 ```
