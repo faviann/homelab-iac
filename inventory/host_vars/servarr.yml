@@ -21,8 +21,10 @@ lxc_docker_env_host_directories:
   - path: /data/media/tv/anime
 
 # Komf stack secrets (resolved from vault)
-servarr_komf_komga_user: "{{ vault_servarr_komf_komga_user }}"
-servarr_komf_komga_password: "{{ vault_servarr_komf_komga_password }}"
+lxc_docker_env_stack_vars:
+  komf:
+    komga_user: "{{ vault_servarr_komf_komga_user }}"
+    komga_password: "{{ vault_servarr_komf_komga_password }}"
 
 # Container definition for proxmox_lxc_provision role
 # NOTE: Confirm vmid matches the existing Proxmox container if already created.
