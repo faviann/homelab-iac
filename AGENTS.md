@@ -64,6 +64,8 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
 | `ssh -l root -i .ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 
+**Timing**: `ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
+
 Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` for merged vars, `ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
 
 ## Role Design Principles

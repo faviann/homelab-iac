@@ -13,6 +13,11 @@ lxc_docker_env_stack_vars:
     secret_key: "{{ vault_public_storyteller_secret_key }}"
   mealie:
     smtp_password: "{{ vault_public_mealie_smtp_password }}"
+  readmeabook:
+    jwt_secret: "{{ vault_public_readmeabook_jwt_secret | default('REPLACE_ME', true) }}"
+    jwt_refresh_secret: "{{ vault_public_readmeabook_jwt_refresh_secret | default('REPLACE_ME', true) }}"
+    config_encryption_key: "{{ vault_public_readmeabook_config_encryption_key | default('REPLACE_ME', true) }}"
+    postgres_password: "{{ vault_public_readmeabook_postgres_password | default('REPLACE_ME', true) }}"
 
 lxc_docker_env_path_ownership_overrides:
   - path: "/shared/{{ inventory_hostname }}/stacks/romm/appdata/db"
@@ -36,12 +41,6 @@ public_romm_igdb_client_id: "{{ vault_public_romm_igdb_client_id }}"
 public_romm_igdb_client_secret: "{{ vault_public_romm_igdb_client_secret }}"
 public_romm_retroachievements_api_key: "{{ vault_public_romm_retroachievements_api_key }}"
 public_romm_steamgriddb_api_key: "{{ vault_public_romm_steamgriddb_api_key }}"
-
-# ReadMeABook stack secrets (resolved from vault)
-public_readmeabook_jwt_secret: "{{ vault_public_readmeabook_jwt_secret | default('REPLACE_ME', true) }}"
-public_readmeabook_jwt_refresh_secret: "{{ vault_public_readmeabook_jwt_refresh_secret | default('REPLACE_ME', true) }}"
-public_readmeabook_config_encryption_key: "{{ vault_public_readmeabook_config_encryption_key | default('REPLACE_ME', true) }}"
-public_readmeabook_postgres_password: "{{ vault_public_readmeabook_postgres_password | default('REPLACE_ME', true) }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
