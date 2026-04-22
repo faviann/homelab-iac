@@ -12,10 +12,14 @@
       docker_uid: "{{ ansible_user_uid }}"
       docker_gid: "{{ ansible_user_gid }}"
       path_ownership_overrides:
-        - path: "{{ temp_root }}/shared/stacks/myapp/data/cache"
+        - path: "{{ temp_root }}/shared/stacks/komf/data/cache"
           owner: "{{ ansible_user_uid }}"
           group: "{{ ansible_user_gid }}"
           recurse: false
+    lxc_docker_env_stack_vars:
+      komf:
+        komga_user: "komf-user"
+        komga_password: "komf-pa$$"
   tasks:
     - name: Create source stack layout
       ansible.builtin.file:
@@ -23,25 +27,35 @@
         state: directory
         mode: "0755"
       loop:
-        - "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
+        - "{{ lxc_docker_environment_internal.stacks_source }}/komf"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
 
-    - name: Create a templated compose file (.j2)
+    - name: Create a templated Komf compose file (.j2)
       ansible.builtin.copy:
         content: |
           # stack: {{ '{{' }} stack_name {{ '}}' }}
+          # komga user: {{ '{{' }} stack_vars.komga_user {{ '}}' }}
           services:
-            app:
-              image: myapp:latest
+            komf:
+              image: "example.invalid/komf-{{ '{{' }} stack_vars.komga_user {{ '}}' }}:latest"
           x-prereq-dirs:
             - ./data/uploads
             - ./data/cache
-        dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/compose.yaml.j2"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/compose.yaml.j2"
+
+    - name: Create a templated Komf .env.j2
+      ansible.builtin.copy:
+        content: |
+          KOMF_KOMGA_BASE_URI=https://komga.example.invalid
+          KOMF_KOMGA_USER={{ '{{' }} stack_vars.komga_user {{ '}}' }}
+          KOMF_KOMGA_PASSWORD={{ '{{' }} stack_vars.komga_password | replace('$', '$$') {{ '}}' }}
+          STACK_NAME={{ '{{' }} stack_name {{ '}}' }}
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/.env.j2"
 
     - name: Create a static config file
       ansible.builtin.copy:
         content: "static-config-content"
-        dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/config.conf"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/config.conf"
 
     - name: Run actual find ops to populate discover registers
       ansible.builtin.find:
@@ -76,50 +90,73 @@
     - name: Include materialize
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
 
-    - name: Assert templated compose file was rendered at target path
+    - name: Assert templated files were rendered at target paths
       ansible.builtin.stat:
-        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/compose.yaml"
-      register: _rendered_compose_stat
-    - ansible.builtin.assert:
-        that:
-          - _rendered_compose_stat.stat.exists
-        fail_msg: "Rendered compose.yaml not found at target path"
+        path: "{{ item }}"
+      register: _rendered_file_stats
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/compose.yaml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/.env"
 
-    - name: Assert rendered content contains stack_name substitution
-      ansible.builtin.slurp:
-        src: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/compose.yaml"
-      register: _rendered_content
-    - ansible.builtin.assert:
+    - name: Verify templated files exist
+      ansible.builtin.assert:
         that:
-          - "'stack: myapp' in (_rendered_content.content | b64decode)"
-        fail_msg: "stack_name var was not substituted in rendered output"
+          - _rendered_file_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 2
+        fail_msg: "Rendered Komf compose.yaml and .env were not both created"
+
+    - name: Read rendered Komf compose file
+      ansible.builtin.slurp:
+        src: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/compose.yaml"
+      register: _rendered_compose
+
+    - name: Read rendered Komf env file
+      ansible.builtin.slurp:
+        src: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/.env"
+      register: _rendered_env
+
+    - name: Assert rendered content contains stack_name and stack_vars substitutions
+      ansible.builtin.assert:
+        that:
+          - "'# stack: komf' in (_rendered_compose.content | b64decode)"
+          - "'# komga user: komf-user' in (_rendered_compose.content | b64decode)"
+          - "'KOMF_KOMGA_USER=komf-user' in (_rendered_env.content | b64decode)"
+          - "'KOMF_KOMGA_PASSWORD=komf-pa$$$$' in (_rendered_env.content | b64decode)"
+          - "'STACK_NAME=komf' in (_rendered_env.content | b64decode)"
+        fail_msg: "stack_name or stack_vars were not substituted in rendered output"
 
     - name: Assert static config file was copied
       ansible.builtin.stat:
-        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/config.conf"
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/config.conf"
       register: _static_file_stat
+
     - ansible.builtin.assert:
         that:
           - _static_file_stat.stat.exists
         fail_msg: "Static config.conf not found at target path"
 
-    - name: Assert .j2 source file was NOT copied as a static file
+    - name: Assert .j2 source files were NOT copied as static files
       ansible.builtin.stat:
-        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/compose.yaml.j2"
-      register: _j2_source_stat
+        path: "{{ item }}"
+      register: _j2_source_stats
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/compose.yaml.j2"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/.env.j2"
+
     - ansible.builtin.assert:
         that:
-          - not _j2_source_stat.stat.exists
-        fail_msg: "compose.yaml.j2 should not appear at target (it is a template source)"
+          - _j2_source_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 0
+        fail_msg: ".j2 source files should not appear at target"
 
     - name: Assert planner output captures stack assets and prereq dirs
       ansible.builtin.assert:
         that:
-          - "'myapp/compose.yaml' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
+          - "'komf/compose.yaml' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
+          - "'komf/.env' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
+          - "'example.invalid/komf-komf-user:latest' in (lxc_stack_sync_manifest_plan.source_compose_specs | first).content"
           - lxc_stack_sync_manifest_plan.stack_dirs_to_create | length > 0
-          - lxc_stack_sync_manifest_plan.files_to_render | length == 1
+          - lxc_stack_sync_manifest_plan.files_to_render | length == 2
           - lxc_stack_sync_manifest_plan.files_to_copy | length == 1
-          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp/data/uploads') in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
-          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp/data/cache') not in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/uploads') in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/cache') not in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
           - lxc_stack_sync_manifest_plan.ownership_overrides | length == 1
         fail_msg: "Planner output did not capture the expected stack assets and prereq dirs"
