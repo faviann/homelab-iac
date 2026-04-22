@@ -1,0 +1,27 @@
+schema_version: 1
+kind: stack
+name: notifiarr
+description: Notification and automation companion for media operations
+portability:
+  tier: portable-app
+  owner: stack
+runtime:
+  template_inputs:
+    - docker_uid
+    - docker_gid
+    - default_domain
+    - stack_name
+  host_requirements:
+    external_networks:
+      - servarr-internal
+    host_directories:
+      - /data
+    ownership_overrides: []
+exposure:
+  traefik: protected
+  homepage_instances:
+    - admin
+  homepage_group: Operations
+notes:
+  - Host-level network creation stays in inventory/host_vars/servarr.yml.
+  - Runtime sensitive values stay in rendered templates or the app, not in metadata.
