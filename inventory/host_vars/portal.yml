@@ -7,8 +7,6 @@ default_domain: faviann.com
 traefik_kop_enabled: false
 lxc_hwaddr: "BC:24:11:BA:09:16"
 
-dockhand_discord_webhook_url: "{{ vault_portal_diun_discord_webhook }}"
-
 lxc_docker_env_stack_vars:
   dockhand:
     encryption_key: "{{ vault_portal_dockhand_encryption_key }}"
