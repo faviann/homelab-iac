@@ -27,6 +27,9 @@ lxc_docker_env_stack_vars:
     igdb_client_secret: "{{ vault_public_romm_igdb_client_secret }}"
     retroachievements_api_key: "{{ vault_public_romm_retroachievements_api_key }}"
     steamgriddb_api_key: "{{ vault_public_romm_steamgriddb_api_key }}"
+  music:
+    authentik_token: "{{ vault_authentik_reconciler_token }}"
+    navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
 
 lxc_docker_env_path_ownership_overrides:
   - path: "/shared/{{ inventory_hostname }}/stacks/romm/appdata/db"
@@ -37,9 +40,6 @@ lxc_docker_env_path_ownership_overrides:
     owner: '103'
     group: '103'
     recurse: true
-
-public_authentik_reconciler_token: "{{ vault_authentik_reconciler_token }}"
-public_navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
