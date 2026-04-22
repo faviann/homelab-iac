@@ -9,10 +9,54 @@
       stack_dirs_to_create: []
       files_to_render: []
       files_to_copy: []
+      stack_metadata: []
       prereq_dirs: []
       ownership_overrides: "{{ lxc_docker_environment_internal.path_ownership_overrides | default([]) }}"
       managed_files: []
       managed_file_parent_dirs: []
+
+- name: Build stack metadata plan entries
+  ansible.builtin.set_fact:
+    lxc_stack_sync_manifest_plan: >-
+      {{
+        lxc_stack_sync_manifest_plan
+        | combine(
+            {
+              'stack_metadata': planned_stack_metadata
+            },
+            recursive=True
+          )
+      }}
+  vars:
+    planned_stack_metadata: >-
+      {%- set metadata = [] -%}
+      {%- for file in _per_host_stack_metadata_files.files | default([]) -%}
+      {%- set raw_data = lookup('file', file.path) | from_yaml -%}
+      {%- set _ = metadata.append({
+        'source_path': file.path,
+        'relative_path': file.relative_path,
+        'stack_name': file.stack_name,
+        'data': raw_data
+      }) -%}
+      {%- endfor -%}
+      {{ metadata }}
+  when: (_per_host_stack_metadata_files.files | default([])) | length > 0
+
+- name: Validate stack metadata is non-secret role data
+  ansible.builtin.assert:
+    that:
+      - item.data is mapping
+      - item.data.vars is not defined
+      - item.data.secrets is not defined
+      - item.data.vault is not defined
+      - (item.data | to_json | lower) is not search('password|token|secret|private_key|credential')
+    fail_msg: >-
+      Stack metadata {{ item.relative_path }} must be a non-secret mapping.
+      Do not put Ansible vars, vault data, passwords, tokens, private keys, or
+      credentials in stack-local metadata.
+  loop: "{{ lxc_stack_sync_manifest_plan.stack_metadata | default([]) }}"
+  loop_control:
+    label: "{{ item.relative_path }}"
 
 - name: Build list of templated per-host output files
   ansible.builtin.set_fact:

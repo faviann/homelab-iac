@@ -1,0 +1,160 @@
+---
+- name: Test stack sync excludes stack-local docs and metadata from deployment
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      root_docker_conf_path: "{{ temp_root }}/shared"
+      stacks_source: "{{ temp_root }}/stacks-source"
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+      docker_uid: "{{ ansible_user_uid }}"
+      docker_gid: "{{ ansible_user_gid }}"
+      external_networks: []
+      path_ownership_overrides: []
+  tasks:
+    - name: Create source and deployed stack roots
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
+        - "{{ lxc_docker_environment_internal.stacks_source }}/myapp/docs"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+
+    - name: Create deployable compose file
+      ansible.builtin.copy:
+        content: |
+          services:
+            app:
+              image: myapp:latest
+          x-prereq-dirs:
+            - ./appdata/config
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/compose.yaml"
+
+    - name: Create deployable static config file
+      ansible.builtin.copy:
+        content: "deploy-me"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/config.ini"
+
+    - name: Create stack-local docs and metadata that must not deploy
+      ansible.builtin.copy:
+        content: "{{ item.content }}"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/{{ item.path }}"
+      loop:
+        - path: README.md
+          content: |
+            # MyApp
+
+            Stack-local documentation for operators.
+        - path: docs/operator.md
+          content: |
+            # Operator Notes
+
+            This file belongs in the repo only.
+        - path: stack.yaml
+          content: |
+            schema_version: 1
+            kind: stack
+            name: myapp
+            description: Test stack metadata
+            portability:
+              tier: portable-app
+              owner: stack
+            runtime:
+              template_inputs:
+                - stack_name
+        - path: stack.yml
+          content: |
+            schema_version: 1
+            kind: stack
+            name: duplicate-extension-example
+        - path: metadata.yaml
+          content: |
+            schema_version: 1
+            kind: metadata
+            name: myapp
+        - path: metadata.yml
+          content: |
+            schema_version: 1
+            kind: metadata
+            name: myapp
+        - path: metadata.json
+          content: |
+            {"schema_version": 1, "kind": "metadata", "name": "myapp"}
+
+    - name: Discover source stacks through the role task
+      ansible.builtin.include_role:
+        name: config/lxc_stack_sync
+        tasks_from: discover.yml
+
+    - name: Plan source stack materialization through the role task
+      ansible.builtin.include_role:
+        name: config/lxc_stack_sync
+        tasks_from: planner.yml
+
+    - name: Materialize source stacks through the role task
+      ansible.builtin.include_role:
+        name: config/lxc_stack_sync
+        tasks_from: materialize.yml
+
+    - name: Assert deployable files were materialized
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: _deployable_file_stats
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/compose.yaml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/config.ini"
+
+    - name: Verify deployable files exist
+      ansible.builtin.assert:
+        that:
+          - _deployable_file_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 2
+        fail_msg: "Expected compose.yaml and config.ini to deploy"
+
+    - name: Check excluded docs and metadata targets
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: _excluded_target_stats
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/README.md"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/docs"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/docs/operator.md"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/stack.yaml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/stack.yml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/metadata.yaml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/metadata.yml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/metadata.json"
+
+    - name: Assert docs and metadata were not deployed
+      ansible.builtin.assert:
+        that:
+          - _excluded_target_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 0
+        fail_msg: "Stack-local docs/metadata should not appear in deployed Docker config"
+
+    - name: Assert planner deploy lists exclude docs and metadata
+      ansible.builtin.assert:
+        that:
+          - "'myapp/README.md' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
+          - "'myapp/docs/operator.md' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
+          - "'myapp/stack.yaml' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
+          - "'myapp/stack.yml' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
+          - "'myapp/metadata.yaml' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
+          - "'myapp/metadata.yml' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
+          - "'myapp/metadata.json' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp/docs') not in (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]))"
+        fail_msg: "Planner should exclude docs and metadata from deploy materialization"
+
+    - name: Assert stack.yaml is parsed as role-scoped metadata
+      ansible.builtin.assert:
+        that:
+          - lxc_stack_sync_manifest_plan.stack_metadata | length == 1
+          - lxc_stack_sync_manifest_plan.stack_metadata[0].stack_name == 'myapp'
+          - lxc_stack_sync_manifest_plan.stack_metadata[0].relative_path == 'myapp/stack.yaml'
+          - lxc_stack_sync_manifest_plan.stack_metadata[0].data.kind == 'stack'
+          - lxc_stack_sync_manifest_plan.stack_metadata[0].data.portability.tier == 'portable-app'
+          - lxc_stack_sync_manifest_plan.stack_metadata[0].data.runtime.template_inputs == ['stack_name']
+        fail_msg: "stack.yaml should be available as lxc_stack_sync_manifest_plan.stack_metadata role data"

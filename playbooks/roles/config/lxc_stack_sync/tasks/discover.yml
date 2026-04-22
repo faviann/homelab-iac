@@ -41,6 +41,7 @@
       stack_dirs_to_create: []
       files_to_render: []
       files_to_copy: []
+      stack_metadata: []
       prereq_dirs: []
       ownership_overrides: []
       managed_files: []
@@ -238,6 +239,60 @@
           | list
         }}
   when: stack_filter is defined
+
+- name: Capture stack metadata files before deploy filtering
+  ansible.builtin.set_fact:
+    _per_host_stack_metadata_files:
+      files: "{{ metadata_files }}"
+  vars:
+    metadata_files: >-
+      {%- set kept = [] -%}
+      {%- for file in _per_host_static_files.files | default([]) -%}
+      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
+      {%- if relative_path is match('^[^/]+/stack\.yaml$') -%}
+      {%- set _ = kept.append(file | combine({'relative_path': relative_path, 'stack_name': relative_path.split('/')[0]})) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ kept }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
+
+- name: Filter stack-local docs and metadata from deployment discovery
+  ansible.builtin.set_fact:
+    _per_host_j2_files:
+      files: "{{ deployable_j2_files }}"
+    _per_host_static_files:
+      files: "{{ deployable_static_files }}"
+    _per_host_dirs:
+      files: "{{ deployable_dirs }}"
+  vars:
+    deployable_j2_files: >-
+      {%- set kept = [] -%}
+      {%- for file in _per_host_j2_files.files | default([]) -%}
+      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
+      {%- if not (relative_path is match(lxc_stack_sync_deploy_exclude_regex)) -%}
+      {%- set _ = kept.append(file) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ kept }}
+    deployable_static_files: >-
+      {%- set kept = [] -%}
+      {%- for file in _per_host_static_files.files | default([]) -%}
+      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
+      {%- if not (relative_path is match(lxc_stack_sync_deploy_exclude_regex)) -%}
+      {%- set _ = kept.append(file) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ kept }}
+    deployable_dirs: >-
+      {%- set kept = [] -%}
+      {%- for directory in _per_host_dirs.files | default([]) -%}
+      {%- set relative_path = directory.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
+      {%- if not (relative_path is match(lxc_stack_sync_deploy_exclude_regex)) -%}
+      {%- set _ = kept.append(directory) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ kept }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
 
 - name: Publish discovery slice into stack reconciliation
   ansible.builtin.set_fact:
