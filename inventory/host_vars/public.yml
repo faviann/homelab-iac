@@ -8,6 +8,10 @@ default_domain: public.faviann.com
 lxc_docker_env_external_networks:
   - proxy
 
+lxc_docker_env_stack_vars:
+  storyteller:
+    secret_key: "{{ vault_public_storyteller_secret_key }}"
+
 lxc_docker_env_path_ownership_overrides:
   - path: "/shared/{{ inventory_hostname }}/stacks/romm/appdata/db"
     owner: '999'
@@ -22,9 +26,6 @@ lxc_docker_env_path_ownership_overrides:
 public_mealie_smtp_password: "{{ vault_public_mealie_smtp_password }}"
 public_authentik_reconciler_token: "{{ vault_authentik_reconciler_token }}"
 public_navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
-
-# Storyteller stack secrets (resolved from vault)
-public_storyteller_secret_key: "{{ vault_public_storyteller_secret_key }}"
 
 # RomM stack secrets (resolved from vault)
 public_romm_db_passwd: "{{ vault_public_romm_db_passwd }}"
