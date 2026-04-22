@@ -1,8 +1,7 @@
 ---
 # Role dependencies for lxc_docker_environment
 
-dependencies:
-  - role: config/lxc_base_system
+dependencies: []
 
 galaxy_info:
   role_name: lxc_docker_environment
