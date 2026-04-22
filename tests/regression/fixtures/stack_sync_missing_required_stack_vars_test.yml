@@ -1,0 +1,82 @@
+---
+- name: Test stack sync fails clearly when required stack_vars are missing
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      stacks_source: "{{ temp_root }}/stacks-source"
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+      docker_uid: "{{ ansible_user_uid }}"
+      docker_gid: "{{ ansible_user_gid }}"
+      path_ownership_overrides: []
+    lxc_docker_env_stack_vars:
+      komf:
+        komga_user: "komf-user"
+  tasks:
+    - name: Create source stack layout
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ lxc_docker_environment_internal.stacks_source }}/komf"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+
+    - name: Create a templated Komf compose file (.j2)
+      ansible.builtin.copy:
+        content: |
+          # stack: {{ '{{' }} stack_name {{ '}}' }}
+          services:
+            komf:
+              image: "example.invalid/komf-{{ '{{' }} stack_name {{ '}}' }}:latest"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/compose.yaml.j2"
+
+    - name: Create a templated Komf .env.j2
+      ansible.builtin.copy:
+        content: |
+          KOMF_KOMGA_BASE_URI=https://komga.example.invalid
+          KOMF_KOMGA_USER={{ '{{' }} stack_vars.komga_user {{ '}}' }}
+          KOMF_KOMGA_PASSWORD={{ '{{' }} stack_vars.komga_password | replace('$', '$$') {{ '}}' }}
+          STACK_NAME={{ '{{' }} stack_name {{ '}}' }}
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/.env.j2"
+
+    - name: Create a static config file
+      ansible.builtin.copy:
+        content: "static-config-content"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/config.conf"
+
+    - name: Run actual find ops to populate discover registers
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+        patterns: "*.j2"
+        hidden: true
+        recurse: true
+        file_type: file
+      register: _per_host_j2_files
+      delegate_to: localhost
+      become: false
+
+    - ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+        patterns: "*"
+        excludes: "*.j2,.gitkeep"
+        hidden: true
+        recurse: true
+        file_type: file
+      register: _per_host_static_files
+      delegate_to: localhost
+      become: false
+
+    - ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
+        recurse: true
+        file_type: directory
+      register: _per_host_dirs
+      delegate_to: localhost
+      become: false
+
+    - name: Include materialize
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
