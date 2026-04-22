@@ -225,6 +225,8 @@ When adding a new tier subdomain, also add its wildcard SAN in `stacks/portal/tr
 
 ## RomM
 
+→ [stacks/public/romm/README.md](public/romm/README.md) — read for RomM native OIDC behavior and Authentik coupling notes.
+
 ## Docker Agents
 
 → [docs/stacks-docker-agents.md](../docs/stacks-docker-agents.md) — read when debugging the managed docker-agents stack or changing agent configuration.

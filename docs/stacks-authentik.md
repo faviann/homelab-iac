@@ -14,7 +14,7 @@ Create a dedicated Authentik provider + application when:
 
 Use the provider type that matches the integration: Proxy Provider for Authentik forwardAuth/proxy flows, OAuth2/OpenID Provider for apps that do native OIDC.
 
-Repo-specific rules:
+Repo-wide rules:
 - admin uses shared `admin-wildcard-forwardauth`
 - home uses shared `home-wildcard-forwardauth`
 - media uses shared `media-wildcard-forwardauth`
@@ -41,18 +41,11 @@ For public apps that should stay edge-open and handle login themselves:
 - create an Authentik OAuth2/OpenID provider plus application
 - select an Authentik signing key explicitly in the provider so the JWKS endpoint publishes keys for the client
 - add the app's OIDC environment variables via `.env.j2`
-- keep the redirect URI exact: `https://<host>/api/oauth/openid`
+- keep redirect URIs exact for the app's callback path
 
-RomM is the repo example for this pattern:
+Repo-managed native OIDC app definitions live with the Authentik stack:
 
-- Authentik blueprint: `stacks/auth/auth/appdata/authentik/blueprints/35-public-romm-oidc.yaml.j2`
-- RomM stack env: `stacks/public/romm/.env.j2`
+- Manifest: `stacks/auth/auth/appdata/authentik/oidc-apps.yaml`
+- Generated blueprint template: `stacks/auth/auth/appdata/authentik/blueprints/80-oidc-apps.yaml.j2`
 
-RomM-specific notes from the official docs:
-
-- Authentik 2025.10+ defaults `email_verified` to `false`, so RomM needs a scope mapping that returns `email_verified: True`
-- `OIDC_SERVER_APPLICATION_URL` should use the Authentik application URL with its trailing slash intact
-- the user's email in RomM must match the user's email in Authentik
-- first-time OIDC users are created in RomM with viewer permissions
-- if the provider is left on Authentik's symmetric default signing mode, metadata may advertise `HS256` and the JWKS endpoint may return `{}`, which breaks RomM's OIDC login flow
-- repo-managed RomM OIDC uses `auth_romm_oidc_signing_certificate_name` from `inventory/host_vars/auth.yml`; the referenced certificate/keypair must exist in Authentik
+RomM is the current concrete native OIDC example. Its app-specific notes live in [stacks/public/romm/README.md](../stacks/public/romm/README.md).
