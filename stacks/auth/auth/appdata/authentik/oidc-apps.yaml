@@ -4,8 +4,8 @@ apps:
     provider_name: romm-public-oidc
     launch_url: https://romm.public.faviann.com
     client_id: romm-public
-    client_secret_var: auth_romm_oidc_client_secret
-    signing_certificate_var: auth_romm_oidc_signing_certificate_name
+    client_secret_var: stack_vars.romm_oidc_client_secret
+    signing_certificate_var: stack_vars.romm_oidc_signing_certificate_name
     redirect_uris:
       - https://romm.public.faviann.com/api/oauth/openid
     custom_scope_mappings:
@@ -26,8 +26,8 @@ apps:
     provider_name: audiobookshelf-public-oidc
     launch_url: https://audiobookshelf.public.faviann.com
     client_id: audiobookshelf-public
-    client_secret_var: auth_audiobookshelf_oidc_client_secret
-    signing_certificate_var: auth_public_oidc_signing_certificate_name
+    client_secret_var: stack_vars.audiobookshelf_oidc_client_secret
+    signing_certificate_var: stack_vars.public_oidc_signing_certificate_name
     redirect_uris:
       - https://audiobookshelf.public.faviann.com/auth/openid/callback
       - https://audiobookshelf.public.faviann.com/auth/openid/mobile-redirect
@@ -48,8 +48,8 @@ apps:
     provider_name: komga-public-oidc
     launch_url: https://komga.public.faviann.com
     client_id: komga-public
-    client_secret_var: auth_komga_oidc_client_secret
-    signing_certificate_var: auth_public_oidc_signing_certificate_name
+    client_secret_var: stack_vars.komga_oidc_client_secret
+    signing_certificate_var: stack_vars.public_oidc_signing_certificate_name
     redirect_uris:
       - https://komga.public.faviann.com/login/oauth2/code/authentik
     custom_scope_mappings:
@@ -69,8 +69,8 @@ apps:
     provider_name: calibre-web-automated-public-oidc
     launch_url: https://calibre-web-automated.public.faviann.com
     client_id: calibre-web-automated-public
-    client_secret_var: auth_calibre_web_automated_oidc_client_secret
-    signing_certificate_var: auth_public_oidc_signing_certificate_name
+    client_secret_var: stack_vars.calibre_web_automated_oidc_client_secret
+    signing_certificate_var: stack_vars.public_oidc_signing_certificate_name
     redirect_uris:
       - https://calibre-web-automated.public.faviann.com/login/generic/authorized
     custom_scope_mappings:
@@ -90,8 +90,8 @@ apps:
     provider_name: readmeabook-public-oidc
     launch_url: https://readmeabook.public.faviann.com
     client_id: readmeabook-public
-    client_secret_var: auth_readmeabook_oidc_client_secret
-    signing_certificate_var: auth_public_oidc_signing_certificate_name
+    client_secret_var: stack_vars.readmeabook_oidc_client_secret
+    signing_certificate_var: stack_vars.public_oidc_signing_certificate_name
     redirect_uris:
       - https://readmeabook.public.faviann.com/api/auth/oidc/callback
     custom_scope_mappings:

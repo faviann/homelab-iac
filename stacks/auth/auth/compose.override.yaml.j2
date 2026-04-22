@@ -23,7 +23,7 @@ services:
       - AUTHENTIK_COOKIE_DOMAIN=.faviann.com
       - NAVIDROME_URL=http://public.faviann.vms:4533
       - NAVIDROME_ADMIN_USER=svc-automation
-      - NAVIDROME_ADMIN_PASSWORD={{ auth_navidrome_automation_password | replace('$', '$$') }}
+      - NAVIDROME_ADMIN_PASSWORD={{ stack_vars.navidrome_automation_password | replace('$', '$$') }}
     labels:
       traefik.enable: true
       traefik.docker.network: proxy
@@ -38,7 +38,7 @@ services:
       AUTHENTIK_COOKIE_DOMAIN: .faviann.com
       NAVIDROME_URL: http://public.faviann.vms:4533
       NAVIDROME_ADMIN_USER: svc-automation
-      NAVIDROME_ADMIN_PASSWORD: "{{ auth_navidrome_automation_password | replace('$', '$$') }}"
+      NAVIDROME_ADMIN_PASSWORD: "{{ stack_vars.navidrome_automation_password | replace('$', '$$') }}"
     volumes:
       - ./appdata/authentik/data:/data
       - ./appdata/authentik/certs:/certs

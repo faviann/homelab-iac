@@ -5,30 +5,28 @@
 lxc_hwaddr: "BC:24:11:18:EE:67"
 default_domain: faviann.com
 
-# Notifiarr integration
-auth_notifiarr_webhook_url: "{{ vault_notifiarr_authentik_webhook_url }}"
-auth_discord_approval_webhook_url: "{{ vault_authentik_discord_approval_webhook_url }}"
-auth_navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
-auth_romm_oidc_client_secret: "{{ vault_public_romm_oidc_client_secret }}"
-auth_romm_oidc_signing_certificate_name: "authentik Self-signed Certificate"
-auth_audiobookshelf_oidc_client_secret: "{{ vault_public_audiobookshelf_oidc_client_secret }}"
-auth_komga_oidc_client_secret: "{{ vault_public_komga_oidc_client_secret }}"
-auth_calibre_web_automated_oidc_client_secret: "{{ vault_public_calibre_web_automated_oidc_client_secret }}"
-auth_readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret | default('REPLACE_ME', true) }}"
-auth_public_oidc_signing_certificate_name: "authentik Self-signed Certificate"
-
-# Authentik stack runtime environment
-auth_postgres_password: "{{ vault_auth_postgres_password }}"
-auth_secret_key: "{{ vault_auth_secret_key }}"
-auth_error_reporting_enabled: "{{ vault_auth_error_reporting_enabled }}"
-auth_email_host: "{{ vault_auth_email_host }}"
-auth_email_port: "{{ vault_auth_email_port }}"
-auth_email_username: "{{ vault_auth_email_username }}"
-auth_email_password: "{{ vault_auth_email_password }}"
-auth_email_use_tls: "{{ vault_auth_email_use_tls }}"
-auth_email_use_ssl: "{{ vault_auth_email_use_ssl }}"
-auth_email_timeout: "{{ vault_auth_email_timeout }}"
-auth_email_from: "{{ vault_auth_email_from }}"
+lxc_docker_env_stack_vars:
+  auth:
+    discord_approval_webhook_url: "{{ vault_authentik_discord_approval_webhook_url }}"
+    navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
+    romm_oidc_client_secret: "{{ vault_public_romm_oidc_client_secret }}"
+    romm_oidc_signing_certificate_name: "authentik Self-signed Certificate"
+    audiobookshelf_oidc_client_secret: "{{ vault_public_audiobookshelf_oidc_client_secret }}"
+    komga_oidc_client_secret: "{{ vault_public_komga_oidc_client_secret }}"
+    calibre_web_automated_oidc_client_secret: "{{ vault_public_calibre_web_automated_oidc_client_secret }}"
+    readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret | default('REPLACE_ME', true) }}"
+    public_oidc_signing_certificate_name: "authentik Self-signed Certificate"
+    postgres_password: "{{ vault_auth_postgres_password }}"
+    secret_key: "{{ vault_auth_secret_key }}"
+    error_reporting_enabled: "{{ vault_auth_error_reporting_enabled }}"
+    email_host: "{{ vault_auth_email_host }}"
+    email_port: "{{ vault_auth_email_port }}"
+    email_username: "{{ vault_auth_email_username }}"
+    email_password: "{{ vault_auth_email_password }}"
+    email_use_tls: "{{ vault_auth_email_use_tls }}"
+    email_use_ssl: "{{ vault_auth_email_use_ssl }}"
+    email_timeout: "{{ vault_auth_email_timeout }}"
+    email_from: "{{ vault_auth_email_from }}"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:

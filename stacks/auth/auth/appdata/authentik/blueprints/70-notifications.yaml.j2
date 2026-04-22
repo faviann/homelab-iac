@@ -26,7 +26,7 @@ entries:
   attrs:
     name: Discord Registration Approval
     mode: webhook_slack
-    webhook_url: "{{ auth_discord_approval_webhook_url | regex_replace('/slack/?$', '') }}/slack"
+    webhook_url: "{{ stack_vars.discord_approval_webhook_url | regex_replace('/slack/?$', '') }}/slack"
     send_once: true
 
 - id: rule-registration-pending-approval

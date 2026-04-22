@@ -214,7 +214,7 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
         apps = self.mod.load_oidc_manifest()
         content = self.mod.generate_oidc_blueprint_content(apps)
         self.assertEqual(content.count("id: scope-reading-apps-email-verification"), 1)
-        self.assertEqual(content.count("!KeyOf scope-reading-apps-email-verification"), 3)
+        self.assertEqual(content.count("!KeyOf scope-reading-apps-email-verification"), 4)
 
     def test_real_manifest_validates_cleanly(self):
         apps = self.mod.load_oidc_manifest()
