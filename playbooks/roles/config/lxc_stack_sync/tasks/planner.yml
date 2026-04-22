@@ -141,6 +141,7 @@
       }}
   vars:
     stack_name: "{{ item.stack_name }}"
+    stack_vars: "{{ (lxc_docker_env_stack_vars | default({}))[item.stack_name] | default({}) }}"
   loop: "{{ _lxc_stack_sync_source_compose_specs_unrendered | default([]) }}"
   loop_control:
     label: "{{ item.relative_path }}"
