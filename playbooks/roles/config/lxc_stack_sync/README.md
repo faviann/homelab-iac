@@ -13,6 +13,7 @@
 - `lxc_docker_environment_internal.docker_uid`
 - `lxc_docker_environment_internal.docker_gid`
 - `lxc_docker_environment_internal.path_ownership_overrides`
+- `lxc_docker_env_stack_vars`
 - `_per_host_j2_files.files`
 - `_per_host_static_files.files`
 - `_per_host_dirs.files`
@@ -37,6 +38,7 @@
 - `managed_files` are deduplicated by `path`
 - relative `x-prereq-dirs` and `x-managed-files` paths are resolved from the compose target directory
 - `prereq_dirs` exclude paths that are already covered by `path_ownership_overrides`
+- `planner.yml` and `materialize.yml` consume `stack_vars` as task-scoped render data, not host scope
 - `materialize.yml` consumes the plan and does not re-parse compose extensions inline
 
 ### Deploy Exclusions
@@ -52,3 +54,5 @@ Stack-local documentation and metadata are repo-only control-plane files. The di
 - `<stack>/metadata.json`
 
 Only `<stack>/stack.yaml` is parsed into `lxc_stack_sync_manifest_plan.stack_metadata`. It is role-scoped data for stack sync/reporting decisions, not Ansible variable scope. Do not add `include_vars`, `vars_files`, or broad `set_fact` loading for stack metadata.
+
+Stack metadata remains non-secret control data and must not contain vars, secrets, or vault references.

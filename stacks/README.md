@@ -42,6 +42,7 @@ Stack-owned files:
 Host/inventory-owned settings:
 
 - `default_domain`
+- `lxc_docker_env_stack_vars`
 - `proxmox_lxc_overrides`
 - `lxc_hwaddr`
 - tier and capability group membership
@@ -56,7 +57,7 @@ Do not dynamically include stack-local variable files into Ansible host scope. S
 
 - Host folder must match `inventory_hostname`.
 - Stack folder name becomes the Compose project name. During `.j2` rendering, the role also injects `stack_name`.
-- `.j2` files are rendered with inventory, host, group, and vault variables, then deployed without the `.j2` suffix.
+- `.j2` files are rendered with inventory, host, group, vault variables, `stack_name`, and the current stack `stack_vars` task-scoped render data, then deployed without the `.j2` suffix.
 - Other files are copied verbatim.
 - Stack-local `README.md`, `docs/**`, `stack.yaml`, `stack.yml`, and `metadata.*` files are repo-only and are excluded from deployment.
 - Do not use stack-local metadata for secrets or runtime variable injection.
