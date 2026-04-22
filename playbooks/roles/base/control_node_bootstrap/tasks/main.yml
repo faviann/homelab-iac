@@ -13,6 +13,7 @@
   ansible.builtin.set_fact:
     control_node_ssh_directory: "{{ control_node_ssh_directory | default(([control_node_project_root, '.ansible', 'ssh'] | path_join)) }}"
     control_node_ansible_directory: "{{ control_node_ansible_directory | default(([control_node_project_root, '.ansible'] | path_join)) }}"
+    control_node_ansible_tmp_directory: "{{ control_node_ansible_tmp_directory | default(([control_node_project_root, '.ansible', 'tmp'] | path_join)) }}"
     control_node_ssh_private_key_path: "{{ control_node_ssh_private_key_path | default(([control_node_project_root, '.ansible', 'ssh', 'proxmox_lxc'] | path_join)) }}"
     control_node_ssh_public_key_path: "{{ control_node_ssh_public_key_path | default(([control_node_project_root, '.ansible', 'ssh', 'proxmox_lxc.pub'] | path_join)) }}"
     control_node_vault_password_file: "{{ control_node_vault_password_file | default(([control_node_project_root, '.ansible', 'vault-pass.txt'] | path_join)) }}"
@@ -34,6 +35,12 @@
 - name: Ensure Ansible data directory exists
   ansible.builtin.file:
     path: "{{ control_node_ansible_directory }}"
+    state: directory
+    mode: "0700"
+
+- name: Ensure Ansible local temp directory exists
+  ansible.builtin.file:
+    path: "{{ control_node_ansible_tmp_directory }}"
     state: directory
     mode: "0700"
 
