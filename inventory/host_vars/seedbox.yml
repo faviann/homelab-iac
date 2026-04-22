@@ -6,15 +6,16 @@ default_domain: admin.faviann.com
 
 lxc_hwaddr: "BC:24:11:6D:2E:7E"
 
-# Seedbox stack secrets (resolved from vault)
-seedbox_wireguard_private_key: "{{ vault_seedbox_wireguard_private_key }}"
-seedbox_wireguard_preshared_key: "{{ vault_seedbox_wireguard_preshared_key }}"
-seedbox_wireguard_address: "{{ vault_seedbox_wireguard_address }}"
-seedbox_qbit_username: "{{ vault_seedbox_qbit_username }}"
-seedbox_qbit_password: "{{ vault_seedbox_qbit_password }}"
-seedbox_ws_username: "{{ vault_seedbox_ws_username }}"
-seedbox_ws_password: "{{ vault_seedbox_ws_password }}"
-seedbox_ws_session_cookie: "{{ vault_seedbox_ws_session_cookie }}"
+lxc_docker_env_stack_vars:
+  bittorrent:
+    wireguard_private_key: "{{ vault_seedbox_wireguard_private_key }}"
+    wireguard_preshared_key: "{{ vault_seedbox_wireguard_preshared_key }}"
+    wireguard_address: "{{ vault_seedbox_wireguard_address }}"
+    qbit_username: "{{ vault_seedbox_qbit_username }}"
+    qbit_password: "{{ vault_seedbox_qbit_password }}"
+    ws_username: "{{ vault_seedbox_ws_username }}"
+    ws_password: "{{ vault_seedbox_ws_password }}"
+    ws_session_cookie: "{{ vault_seedbox_ws_session_cookie }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
