@@ -18,6 +18,15 @@ lxc_docker_env_stack_vars:
     jwt_refresh_secret: "{{ vault_public_readmeabook_jwt_refresh_secret | default('REPLACE_ME', true) }}"
     config_encryption_key: "{{ vault_public_readmeabook_config_encryption_key | default('REPLACE_ME', true) }}"
     postgres_password: "{{ vault_public_readmeabook_postgres_password | default('REPLACE_ME', true) }}"
+  romm:
+    db_passwd: "{{ vault_public_romm_db_passwd }}"
+    db_root_passwd: "{{ vault_public_romm_db_root_passwd }}"
+    auth_secret_key: "{{ vault_public_romm_auth_secret_key }}"
+    oidc_client_secret: "{{ vault_public_romm_oidc_client_secret }}"
+    igdb_client_id: "{{ vault_public_romm_igdb_client_id }}"
+    igdb_client_secret: "{{ vault_public_romm_igdb_client_secret }}"
+    retroachievements_api_key: "{{ vault_public_romm_retroachievements_api_key }}"
+    steamgriddb_api_key: "{{ vault_public_romm_steamgriddb_api_key }}"
 
 lxc_docker_env_path_ownership_overrides:
   - path: "/shared/{{ inventory_hostname }}/stacks/romm/appdata/db"
@@ -31,16 +40,6 @@ lxc_docker_env_path_ownership_overrides:
 
 public_authentik_reconciler_token: "{{ vault_authentik_reconciler_token }}"
 public_navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
-
-# RomM stack secrets (resolved from vault)
-public_romm_db_passwd: "{{ vault_public_romm_db_passwd }}"
-public_romm_db_root_passwd: "{{ vault_public_romm_db_root_passwd }}"
-public_romm_auth_secret_key: "{{ vault_public_romm_auth_secret_key }}"
-public_romm_oidc_client_secret: "{{ vault_public_romm_oidc_client_secret }}"
-public_romm_igdb_client_id: "{{ vault_public_romm_igdb_client_id }}"
-public_romm_igdb_client_secret: "{{ vault_public_romm_igdb_client_secret }}"
-public_romm_retroachievements_api_key: "{{ vault_public_romm_retroachievements_api_key }}"
-public_romm_steamgriddb_api_key: "{{ vault_public_romm_steamgriddb_api_key }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
