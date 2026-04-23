@@ -34,12 +34,11 @@
             *faviann.keys)
               printf '%s\n' \
                 'ssh-ed25519 AAAATESTKEYONE faviann@laptop' \
-                'ssh-ed25519 AAAATESTKEYONE faviann@laptop' \
-                'ssh-ed25519 AAAATESTKEYTWO faviann@phone'
+                'ssh-ed25519 AAAATESTKEYONE faviann@laptop'
               ;;
             *aperture.keys)
               printf '%s\n' \
-                'ssh-ed25519 AAAATESTKEYONE faviann@laptop'
+                'ssh-ed25519 AAAATESTKEYTWO faviann@phone'
               ;;
             *)
               echo "unexpected curl url: $url" >&2
