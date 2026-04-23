@@ -49,7 +49,7 @@ def main() -> int:
         print(empty_output, file=sys.stderr)
         return 1
 
-    markers = ["GitHub", "returned no SSH keys", "workstation_github_users"]
+    markers = ["GitHub", "returned no SSH keys", "lxc_github_keys_github_users"]
     missing = [marker for marker in markers if marker not in empty_output]
     if missing:
         print(f"empty-key playbook output missed expected fragments: {missing}", file=sys.stderr)

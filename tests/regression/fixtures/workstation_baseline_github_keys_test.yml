@@ -9,7 +9,11 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/faviann"
     workstation_packages: []
-    workstation_github_users:
+    lxc_ssh_user: faviann
+    lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    lxc_github_keys_home: "{{ temp_root }}/home/faviann"
+    lxc_github_users:
       - faviann
       - aperture
     docker_user: faviann
