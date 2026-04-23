@@ -5,7 +5,7 @@
 
 ## Summary
 
-A single private GitHub repo (`faviann/workstation`) serves as both the dotfiles repo and the personal workstation bootstrap repo. It uses [chezmoi](https://chezmoi.io) for dotfile management and Bitwarden CLI for secret injection. Secrets never touch the repo.
+A single private GitHub repo (`faviann/dotfiles`) serves as both the dotfiles repo and the personal workstation bootstrap repo. It uses [chezmoi](https://chezmoi.io) for dotfile management and Bitwarden CLI for secret injection. Secrets never touch the repo.
 
 ## Machines in Scope
 
@@ -130,7 +130,7 @@ bw login
 export BW_SESSION=$(bw unlock --raw)
 
 # 4. Init and apply dotfiles
-chezmoi init --apply git@github.com:faviann/workstation.git
+chezmoi init --apply git@github.com:faviann/dotfiles.git
 ```
 
 Day-to-day (pull repo changes + re-apply):
