@@ -21,10 +21,12 @@ class WorkstationInventoryTests(unittest.TestCase):
     def test_workstation_inventory_contract(self) -> None:
         inventory = load_yaml(REPO_ROOT / "inventory/hosts.yml")
         workstation_vars = load_yaml(REPO_ROOT / "inventory/host_vars/workstation.yml")
+        all_children = inventory["all"]["children"]
+        overrides = workstation_vars["proxmox_lxc_overrides"]
 
-        self.assertIn("workstation", inventory["all"]["children"]["tier_large"]["hosts"])
-        self.assertIn("workstation", inventory["all"]["children"]["cap_docker"]["hosts"])
-        self.assertNotIn("workstation", inventory["all"]["children"]["cap_wireguard"]["hosts"])
+        self.assertIn("workstation", all_children["tier_large"]["hosts"])
+        self.assertIn("workstation", all_children["cap_docker"]["hosts"])
+        self.assertNotIn("workstation", all_children["cap_wireguard"]["hosts"])
 
         self.assertEqual(workstation_vars["workstation_enabled"], True)
         self.assertEqual(workstation_vars["docker_user"], "faviann")
@@ -34,11 +36,16 @@ class WorkstationInventoryTests(unittest.TestCase):
         self.assertEqual(workstation_vars["docker_agents_enabled"], False)
         self.assertEqual(workstation_vars["traefik_kop_enabled"], False)
         self.assertEqual(workstation_vars["lxc_hwaddr"], "BC:24:11:57:80:06")
-        self.assertEqual(workstation_vars["proxmox_lxc_overrides"]["vmid"], 306)
-        self.assertEqual(workstation_vars["proxmox_lxc_overrides"]["hostname"], "workstation")
-        self.assertEqual(workstation_vars["proxmox_lxc_overrides"]["cores"], 16)
-        self.assertEqual(workstation_vars["proxmox_lxc_overrides"]["memory"], 32768)
-        self.assertEqual(workstation_vars["proxmox_lxc_overrides"]["disk"], "128")
+        self.assertEqual(overrides["vmid"], 306)
+        self.assertEqual(overrides["hostname"], "workstation")
+        self.assertEqual(overrides["cores"], 16)
+        self.assertEqual(overrides["memory"], 32768)
+        self.assertEqual(overrides["disk"], "128")
+        self.assertEqual(
+            overrides["description"],
+            "Persistent remote coding workstation managed via Ansible",
+        )
+        self.assertEqual(overrides["tags"], ["ansible", "workstation", "development"])
 
 
 if __name__ == "__main__":
