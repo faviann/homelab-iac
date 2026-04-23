@@ -18,28 +18,19 @@ argument_specs:
       workstation_username:
         type: str
         required: false
-        description: Username that should own the workstation login and SSH key baseline.
+        description: Username that should own the workstation login baseline.
       workstation_uid:
         type: int
         required: false
-        description: UID that should own the workstation login and SSH key baseline.
+        description: UID that should own the workstation login baseline.
       workstation_gid:
         type: int
         required: false
-        description: GID that should own the workstation login and SSH key baseline.
+        description: GID that should own the workstation login baseline.
       workstation_home:
         type: str
         required: false
         description: Filesystem home directory for the workstation login account.
-      workstation_github_users:
-        type: list
-        elements: str
-        required: true
-        description: GitHub usernames whose public SSH keys should be merged into authorized_keys.
-      workstation_github_keys_base_url:
-        type: str
-        required: false
-        description: Base URL used to fetch GitHub username .keys endpoints.
       workstation_packages:
         type: list
         elements: str

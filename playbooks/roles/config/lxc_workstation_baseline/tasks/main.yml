@@ -1,6 +1,4 @@
 ---
-# Main tasks file for lxc_workstation_baseline role
-
 - name: Assert workstation baseline inputs are present
   ansible.builtin.assert:
     that:
@@ -11,11 +9,9 @@
       - workstation_username == docker_user
       - workstation_uid == docker_uid
       - workstation_gid == docker_gid
-      - workstation_github_users | length > 0
     fail_msg: >-
-      config/lxc_workstation_baseline requires docker_user/docker_uid/docker_gid
-      and a non-empty workstation_github_users list. Set docker_user to the daily
-      login user and provide at least one GitHub username.
+      config/lxc_workstation_baseline requires docker_user/docker_uid/docker_gid.
+      Set docker_user to the daily login user.
 
 - name: Install workstation baseline packages
   ansible.builtin.apt:
@@ -24,53 +20,6 @@
     update_cache: true
   when: workstation_packages | length > 0
 
-- name: Ensure workstation SSH directory exists
-  ansible.builtin.file:
-    path: "{{ workstation_home }}/.ssh"
-    state: directory
-    mode: "0700"
-    owner: "{{ workstation_uid | string }}"
-    group: "{{ workstation_gid | string }}"
-
-- name: Fetch GitHub public keys for workstation users
-  ansible.builtin.command:
-    argv:
-      - curl
-      - -fsSL
-      - "{{ workstation_github_keys_base_url }}/{{ item }}.keys"
-  loop: "{{ workstation_github_users }}"
-  register: workstation_github_key_fetch
-  changed_when: false
-  when: not ansible_check_mode
-
-- name: Build workstation authorized SSH keys
-  ansible.builtin.set_fact:
-    workstation_authorized_keys: >-
-      {{
-        workstation_github_key_fetch.results
-        | map(attribute='stdout_lines')
-        | flatten
-        | map('trim')
-        | reject('equalto', '')
-        | unique
-        | list
-      }}
-  when: not ansible_check_mode
-
-- name: Fail if GitHub returned no workstation SSH keys
-  ansible.builtin.fail:
-    msg: >-
-      GitHub returned no SSH keys for workstation_github_users={{ workstation_github_users | to_json }}.
-      Check the usernames and the configured workstation_github_keys_base_url.
-  when:
-    - not ansible_check_mode
-    - workstation_authorized_keys | length == 0
-
-- name: Write workstation authorized_keys
-  ansible.builtin.copy:
-    dest: "{{ workstation_home }}/.ssh/authorized_keys"
-    content: "{{ workstation_authorized_keys | join('\n') ~ '\n' }}"
-    owner: "{{ workstation_uid | string }}"
-    group: "{{ workstation_gid | string }}"
-    mode: "0600"
-  when: not ansible_check_mode
+- name: Configure GitHub SSH keys
+  ansible.builtin.include_role:
+    name: config/lxc_github_keys
