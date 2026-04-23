@@ -1,0 +1,27 @@
+---
+# Default variables for lxc_workstation_baseline role
+
+workstation_username: "{{ docker_user }}"
+workstation_uid: "{{ docker_uid }}"
+workstation_gid: "{{ docker_gid }}"
+workstation_home: "/home/{{ workstation_username }}"
+workstation_github_users: []
+workstation_github_keys_base_url: "https://github.com"
+workstation_packages:
+  - tmux
+  - mosh
+  - wget
+  - jq
+  - ripgrep
+  - fd-find
+  - fzf
+  - htop
+  - tree
+  - zip
+  - unzip
+  - build-essential
+  - pkg-config
+  - python3-venv
+  - python3-pip
+  - pipx
+  - gh
