@@ -89,16 +89,16 @@ lxc_github_users:
   - faviann
 ```
 
-**`inventory/host_vars/workstation.yml`** — remove `workstation_github_users`. The `docker_user: faviann` / `docker_uid` / `docker_gid` overrides stay unchanged, so workstation identity is unaffected.
+**`inventory/host_vars/workstation.yml`** — remove `workstation_github_users`. The `docker_user: faviann` / `docker_uid` / `docker_gid` overrides were also removed (now redundant — group default matches).
 
-**`inventory/group_vars/cap_docker/vars.yml`** — no change. `docker_user: dockeruser` remains the Docker service account for non-workstation LXCs.
+**`inventory/group_vars/cap_docker/vars.yml`** — `docker_user` changed from `dockeruser` to `faviann` to standardize the login username across all LXCs.
 
 ### User identity resolution
 
 | Host | `docker_user` | `lxc_ssh_user` | Resolved target |
 |------|--------------|----------------|-----------------|
-| workstation | faviann | faviann | faviann |
-| auth, portal, servarr, etc. | dockeruser | faviann | dockeruser |
+| workstation | faviann (from group) | faviann | faviann |
+| auth, portal, servarr, etc. | faviann | faviann | faviann |
 | future non-docker LXC | _(undefined)_ | faviann | faviann |
 
 ## Testing

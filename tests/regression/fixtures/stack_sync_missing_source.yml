@@ -17,7 +17,7 @@
       path_ownership_overrides: []
       docker_uid: 1000
       docker_gid: 1000
-      docker_user: dockeruser
+      docker_user: faviann
       docker_agents_stack_dir: "{{ temp_root }}/shared/stacks/docker-agents"
       legacy_managed_stacks: []
   tasks:

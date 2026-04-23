@@ -17,7 +17,7 @@ proxmox_lxc_capability_defaults:
 
 # Docker user identity — canonical source for lxc_docker_runtime and lxc_docker_environment roles.
 # Override in host_vars/{host}.yml if a specific host needs a different Docker user.
-docker_user: dockeruser
+docker_user: faviann
 docker_uid: 1000
 docker_gid: 1000
 
