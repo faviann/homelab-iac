@@ -18,7 +18,7 @@ dockhand_discord_webhook_url: "{{ vault_dockhand_discord_webhook_url }}"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:
-  - proxy
+  - shared
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:

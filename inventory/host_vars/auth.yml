@@ -28,10 +28,6 @@ lxc_docker_env_stack_vars:
     email_timeout: "{{ vault_auth_email_timeout }}"
     email_from: "{{ vault_auth_email_from }}"
 
-# External Docker networks required by compose stacks
-lxc_docker_env_external_networks:
-  - proxy
-
 lxc_docker_env_path_ownership_overrides:
   - path: "/shared/{{ inventory_hostname }}/stacks/auth/appdata/database"
     owner: '70'

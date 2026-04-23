@@ -16,7 +16,6 @@ services:
       - ./appdata/authentik/custom-templates:/templates
       - ./appdata/authentik/blueprints:/blueprints/custom
     networks:
-      - proxy
       - idm
     environment:
       - AUTHENTIK_PROXY_HEADERS=true
@@ -26,7 +25,6 @@ services:
       - NAVIDROME_ADMIN_PASSWORD={{ stack_vars.navidrome_automation_password | replace('$', '$$') }}
     labels:
       traefik.enable: true
-      traefik.docker.network: proxy
       homepage.instance.admin.group: Operations
       homepage.instance.admin.name: Authentik
       homepage.instance.admin.href: https://auth.faviann.com
@@ -50,5 +48,3 @@ networks:
   idm:
     name: idm
     driver: bridge
-  proxy:
-    external: true

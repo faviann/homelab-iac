@@ -20,7 +20,6 @@ Auth-owned:
 Host-owned:
 
 - `default_domain`
-- `proxy` external Docker network declaration
 - `/data/roms` library mount
 - `public_romm_*` vault-backed variable bindings in `inventory/host_vars/public.yml`
 

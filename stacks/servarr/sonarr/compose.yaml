@@ -24,9 +24,9 @@ services:
       homepage.instance.admin.description: TV series management
       homepage.instance.admin.icon: sonarr
     networks:
-      - servarr-internal
+      - shared
 
 networks:
-  servarr-internal:
-    name: servarr-internal
+  shared:
+    name: shared
     external: true

@@ -7,7 +7,7 @@ lxc_hwaddr: "BC:24:11:77:E5:FC"
 
 # External Docker networks required by compose stacks
 lxc_docker_env_external_networks:
-  - servarr-internal
+  - shared
 
 lxc_docker_env_host_directories:
   - path: /data/media/movies/en

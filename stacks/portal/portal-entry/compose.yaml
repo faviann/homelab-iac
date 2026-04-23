@@ -6,11 +6,11 @@ services:
     volumes:
       - ./appdata/nginx/conf.d:/etc/nginx/conf.d:ro
     networks:
-      - proxy
+      - shared
     labels:
       traefik.enable: true
       traefik.http.routers.portal-entry.rule: Host(`faviann.com`)
       traefik.http.routers.portal-entry.middlewares: protected-edge-auth@file
 networks:
-  proxy:
+  shared:
     external: true

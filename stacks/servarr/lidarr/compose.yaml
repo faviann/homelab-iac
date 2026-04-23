@@ -24,9 +24,9 @@ services:
       homepage.instance.admin.description: Music management
       homepage.instance.admin.icon: lidarr
     networks:
-      - servarr-internal
+      - shared
 
 networks:
-  servarr-internal:
-    name: servarr-internal
+  shared:
+    name: shared
     external: true

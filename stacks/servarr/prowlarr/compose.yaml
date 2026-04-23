@@ -26,7 +26,7 @@ services:
       homepage.instance.admin.description: Indexer management
       homepage.instance.admin.icon: prowlarr
     networks:
-      - servarr-internal
+      - shared
 
   flaresolverr-custom:
     image: 21hsmw/flaresolverr:nodriver
@@ -38,9 +38,9 @@ services:
       - TZ=${TZ}
       - DRIVER=nodriver
     networks:
-      - servarr-internal
+      - shared
 
 networks:
-  servarr-internal:
-    name: servarr-internal
+  shared:
+    name: shared
     external: true

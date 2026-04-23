@@ -103,11 +103,11 @@ services:
       homepage.instance.admin.description: Anime movie management
       homepage.instance.admin.icon: radarr
     networks:
-      - servarr-internal
+      - shared
 
 networks:
-  servarr-internal:
-    name: servarr-internal
+  shared:
+    name: shared
     external: true
 ```
 
@@ -180,11 +180,11 @@ services:
       homepage.instance.admin.description: Anime series management
       homepage.instance.admin.icon: sonarr
     networks:
-      - servarr-internal
+      - shared
 
 networks:
-  servarr-internal:
-    name: servarr-internal
+  shared:
+    name: shared
     external: true
 ```
 

@@ -2,7 +2,7 @@ x-prereq-dirs:
   - ./appdata/data
 
 networks:
-  proxy:
+  shared:
     external: true
 
 services:
@@ -22,7 +22,7 @@ services:
       PGID: ${PGID}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     networks:
-      - proxy
+      - shared
     labels:
       traefik.enable: true
       traefik.domain: admin.faviann.com

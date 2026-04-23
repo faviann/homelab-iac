@@ -1,6 +1,6 @@
 networks:
-  proxy:
-    name: proxy
+  shared:
+    name: shared
     external: true
 
 services:
@@ -18,7 +18,7 @@ services:
       - HOMEPAGE_INSTANCE_NAME=home
       - HOMEPAGE_ALLOWED_HOSTS=localhost:3002,127.0.0.1:3002,[::1]:3002,portal.faviann.vms:3002,homepage.home.faviann.com
     networks:
-      - proxy
+      - shared
     labels:
       traefik.enable: true
       traefik.http.routers.homepage-home.rule: Host(`homepage.home.faviann.com`)

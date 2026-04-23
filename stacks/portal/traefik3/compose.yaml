@@ -6,7 +6,7 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - proxy
+      - shared
     ports:
       - 80:80
       - 443:443/tcp
@@ -29,11 +29,11 @@ services:
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
     networks:
-      - proxy
+      - shared
 networks:
   traefik:
     driver: bridge
-  proxy:
+  shared:
     external: true #CAREFUL check .env
 
 x-managed-files:

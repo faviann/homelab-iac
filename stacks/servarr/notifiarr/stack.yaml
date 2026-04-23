@@ -13,7 +13,7 @@ runtime:
     - stack_name
   host_requirements:
     external_networks:
-      - servarr-internal
+      - shared
     host_directories:
       - /data
     ownership_overrides: []

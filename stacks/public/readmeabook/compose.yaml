@@ -39,9 +39,3 @@ services:
       homepage.href: https://${HOMEPAGE_FQDN}
       homepage.description: Audiobook request and automation engine
       homepage.icon: mdi-book-music
-    networks:
-      - proxy
-
-networks:
-  proxy:
-    external: true

@@ -24,9 +24,9 @@ services:
       homepage.instance.admin.description: Movie management
       homepage.instance.admin.icon: radarr
     networks:
-      - servarr-internal
+      - shared
 
 networks:
-  servarr-internal:
-    name: servarr-internal
+  shared:
+    name: shared
     external: true

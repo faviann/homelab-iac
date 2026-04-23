@@ -5,9 +5,6 @@
 lxc_hwaddr: "BC:24:11:D4:52:3F"
 default_domain: public.faviann.com
 
-lxc_docker_env_external_networks:
-  - proxy
-
 lxc_docker_env_stack_vars:
   storyteller:
     secret_key: "{{ vault_public_storyteller_secret_key }}"

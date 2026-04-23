@@ -31,7 +31,6 @@ Stack-owned:
 
 Host-owned:
 
-- `proxy` external network declaration
 - auth vault-backed variable bindings in `inventory/host_vars/auth.yml`
 - cross-host OIDC and automation inputs declared through host vars
 

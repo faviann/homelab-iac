@@ -48,7 +48,6 @@ services:
       homepage.href: https://${HOMEPAGE_FQDN}
       homepage.description: ROM manager
     networks:
-      - proxy
       - default
 
   romm-db:
@@ -68,7 +67,3 @@ services:
       start_period: 30s
       interval: 10s
       retries: 5
-
-networks:
-  proxy:
-    external: true

@@ -24,9 +24,9 @@ services:
       homepage.instance.admin.description: Notification and automation companion
       homepage.instance.admin.icon: notifiarr
     networks:
-      - servarr-internal
+      - shared
 
 networks:
-  servarr-internal:
-    name: servarr-internal
+  shared:
+    name: shared
     external: true

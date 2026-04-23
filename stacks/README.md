@@ -97,7 +97,7 @@ runtime:
     - stack_name
   host_requirements:
     external_networks:
-      - servarr-internal
+      - shared
     host_directories: []
     ownership_overrides: []
 exposure:
@@ -214,7 +214,8 @@ lxc_docker_env_external_networks:
   - shared
 ```
 
-Current stacks still use legacy names such as `proxy` and `servarr-internal` for this pattern. New work should prefer `shared` so host-local shared networks are named consistently across LXCs.
+Older stacks used inconsistent legacy names for this pattern. Use `shared` so
+host-local shared networks are named consistently across LXCs.
 
 Do not add `shared` only because a stack has Traefik labels or because `traefik-kop` exports those labels. Label-exported routes need a reachable published port; `shared` is only for same-LXC stack-to-stack traffic.
 

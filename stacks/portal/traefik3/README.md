@@ -31,7 +31,7 @@ Stack-owned:
 
 Host-owned:
 
-- `proxy` external network declaration
+- `shared` external network declaration
 - portal vault-backed variable bindings in `inventory/host_vars/portal.yml`
 - domain-edge exposure and certificate DNS credentials
 

@@ -15,7 +15,7 @@ Stack-owned:
 Host-owned:
 
 - `default_domain`
-- `servarr-internal` external Docker network declaration
+- `shared` external Docker network declaration
 - `/data` host directory contract
 - LXC identity and resource settings
 
