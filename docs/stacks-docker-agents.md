@@ -15,7 +15,7 @@ Optional when `traefik_kop_enabled: true`:
 Hawser is enabled on every non-`portal` Docker host where `docker_agents_enabled: true`:
 - `hawser`: Standard-mode remote agent for Dockhand multi-host management across the remote fleet
 
-Set `docker_agents_enabled: false` on hosts that need Docker without Dockhand/Homepage/Hawser sidecars, such as `workstation`.
+Set `docker_agents_enabled: false` on hosts that need Docker without the managed `docker-agents` stack and its Dockhand/Homepage/Hawser sidecars, such as `workstation`.
 
 Set `traefik_kop_enabled: false` on `portal`, because portal runs Traefik itself.
 `portal` is also excluded from Hawser because it hosts Dockhand rather than acting as a remote service host.

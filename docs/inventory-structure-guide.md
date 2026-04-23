@@ -17,7 +17,7 @@ All tiers use network bridge `vmbr1` by default.
 
 Hosts can belong to **multiple** capability groups:
 
-- **cap_docker**: Docker runtime, compose, and the docker-agents managed stack
+- **cap_docker**: Docker runtime, compose, and the default-on docker-agents managed stack
 - **cap_gpu**: GPU passthrough for hardware acceleration
 - **cap_wireguard**: WireGuard kernel module access
 
@@ -85,8 +85,11 @@ If a host should run Docker, it must be in `cap_docker` so the Docker roles and
 now fails early with a clear validation message instead of an undefined-variable error
 later in the run.
 
-The only long-term exclusion from the Hawser remote-agent baseline is `portal`, identified by
-`portal_instance: true` in host vars.
+The Hawser remote-agent baseline follows `docker_agents_enabled`: hosts with
+`docker_agents_enabled: false`, such as `workstation`, do not receive Hawser or the
+managed `docker-agents` stack. `portal` additionally sets `traefik_kop_enabled: false`
+and is excluded from Hawser because it hosts Dockhand rather than acting as a remote
+service host.
 
 ## Adding New Hosts
 
