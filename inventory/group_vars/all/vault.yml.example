@@ -72,6 +72,7 @@ vault_public_calibre_web_automated_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIE
 
 # Portal Dockhand
 vault_portal_dockhand_encryption_key: "REPLACE_WITH_BASE64_32_BYTE_KEY"
+vault_dockhand_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 
 # Portal Traefik
 vault_portal_traefik_cloudflare_dns_api_token: "REPLACE_WITH_CLOUDFLARE_DNS_API_TOKEN"
