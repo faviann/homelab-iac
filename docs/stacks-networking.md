@@ -4,18 +4,41 @@ Read when a stack needs external networks, VPN tunneling, or non-default network
 
 | Pattern | Use |
 | --- | --- |
-| `proxy` external bridge | host-local proxy attachment for stacks that explicitly join the shared proxy network |
+| `shared` external bridge | stable cross-stack communication on one LXC |
 | `admin` internal bridge | docker-agents |
 | `network_mode: service:<vpn>` | stacks that must share a VPN container's network namespace |
 
-External networks must be declared in host vars before deploy:
+External networks must be declared in host vars before deploy, but only on hosts whose compose files actually use them:
 
 ```yaml
 lxc_docker_env_external_networks:
-  - proxy
+  - shared
 ```
 
-`proxy` is a host-local Docker network, not a cross-host network. Portal-hosted services use it so local Traefik can reach them directly. Some non-portal stacks also declare it when their compose file explicitly attaches services to a local shared proxy network, but `traefik-kop` label replication alone does not require every routed service to join `proxy`.
+`shared` is a host-local Docker network, not a cross-host network. Use it when one stack needs stable Docker-network access to another stack on the same LXC. A local reverse proxy reaching local services is one example; Servarr services sharing an internal app network are the same pattern.
+
+Current stacks still use legacy names such as `proxy` and `servarr-internal` for this pattern. New work should prefer `shared`, and migration work should normalize legacy names where behavior allows.
+
+Do not add `shared` only to support `traefik-kop`; exported labels do not make a remote host-local network reachable.
+
+## Label-Exported Routes
+
+When `traefik-kop` exports labels from a Docker host to portal Traefik, it exports routing metadata, not Docker network reachability. Portal Traefik connects back to the source host through a published port.
+
+If a routed service publishes a different host port than its container port, set `traefik.http.services.<name>.loadbalancer.server.port` to the host port:
+
+```yaml
+services:
+  sonarr-anime:
+    ports:
+      - 8990:8989
+    labels:
+      traefik.enable: true
+      traefik.http.routers.sonarr-anime.middlewares: protected-edge-auth@file
+      traefik.http.services.sonarr-anime.loadbalancer.server.port: 8990
+```
+
+Use the container port only when the active Traefik instance reaches the container directly, such as over a same-LXC shared Docker network.
 
 ## VPN Namespace Pattern
 

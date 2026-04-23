@@ -136,7 +136,7 @@ No registration step is required; the role discovers everything under `stacks/<h
 
 ## Traefik
 
-Non-portal hosts are exposed through Traefik on `portal` via `traefik-kop`, which copies Docker labels into portal's Redis. Portal-hosted stacks use Traefik directly.
+Some Docker hosts act as label sources for Traefik on `portal`: `traefik-kop` copies their Docker labels into portal's Redis. Stacks on the reverse-proxy host use Traefik directly.
 
 ### Discovery Contract
 
@@ -171,6 +171,20 @@ So you normally should not add `entrypoints=websecure` or `tls=true`.
 
 Public services should omit the auth middleware label. Protected tiers add it explicitly.
 
+Port labels name the port Traefik can reach. For label-exported routes, such as routes copied by `traefik-kop` from a Docker host that is not running the reverse proxy, Traefik reaches the service through the published host port. If the service publishes `host_port:container_port` and those ports differ, set `traefik.http.services.<name>.loadbalancer.server.port` to the host port.
+
+Example:
+
+```yaml
+services:
+  myapp:
+    ports:
+      - 8990:8989
+    labels:
+      traefik.enable: true
+      traefik.http.services.myapp.loadbalancer.server.port: 8990
+```
+
 ### Usually Leave Unlabeled
 
 - internal databases and caches
@@ -178,18 +192,18 @@ Public services should omit the auth middleware label. Protected tiers add it ex
 - internal helper APIs
 - VPN support containers
 
-### `proxy` Network
+### Shared Docker Network
 
-Use the external `proxy` network only when a stack explicitly needs to attach a service to the host-local shared proxy bridge:
+Use one external `shared` network when multiple stacks on the same LXC need stable Docker-network access to each other. This is host-local cross-stack plumbing; it is not a cross-LXC network.
 
 ```yaml
 services:
   myapp:
     networks:
-      - proxy
+      - shared
 
 networks:
-  proxy:
+  shared:
     external: true
 ```
 
@@ -197,10 +211,12 @@ Also declare the external network in host vars:
 
 ```yaml
 lxc_docker_env_external_networks:
-  - proxy
+  - shared
 ```
 
-`proxy` is local to each Docker host. Portal-hosted routed services use it so Traefik can reach them directly. Non-portal Traefik labels are replicated by `traefik-kop`; that label replication does not by itself require every routed service to join `proxy`.
+Current stacks still use legacy names such as `proxy` and `servarr-internal` for this pattern. New work should prefer `shared` so host-local shared networks are named consistently across LXCs.
+
+Do not add `shared` only because a stack has Traefik labels or because `traefik-kop` exports those labels. Label-exported routes need a reachable published port; `shared` is only for same-LXC stack-to-stack traffic.
 
 ### Domains
 

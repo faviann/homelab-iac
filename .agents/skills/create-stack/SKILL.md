@@ -91,8 +91,10 @@ For vendor-preserving stacks, keep the upstream base recognizable and put repo-o
 
 Routed services must be reachable by Traefik or by the host-side label replication path, but the reachable port may live somewhere other than the labeled app:
 
-- portal-hosted services may attach to the host-local `proxy` network instead of relying only on host port publishing
-- non-portal services often keep `ports:` because `traefik-kop` replicates labels and the target must still be reachable
+- services may attach to a host-local `shared` network when another stack on the same LXC needs stable Docker-network access
+- label-exported routes, such as routes copied by `traefik-kop`, often keep `ports:` because exported labels do not provide Docker network reachability
+- for label-exported routes, if a routed service publishes `host_port:container_port` and the ports differ, `traefik.http.services.<name>.loadbalancer.server.port` must use the host port
+- do not add `shared` only because a stack has Traefik labels; add it only when another local stack will actually use it
 - VPN namespace apps using `network_mode: service:<vpn>` publish reachable ports on the VPN service while labels may remain on the user-facing app
 
 External networks used in Compose must also be declared in `lxc_docker_env_external_networks` for that host.
@@ -123,7 +125,7 @@ Before finishing any stack edit, verify:
 5. Bind-mount targets needing pre-creation are in `x-prereq-dirs`.
 6. Secrets and runtime templated values flow through `.env.j2`, `lxc_docker_env_stack_vars`, and `stack_vars`.
 7. External networks are declared in host vars.
-8. Routed service reachability is valid for the chosen pattern, including portal/proxy and VPN namespace cases.
+8. Routed service reachability is valid for the chosen pattern, including same-LXC shared networks, label-exported host-port routes, and VPN namespace cases.
 9. Port bindings do not conflict on the same host IP, port, and protocol.
 10. GPU config is only used on GPU-capable hosts.
 11. Stack-local docs and metadata contain no plaintext secrets or secret-shaped values.
