@@ -4,7 +4,7 @@
 
 - name: Get current NVIDIA GPU configuration lines
   ansible.builtin.shell: |
-    grep -E '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file }} | sort || true
+    grep -iE '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file }} | sort || true
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   register: _current_nvidia_config
