@@ -2,6 +2,19 @@
 
 This stack runs qBittorrent through Gluetun on the `seedbox` Docker host. qBittorrent and `ws-ephemeral` intentionally share Gluetun's network namespace, so reachable ports are published on `gluetun`, not on the `qbittorrent` service.
 
+## Normalization Boundary
+
+This stack intentionally does not follow every ordinary app-stack default.
+
+Preserve:
+
+- Do not move qBittorrent Web UI or torrenting ports from `gluetun` to `qbittorrent`.
+- Do not remove `network_mode: service:gluetun`.
+- Do not treat `qbittorrent` route labels without local service ports as a blocker.
+- Do not change helper services that share the VPN namespace to use Docker service DNS instead of `127.0.0.1` namespace-local ports.
+
+Do not use this stack as a template for normal application stacks.
+
 ## Windscribe Endpoint Selection
 
 The current Gluetun server hostnames were chosen from Windscribe 10 Gbps locations:

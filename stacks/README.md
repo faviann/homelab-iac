@@ -14,6 +14,8 @@ Stack portability is explicit. A stack being under `stacks/<host>/<stack>/` does
 
 Foundational stacks are intentionally less portable. Authentik/OIDC has cross-host coupling, `scripts/authentik_blueprint_sync.py` depends on the current auth stack paths, and `portal_instance` controls portal discovery, Traefik KOP behavior, Hawser inclusion, and Dockhand seeding.
 
+Accepted normalization exceptions are indexed in [ADR-006](../docs/decisions/adr-006-stack-normalization-exceptions.md). Stack-local details live in each stack README.
+
 This directory is only for repo-managed stacks that Ansible deploys and reconciles.
 
 ## Stack Contract
