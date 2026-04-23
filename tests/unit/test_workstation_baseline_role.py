@@ -24,7 +24,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(defaults["workstation_username"], "{{ docker_user }}")
         self.assertEqual(defaults["workstation_uid"], "{{ docker_uid }}")
         self.assertEqual(defaults["workstation_gid"], "{{ docker_gid }}")
-        self.assertEqual(defaults["workstation_github_keys_base_url"], "https://github.com")
+        lxc_github_keys_defaults = load_yaml(REPO_ROOT / "playbooks/roles/config/lxc_github_keys/defaults/main.yml")
+        self.assertEqual(lxc_github_keys_defaults["lxc_github_keys_base_url"], "https://github.com")
         self.assertTrue(
             {
                 "tmux",
@@ -48,7 +49,11 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
 
     def test_lifecycle_wires_workstation_baseline_role_once(self) -> None:
         tasks = load_yaml(REPO_ROOT / "playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/configure.yml")
-        matching_tasks = [task for task in tasks if task.get("name") == "Configure workstation baseline"]
+        flat_tasks = []
+        for task in tasks:
+            flat_tasks.append(task)
+            flat_tasks.extend(task.get("block", []))
+        matching_tasks = [task for task in flat_tasks if task.get("name") == "Configure workstation baseline"]
 
         self.assertEqual(len(matching_tasks), 1)
 
