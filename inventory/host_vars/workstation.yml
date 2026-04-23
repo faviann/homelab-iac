@@ -4,8 +4,6 @@
 
 lxc_hwaddr: "BC:24:11:57:80:06"
 workstation_enabled: true
-workstation_github_users:
-  - faviann
 
 docker_user: faviann
 docker_uid: 1000

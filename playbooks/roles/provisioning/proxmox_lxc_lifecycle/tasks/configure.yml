@@ -29,6 +29,10 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
 
+    - name: Configure GitHub SSH keys
+      ansible.builtin.include_role:
+        name: config/lxc_github_keys
+
     - name: Configure logging
       ansible.builtin.include_role:
         name: config/lxc_logging_config
