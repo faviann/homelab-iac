@@ -96,7 +96,7 @@ providers:
   docker:
     # Default rule dynamically gets DOMAIN from labels
     watch: true
-    endpoint: "unix:///run/docker.sock"
+    endpoint: "tcp://traefik-docker-socket-proxy:2375"
     exposedByDefault: false  # <-- (Optional) Change this to true if you want to expose all services
     # Specify discovery network - This ensures correct name resolving and possible issues with containers, that are in multiple networks.
     # E.g. Database container in a separate network and a container in the frontend and database network.

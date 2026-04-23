@@ -17,3 +17,8 @@ Enabled on every non-`portal` Docker host:
 
 Set `traefik_kop_enabled: false` on `portal`, because portal runs Traefik itself.
 `portal` is also excluded from Hawser because it hosts Dockhand rather than acting as a remote service host.
+
+Portal Traefik uses its own stack-local `traefik-docker-socket-proxy` in
+`stacks/portal/traefik3/`. Keep that proxy separate from the managed
+`docker-metadata-proxy` so edge routing does not depend on the docker-agents
+stack or its broader Homepage-oriented allowlist.

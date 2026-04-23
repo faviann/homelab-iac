@@ -11,6 +11,9 @@ Preserve:
 
 - Do not remove either `443/tcp` or `443/udp`; same-number TCP and UDP bindings
   are not a port conflict.
+- Keep Docker provider socket access behind the stack-local
+  `traefik-docker-socket-proxy`; Traefik should not mount the host Docker socket
+  directly.
 - Do not treat Redis, certificate storage, or `x-managed-files` as
   exception-only behavior. They are normal features for this domain-edge reverse
   proxy pattern.
