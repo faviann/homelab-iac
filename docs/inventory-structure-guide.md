@@ -21,12 +21,16 @@ Hosts can belong to **multiple** capability groups:
 - **cap_gpu**: GPU passthrough for hardware acceleration
 - **cap_wireguard**: WireGuard kernel module access
 
-Every `cap_docker` host automatically receives the **docker-agents** stack:
+Every `cap_docker` host receives Docker runtime support. By default, `docker_agents_enabled: true`
+also seeds the managed `docker-agents` stack:
 - `docker-metadata-proxy` — read-only Docker socket proxy for Homepage discovery
 - `dockwatch-socket-proxy` — write-capable proxy for container management
 - `dockwatch` — container monitoring UI
 - `traefik-kop` — Traefik label replication (controlled by `traefik_kop_enabled`, default `true`; set `false` on portal)
-- `hawser` — Standard-mode Dockhand remote agent on every non-`portal` Docker host
+- `hawser` — Standard-mode Dockhand remote agent on every non-`portal` Docker host where `docker_agents_enabled: true`
+
+Hosts that need Docker without Dockhand/Homepage sidecars, such as `workstation`, should set
+`docker_agents_enabled: false` in `host_vars`.
 
 Traefik discovery contract: routes are created from service labels. Apply labels only to intentionally exposed user-facing services.
 
