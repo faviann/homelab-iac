@@ -71,7 +71,11 @@
     - name: Assert workstation baseline GitHub keys were written
       ansible.builtin.assert:
         that:
+          - workstation_ssh_dir_stat.stat.uid == workstation_uid
+          - workstation_ssh_dir_stat.stat.gid == workstation_gid
           - workstation_ssh_dir_stat.stat.mode == "0700"
+          - workstation_authorized_keys_stat.stat.uid == workstation_uid
+          - workstation_authorized_keys_stat.stat.gid == workstation_gid
           - workstation_authorized_keys_stat.stat.mode == "0600"
           - (workstation_authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE faviann@laptop\nssh-ed25519 AAAATESTKEYTWO faviann@phone\n"
-        fail_msg: "Workstation baseline did not write the expected GitHub keys with the expected modes"
+        fail_msg: "Workstation baseline did not write the expected GitHub keys with the expected ownership and modes"
