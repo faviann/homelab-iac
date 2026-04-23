@@ -66,8 +66,31 @@
       restart_required: false
       restart_applied: false
 
+- name: Determine host-config LXC configuration file path
+  ansible.builtin.set_fact:
+    _proxmox_lxc_host_config_file: >-
+      {{ proxmox_lxc_host_config_path_root }}/{{ proxmox_lxc_host_config_spec.vmid }}.conf
+
+- name: Check if host-config LXC configuration file exists
+  ansible.builtin.stat:
+    path: "{{ _proxmox_lxc_host_config_file }}"
+  register: _proxmox_lxc_host_config_file_stat
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: "{{ proxmox_lxc_host_config_become }}"
+
+- name: Skip runtime-sensitive host reconciliation in check mode when config is absent
+  ansible.builtin.debug:
+    msg: >-
+      Check mode skips host-config reconciliation for container
+      {{ proxmox_lxc_host_config_spec.vmid }} ({{ proxmox_lxc_host_config_spec.hostname }})
+      because {{ _proxmox_lxc_host_config_file }} does not exist yet.
+  when:
+    - ansible_check_mode | bool
+    - not _proxmox_lxc_host_config_file_stat.stat.exists
+
 - name: Apply LXC config file modifications
   ansible.builtin.include_tasks: config_file.yml
+  when: not (ansible_check_mode | bool and not _proxmox_lxc_host_config_file_stat.stat.exists)
   tags:
     - config_file
     - idmap
@@ -76,7 +99,9 @@
 
 - name: Apply LXC feature flags via pct
   ansible.builtin.include_tasks: features.yml
-  when: proxmox_lxc_host_config_spec.features | default([]) | length > 0
+  when:
+    - proxmox_lxc_host_config_spec.features | default([]) | length > 0
+    - not (ansible_check_mode | bool and not _proxmox_lxc_host_config_file_stat.stat.exists)
   tags:
     - features
 

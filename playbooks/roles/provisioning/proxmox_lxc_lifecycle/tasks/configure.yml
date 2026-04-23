@@ -1,61 +1,62 @@
----
-- name: Ensure container is accessible via SSH
-  ansible.builtin.wait_for_connection:
-    timeout: "{{ 60 if (proxmox_lifecycle_rebuilt | bool) else 15 }}"
-  register: proxmox_lifecycle_connection_check
-  retries: "{{ 6 if (proxmox_lifecycle_rebuilt | bool) else 3 }}"
-  delay: "{{ 10 if (proxmox_lifecycle_rebuilt | bool) else 5 }}"
-  until: proxmox_lifecycle_connection_check is succeeded
-  when: proxmox_lifecycle_guest_actions | length > 0
-
-- name: Gather container facts
-  ansible.builtin.setup:
-  when: proxmox_lifecycle_guest_actions | length > 0
-
-- name: Configure base system
-  ansible.builtin.include_role:
-    name: config/lxc_base_system
-  when: proxmox_lifecycle_guest_actions | length > 0
-
-- name: Configure logging
-  ansible.builtin.include_role:
-    name: config/lxc_logging_config
-  when: proxmox_lifecycle_guest_actions | length > 0
-
-- name: Install Docker runtime
-  ansible.builtin.include_role:
-    name: config/lxc_docker_runtime
+- name: Skip runtime-sensitive guest configuration in check mode when container is absent
+  ansible.builtin.debug:
+    msg: >-
+      Check mode skips guest configuration for container
+      {{ proxmox_lxc_contract.api_spec.vmid | default(inventory_hostname) }}
+      because runtime state is absent.
   when:
     - proxmox_lifecycle_guest_actions | length > 0
-    - docker_enabled | default(false)
+    - ansible_check_mode | bool
+    - proxmox_lifecycle_runtime_state == 'absent'
 
-- name: Configure NVIDIA GPU runtime
-  ansible.builtin.include_role:
-    name: config/lxc_nvidia_runtime
+- name: Run guest configuration actions
   when:
     - proxmox_lifecycle_guest_actions | length > 0
-    - gpu_enabled | default(false)
+    - not (ansible_check_mode | bool and proxmox_lifecycle_runtime_state == 'absent')
+  block:
+    - name: Ensure container is accessible via SSH
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ 60 if (proxmox_lifecycle_rebuilt | bool) else 15 }}"
+      register: proxmox_lifecycle_connection_check
+      retries: "{{ 6 if (proxmox_lifecycle_rebuilt | bool) else 3 }}"
+      delay: "{{ 10 if (proxmox_lifecycle_rebuilt | bool) else 5 }}"
+      until: proxmox_lifecycle_connection_check is succeeded
 
-- name: Configure Docker environment
-  ansible.builtin.include_role:
-    name: config/lxc_docker_environment
-  when:
-    - proxmox_lifecycle_guest_actions | length > 0
-    - docker_enabled | default(false)
+    - name: Gather container facts
+      ansible.builtin.setup:
 
-- name: Configure workstation baseline
-  ansible.builtin.include_role:
-    name: config/lxc_workstation_baseline
-  when:
-    - proxmox_lifecycle_guest_actions | length > 0
-    - workstation_enabled | default(false)
+    - name: Configure base system
+      ansible.builtin.include_role:
+        name: config/lxc_base_system
 
-- name: Flush handlers after guest configuration
-  ansible.builtin.meta: flush_handlers
-  when: proxmox_lifecycle_guest_actions | length > 0
+    - name: Configure logging
+      ansible.builtin.include_role:
+        name: config/lxc_logging_config
 
-- name: Reboot container if needed
-  ansible.builtin.include_role:
-    name: config/lxc_base_system
-    tasks_from: reboot
-  when: proxmox_lifecycle_guest_actions | length > 0
+    - name: Install Docker runtime
+      ansible.builtin.include_role:
+        name: config/lxc_docker_runtime
+      when: docker_enabled | default(false)
+
+    - name: Configure NVIDIA GPU runtime
+      ansible.builtin.include_role:
+        name: config/lxc_nvidia_runtime
+      when: gpu_enabled | default(false)
+
+    - name: Configure Docker environment
+      ansible.builtin.include_role:
+        name: config/lxc_docker_environment
+      when: docker_enabled | default(false)
+
+    - name: Configure workstation baseline
+      ansible.builtin.include_role:
+        name: config/lxc_workstation_baseline
+      when: workstation_enabled | default(false)
+
+    - name: Flush handlers after guest configuration
+      ansible.builtin.meta: flush_handlers
+
+    - name: Reboot container if needed
+      ansible.builtin.include_role:
+        name: config/lxc_base_system
+        tasks_from: reboot

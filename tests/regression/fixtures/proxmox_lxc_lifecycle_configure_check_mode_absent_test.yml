@@ -1,0 +1,33 @@
+---
+- name: Seed transient target for configure check-mode absent runtime regression
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Add guest target with intentionally unresolvable SSH endpoint
+      ansible.builtin.add_host:
+        name: absent-check-mode-guest
+        groups:
+          - proxmox_lifecycle_guest_targets
+        ansible_connection: ssh
+        ansible_host: absent-check-mode-guest.invalid
+        ansible_user: root
+
+- name: Test lifecycle guest configure skips absent runtime in check mode
+  hosts: proxmox_lifecycle_guest_targets
+  gather_facts: false
+  vars:
+    proxmox_lifecycle_runtime_state: absent
+    proxmox_lifecycle_rebuilt: false
+    proxmox_lifecycle_guest_actions:
+      - wait_for_connection
+      - gather_facts
+      - configure_guest
+      - reboot_if_required
+    docker_enabled: true
+    workstation_enabled: true
+    gpu_enabled: true
+  tasks:
+    - name: Include lifecycle guest configuration tasks
+      ansible.builtin.include_tasks:
+        file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/configure.yml"
