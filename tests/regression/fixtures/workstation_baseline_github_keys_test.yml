@@ -1,0 +1,78 @@
+---
+- name: Test workstation baseline GitHub key population
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    workstation_username: faviann
+    workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    workstation_home: "{{ temp_root }}/home/faviann"
+    workstation_packages: []
+    workstation_github_users:
+      - faviann
+      - aperture
+    docker_user: faviann
+    docker_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    docker_gid: "{{ lookup('pipe', 'id -g') | int }}"
+  tasks:
+    - name: Place mock curl on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/curl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          url=""
+          for arg in "$@"; do
+            case "$arg" in
+              http://*|https://*)
+                url="$arg"
+                ;;
+            esac
+          done
+          case "$url" in
+            *faviann.keys)
+              printf '%s\n' \
+                'ssh-ed25519 AAAATESTKEYONE faviann@laptop' \
+                'ssh-ed25519 AAAATESTKEYONE faviann@laptop' \
+                'ssh-ed25519 AAAATESTKEYTWO faviann@phone'
+              ;;
+            *aperture.keys)
+              printf '%s\n' \
+                'ssh-ed25519 AAAATESTKEYONE faviann@laptop'
+              ;;
+            *)
+              echo "unexpected curl url: $url" >&2
+              exit 1
+              ;;
+          esac
+
+    - name: Include workstation baseline role with mock curl on PATH
+      block:
+        - ansible.builtin.include_role:
+            name: config/lxc_workstation_baseline
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Stat workstation ssh directory
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.ssh"
+      register: workstation_ssh_dir_stat
+
+    - name: Stat workstation authorized_keys
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.ssh/authorized_keys"
+      register: workstation_authorized_keys_stat
+
+    - name: Read workstation authorized_keys
+      ansible.builtin.slurp:
+        src: "{{ workstation_home }}/.ssh/authorized_keys"
+      register: workstation_authorized_keys_content
+
+    - name: Assert workstation baseline GitHub keys were written
+      ansible.builtin.assert:
+        that:
+          - workstation_ssh_dir_stat.stat.mode == "0700"
+          - workstation_authorized_keys_stat.stat.mode == "0600"
+          - (workstation_authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE faviann@laptop\nssh-ed25519 AAAATESTKEYTWO faviann@phone\n"
+        fail_msg: "Workstation baseline did not write the expected GitHub keys with the expected modes"
