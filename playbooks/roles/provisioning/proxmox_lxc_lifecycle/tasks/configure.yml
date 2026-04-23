@@ -43,6 +43,13 @@
     - proxmox_lifecycle_guest_actions | length > 0
     - docker_enabled | default(false)
 
+- name: Configure workstation baseline
+  ansible.builtin.include_role:
+    name: config/lxc_workstation_baseline
+  when:
+    - proxmox_lifecycle_guest_actions | length > 0
+    - workstation_enabled | default(false)
+
 - name: Flush handlers after guest configuration
   ansible.builtin.meta: flush_handlers
   when: proxmox_lifecycle_guest_actions | length > 0
