@@ -1,0 +1,30 @@
+---
+argument_specs:
+  main:
+    short_description: Fetch GitHub public SSH keys and write authorized_keys inside an LXC
+    options:
+      lxc_github_keys_user:
+        type: str
+        required: false
+        description: Username that should own the SSH directory and authorized_keys file. Defaults to docker_user or lxc_ssh_user.
+      lxc_github_keys_uid:
+        type: int
+        required: false
+        description: Numeric UID that should own the SSH directory and authorized_keys file. Defaults to docker_uid or lxc_ssh_uid.
+      lxc_github_keys_gid:
+        type: int
+        required: false
+        description: Numeric GID that should own the SSH directory and authorized_keys file. Defaults to docker_gid or lxc_ssh_gid.
+      lxc_github_keys_github_users:
+        type: list
+        elements: str
+        required: false
+        description: GitHub usernames whose public SSH keys should be merged and deduplicated into authorized_keys. Populated from lxc_github_users by default.
+      lxc_github_keys_base_url:
+        type: str
+        required: false
+        description: Base URL used to fetch GitHub username .keys endpoints. Override for air-gapped or mirror environments.
+      lxc_github_keys_home:
+        type: str
+        required: false
+        description: Filesystem home directory for the account receiving the authorized_keys file.

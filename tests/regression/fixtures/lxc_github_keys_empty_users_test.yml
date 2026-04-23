@@ -1,0 +1,16 @@
+---
+- name: Test lxc_github_keys fails clearly on empty users list
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    lxc_ssh_user: faviann
+    lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    lxc_github_keys_home: "{{ temp_root }}/home/faviann"
+    lxc_github_users: []
+  tasks:
+    - name: Include lxc_github_keys role with empty users list
+      block:
+        - ansible.builtin.include_role:
+            name: config/lxc_github_keys

@@ -1,0 +1,7 @@
+---
+lxc_github_keys_user: "{{ docker_user | default(lxc_ssh_user) }}"
+lxc_github_keys_uid: "{{ docker_uid | default(lxc_ssh_uid) }}"
+lxc_github_keys_gid: "{{ docker_gid | default(lxc_ssh_gid) }}"
+lxc_github_keys_github_users: "{{ lxc_github_users }}"
+lxc_github_keys_base_url: "https://github.com"
+lxc_github_keys_home: "/home/{{ lxc_github_keys_user }}"

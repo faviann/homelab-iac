@@ -1,0 +1,54 @@
+---
+- name: Test lxc_github_keys single user
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    lxc_ssh_user: faviann
+    lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    lxc_github_keys_home: "{{ temp_root }}/home/faviann"
+    lxc_github_users:
+      - faviann
+  tasks:
+    - name: Place mock curl on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/curl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          printf '%s\n' 'ssh-ed25519 AAAATESTKEYONE faviann@laptop'
+
+    - name: Include lxc_github_keys role with mock curl on PATH
+      block:
+        - ansible.builtin.include_role:
+            name: config/lxc_github_keys
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Stat SSH directory
+      ansible.builtin.stat:
+        path: "{{ lxc_github_keys_home }}/.ssh"
+      register: ssh_dir_stat
+
+    - name: Stat authorized_keys
+      ansible.builtin.stat:
+        path: "{{ lxc_github_keys_home }}/.ssh/authorized_keys"
+      register: authorized_keys_stat
+
+    - name: Read authorized_keys
+      ansible.builtin.slurp:
+        src: "{{ lxc_github_keys_home }}/.ssh/authorized_keys"
+      register: authorized_keys_content
+
+    - name: Assert lxc_github_keys wrote the expected key with correct ownership and modes
+      ansible.builtin.assert:
+        that:
+          - ssh_dir_stat.stat.uid == lxc_ssh_uid
+          - ssh_dir_stat.stat.gid == lxc_ssh_gid
+          - ssh_dir_stat.stat.mode == "0700"
+          - authorized_keys_stat.stat.uid == lxc_ssh_uid
+          - authorized_keys_stat.stat.gid == lxc_ssh_gid
+          - authorized_keys_stat.stat.mode == "0600"
+          - (authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE faviann@laptop\n"
+        fail_msg: "lxc_github_keys did not write the expected key with the expected ownership and modes"

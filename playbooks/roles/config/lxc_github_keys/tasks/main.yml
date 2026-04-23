@@ -1,0 +1,61 @@
+---
+# Main tasks file for lxc_github_keys role
+
+- name: Assert lxc_github_keys inputs are present
+  ansible.builtin.assert:
+    that:
+      - lxc_github_keys_github_users | length > 0
+    fail_msg: >-
+      config/lxc_github_keys requires a non-empty lxc_github_keys_github_users list.
+      Set lxc_github_users in group_vars/lxcs/ or override lxc_github_keys_github_users.
+
+- name: Ensure SSH directory exists
+  ansible.builtin.file:
+    path: "{{ lxc_github_keys_home }}/.ssh"
+    state: directory
+    mode: "0700"
+    owner: "{{ lxc_github_keys_uid | string }}"
+    group: "{{ lxc_github_keys_gid | string }}"
+
+- name: Fetch GitHub public keys
+  ansible.builtin.command:
+    argv:
+      - curl
+      - -fsSL
+      - "{{ lxc_github_keys_base_url }}/{{ item }}.keys"
+  loop: "{{ lxc_github_keys_github_users }}"
+  register: lxc_github_keys_fetch
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Build authorized SSH keys list
+  ansible.builtin.set_fact:
+    lxc_github_keys_authorized: >-
+      {{
+        lxc_github_keys_fetch.results
+        | map(attribute='stdout_lines')
+        | flatten
+        | map('trim')
+        | reject('equalto', '')
+        | unique
+        | list
+      }}
+  when: not ansible_check_mode
+
+- name: Fail if GitHub returned no SSH keys
+  ansible.builtin.fail:
+    msg: >-
+      GitHub returned no SSH keys for lxc_github_keys_github_users={{ lxc_github_keys_github_users | to_json }}.
+      Check the usernames and the configured lxc_github_keys_base_url.
+  when:
+    - not ansible_check_mode
+    - lxc_github_keys_authorized | length == 0
+
+- name: Write authorized_keys
+  ansible.builtin.copy:
+    dest: "{{ lxc_github_keys_home }}/.ssh/authorized_keys"
+    content: "{{ lxc_github_keys_authorized | join('\n') ~ '\n' }}"
+    mode: "0600"
+    owner: "{{ lxc_github_keys_uid | string }}"
+    group: "{{ lxc_github_keys_gid | string }}"
+  when: not ansible_check_mode
