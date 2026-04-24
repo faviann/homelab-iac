@@ -47,8 +47,6 @@ services:
       homepage.icon: romm
       homepage.href: https://${HOMEPAGE_FQDN}
       homepage.description: ROM manager
-    networks:
-      - default
 
   romm-db:
     image: mariadb:11.4

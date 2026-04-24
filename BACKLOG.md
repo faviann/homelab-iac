@@ -55,19 +55,6 @@
 
 ## In Progress
 
-### [DES-008] Normalize legacy cross-stack Docker network names to shared
-- **Category**: design
-- **Location**: `inventory/host_vars/portal.yml`, `inventory/host_vars/servarr.yml`, `inventory/host_vars/auth.yml`, `inventory/host_vars/public.yml`, `stacks/portal/`, `stacks/servarr/`, `stacks/auth/auth/`, `stacks/public/storyteller/`, `stacks/public/romm/`, `stacks/public/readmeabook/`
-- **Context**: Host-local cross-stack Docker networks use inconsistent legacy names on portal/auth/public and servarr. They represent the same LXC-local shared-network pattern and should be normalized to `shared` where the network is actually needed.
-- **Rework checklist**:
-  - `portal`: rename `lxc_docker_env_external_networks`, `stacks/portal/traefik3`, `portal-entry`, `dockhand`, and homepage stacks from `proxy` to `shared`.
-  - `servarr`: rename `inventory/host_vars/servarr.yml` and all stacks currently using the legacy Servarr network name to `shared`.
-  - `auth`: verify `stacks/auth/auth/compose.override.yaml.j2` needs a shared network; if yes, rename `proxy` to `shared`, otherwise drop the network and `traefik.docker.network`.
-  - `public`: verify `storyteller`, `romm`, and `readmeabook` need a shared network; if yes, rename `proxy` to `shared`, otherwise drop the network and rely on published ports for label-exported routing.
-  - Update stack READMEs after compose/host-var changes so ownership sections match the actual network contract.
-- **Added**: 2026-04-23
-- **Status**: in-progress
-
 ### [SEC-001] Harden portal Traefik Docker socket access
 - **Category**: security
 - **Location**: `stacks/portal/traefik3/compose.yaml`, `stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml`, `docs/stacks-docker-agents.md`
@@ -92,6 +79,13 @@
 - **Status**: in-progress
 
 ## Done
+
+### [DES-008] Normalize legacy cross-stack Docker network names to shared
+- **Category**: design
+- **Added**: 2026-04-23
+- **Status**: done
+- **Completed**: 2026-04-23
+- **Resolution**: portal and servarr stacks renamed to `shared`. auth verified as normalization boundary exception — intentionally uses internal `idm` network. public stacks (storyteller, readmeabook) verified — use published ports, no cross-stack network needed; removed redundant explicit `default` network from romm service. READMEs created for storyteller and readmeabook.
 
 ### [TD-001] Rename vault_portal_diun_discord_webhook in vault
 - **Category**: tech-debt
