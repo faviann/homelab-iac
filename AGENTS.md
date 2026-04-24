@@ -11,6 +11,8 @@
 ## Non-negotiables
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
 - The venv is on `PATH` automatically. If it doesn't exist yet, run `ansible-playbook bootstrap.yml` to create it.
+- `ansible.cfg` expects the vault passphrase at `~/.ansible/vault-pass`.
+- Lifecycle playbooks skip any host whose `inventory_hostname` matches the controller's hostname (`proxmox_skip_self: true` by default). To manage the control node intentionally: `ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation` (`--limit` targets the host, `-e` disables the guard).
 
 ## Standard Paths
 
@@ -18,13 +20,13 @@
 |------|----------|
 | SSH key (private) | `.ansible/ssh/proxmox_lxc` (project-relative, gitignored) |
 | SSH key (public) | `.ansible/ssh/proxmox_lxc.pub` (project-relative, gitignored) |
-| Vault password | `.ansible/vault-pass.txt` (project-relative, gitignored) |
+| Vault password | `~/.ansible/vault-pass` (home-dir, written by chezmoi from Bitwarden) |
 | Vaulted secrets | `inventory/group_vars/all/vault.yml` (encrypted) |
 | Fact cache | `.ansible/cache/` (project-relative, gitignored, 1h TTL) |
 | Venv | `.ansible/venv/` (project-relative, gitignored) |
 | External roles | `.ansible/roles/` (project-relative, gitignored, auto-installed) |
 
-Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never commit plaintext credentials. All secrets are gitignored and must be generated locally via `bootstrap.yml`.
+Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never commit plaintext credentials. The vault password file is machine-local and should be provisioned outside this repo.
 
 ## Inventory Structure
 
@@ -57,6 +59,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | Command | Purpose |
 |---------|---------|
 | `ansible-playbook site.yml` | Full lifecycle — deploy/update all LXCs |
+| `ansible-playbook site.yml -e proxmox_lifecycle_target_hosts=lxcs --limit workstation` | Intentionally include the control node when running from `workstation` |
 | `ansible-playbook site.yml --limit <host>` | Target one host |
 | `ansible-playbook site.yml --limit <host> -e stack_filter=<stack>` | Deploy one stack on a host (skips all others) |
 | `ansible-playbook site.yml --check` | Dry run |

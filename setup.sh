@@ -100,59 +100,20 @@ echo
 echo "Step 3: Vault password configuration..."
 echo "─────────────────────────────────────────"
 
-# Generate or prompt for vault password
-VAULT_PASS_FILE=".ansible/vault-pass.txt"
+VAULT_PASS_FILE="$HOME/.ansible/vault-pass"
+
+mkdir -p "$HOME/.ansible"
+chmod 700 "$HOME/.ansible"
 
 if [ -f "$VAULT_PASS_FILE" ]; then
-    print_warning "Vault password file already exists at $VAULT_PASS_FILE"
-    read -p "Do you want to keep it? (y/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        rm "$VAULT_PASS_FILE"
-        print_info "Removed existing vault password file"
-    else
-        print_status "Keeping existing vault password"
-    fi
-fi
-
-if [ ! -f "$VAULT_PASS_FILE" ]; then
-    echo
-    echo "Choose vault password method:"
-    echo "  1) Generate secure random password (recommended)"
-    echo "  2) Enter your own password"
-    read -p "Choice (1/2): " -n 1 -r PASS_CHOICE
-    echo
-    
-    if [ "$PASS_CHOICE" == "1" ]; then
-        # Generate a secure random password
-        VAULT_PASS=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
-        echo "$VAULT_PASS" > "$VAULT_PASS_FILE"
-        chmod 600 "$VAULT_PASS_FILE"
-        print_status "Generated secure vault password"
-        echo
-        print_warning "IMPORTANT: Save this password securely!"
-        echo -e "${YELLOW}Vault password: ${GREEN}${VAULT_PASS}${NC}"
-        echo
-        read -p "Press Enter after you've saved the password..." -r
-    else
-        # Prompt for password
-        echo
-        read -sp "Enter vault password: " VAULT_PASS
-        echo
-        read -sp "Confirm vault password: " VAULT_PASS_CONFIRM
-        echo
-        
-        if [ "$VAULT_PASS" != "$VAULT_PASS_CONFIRM" ]; then
-            print_error "Passwords do not match"
-            exit 1
-        fi
-        
-        echo "$VAULT_PASS" > "$VAULT_PASS_FILE"
-        chmod 600 "$VAULT_PASS_FILE"
-        print_status "Vault password saved"
-    fi
+    print_status "Using existing vault password at $VAULT_PASS_FILE"
 else
-    print_status "Using existing vault password"
+    print_error "Vault password file missing at $VAULT_PASS_FILE"
+    print_info "Provision it first via chezmoi + Bitwarden, then rerun setup:"
+    echo "  bw login"
+    echo "  export BW_SESSION=\$(bw unlock --raw)"
+    echo "  chezmoi init --apply git@github.com:faviann/dotfiles.git"
+    exit 1
 fi
 
 echo
@@ -343,7 +304,7 @@ echo
 echo "  • Activate environment:    ${BLUE}automatic via direnv on cd${NC}"
 echo "  • Test connectivity:       ${BLUE}ansible-playbook site.yml --tags validation${NC}"
 echo "  • Update credentials:      ${BLUE}./configure-vault.sh${NC}"
-echo "  • View vault password:     ${BLUE}cat .ansible/vault-pass.txt${NC}"
+echo "  • View vault password:     ${BLUE}cat ~/.ansible/vault-pass${NC}"
 echo "  • Edit encrypted vault:    ${BLUE}ansible-vault edit inventory/group_vars/all/vault.yml${NC}"
 echo
 echo "Documentation:"

@@ -114,17 +114,15 @@ If you prefer manual setup or need to troubleshoot:
    sudo apt install -y python3-venv python3-pip sshpass
    ```
 
-2. **Create vault password file:**
+2. **Provision the vault password file:**
 
    ```bash
-   # Option 1: Generate secure random password
-   openssl rand -base64 32 | tr -d "=+/" | cut -c1-32 > .ansible/vault-pass.txt
-   chmod 600 .ansible/vault-pass.txt
-   
-   # Option 2: Use your own password
-   echo "your-passphrase" > .ansible/vault-pass.txt
-   chmod 600 .ansible/vault-pass.txt
+   bw login                                  # first time only
+   export BW_SESSION=$(bw unlock --raw)
+   chezmoi init --apply git@github.com:faviann/dotfiles.git
    ```
+
+   This writes `~/.ansible/vault-pass` before you bootstrap this repo.
 
 3. **Create and activate virtual environment:**
 
@@ -142,6 +140,13 @@ If you prefer manual setup or need to troubleshoot:
    ```
 
    This creates SSH keys, installs collections, and prepares Python dependencies.
+
+   When you run lifecycle playbooks from the `workstation` LXC itself, they exclude that host by
+   default. To manage it intentionally, run:
+
+   ```bash
+   ansible-playbook site.yml -e proxmox_lifecycle_target_hosts=lxcs --limit workstation
+   ```
 
 5. **Configure Proxmox API credentials:**
 

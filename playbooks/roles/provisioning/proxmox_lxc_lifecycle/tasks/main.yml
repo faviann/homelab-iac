@@ -1,4 +1,10 @@
 ---
+- name: Skip if this host is the Ansible controller
+  meta: end_host
+  when:
+    - proxmox_skip_self | default(true) | bool
+    - inventory_hostname == lookup('pipe', 'hostname')
+
 - name: Validate lifecycle intent
   ansible.builtin.assert:
     that:

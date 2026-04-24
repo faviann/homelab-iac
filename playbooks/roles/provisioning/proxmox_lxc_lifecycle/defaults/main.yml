@@ -10,3 +10,5 @@ proxmox_lifecycle_policy_default:
 proxmox_lifecycle_policy: {}
 
 proxmox_lifecycle_desired_release: ""
+
+proxmox_skip_self: true

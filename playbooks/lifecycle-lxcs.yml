@@ -29,7 +29,7 @@
           {{ results }}
         lxc_lifecycle_skip_hosts: >-
           {%- set hosts = [] -%}
-          {%- for host in groups['lxcs'] | default([]) -%}
+          {%- for host in ansible_play_hosts_all | default([]) -%}
           {%-   if hostvars[host].lxc_lifecycle_skip_host | default(false) | bool -%}
           {%-     set _ = hosts.append(host) -%}
           {%-   endif -%}
@@ -37,7 +37,7 @@
           {{ hosts }}
         lxc_lifecycle_rebuilt_hosts: >-
           {%- set hosts = [] -%}
-          {%- for host in groups['lxcs'] | default([]) -%}
+          {%- for host in ansible_play_hosts_all | default([]) -%}
           {%-   if hostvars[host].proxmox_lxc_rebuilt | default(false) | bool -%}
           {%-     set _ = hosts.append(host) -%}
           {%-   endif -%}
