@@ -43,6 +43,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
                 "python3-venv",
                 "python3-pip",
                 "pipx",
+                "nodejs",
+                "npm",
             }.issubset(set(defaults["workstation_packages"])),
             msg="workstation_packages is missing expected baseline tools",
         )
@@ -71,6 +73,13 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         else:
             when_text = str(when_value)
         self.assertIn("workstation_enabled | default(false)", when_text)
+
+
+    def test_role_tasks_install_chezmoi_and_bw(self) -> None:
+        tasks = load_yaml(REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/tasks/main.yml")
+        task_names = [t.get("name") for t in tasks]
+        self.assertIn("Install chezmoi", task_names, "missing chezmoi install task")
+        self.assertIn("Install bw CLI", task_names, "missing bw CLI install task")
 
 
 if __name__ == "__main__":

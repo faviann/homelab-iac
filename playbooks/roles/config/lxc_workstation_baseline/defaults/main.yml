@@ -21,3 +21,5 @@ workstation_packages:
   - python3-pip
   - pipx
   - gh
+  - nodejs
+  - npm

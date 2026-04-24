@@ -23,3 +23,13 @@
 - name: Configure GitHub SSH keys
   ansible.builtin.include_role:
     name: config/lxc_github_keys
+
+- name: Install chezmoi
+  ansible.builtin.shell:
+    cmd: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
+    creates: /usr/local/bin/chezmoi
+
+- name: Install bw CLI
+  ansible.builtin.shell:
+    cmd: npm install -g @bitwarden/cli
+    creates: /usr/local/bin/bw
