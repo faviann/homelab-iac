@@ -8,15 +8,11 @@ services:
   postgresql:
     volumes:
       - ./appdata/database:/var/lib/postgresql/data
-    networks:
-      - idm
   server:
     volumes:
       - ./appdata/authentik/data:/data
       - ./appdata/authentik/custom-templates:/templates
       - ./appdata/authentik/blueprints:/blueprints/custom
-    networks:
-      - idm
     environment:
       - AUTHENTIK_PROXY_HEADERS=true
       - AUTHENTIK_COOKIE_DOMAIN=.faviann.com
@@ -42,9 +38,3 @@ services:
       - ./appdata/authentik/certs:/certs
       - ./appdata/authentik/custom-templates:/templates
       - ./appdata/authentik/blueprints:/blueprints/custom
-    networks:
-      - idm
-networks:
-  idm:
-    name: idm
-    driver: bridge
