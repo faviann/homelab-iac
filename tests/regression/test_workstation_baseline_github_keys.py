@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test for workstation baseline GitHub key population."""
+"""Regression test for workstation baseline inbound GitHub key population."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUCCESS_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "workstation_baseline_github_keys_test.yml"
-EMPTY_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "workstation_baseline_empty_github_keys_test.yml"
 ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
 
 
@@ -40,23 +39,7 @@ def main() -> int:
         print(success_output, file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="workstation-baseline-github-keys-empty-") as temp_root:
-        empty = run_playbook(EMPTY_PLAYBOOK, temp_root)
-
-    empty_output = f"{empty.stdout}\n{empty.stderr}"
-    if empty.returncode == 0:
-        print("empty-key playbook succeeded unexpectedly", file=sys.stderr)
-        print(empty_output, file=sys.stderr)
-        return 1
-
-    markers = ["GitHub", "returned no SSH keys", "lxc_github_keys_github_users"]
-    missing = [marker for marker in markers if marker not in empty_output]
-    if missing:
-        print(f"empty-key playbook output missed expected fragments: {missing}", file=sys.stderr)
-        print(empty_output, file=sys.stderr)
-        return 1
-
-    print("ok: workstation baseline GitHub keys succeed when present and fail clearly when empty")
+    print("ok: workstation baseline writes inbound GitHub authorized_keys without outbound identity")
     return 0
 
 

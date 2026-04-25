@@ -112,7 +112,7 @@ else
     print_info "Provision it first via chezmoi + Bitwarden, then rerun setup:"
     echo "  bw login"
     echo "  export BW_SESSION=\$(bw unlock --raw)"
-    echo "  chezmoi init --apply git@github.com:faviann/dotfiles.git"
+    echo "  chezmoi init --apply https://github.com/faviann/dotfiles.git"
     exit 1
 fi
 

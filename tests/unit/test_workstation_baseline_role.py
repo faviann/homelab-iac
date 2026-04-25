@@ -24,8 +24,9 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(defaults["workstation_username"], "{{ docker_user }}")
         self.assertEqual(defaults["workstation_uid"], "{{ docker_uid }}")
         self.assertEqual(defaults["workstation_gid"], "{{ docker_gid }}")
-        lxc_github_keys_defaults = load_yaml(REPO_ROOT / "playbooks/roles/config/lxc_github_keys/defaults/main.yml")
-        self.assertEqual(lxc_github_keys_defaults["lxc_github_keys_base_url"], "https://github.com")
+        self.assertNotIn("workstation_github_known_host_name", defaults)
+        self.assertNotIn("workstation_github_ssh_private_key_path", defaults)
+        self.assertNotIn("workstation_github_register_public_key", defaults)
         self.assertTrue(
             {
                 "tmux",
@@ -74,12 +75,34 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             when_text = str(when_value)
         self.assertIn("workstation_enabled | default(false)", when_text)
 
-
-    def test_role_tasks_install_chezmoi_and_bw(self) -> None:
+    def test_role_tasks_contract(self) -> None:
         tasks = load_yaml(REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/tasks/main.yml")
         task_names = [t.get("name") for t in tasks]
+        self.assertIn("Install workstation baseline packages", task_names)
+        self.assertIn("Configure GitHub SSH keys", task_names)
         self.assertIn("Install chezmoi", task_names, "missing chezmoi install task")
         self.assertIn("Install bw CLI", task_names, "missing bw CLI install task")
+
+        removed_task_names = {
+            "Fetch GitHub SSH host key on controller",
+            "Ensure github.com known_hosts entry exists",
+            "Ensure workstation GitHub known_hosts permissions",
+            "Generate workstation GitHub SSH keypair",
+            "Ensure workstation GitHub SSH key ownership",
+            "Read workstation GitHub SSH public key",
+            "Set workstation GitHub SSH public key fact",
+            "Verify GitHub CLI auth is available on controller",
+            "List registered GitHub SSH public keys on controller",
+            "Register workstation GitHub SSH public key on controller",
+        }
+        self.assertTrue(
+            removed_task_names.isdisjoint(task_names),
+            msg="workstation baseline still contains removed outbound GitHub SSH identity tasks",
+        )
+
+        rendered_tasks = yaml.safe_dump(tasks, sort_keys=True)
+        for removed_fragment in ("workstation_github_", "gh auth status", "user/keys"):
+            self.assertNotIn(removed_fragment, rendered_tasks)
 
 
 if __name__ == "__main__":

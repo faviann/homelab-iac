@@ -59,7 +59,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | Command | Purpose |
 |---------|---------|
 | `ansible-playbook site.yml` | Full lifecycle — deploy/update all LXCs |
-| `ansible-playbook site.yml -e proxmox_lifecycle_target_hosts=lxcs --limit workstation` | Intentionally include the control node when running from `workstation` |
+| `ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation` | Intentionally include the control node when running from `workstation` |
 | `ansible-playbook site.yml --limit <host>` | Target one host |
 | `ansible-playbook site.yml --limit <host> -e stack_filter=<stack>` | Deploy one stack on a host (skips all others) |
 | `ansible-playbook site.yml --check` | Dry run |

@@ -558,7 +558,7 @@ This triggers `is_lxc = true` in `.chezmoi.toml.tmpl`, which skips fish config o
 When lifecycle playbooks run from the workstation itself, they exclude that host by default. To manage it intentionally, run from `ServerManagementScripts`:
 
 ```bash
-ansible-playbook site.yml -e proxmox_lifecycle_target_hosts=lxcs --limit workstation
+ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation
 ```
 ````
 

@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SINGLE_USER_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_github_keys_single_user_test.yml"
 MULTI_USER_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_github_keys_multi_user_dedup_test.yml"
 EMPTY_USERS_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_github_keys_empty_users_test.yml"
+EMPTY_RESPONSE_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_github_keys_empty_response_test.yml"
 ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
 
 
@@ -64,7 +65,23 @@ def main() -> int:
         print(f"{empty.stdout}\n{empty.stderr}", file=sys.stderr)
         return 1
 
-    print("ok: lxc_github_keys writes keys correctly and fails clearly on empty users")
+    with tempfile.TemporaryDirectory(prefix="lxc-github-keys-empty-response-") as temp_root:
+        empty_response = run_playbook(EMPTY_RESPONSE_PLAYBOOK, temp_root)
+
+    empty_response_output = f"{empty_response.stdout}\n{empty_response.stderr}"
+    if empty_response.returncode == 0:
+        print("empty-response playbook succeeded unexpectedly", file=sys.stderr)
+        print(empty_response_output, file=sys.stderr)
+        return 1
+
+    markers = ["GitHub", "returned no SSH keys", "lxc_github_keys_github_users"]
+    missing = [marker for marker in markers if marker not in empty_response_output]
+    if missing:
+        print(f"empty-response playbook output missed expected fragments: {missing}", file=sys.stderr)
+        print(empty_response_output, file=sys.stderr)
+        return 1
+
+    print("ok: lxc_github_keys writes keys correctly and fails clearly on empty users/results")
     return 0
 
 

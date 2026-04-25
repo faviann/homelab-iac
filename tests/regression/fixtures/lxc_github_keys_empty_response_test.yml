@@ -1,23 +1,15 @@
 ---
-- name: Test workstation baseline GitHub key failure on empty results
+- name: Test lxc_github_keys fails clearly when GitHub returns no keys
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
-    workstation_username: faviann
-    workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
-    workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
-    workstation_home: "{{ temp_root }}/home/faviann"
-    workstation_packages: []
     lxc_ssh_user: faviann
     lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
     lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
     lxc_github_keys_home: "{{ temp_root }}/home/faviann"
     lxc_github_users:
       - faviann
-    docker_user: faviann
-    docker_uid: "{{ lookup('pipe', 'id -u') | int }}"
-    docker_gid: "{{ lookup('pipe', 'id -g') | int }}"
   tasks:
     - name: Place empty mock curl on PATH
       ansible.builtin.copy:
@@ -27,9 +19,9 @@
           #!/bin/sh
           exit 0
 
-    - name: Include workstation baseline role with empty mock curl on PATH
+    - name: Include lxc_github_keys role with empty GitHub response
       block:
         - ansible.builtin.include_role:
-            name: config/lxc_workstation_baseline
+            name: config/lxc_github_keys
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"

@@ -6,6 +6,7 @@
   vars:
     docker_agents_enabled: false
     service_agents_enabled: false
+    lxc_stack_sync_deploy_exclude_regex: '^[^/]+/(README(\..*)?|docs($|/.*)|stack\.ya?ml|metadata\.(ya?ml|json))$'
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       shared_owner: 1000

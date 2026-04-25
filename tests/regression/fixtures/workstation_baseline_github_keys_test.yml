@@ -44,13 +44,30 @@
               printf '%s\n' \
                 'ssh-ed25519 AAAATESTKEYTWO faviann@phone'
               ;;
+            *get.chezmoi.io)
+              printf '%s\n' \
+                '#!/bin/sh' \
+                'exit 0'
+              ;;
             *)
               echo "unexpected curl url: $url" >&2
               exit 1
               ;;
           esac
 
-    - name: Include workstation baseline role with mock curl on PATH
+    - name: Place mock npm on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/npm"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          if [ "$1" != "install" ] || [ "$2" != "-g" ] || [ "$3" != "@bitwarden/cli" ]; then
+            echo "unexpected npm command: $*" >&2
+            exit 1
+          fi
+          exit 0
+
+    - name: Include workstation baseline role with PATH mocks
       block:
         - ansible.builtin.include_role:
             name: config/lxc_workstation_baseline
@@ -67,12 +84,22 @@
         path: "{{ workstation_home }}/.ssh/authorized_keys"
       register: workstation_authorized_keys_stat
 
+    - name: Stat workstation outbound private key
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.ssh/id_ed25519"
+      register: workstation_private_key_stat
+
+    - name: Stat workstation GitHub known_hosts
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.ssh/known_hosts"
+      register: workstation_known_hosts_stat
+
     - name: Read workstation authorized_keys
       ansible.builtin.slurp:
         src: "{{ workstation_home }}/.ssh/authorized_keys"
       register: workstation_authorized_keys_content
 
-    - name: Assert workstation baseline GitHub keys were written
+    - name: Assert workstation baseline only writes inbound GitHub authorized_keys
       ansible.builtin.assert:
         that:
           - workstation_ssh_dir_stat.stat.uid == workstation_uid
@@ -82,4 +109,6 @@
           - workstation_authorized_keys_stat.stat.gid == workstation_gid
           - workstation_authorized_keys_stat.stat.mode == "0600"
           - (workstation_authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE faviann@laptop\nssh-ed25519 AAAATESTKEYTWO faviann@phone\n"
-        fail_msg: "Workstation baseline did not write the expected GitHub keys with the expected ownership and modes"
+          - not workstation_private_key_stat.stat.exists
+          - not workstation_known_hosts_stat.stat.exists
+        fail_msg: "Workstation baseline did not write only the expected inbound GitHub authorized_keys"

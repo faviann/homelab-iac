@@ -119,7 +119,7 @@ If you prefer manual setup or need to troubleshoot:
    ```bash
    bw login                                  # first time only
    export BW_SESSION=$(bw unlock --raw)
-   chezmoi init --apply git@github.com:faviann/dotfiles.git
+   chezmoi init --apply https://github.com/faviann/dotfiles.git
    ```
 
    This writes `~/.ansible/vault-pass` before you bootstrap this repo.
@@ -145,7 +145,7 @@ If you prefer manual setup or need to troubleshoot:
    default. To manage it intentionally, run:
 
    ```bash
-   ansible-playbook site.yml -e proxmox_lifecycle_target_hosts=lxcs --limit workstation
+   ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation
    ```
 
 5. **Configure Proxmox API credentials:**
