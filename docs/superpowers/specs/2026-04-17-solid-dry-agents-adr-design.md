@@ -29,7 +29,7 @@ A "Design Principles" section added to AGENTS.md with the following rules:
 
 **DRY**: One place computes a fact; consumers read the registered var. No duplicated task blocks across roles. Defaults live in `defaults/main.yml`, not re-stated in group_vars.
 
-**The refactoring gate**: Before starting a refactor, state which principle it serves and what "done" looks like. If a refactor intentionally breaks a principle, it requires an ADR.
+**The refactoring gate**: Before starting a refactor, state which principle it serves and what "done" looks like in the commit message or in conversation. If a refactor intentionally breaks a principle, it requires an ADR.
 
 ## Section 2: ADR Format
 
