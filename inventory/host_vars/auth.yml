@@ -14,7 +14,7 @@ lxc_docker_env_stack_vars:
     audiobookshelf_oidc_client_secret: "{{ vault_public_audiobookshelf_oidc_client_secret }}"
     komga_oidc_client_secret: "{{ vault_public_komga_oidc_client_secret }}"
     calibre_web_automated_oidc_client_secret: "{{ vault_public_calibre_web_automated_oidc_client_secret }}"
-    readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret | default('REPLACE_ME', true) }}"
+    readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret }}"
     public_oidc_signing_certificate_name: "authentik Self-signed Certificate"
     postgres_password: "{{ vault_auth_postgres_password }}"
     secret_key: "{{ vault_auth_secret_key }}"

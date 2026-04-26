@@ -1,0 +1,16 @@
+x-prereq-dirs:
+  - ./appdata/config
+  - ./appdata/pgdata
+  - ./appdata/redis
+  - /ephemeral/readmeabook/cache
+  - /data/downloads/readmeabook
+
+services:
+  readmeabook:
+    labels:
+      traefik.enable: true
+      homepage.group: Media
+      homepage.name: ReadMeABook
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Audiobook request and automation engine
+      homepage.icon: mdi-book-music

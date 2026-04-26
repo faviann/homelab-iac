@@ -1,10 +1,3 @@
-x-prereq-dirs:
-  - ./appdata/config
-  - ./appdata/pgdata
-  - ./appdata/redis
-  - /ephemeral/readmeabook/cache
-  - /data/downloads/readmeabook
-
 services:
   readmeabook:
     image: ghcr.io/kikootwo/readmeabook:1.1.7
@@ -17,11 +10,11 @@ services:
       UMASK: ${UMASK}
       LOG_LEVEL: ${LOG_LEVEL}
       PUBLIC_URL: https://${HOMEPAGE_FQDN}
-      SETUP_CHECK_BASE_URL: http://127.0.0.1:3030
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DISABLE_LOCAL_LOGIN: ${DISABLE_LOCAL_LOGIN}
     volumes:
       - ./appdata/config:/app/config
       - /ephemeral/readmeabook/cache:/app/cache
@@ -31,11 +24,9 @@ services:
       - ./appdata/redis:/var/lib/redis
     ports:
       - "3030:3030"
-    labels:
-      traefik.enable: true
-      traefik.http.services.readmeabook.loadbalancer.server.port: "3030"
-      homepage.group: Media
-      homepage.name: ReadMeABook
-      homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Audiobook request and automation engine
-      homepage.icon: mdi-book-music
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3030/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
