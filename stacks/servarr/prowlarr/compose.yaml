@@ -37,6 +37,8 @@ services:
       - PGID=${PGID}
       - TZ=${TZ}
       - DRIVER=nodriver
+    ports:
+      - "8191:8191"
     networks:
       - shared
 
