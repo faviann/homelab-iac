@@ -1,0 +1,31 @@
+x-prereq-dirs:
+  - ./appdata/jackett
+
+services:
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/jackett:/config
+    ports:
+      - 9117:9117
+    labels:
+      traefik.enable: true
+      traefik.http.routers.jackett.middlewares: protected-edge-auth@file
+      homepage.instance.admin.group: Arr
+      homepage.instance.admin.name: Jackett
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Torrent indexer proxy
+      homepage.instance.admin.icon: jackett
+    networks:
+      - shared
+
+networks:
+  shared:
+    name: shared
+    external: true
