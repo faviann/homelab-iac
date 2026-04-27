@@ -5,11 +5,11 @@
 lxc_hwaddr: "BC:24:11:18:EE:67"
 default_domain: faviann.com
 authentik_blueprint_sync_enabled: true
-authentik_blueprint_api_token: "{{ vault_auth_blueprint_api_token | default('', true) }}"
+authentik_blueprint_api_token: "{{ vault_auth_blueprint_api_token }}"
 
 lxc_docker_env_stack_vars:
   auth:
-    blueprint_api_token: "{{ vault_auth_blueprint_api_token | default('', true) }}"
+    blueprint_api_token: "{{ vault_auth_blueprint_api_token }}"
     discord_approval_webhook_url: "{{ vault_authentik_discord_approval_webhook_url }}"
     navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
     romm_oidc_client_secret: "{{ vault_public_romm_oidc_client_secret }}"
