@@ -7,6 +7,27 @@ x-prereq-dirs:
 
 services:
   readmeabook:
+    image: ghcr.io/kikootwo/readmeabook:1.1.7
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      UMASK: ${UMASK}
+      LOG_LEVEL: ${LOG_LEVEL}
+      PUBLIC_URL: https://${HOMEPAGE_FQDN}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DISABLE_LOCAL_LOGIN: ${DISABLE_LOCAL_LOGIN}
+    volumes:
+      - ./appdata/config:/app/config
+      - /ephemeral/readmeabook/cache:/app/cache
+      - /data/downloads/readmeabook:/downloads
+      - /data/media/audiobooks:/media
+      - /data:/data
+      - ./appdata/pgdata:/var/lib/postgresql/data
+      - ./appdata/redis:/var/lib/redis
     labels:
       traefik.enable: true
       homepage.group: Media

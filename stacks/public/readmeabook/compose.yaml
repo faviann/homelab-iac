@@ -1,29 +1,121 @@
 services:
   readmeabook:
-    image: ghcr.io/kikootwo/readmeabook:1.1.7
+    image: ghcr.io/kikootwo/readmeabook:latest
+#    build:
+#      context: .
+#      dockerfile: dockerfile.unified
     container_name: readmeabook
     restart: unless-stopped
-    environment:
-      PUID: ${PUID}
-      PGID: ${PGID}
-      TZ: ${TZ}
-      UMASK: ${UMASK}
-      LOG_LEVEL: ${LOG_LEVEL}
-      PUBLIC_URL: https://${HOMEPAGE_FQDN}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DISABLE_LOCAL_LOGIN: ${DISABLE_LOCAL_LOGIN}
-    volumes:
-      - ./appdata/config:/app/config
-      - /ephemeral/readmeabook/cache:/app/cache
-      - /data/downloads/readmeabook:/downloads
-      - /data/media/audiobooks:/media
-      - ./appdata/pgdata:/var/lib/postgresql/data
-      - ./appdata/redis:/var/lib/redis
     ports:
       - "3030:3030"
+    volumes:
+      # Application config and cache
+      - ./config:/app/config
+      - ./cache:/app/cache
+
+      # Downloads and media directories
+      - ./downloads:/downloads
+      - ./media:/media
+
+      # Book Drop: optional folder for Manual Import (Admin → audiobook → Manual Import)
+      # Map any host folder here and it will appear as a browsable root in the file picker.
+      # Example: - /path/to/your/audiobooks:/bookdrop
+      # - ./bookdrop:/bookdrop
+
+      # PostgreSQL data persistence
+      - ./pgdata:/var/lib/postgresql/data
+
+      # Redis data persistence
+      - ./redis:/var/lib/redis
+
+    environment:
+      # ========================================================================
+      # RECOMMENDED: User/Group ID Mapping (Hybrid Approach)
+      # ========================================================================
+      # Set these to match your host user for proper file ownership
+      # Run 'id' on your host to find your UID and GID
+      #
+      # How it works:
+      # - postgres user: Keeps UID 103 (PostgreSQL requirement), uses your PGID
+      # - redis/node:    Fully remapped to your PUID:PGID
+      #
+      # File ownership on host:
+      # - PostgreSQL data (/var/lib/postgresql/data): UID 103, GID <your-PGID>
+      # - Everything else (/downloads, /media, /config): <your-PUID>:<your-PGID>
+      #
+      # For LXC: You only need to passthrough/map container UID 103
+      # See documentation/deployment/unified.md for LXC examples
+      #
+      PUID: 1000
+      PGID: 1000
+
+      # ========================================================================
+      # OPTIONAL: File Permission Mask
+      # ========================================================================
+      # Set a umask to control default file permissions for all files created
+      # by the application. Common values:
+      # - 002: Group-writable (files: 664, dirs: 775) - recommended for shared access
+      # - 022: Group-readable only (files: 644, dirs: 755) - more restrictive
+      # UMASK: "002"
+
+      # ========================================================================
+      # OPTIONAL: Secrets (auto-generated on first run if not provided)
+      # ========================================================================
+      # Uncomment and set these if you want to use custom secrets:
+      # JWT_SECRET: "your-custom-jwt-secret-here"
+      # JWT_REFRESH_SECRET: "your-custom-jwt-refresh-secret-here"
+      # CONFIG_ENCRYPTION_KEY: "your-custom-encryption-key-here"
+      # POSTGRES_PASSWORD: "your-custom-postgres-password-here"
+
+      # ========================================================================
+      # OPTIONAL: External PostgreSQL and Redis
+      # ========================================================================
+      # To use external PostgreSQL or Redis instances instead of the internal ones,
+      # uncomment and configure the appropriate URL(s):
+      #
+      # External PostgreSQL example:
+      # DATABASE_URL: "postgresql://username:password@postgres.example.com:5432/readmeabook"
+      #
+      # External Redis example:
+      # REDIS_URL: "redis://redis.example.com:6379"
+      # REDIS_URL: "redis://:password@redis.example.com:6379"  # With password
+      #
+      # Note: When using external services:
+      # - The internal PostgreSQL/Redis will NOT start (smart detection)
+      # - You do NOT need to mount ./pgdata or ./redis volumes
+      # - Ensure your external services are accessible from the container
+
+      # ========================================================================
+      # OPTIONAL: Rootless Podman Support
+      # ========================================================================
+      # Set to "true" ONLY if running with rootless Podman.
+      # This skips gosu UID/GID switching since the user namespace already
+      # handles mapping. Do NOT enable for Docker or LXC - it will cause
+      # files to be created as root.
+      # ROOTLESS_CONTAINER: "true"
+
+      # ========================================================================
+      # OPTIONAL: Application Configuration
+      # ========================================================================
+      # Only set these if you need non-default values:
+      # POSTGRES_USER: "readmeabook"
+      # POSTGRES_DB: "readmeabook"
+      # PLEX_CLIENT_IDENTIFIER: "readmeabook-custom-id"
+      # PLEX_PRODUCT_NAME: "ReadMeABook"
+      # LOG_LEVEL: "info"
+      # DISABLE_LOCAL_LOGIN: "true"  # Set to "true" to disable local login (force OAuth)
+      # ALLOW_WEAK_PASSWORD: "true"  # Set to "true" to remove minimum password length requirement
+
+
+      # ========================================================================
+      # IMPORTANT: Public URL Configuration (Required for OAuth)
+      # ========================================================================
+      # Set this to your public URL for OAuth callbacks (Plex/OIDC authentication)
+      # Format: https://your-domain.com (no trailing slash)
+      # REQUIRED if accessing from outside localhost or using OIDC/Plex OAuth
+      # See: documentation/backend/services/environment.md
+      # PUBLIC_URL: "https://readmeabook.yourdomain.com"
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3030/api/health"]
       interval: 30s
