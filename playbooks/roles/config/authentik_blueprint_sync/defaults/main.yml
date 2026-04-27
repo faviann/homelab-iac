@@ -1,0 +1,4 @@
+---
+authentik_blueprint_sync_enabled: false
+authentik_blueprint_sync_url: "https://auth.faviann.com"
+authentik_blueprint_api_token: ""

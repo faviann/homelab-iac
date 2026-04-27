@@ -52,6 +52,11 @@
         name: config/lxc_docker_environment
       when: docker_enabled | default(false)
 
+    - name: Apply Authentik blueprints
+      ansible.builtin.include_role:
+        name: config/authentik_blueprint_sync
+      when: authentik_blueprint_sync_enabled | default(false)
+
     - name: Configure workstation baseline
       ansible.builtin.include_role:
         name: config/lxc_workstation_baseline

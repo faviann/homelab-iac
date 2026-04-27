@@ -1,0 +1,72 @@
+---
+- name: Skip Authentik blueprint apply in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Check mode skips Authentik blueprint apply because it requires a live API and
+      controller-side command execution.
+  when: ansible_check_mode | bool
+
+- name: Assert Authentik blueprint sync inputs are present
+  ansible.builtin.assert:
+    that:
+      - authentik_blueprint_sync_url | length > 0
+      - authentik_blueprint_api_token | length > 0
+    fail_msg: >-
+      config/authentik_blueprint_sync requires authentik_blueprint_sync_url and
+      authentik_blueprint_api_token. Add vault_auth_blueprint_api_token to the local
+      inventory/group_vars/all/vault.yml and bind it in inventory/host_vars/auth.yml.
+  when: not ansible_check_mode | bool
+
+- name: Apply Authentik blueprints
+  when: not ansible_check_mode | bool
+  block:
+    - name: Wait for Authentik API to be ready
+      ansible.builtin.uri:
+        url: "{{ authentik_blueprint_sync_url }}/api/v3/-/healthcheck/"
+        status_code: 200
+      register: _authentik_health
+      delegate_to: localhost
+      become: false
+      retries: 30
+      delay: 10
+      until: _authentik_health is not failed
+
+    - name: Create temporary token file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .token
+      register: _authentik_token_file
+      delegate_to: localhost
+      become: false
+
+    - name: Write token to tempfile
+      ansible.builtin.copy:
+        content: "{{ authentik_blueprint_api_token }}"
+        dest: "{{ _authentik_token_file.path }}"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Run blueprint apply script
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - "{{ playbook_dir }}/scripts/authentik_blueprint_sync.py"
+          - apply
+          - --token-file
+          - "{{ _authentik_token_file.path }}"
+          - --base-url
+          - "{{ authentik_blueprint_sync_url }}"
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+  always:
+    - name: Remove temporary token file
+      ansible.builtin.file:
+        path: "{{ _authentik_token_file.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      when: _authentik_token_file.path is defined
