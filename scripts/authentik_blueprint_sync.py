@@ -24,6 +24,12 @@ BLUEPRINT_ROOT = REPO_ROOT / "stacks" / "auth" / "auth" / "appdata" / "authentik
 FLOW_ROOT = BLUEPRINT_ROOT / "20-flows"
 
 GROUPS_FILE = BLUEPRINT_ROOT / "10-groups.yaml"
+ROLES_FILE = BLUEPRINT_ROOT / "15-roles.yaml"
+ROLES_BLUEPRINT_INSTANCE_NAME = "repo-auth-roles"
+ROLES_BLUEPRINT_DEPLOYED_NAME = str(ROLES_FILE.relative_to(BLUEPRINT_ROOT))
+LEGACY_CLEANUP_FILE = BLUEPRINT_ROOT / "90-cleanup-legacy.yaml"
+LEGACY_CLEANUP_BLUEPRINT_INSTANCE_NAME = "repo-auth-legacy-cleanup"
+LEGACY_CLEANUP_BLUEPRINT_DEPLOYED_NAME = str(LEGACY_CLEANUP_FILE.relative_to(BLUEPRINT_ROOT))
 BRAND_FLOWS_FILE = BLUEPRINT_ROOT / "24-brand-flows.yaml"
 DEFAULT_AUTH_POLICIES_FILE = BLUEPRINT_ROOT / "25-default-auth-policies.yaml"
 REGISTRATION_APPROVAL_FILE = BLUEPRINT_ROOT / "26-registration-approval-flow.yaml"
@@ -188,6 +194,7 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
         app_id = f"app-{slug}"
         secret_var = app["client_secret_var"]
         cert_var = app["signing_certificate_var"]
+        group = app.get("group")
         policy = app.get("policy", "always-allow")
         sub_mode = app.get("sub_mode", "user_email")
         issuer_mode = app.get("issuer_mode", "global")
@@ -245,21 +252,61 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
             "    meta_publisher: ''",
             "    meta_description: ''",
             "",
-            "- model: authentik_policies.policybinding",
-            "  state: present",
-            "  identifiers:",
-            f"    target: !KeyOf {app_id}",
-            "    order: 0",
-            "  attrs:",
-            f"    target: !KeyOf {app_id}",
-            "    order: 0",
-            "    enabled: true",
-            "    negate: false",
-            "    failure_result: false",
-            "    timeout: 30",
-            f"    policy: !Find [authentik_policies_expression.expressionpolicy, [name, {policy}]]",
-            "",
         ]
+        if group:
+            lines += [
+                "- model: authentik_policies.policybinding",
+                "  state: absent",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 0",
+                "",
+                "- model: authentik_policies.policybinding",
+                "  state: present",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 1",
+                "  attrs:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 1",
+                "    enabled: true",
+                "    negate: false",
+                "    failure_result: false",
+                "    timeout: 30",
+                f"    group: !Find [authentik_core.group, [name, {group}]]",
+                "",
+                "- model: authentik_policies.policybinding",
+                "  state: present",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 2",
+                "  attrs:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 2",
+                "    enabled: true",
+                "    negate: false",
+                "    failure_result: false",
+                "    timeout: 30",
+                "    group: !Find [authentik_core.group, [name, admins]]",
+                "",
+            ]
+        else:
+            lines += [
+                "- model: authentik_policies.policybinding",
+                "  state: present",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 0",
+                "  attrs:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 0",
+                "    enabled: true",
+                "    negate: false",
+                "    failure_result: false",
+                "    timeout: 30",
+                f"    policy: !Find [authentik_policies_expression.expressionpolicy, [name, {policy}]]",
+                "",
+            ]
 
     return "\n".join(lines) + "\n"
 
@@ -802,7 +849,10 @@ def build_outposts_blueprint(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def blueprint_plan(flow_slugs: list[str]) -> list[tuple[str, str]]:
-    steps = [("repo-auth-groups", "10-groups.yaml")]
+    steps = [
+        ("repo-auth-groups", "10-groups.yaml"),
+        (ROLES_BLUEPRINT_INSTANCE_NAME, ROLES_BLUEPRINT_DEPLOYED_NAME),
+    ]
     steps.extend(
         (f"repo-auth-flow-{slug}", f"20-flows/{slug}.yaml") for slug in flow_slugs
     )
@@ -819,6 +869,7 @@ def blueprint_plan(flow_slugs: list[str]) -> list[tuple[str, str]]:
             (OIDC_BLUEPRINT_INSTANCE_NAME, OIDC_BLUEPRINT_DEPLOYED_NAME),
         ]
     )
+    steps.append((LEGACY_CLEANUP_BLUEPRINT_INSTANCE_NAME, LEGACY_CLEANUP_BLUEPRINT_DEPLOYED_NAME))
     return steps
 
 

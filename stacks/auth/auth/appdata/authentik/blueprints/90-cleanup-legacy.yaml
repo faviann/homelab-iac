@@ -1,0 +1,11 @@
+version: 1
+metadata:
+  name: repo-auth-legacy-cleanup
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- model: authentik_core.group
+  state: absent
+  identifiers:
+    name: content-editors

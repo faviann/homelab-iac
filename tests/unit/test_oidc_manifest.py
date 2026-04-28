@@ -220,6 +220,18 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
         apps = self.mod.load_oidc_manifest()
         self.mod.validate_oidc_manifest(apps)
 
+    def test_real_manifest_uses_group_bindings_not_always_allow(self):
+        apps = self.mod.load_oidc_manifest()
+        content = self.mod.generate_oidc_blueprint_content(apps)
+        self.assertNotIn("name, always-allow", content)
+        self.assertIn("name, admins", content)
+
+    def test_committed_oidc_blueprint_matches_generator(self):
+        apps = self.mod.load_oidc_manifest()
+        expected = self.mod.generate_oidc_blueprint_content(apps)
+        actual = self.mod.OIDC_BLUEPRINT_FILE.read_text(encoding="utf-8")
+        self.assertEqual(actual, expected)
+
 
 class OidcBlueprintPlanTests(unittest.TestCase):
     @classmethod
@@ -278,6 +290,104 @@ class OidcBlueprintPlanTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("issuer_mode: per_provider", content)
         self.assertNotIn("issuer_mode: global", content)
+
+
+class RolesBlueprintPlanTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def test_roles_blueprint_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertIn("repo-auth-roles", names)
+
+    def test_roles_blueprint_path_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        paths = [path for _, path in plan]
+        self.assertIn("15-roles.yaml", paths)
+
+    def test_roles_blueprint_after_groups_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertLess(names.index("repo-auth-groups"), names.index("repo-auth-roles"))
+
+    def test_roles_blueprint_before_flows_in_plan(self):
+        plan = self.mod.blueprint_plan(["default-authentication-flow"])
+        names = [name for name, _ in plan]
+        self.assertLess(
+            names.index("repo-auth-roles"),
+            names.index("repo-auth-flow-default-authentication-flow"),
+        )
+
+
+class OidcGroupBindingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def test_group_binding_emits_domain_group(self):
+        content = self.mod.generate_oidc_blueprint_content([minimal_app(group="media")])
+        self.assertIn("name, media", content)
+
+    def test_group_binding_emits_admins_group(self):
+        content = self.mod.generate_oidc_blueprint_content([minimal_app(group="media")])
+        self.assertIn("name, admins", content)
+
+    def test_group_binding_uses_orders_1_and_2(self):
+        content = self.mod.generate_oidc_blueprint_content([minimal_app(group="media")])
+        self.assertIn("order: 1", content)
+        self.assertIn("order: 2", content)
+
+    def test_group_binding_does_not_emit_expression_policy(self):
+        content = self.mod.generate_oidc_blueprint_content([minimal_app(group="media")])
+        self.assertNotIn("expressionpolicy", content)
+
+    def test_group_binding_emits_order_0_absent_tombstone(self):
+        content = self.mod.generate_oidc_blueprint_content([minimal_app(group="media")])
+        self.assertIn(
+            "  state: absent\n  identifiers:\n    target: !KeyOf app-test-app\n    order: 0",
+            content,
+        )
+
+    def test_policy_binding_still_uses_order_0(self):
+        content = self.mod.generate_oidc_blueprint_content([minimal_app(policy="always-allow")])
+        self.assertIn("order: 0", content)
+        self.assertNotIn("order: 1", content)
+        self.assertNotIn("order: 2", content)
+
+    def test_reading_group_binding(self):
+        content = self.mod.generate_oidc_blueprint_content([minimal_app(group="reading")])
+        self.assertIn("name, reading", content)
+        self.assertIn("name, admins", content)
+
+
+class LegacyCleanupBlueprintPlanTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def test_legacy_cleanup_blueprint_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertIn("repo-auth-legacy-cleanup", names)
+
+    def test_legacy_cleanup_blueprint_path_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        paths = [path for _, path in plan]
+        self.assertIn("90-cleanup-legacy.yaml", paths)
+
+    def test_legacy_cleanup_runs_after_applications_and_oidc(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertGreater(
+            names.index("repo-auth-legacy-cleanup"),
+            names.index("repo-auth-applications"),
+        )
+        self.assertGreater(
+            names.index("repo-auth-legacy-cleanup"),
+            names.index("repo-auth-oidc-apps"),
+        )
 
 
 if __name__ == "__main__":

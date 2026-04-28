@@ -1,0 +1,16 @@
+version: 1
+metadata:
+  name: repo-auth-roles
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- model: authentik_rbac.role
+  state: present
+  identifiers:
+    name: registration-approver
+  attrs:
+    name: registration-approver
+    permissions:
+    - authentik_core.view_user
+    - authentik_core.change_user

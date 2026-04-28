@@ -14,12 +14,6 @@ entries:
 - model: authentik_core.group
   state: present
   identifiers:
-    name: content-editors
-  attrs:
-    name: content-editors
-- model: authentik_core.group
-  state: present
-  identifiers:
     name: ldapsearch
   attrs:
     name: ldapsearch
@@ -35,3 +29,15 @@ entries:
     name: PVEAdmins
   attrs:
     name: PVEAdmins
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: reading
+  attrs:
+    name: reading
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: storage
+  attrs:
+    name: storage

@@ -17,7 +17,7 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    policy: always-allow
+    group: media
     sub_mode: user_email
     issuer_mode: global
 
@@ -39,7 +39,7 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    policy: always-allow
+    group: reading
     sub_mode: user_email
     issuer_mode: global
 
@@ -60,7 +60,7 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    policy: always-allow
+    group: reading
     sub_mode: user_email
     issuer_mode: global
 
@@ -81,7 +81,7 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    policy: always-allow
+    group: reading
     sub_mode: user_email
     issuer_mode: global
 
@@ -102,6 +102,6 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    policy: always-allow
+    group: reading
     sub_mode: user_email
     issuer_mode: global
