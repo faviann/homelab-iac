@@ -1,0 +1,57 @@
+---
+- name: Validate workstation agent state paths
+  ansible.builtin.assert:
+    that:
+      - workstation_agent_state_enabled | default(true) | bool
+      - workstation_agent_state_root is defined
+      - workstation_agent_state_root | string | length > 0
+      - workstation_agent_state_links is defined
+      - workstation_agent_state_links | length > 0
+      - workstation_agent_state_links | selectattr('path', 'defined') | list | length == workstation_agent_state_links | length
+      - workstation_agent_state_links | selectattr('target', 'defined') | list | length == workstation_agent_state_links | length
+      - workstation_agent_state_links | map(attribute='path') | map('string') | select('match', '^' ~ workstation_home ~ '/\\.[^/]+$') | list | length == workstation_agent_state_links | length
+      - workstation_agent_state_links | map(attribute='target') | map('string') | select('match', '^' ~ workstation_agent_state_root ~ '/[^/]+$') | list | length == workstation_agent_state_links | length
+    fail_msg: >-
+      workstation_agent_state_links must map direct hidden paths under workstation_home
+      to direct children under workstation_agent_state_root.
+
+- name: Ensure workstation agent state directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ workstation_uid }}"
+    group: "{{ workstation_gid }}"
+    mode: "0700"
+  loop: "{{ [workstation_agent_state_root] + (workstation_agent_state_links | map(attribute='target') | list) }}"
+
+- name: Inspect workstation agent state home links
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ workstation_agent_state_links }}"
+  register: _workstation_agent_state_home_paths
+
+- name: Fail when workstation agent state home path is not the managed symlink
+  ansible.builtin.assert:
+    that:
+      - >-
+        (not item.stat.exists)
+        or
+        (
+          item.stat.islnk | default(false)
+          and item.stat.lnk_source == item.item.target
+        )
+    fail_msg: >-
+      {{ item.item.path }} exists and is not the managed symlink to
+      {{ item.item.target }}. Move or migrate it manually before enabling
+      workstation agent state.
+  loop: "{{ _workstation_agent_state_home_paths.results }}"
+
+- name: Link workstation agent state into home directory
+  ansible.builtin.file:
+    src: "{{ item.target }}"
+    dest: "{{ item.path }}"
+    state: link
+    owner: "{{ workstation_uid }}"
+    group: "{{ workstation_gid }}"
+    force: false
+  loop: "{{ workstation_agent_state_links }}"

@@ -3,6 +3,15 @@ workstation_username: "{{ docker_user }}"
 workstation_uid: "{{ docker_uid }}"
 workstation_gid: "{{ docker_gid }}"
 workstation_home: "/home/{{ workstation_username }}"
+workstation_agent_state_enabled: true
+workstation_agent_state_root: /ephemeral/workstation/agent-state
+workstation_agent_state_links:
+  - name: claude
+    path: "{{ workstation_home }}/.claude"
+    target: "{{ workstation_agent_state_root }}/claude"
+  - name: codex
+    path: "{{ workstation_home }}/.codex"
+    target: "{{ workstation_agent_state_root }}/codex"
 workstation_packages:
   - tmux
   - mosh

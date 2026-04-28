@@ -20,6 +20,10 @@
     update_cache: true
   when: workstation_packages | length > 0
 
+- name: Configure workstation agent state
+  ansible.builtin.include_tasks: agent_state.yml
+  when: workstation_agent_state_enabled | bool
+
 - name: Configure GitHub SSH keys
   ansible.builtin.include_role:
     name: config/lxc_github_keys

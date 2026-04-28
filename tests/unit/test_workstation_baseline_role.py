@@ -24,6 +24,24 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(defaults["workstation_username"], "{{ docker_user }}")
         self.assertEqual(defaults["workstation_uid"], "{{ docker_uid }}")
         self.assertEqual(defaults["workstation_gid"], "{{ docker_gid }}")
+        self.assertEqual(defaults["workstation_home"], "/home/{{ workstation_username }}")
+        self.assertTrue(defaults["workstation_agent_state_enabled"])
+        self.assertEqual(defaults["workstation_agent_state_root"], "/ephemeral/workstation/agent-state")
+        self.assertEqual(
+            defaults["workstation_agent_state_links"],
+            [
+                {
+                    "name": "claude",
+                    "path": "{{ workstation_home }}/.claude",
+                    "target": "{{ workstation_agent_state_root }}/claude",
+                },
+                {
+                    "name": "codex",
+                    "path": "{{ workstation_home }}/.codex",
+                    "target": "{{ workstation_agent_state_root }}/codex",
+                },
+            ],
+        )
         self.assertNotIn("workstation_github_known_host_name", defaults)
         self.assertNotIn("workstation_github_ssh_private_key_path", defaults)
         self.assertNotIn("workstation_github_register_public_key", defaults)
@@ -75,10 +93,23 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             when_text = str(when_value)
         self.assertIn("workstation_enabled | default(false)", when_text)
 
+    def test_role_argument_specs_contract(self) -> None:
+        specs = load_yaml(REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/meta/argument_specs.yml")
+        options = specs["argument_specs"]["main"]["options"]
+
+        self.assertEqual(options["workstation_agent_state_enabled"]["type"], "bool")
+        self.assertFalse(options["workstation_agent_state_enabled"]["required"])
+        self.assertEqual(options["workstation_agent_state_root"]["type"], "str")
+        self.assertFalse(options["workstation_agent_state_root"]["required"])
+        self.assertEqual(options["workstation_agent_state_links"]["type"], "list")
+        self.assertEqual(options["workstation_agent_state_links"]["elements"], "dict")
+        self.assertFalse(options["workstation_agent_state_links"]["required"])
+
     def test_role_tasks_contract(self) -> None:
         tasks = load_yaml(REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/tasks/main.yml")
         task_names = [t.get("name") for t in tasks]
         self.assertIn("Install workstation baseline packages", task_names)
+        self.assertIn("Configure workstation agent state", task_names)
         self.assertIn("Configure GitHub SSH keys", task_names)
         self.assertIn("Install chezmoi", task_names, "missing chezmoi install task")
         self.assertIn("Install bw CLI", task_names, "missing bw CLI install task")
@@ -101,8 +132,33 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         )
 
         rendered_tasks = yaml.safe_dump(tasks, sort_keys=True)
+        agent_state_tasks = load_yaml(
+            REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/tasks/agent_state.yml"
+        )
+        agent_state_task_names = [t.get("name") for t in agent_state_tasks]
+        self.assertIn("Validate workstation agent state paths", agent_state_task_names)
+        self.assertIn("Ensure workstation agent state directories exist", agent_state_task_names)
+        self.assertIn("Inspect workstation agent state home links", agent_state_task_names)
+        self.assertIn(
+            "Fail when workstation agent state home path is not the managed symlink",
+            agent_state_task_names,
+        )
+        self.assertIn("Link workstation agent state into home directory", agent_state_task_names)
         for removed_fragment in ("workstation_github_", "gh auth status", "user/keys"):
             self.assertNotIn(removed_fragment, rendered_tasks)
+
+        rendered_agent_state_tasks = yaml.safe_dump(agent_state_tasks, sort_keys=True)
+        expected_fragments = (
+            "workstation_agent_state_enabled",
+            "workstation_agent_state_root",
+            "workstation_agent_state_links",
+            "islnk",
+            "lnk_source",
+            "state: link",
+            "mode: '0700'",
+        )
+        for expected_fragment in expected_fragments:
+            self.assertIn(expected_fragment, rendered_agent_state_tasks)
 
 
 if __name__ == "__main__":
