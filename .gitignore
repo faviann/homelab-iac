@@ -60,7 +60,6 @@ __pycache__/
 # Temporary files
 /tmp/
 inventory/group_vars/all/vault.yml
-token.txt
 
 # Rendered env files (secrets injected at deploy time)
 stacks/**/.env

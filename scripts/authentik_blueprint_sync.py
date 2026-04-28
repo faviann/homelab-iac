@@ -1152,8 +1152,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--token-file",
-        default=str(REPO_ROOT / "token.txt"),
-        help="Path to the Authentik API token file",
+        default=None,
+        help="Path to an Authentik API token file. If omitted, the token is read from the Ansible vault.",
     )
     parser.add_argument(
         "--base-url",
@@ -1165,9 +1165,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    token_file = Path(args.token_file)
-    if token_file.exists():
-        client = AuthentikClient.from_token_file(token_file, base_url=args.base_url)
+    if args.token_file is not None:
+        client = AuthentikClient.from_token_file(Path(args.token_file), base_url=args.base_url)
     else:
         client = AuthentikClient.from_vault(base_url=args.base_url)
 
