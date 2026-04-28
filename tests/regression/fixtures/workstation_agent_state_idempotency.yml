@@ -1,0 +1,29 @@
+---
+- name: Test workstation agent state idempotency
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    workstation_username: faviann
+    workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    workstation_home: "{{ temp_root }}/home/faviann"
+    workstation_agent_state_root: "{{ temp_root }}/ephemeral/workstation/agent-state"
+    workstation_agent_state_links:
+      - name: claude
+        path: "{{ workstation_home }}/.claude"
+        target: "{{ workstation_agent_state_root }}/claude"
+      - name: codex
+        path: "{{ workstation_home }}/.codex"
+        target: "{{ workstation_agent_state_root }}/codex"
+  tasks:
+    - name: Ensure workstation home exists
+      ansible.builtin.file:
+        path: "{{ workstation_home }}"
+        state: directory
+        mode: "0755"
+
+    - name: Include focused workstation agent state tasks
+      ansible.builtin.include_role:
+        name: config/lxc_workstation_baseline
+        tasks_from: agent_state

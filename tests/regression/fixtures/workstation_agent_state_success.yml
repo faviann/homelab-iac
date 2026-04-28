@@ -1,0 +1,114 @@
+---
+- name: Test workstation agent state success path
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    workstation_username: faviann
+    workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    workstation_home: "{{ temp_root }}/home/faviann"
+    workstation_packages: []
+    workstation_agent_state_enabled: true
+    workstation_agent_state_root: "{{ temp_root }}/ephemeral/workstation/agent-state"
+    workstation_agent_state_links:
+      - name: claude
+        path: "{{ workstation_home }}/.claude"
+        target: "{{ workstation_agent_state_root }}/claude"
+      - name: codex
+        path: "{{ workstation_home }}/.codex"
+        target: "{{ workstation_agent_state_root }}/codex"
+    lxc_ssh_user: faviann
+    lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    lxc_github_keys_home: "{{ temp_root }}/home/faviann"
+    lxc_github_users:
+      - faviann
+    docker_user: faviann
+    docker_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    docker_gid: "{{ lookup('pipe', 'id -g') | int }}"
+  tasks:
+    - name: Place mock curl on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/curl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          case "$*" in
+            *faviann.keys*)
+              printf '%s\n' 'ssh-ed25519 AAAATESTKEYONE faviann@laptop'
+              ;;
+            *get.chezmoi.io*)
+              printf '%s\n' '#!/bin/sh' 'exit 0'
+              ;;
+            *)
+              exit 0
+              ;;
+          esac
+
+    - name: Place mock npm on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/npm"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          exit 0
+
+    - name: Ensure workstation home exists
+      ansible.builtin.file:
+        path: "{{ workstation_home }}"
+        state: directory
+        mode: "0755"
+
+    - name: Include workstation baseline role with PATH mocks
+      block:
+        - ansible.builtin.include_role:
+            name: config/lxc_workstation_baseline
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Stat agent state root
+      ansible.builtin.stat:
+        path: "{{ workstation_agent_state_root }}"
+      register: agent_state_root_stat
+
+    - name: Stat Claude agent state directory
+      ansible.builtin.stat:
+        path: "{{ workstation_agent_state_root }}/claude"
+      register: claude_state_dir_stat
+
+    - name: Stat Codex agent state directory
+      ansible.builtin.stat:
+        path: "{{ workstation_agent_state_root }}/codex"
+      register: codex_state_dir_stat
+
+    - name: Stat Claude home symlink
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.claude"
+      register: claude_home_link_stat
+
+    - name: Stat Codex home symlink
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.codex"
+      register: codex_home_link_stat
+
+    - name: Assert workstation agent state was linked safely
+      ansible.builtin.assert:
+        that:
+          - agent_state_root_stat.stat.isdir
+          - agent_state_root_stat.stat.uid == workstation_uid
+          - agent_state_root_stat.stat.gid == workstation_gid
+          - agent_state_root_stat.stat.mode == "0700"
+          - claude_state_dir_stat.stat.isdir
+          - claude_state_dir_stat.stat.uid == workstation_uid
+          - claude_state_dir_stat.stat.gid == workstation_gid
+          - claude_state_dir_stat.stat.mode == "0700"
+          - codex_state_dir_stat.stat.isdir
+          - codex_state_dir_stat.stat.uid == workstation_uid
+          - codex_state_dir_stat.stat.gid == workstation_gid
+          - codex_state_dir_stat.stat.mode == "0700"
+          - claude_home_link_stat.stat.islnk
+          - claude_home_link_stat.stat.lnk_source == workstation_agent_state_root ~ "/claude"
+          - codex_home_link_stat.stat.islnk
+          - codex_home_link_stat.stat.lnk_source == workstation_agent_state_root ~ "/codex"
+        fail_msg: "Workstation agent state directories or symlinks were not created as expected"
