@@ -23,7 +23,7 @@ PLAYBOOKS = [
         ["stack_vars", "komga_user"],
     ),
 ]
-ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
+ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def run_missing_stack_vars_case(name: str, playbook: Path, markers: list[str]) -> int:
@@ -33,7 +33,7 @@ def run_missing_stack_vars_case(name: str, playbook: Path, markers: list[str]) -
         env["TMPDIR"] = temp_root
         proc = subprocess.run(
             [
-                str(ANSIBLE_PLAYBOOK),
+                *ANSIBLE_PLAYBOOK,
                 str(playbook),
                 "-e",
                 f"temp_root={temp_root}",
@@ -66,10 +66,6 @@ def run_missing_stack_vars_case(name: str, playbook: Path, markers: list[str]) -
 
 
 def main() -> int:
-    if not ANSIBLE_PLAYBOOK.exists():
-        print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
-        return 1
-
     for name, playbook, markers in PLAYBOOKS:
         result = run_missing_stack_vars_case(name, playbook, markers)
         if result != 0:

@@ -17,16 +17,12 @@ PLAYBOOK = (
     / "fixtures"
     / "proxmox_lxc_lifecycle_configure_check_mode_absent_test.yml"
 )
-ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
+ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def main() -> int:
-    if not ANSIBLE_PLAYBOOK.exists():
-        print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
-        return 1
-
     proc = subprocess.run(
-        [str(ANSIBLE_PLAYBOOK), str(PLAYBOOK), "--check"],
+        [*ANSIBLE_PLAYBOOK, str(PLAYBOOK), "--check"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

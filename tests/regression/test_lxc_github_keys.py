@@ -15,12 +15,12 @@ SINGLE_USER_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_gi
 MULTI_USER_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_github_keys_multi_user_dedup_test.yml"
 EMPTY_USERS_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_github_keys_empty_users_test.yml"
 EMPTY_RESPONSE_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_github_keys_empty_response_test.yml"
-ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
+ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def run_playbook(playbook: Path, temp_root: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(ANSIBLE_PLAYBOOK), str(playbook), "-f", "1", "-e", f"temp_root={temp_root}"],
+        [*ANSIBLE_PLAYBOOK, str(playbook), "-f", "1", "-e", f"temp_root={temp_root}"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -29,10 +29,6 @@ def run_playbook(playbook: Path, temp_root: str) -> subprocess.CompletedProcess[
 
 
 def main() -> int:
-    if not ANSIBLE_PLAYBOOK.exists():
-        print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
-        return 1
-
     with tempfile.TemporaryDirectory(prefix="lxc-github-keys-single-") as temp_root:
         single = run_playbook(SINGLE_USER_PLAYBOOK, temp_root)
 

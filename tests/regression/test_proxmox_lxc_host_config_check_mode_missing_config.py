@@ -18,17 +18,13 @@ PLAYBOOK = (
     / "fixtures"
     / "proxmox_lxc_host_config_check_mode_missing_config_test.yml"
 )
-ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
+ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def main() -> int:
-    if not ANSIBLE_PLAYBOOK.exists():
-        print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
-        return 1
-
     with tempfile.TemporaryDirectory(prefix="proxmox-lxc-host-config-check-") as temp_root:
         proc = subprocess.run(
-            [str(ANSIBLE_PLAYBOOK), str(PLAYBOOK), "--check", "-e", f"temp_root={temp_root}"],
+            [*ANSIBLE_PLAYBOOK, str(PLAYBOOK), "--check", "-e", f"temp_root={temp_root}"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,

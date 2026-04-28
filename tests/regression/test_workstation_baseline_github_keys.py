@@ -12,12 +12,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUCCESS_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "workstation_baseline_github_keys_test.yml"
-ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
+ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def run_playbook(playbook: Path, temp_root: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(ANSIBLE_PLAYBOOK), str(playbook), "-f", "1", "-e", f"temp_root={temp_root}"],
+        [*ANSIBLE_PLAYBOOK, str(playbook), "-f", "1", "-e", f"temp_root={temp_root}"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -26,10 +26,6 @@ def run_playbook(playbook: Path, temp_root: str) -> subprocess.CompletedProcess[
 
 
 def main() -> int:
-    if not ANSIBLE_PLAYBOOK.exists():
-        print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
-        return 1
-
     with tempfile.TemporaryDirectory(prefix="workstation-baseline-github-keys-success-") as temp_root:
         success = run_playbook(SUCCESS_PLAYBOOK, temp_root)
 

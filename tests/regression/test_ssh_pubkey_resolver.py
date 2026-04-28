@@ -12,17 +12,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "ssh_pubkey_resolver_test.yml"
-ANSIBLE_PLAYBOOK = REPO_ROOT / ".ansible" / "venv" / "bin" / "ansible-playbook"
+ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def main() -> int:
-    if not ANSIBLE_PLAYBOOK.exists():
-        print(f"missing ansible-playbook at {ANSIBLE_PLAYBOOK}", file=sys.stderr)
-        return 1
-
     with tempfile.TemporaryDirectory(prefix="ssh-pubkey-resolver-") as temp_root:
         proc = subprocess.run(
-            [str(ANSIBLE_PLAYBOOK), str(PLAYBOOK), "-e", f"temp_root={temp_root}"],
+            [*ANSIBLE_PLAYBOOK, str(PLAYBOOK), "-e", f"temp_root={temp_root}"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
