@@ -69,6 +69,14 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 
 **Timing**: `ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
 
+**Long-running output discipline**: For live deploys or other noisy commands, avoid streaming full output into chat context. Prefer redirecting to a temp log and polling only high-signal excerpts:
+```bash
+ansible-playbook site.yml --limit <host> > /tmp/<task>.log 2>&1
+tail -40 /tmp/<task>.log
+rg "failed=|unreachable=|FAILED|changed=|<relevant-resource>" /tmp/<task>.log
+```
+Only read the full log when the summarized output is insufficient to diagnose a failure. Never print secrets from logs or vault output.
+
 Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` for merged vars, `ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
 
 ## Role Design Principles
