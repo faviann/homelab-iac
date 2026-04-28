@@ -55,24 +55,31 @@ workstation_agent_state_links:
     target: "{{ workstation_agent_state_root }}/codex"
 ```
 
-`workstation_agent_state_enabled: false` is the escape hatch for a deliberately clean rebuild.
+`workstation_home` is an existing `playbooks/roles/config/lxc_workstation_baseline`
+default. `workstation_agent_state_enabled: false` is the escape hatch for a
+deliberately clean rebuild. Disabling it means the role does not create or manage
+agent-state directories and links; it does not remove existing symlinks or
+persistent state.
 
 ---
 
 ## Role Behavior
 
-`config/lxc_workstation_baseline` should:
+`playbooks/roles/config/lxc_workstation_baseline` should:
 
 1. Create `workstation_agent_state_root` and each agent state target directory.
 2. Own those directories with `workstation_uid` and `workstation_gid`, matching the existing workstation user contract.
-3. Set restrictive permissions, preferably `0700`.
+3. Set `workstation_agent_state_root` and each child state directory to mode `0700`.
 4. Create symlinks from the workstation user's home into the persistent state directories.
 5. Avoid persisting the whole home directory.
 6. Avoid copying, printing, or managing secrets directly.
 
 If a target home path already exists as a symlink to the desired target, the role should be a no-op.
 
-If a target home path exists as a real file or directory, the implementation should fail clearly or move it aside in a conservative, deterministic way. Silent overwrite is not acceptable because these directories may contain active CLI state.
+If a target home path exists as a real file or directory, the role should fail
+clearly and instruct the operator to move or migrate it manually before enabling
+workstation agent state. The role must not silently overwrite, delete, or rename
+the existing path because these directories may contain active CLI state.
 
 ---
 
@@ -118,6 +125,7 @@ Add focused tests for the workstation baseline role contract:
 - role tasks create agent-state directories when enabled
 - role tasks create `~/.claude` and `~/.codex` symlinks
 - disabling `workstation_agent_state_enabled` skips the behavior
+- an existing real file or directory at a managed home path fails clearly instead of being overwritten
 - existing unrelated workstation role responsibilities remain wired once
 
 Live validation after implementation should run:
@@ -140,3 +148,5 @@ uv run --locked ansible-playbook site.yml -e proxmox_skip_self=false --limit wor
 - Persisting shell history, MCP state, or skills beyond Claude/Codex.
 - Dedicated per-workstation Proxmox bind mount instead of using the existing `/ephemeral` mount.
 - Backup or replication policy for the agent-state directory.
+- Cleanup behavior when `workstation_agent_state_enabled` is disabled after symlinks already exist.
+- Automated migration or quarantine for pre-existing real `~/.claude` or `~/.codex` paths.
