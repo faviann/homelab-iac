@@ -61,7 +61,7 @@ Use a `__` traversal on the stage name (stable because Stage has a managed field
 If uniqueness is a concern (same stage bound to multiple flows), add a second condition:
 
 ```yaml
-!Find [authentik_flows.flowstagebinding, [stage__name, default-password-change-prompt, flow__slug, default-password-change]]
+!Find [authentik_flows.flowstagebinding, [stage__name, default-password-change-prompt, target__slug, default-password-change]]
 ```
 
 ### Reference a Flow
