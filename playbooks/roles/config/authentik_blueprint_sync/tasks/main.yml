@@ -52,7 +52,7 @@
       ansible.builtin.command:
         argv:
           - "{{ ansible_playbook_python }}"
-          - "{{ playbook_dir }}/scripts/authentik_blueprint_sync.py"
+          - "{{ inventory_dir | dirname }}/scripts/authentik_blueprint_sync.py"
           - apply
           - --token-file
           - "{{ _authentik_token_file.path }}"
