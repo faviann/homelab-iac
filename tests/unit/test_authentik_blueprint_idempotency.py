@@ -339,5 +339,103 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertEqual(result["applied"][0]["action"], "deleted-stale-instance")
 
 
+class FakeNavidromeBindingClient:
+    def __init__(self, *, binding: dict[str, Any] | None):
+        self.policy = {"pk": "policy-pk", "name": "navidrome-registration-sync-policy"}
+        self.target_pk = "target-pk"
+        self.binding = binding
+        self.created: list[dict[str, Any]] = []
+        self.updated: list[dict[str, Any]] = []
+
+    def get_paginated(self, path: str) -> list[dict[str, Any]]:
+        if path == "/api/v3/policies/all/?page_size=200":
+            return [self.policy]
+        if path == "/api/v3/policies/bindings/?page_size=500":
+            return [] if self.binding is None else [self.binding]
+        raise AssertionError(f"Unexpected paginated path: {path}")
+
+    def request_json(
+        self,
+        method: str,
+        path_or_url: str,
+        *,
+        payload: dict[str, Any] | None = None,
+    ) -> Any:
+        if method == "PATCH" and path_or_url == "/api/v3/policies/bindings/binding-pk/":
+            self.updated.append(dict(payload))
+            self.binding.update(payload)
+            return self.binding
+        if method == "POST" and path_or_url == "/api/v3/policies/bindings/":
+            self.created.append(dict(payload))
+            self.binding = {"pk": "created-binding-pk", **payload}
+            return self.binding
+        raise AssertionError(f"Unexpected request: {method} {path_or_url}")
+
+
+class NavidromeBindingChangedReportingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def setUp(self):
+        self.original_target = self.mod.desired_navidrome_password_change_target_pk
+        self.mod.desired_navidrome_password_change_target_pk = lambda client: client.target_pk
+
+    def tearDown(self):
+        self.mod.desired_navidrome_password_change_target_pk = self.original_target
+
+    def test_existing_matching_binding_reports_unchanged(self):
+        client = FakeNavidromeBindingClient(
+            binding={
+                "pk": "binding-pk",
+                "policy": "policy-pk",
+                "target": "target-pk",
+                "order": 0,
+                "enabled": True,
+                "negate": False,
+                "failure_result": False,
+                "timeout": 10,
+            }
+        )
+
+        result = self.mod.ensure_navidrome_password_change_sync_binding(client)
+
+        self.assertFalse(result["changed"])
+        self.assertEqual(result["action"], "unchanged")
+        self.assertEqual(client.updated, [])
+        self.assertEqual(client.created, [])
+
+    def test_existing_mismatched_binding_reports_updated(self):
+        client = FakeNavidromeBindingClient(
+            binding={
+                "pk": "binding-pk",
+                "policy": "policy-pk",
+                "target": "target-pk",
+                "order": 1,
+                "enabled": True,
+                "negate": False,
+                "failure_result": False,
+                "timeout": 10,
+            }
+        )
+
+        result = self.mod.ensure_navidrome_password_change_sync_binding(client)
+
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["action"], "updated-binding")
+        self.assertEqual(client.updated[0]["order"], 0)
+        self.assertEqual(client.created, [])
+
+    def test_missing_binding_reports_created(self):
+        client = FakeNavidromeBindingClient(binding=None)
+
+        result = self.mod.ensure_navidrome_password_change_sync_binding(client)
+
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["action"], "created-binding")
+        self.assertEqual(client.created[0]["policy"], "policy-pk")
+        self.assertEqual(client.created[0]["target"], "target-pk")
+
+
 if __name__ == "__main__":
     unittest.main()

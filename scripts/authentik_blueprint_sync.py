@@ -1055,14 +1055,33 @@ def ensure_navidrome_password_change_sync_binding(client: AuthentikClient) -> di
                 f"/api/v3/policies/bindings/{existing['pk']}/",
                 payload=desired_payload,
             )
-        return {"status": "successful", "binding_pk": existing["pk"], "target_pk": target_pk}
+            return {
+                "status": "successful",
+                "changed": True,
+                "action": "updated-binding",
+                "binding_pk": existing["pk"],
+                "target_pk": target_pk,
+            }
+        return {
+            "status": "successful",
+            "changed": False,
+            "action": "unchanged",
+            "binding_pk": existing["pk"],
+            "target_pk": target_pk,
+        }
 
     created = client.request_json(
         "POST",
         "/api/v3/policies/bindings/",
         payload=desired_payload,
     )
-    return {"status": "successful", "binding_pk": created["pk"], "target_pk": target_pk}
+    return {
+        "status": "successful",
+        "changed": True,
+        "action": "created-binding",
+        "binding_pk": created["pk"],
+        "target_pk": target_pk,
+    }
 
 
 def wait_for_instance(client: AuthentikClient, instance_pk: str, previous_last_applied: str | None) -> dict[str, Any]:
@@ -1080,19 +1099,27 @@ def wait_for_instance(client: AuthentikClient, instance_pk: str, previous_last_a
 
 def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]) -> dict[str, Any]:
     plan = blueprint_plan(flow_slugs)
+    plan_names = {name for name, _ in plan}
     available = find_available_paths(client)
     available_by_suffix = {item["path"]: item for item in available}
     instances = get_instances(client)
     instances_by_name = {item["name"]: item for item in instances}
     instances_by_path = {item.get("path"): item for item in instances if item.get("path")}
     applied = []
+    changed = False
 
     for name, relative_path in plan:
         if name == NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME:
             navidrome_result = ensure_navidrome_password_change_sync_binding(client)
             stale_instance = instances_by_name.get(name)
+            action_parts = []
+            if navidrome_result.get("changed"):
+                changed = True
+                action_parts.append(navidrome_result.get("action", "updated-binding"))
             if stale_instance is not None:
                 delete_instance(client, stale_instance["pk"])
+                changed = True
+                action_parts.append("deleted-stale-instance")
                 instances_by_name.pop(name, None)
                 if stale_instance.get("path"):
                     instances_by_path.pop(stale_instance["path"], None)
@@ -1101,6 +1128,7 @@ def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]
                     "name": name,
                     "path": relative_path,
                     "status": navidrome_result["status"],
+                    "action": "+".join(action_parts) if action_parts else "unchanged",
                 }
             )
             continue
@@ -1108,41 +1136,68 @@ def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]
         matched = [item for item in available_by_suffix.values() if item["path"].endswith(relative_path)]
         if len(matched) != 1:
             raise RuntimeError(f"Expected exactly one available blueprint for {relative_path}, found {len(matched)}")
-        available_path = matched[0]["path"]
+        available_blueprint = matched[0]
+        available_path = available_blueprint["path"]
+        available_hash = available_blueprint.get("hash")
         payload = {
             "name": name,
             "path": available_path,
             "enabled": True,
         }
         instance = instances_by_name.get(name) or instances_by_path.get(available_path)
+        action_parts = []
+        needs_apply = False
+
         if instance is None:
             instance = create_instance(client, payload)
+            changed = True
+            action_parts.append("created")
+            needs_apply = True
         else:
-            needs_update = any(instance.get(field) != value for field, value in payload.items())
-            if needs_update:
+            needs_metadata_update = any(instance.get(field) != value for field, value in payload.items())
+            if needs_metadata_update:
                 instance = update_instance(client, instance["pk"], payload)
-        previous_last_applied = instance.get("last_applied")
-        apply_instance(client, instance["pk"])
-        instance = wait_for_instance(client, instance["pk"], previous_last_applied)
+                changed = True
+                action_parts.append("updated")
+                needs_apply = True
+            else:
+                needs_apply = (
+                    instance.get("status") != "successful"
+                    or available_hash is None
+                    or instance.get("last_applied_hash") != available_hash
+                )
+
+        if needs_apply:
+            previous_last_applied = instance.get("last_applied")
+            apply_instance(client, instance["pk"])
+            instance = wait_for_instance(client, instance["pk"], previous_last_applied)
+            changed = True
+            action_parts.append("applied")
+
         applied.append(
             {
                 "name": instance["name"],
                 "path": instance["path"],
                 "status": instance["status"],
+                "action": "+".join(action_parts) if action_parts else "unchanged",
             }
         )
         instances_by_name[instance["name"]] = instance
         instances_by_path[instance.get("path")] = instance
 
     final_instances = get_instances(client)
-    repo_instances = [item for item in final_instances if item["name"].startswith("repo-auth-")]
+    repo_instances = [item for item in final_instances if item["name"] in plan_names]
     failures = [item for item in repo_instances if item.get("status") != "successful"]
     if failures:
         raise RuntimeError(
             "Repo-managed blueprint instances did not all succeed: "
             + ", ".join(f"{item['name']}={item['status']}" for item in failures)
         )
-    return {"applied": applied, "available_paths": [item["path"] for item in available]}
+    return {
+        "changed": changed,
+        "applied": applied,
+        "available_paths": [item["path"] for item in available],
+    }
 
 
 def parse_args() -> argparse.Namespace:
