@@ -33,6 +33,32 @@ For protected tiers, the matching provider still needs the outpost callback URL 
 
 Current shared protected-tier providers: `admin-wildcard-forwardauth`, `home-wildcard-forwardauth`, `media-wildcard-forwardauth`, and `Provider for Domain Wide Forward Auth Catch All`.
 
+## Access Groups
+
+Use domain bundle groups for ordinary application access:
+
+| Group | Use for |
+| --- | --- |
+| `media` | Media applications and the media protected tier. |
+| `reading` | Reading applications such as Audiobookshelf, Komga, Calibre-Web Automated, and ReadMeABook. |
+| `storage` | Home-tier file, document, and storage services. |
+
+`admins` is bound to every gated repo-managed application as the admin override
+group. Per-app groups are created only when a user needs access to one
+application without joining the wider domain bundle.
+
+For app-specific Authentik objects, bind access at the application using this
+convention:
+
+| Order | Binding |
+| --- | --- |
+| `0` | Per-app group, only when one exists. |
+| `1` | Domain bundle group. |
+| `2` | `admins`. |
+
+Keep `policy_engine_mode: any` on gated applications so any matching group
+grants access.
+
 ## Native OIDC Pattern
 
 For public apps that should stay edge-open and handle login themselves:
@@ -47,5 +73,8 @@ Repo-managed native OIDC app definitions live with the Authentik stack:
 
 - Manifest: `stacks/auth/auth/appdata/authentik/oidc-apps.yaml`
 - Generated blueprint template: `stacks/auth/auth/appdata/authentik/blueprints/80-oidc-apps.yaml.j2`
+
+Set `group:` in the manifest to the app's domain bundle. The generated
+blueprint replaces `always-allow` with domain-group and `admins` bindings.
 
 RomM is the current concrete native OIDC example. Its app-specific notes live in [stacks/public/romm/README.md](../stacks/public/romm/README.md).
