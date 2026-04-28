@@ -63,6 +63,7 @@ entryPoints:
               - "*.home.faviann.com"
               - "*.media.faviann.com"
               - "*.public.faviann.com"
+              - "*.local.faviann.com"
 #          - main: example2.com # change this to your proxy domain
 #            sans:
 #              - '*.example2.com' # change this to your proxy domain  

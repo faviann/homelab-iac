@@ -29,3 +29,9 @@ entries:
     name: media
   attrs:
     name: media
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: PVEAdmins
+  attrs:
+    name: PVEAdmins

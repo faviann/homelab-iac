@@ -19,6 +19,7 @@ lxc_docker_env_stack_vars:
     calibre_web_automated_oidc_client_secret: "{{ vault_public_calibre_web_automated_oidc_client_secret }}"
     readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret }}"
     public_oidc_signing_certificate_name: "authentik Self-signed Certificate"
+    proxmox_oidc_client_secret: "{{ vault_proxmox_oidc_client_secret }}"
     postgres_password: "{{ vault_auth_postgres_password }}"
     secret_key: "{{ vault_auth_secret_key }}"
     error_reporting_enabled: "{{ vault_auth_error_reporting_enabled }}"
