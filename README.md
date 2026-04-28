@@ -13,19 +13,17 @@ cd ServerManagementScripts
 ```
 
 The `setup.sh` script will:
-- ✅ Install system prerequisites (python3-venv, pip, sshpass)
+- ✅ Install system prerequisites (`python3`, `curl`, `sshpass`)
 - ✅ Generate or prompt for vault password
 - ✅ Prompt for Proxmox API credentials (user, token ID, token secret)
-- ✅ Create isolated Python virtual environment
-- ✅ Install Ansible and dependencies
+- ✅ Install `uv` when needed and run `uv sync --locked`
 - ✅ Generate SSH keys
 - ✅ Create and encrypt vault.yml with your credentials
 
 **After setup, validate your credentials:**
 
 ```bash
-source activate-env.sh
-ansible-playbook playbooks/validate-credentials.yml
+uv run --locked ansible-playbook playbooks/validate-credentials.yml
 ```
 
 **Manual setup:** See [detailed instructions below](#first-time-setup).
@@ -51,7 +49,7 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 ### System Requirements
 
 - **Operating System**: Debian/Ubuntu Linux (tested on Ubuntu 24.04 LTS)
-- **Python**: 3.10+ 
+- **Python**: 3.12+
 - **Network**: Must reach Proxmox API (HTTPS port 8006)
 - **Proxmox**: API token with LXC management permissions
 
@@ -61,20 +59,19 @@ Before running bootstrap, install these packages:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-venv python3-pip sshpass
+sudo apt install -y python3 curl sshpass
 ```
 
 **Package purposes:**
-- `python3-venv` - Creates isolated Python environments
-- `python3-pip` - Python package installer
+- `python3` - Base Python runtime for `uv` and Ansible tooling
+- `curl` - Required to install `uv` when it is missing
 - `sshpass` - Required for initial SSH key distribution to Proxmox host
 
 ### Ansible Dependencies
 
-Installed automatically via `ansible-playbook bootstrap.yml`:
-- Ansible core and collections (from `requirements/pip.txt` and `collections/requirements.yml`)
-- Python libraries for Proxmox API communication
-- SSH key generation utilities
+Python dependencies are declared in `pyproject.toml` and locked in `uv.lock`.
+Run `./setup.sh` for the guided path, or `uv sync --locked` directly if `uv` is already installed.
+Collections and external roles are prepared by `uv run --locked ansible-playbook bootstrap.yml`.
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
@@ -101,7 +98,7 @@ Run the automated setup script:
 ./setup.sh
 ```
 
-This handles all prerequisites, creates the virtual environment, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use.
+This handles the workstation prerequisites, installs `uv` when needed, syncs `.venv/`, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use.
 
 ### Manual Setup
 
@@ -111,7 +108,7 @@ If you prefer manual setup or need to troubleshoot:
 
    ```bash
    sudo apt update
-   sudo apt install -y python3-venv python3-pip sshpass
+   sudo apt install -y python3 curl sshpass
    ```
 
 2. **Provision the vault password file:**
@@ -124,28 +121,27 @@ If you prefer manual setup or need to troubleshoot:
 
    This writes `~/.ansible/vault-pass` before you bootstrap this repo.
 
-3. **Create and activate virtual environment:**
+3. **Install uv and sync dependencies:**
 
    ```bash
-   python3 -m venv .ansible/venv
-   source .ansible/venv/bin/activate
-   pip install --upgrade pip
-   pip install ansible
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   export PATH="$HOME/.local/bin:$PATH"
+   uv sync --locked
    ```
 
 4. **Run bootstrap:**
 
    ```bash
-   ansible-playbook bootstrap.yml
+   uv run --locked ansible-playbook bootstrap.yml
    ```
 
-   This creates SSH keys, installs collections, and prepares Python dependencies.
+   This creates SSH keys and installs collections and external roles.
 
    When you run lifecycle playbooks from the `workstation` LXC itself, they exclude that host by
    default. To manage it intentionally, run:
 
    ```bash
-   ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation
+   uv run --locked ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation
    ```
 
 5. **Configure Proxmox API credentials:**
@@ -161,7 +157,7 @@ If you prefer manual setup or need to troubleshoot:
    ```bash
    cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
    # Edit vault.yml with your actual credentials
-   ansible-vault encrypt inventory/group_vars/all/vault.yml
+   uv run --locked ansible-vault encrypt inventory/group_vars/all/vault.yml
    ```
 
    **To generate a Proxmox API token:**
@@ -176,24 +172,17 @@ If you prefer manual setup or need to troubleshoot:
 6. **Validate credentials:**
 
    ```bash
-   source activate-env.sh
-   ansible-playbook playbooks/validate-credentials.yml
+   uv run --locked ansible-playbook playbooks/validate-credentials.yml
    ```
 
 ### After Setup
 
-Activate the environment:
-
-```bash
-source activate-env.sh
-```
-
 Test connectivity:
 
 ```bash
-ansible-playbook playbooks/validate-credentials.yml
+uv run --locked ansible-playbook playbooks/validate-credentials.yml
 # Or test full site validation
-ansible-playbook site.yml --tags validation
+uv run --locked ansible-playbook site.yml --tags validation
 ```
 
 ## Usage
@@ -243,8 +232,8 @@ ansible-playbook site.yml --tags validation
 |   |-- lab-connectivity.yml          # SSH + Proxmox API connectivity checks
 |   |-- proxmox_api_check.yml         # API connectivity test
 |   `-- lxc-provision.yml             # Legacy provisioning playbook
-|-- requirements/
-|   `-- pip.txt                        # Python package dependencies
+|-- pyproject.toml                     # Python dependency declarations for uv
+|-- uv.lock                            # Locked Python dependency resolution
 |-- site.yml                           # Top-level orchestration playbook
 `-- .ansible-lint
 ```
@@ -279,7 +268,7 @@ vault_proxmox_api_token_secret: "your-actual-token-secret"
 ```
 
 ```bash
-ansible-vault encrypt inventory/group_vars/all/vault.yml
+uv run --locked ansible-vault encrypt inventory/group_vars/all/vault.yml
 ```
 
 ### Inventory
@@ -324,7 +313,7 @@ After initial setup, all subsequent playbook runs will use passwordless SSH auth
 #### Connectivity validation
 
 ```bash
-ansible-playbook playbooks/lab-connectivity.yml
+uv run --locked ansible-playbook playbooks/lab-connectivity.yml
 ```
 
 Runs SSH ping checks against managed hosts and calls the Proxmox `/api2/json/version` endpoint using your API token.
@@ -332,7 +321,7 @@ Runs SSH ping checks against managed hosts and calls the Proxmox `/api2/json/ver
 ### Check API Connectivity
 
 ```bash
-ansible-playbook playbooks/proxmox_api_check.yml
+uv run --locked ansible-playbook playbooks/proxmox_api_check.yml
 ```
 
 Lists all LXC containers on the default node.
@@ -340,7 +329,7 @@ Lists all LXC containers on the default node.
 ### Provision Inventory-Defined LXCs
 
 ```bash
-ansible-playbook -i inventory/hosts.yml site.yml --tags provision
+uv run --locked ansible-playbook -i inventory/hosts.yml site.yml --tags provision
 ```
 
 Builds the effective LXC specs from tier and capability group variables, ensures each container exists through the `proxmox_lxc_provision` role, and applies host-side preparation tasks when enabled. Edit inventory group and host vars to tailor resources and features.
@@ -364,19 +353,19 @@ Builds the effective LXC specs from tier and capability group variables, ensures
 
 ### Authentication fails
 
-- Verify API token secret in vault: `ansible-vault view inventory/group_vars/all/vault.yml`
+- Verify API token secret in vault: `uv run --locked ansible-vault view inventory/group_vars/all/vault.yml`
 - Check token permissions in Proxmox web UI
 - Ensure token ID format: `user@realm!tokenid` (e.g., `ansible@pve!controller`)
 
 ### Module not found
 
 - Verify collections installed: `ansible-galaxy collection list | grep proxmox`
-- Re-run `ansible-playbook bootstrap.yml` to reinstall collections after updating dependency files
+- Re-run `uv run --locked ansible-playbook bootstrap.yml` to reinstall collections after updating dependency files
 
 ### Python import errors
 
-- Verify Python packages: `python3 -m pip list | grep -E "proxmoxer|requests"`
-- Re-run `ansible-playbook bootstrap.yml` to rebuild the controller virtual environment if packages drift
+- Verify Python packages: `uv run --locked python -c "import proxmoxer, requests"`
+- Re-run `uv sync --locked` to rebuild the controller Python environment if packages drift
 
 ## Migration from Legacy Implementation
 

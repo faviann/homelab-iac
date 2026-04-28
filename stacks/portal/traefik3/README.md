@@ -41,5 +41,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-ansible-playbook site.yml --limit portal -e stack_filter=traefik3
+uv run --locked ansible-playbook site.yml --limit portal -e stack_filter=traefik3
 ```

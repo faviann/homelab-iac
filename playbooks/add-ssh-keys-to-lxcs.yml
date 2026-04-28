@@ -3,8 +3,8 @@
 # This does NOT delete containers - it only adds the SSH public key to authorized_keys
 #
 # Usage:
-#   ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
-#   ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
+#   uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
+#   uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
 
 - name: Add SSH keys to existing LXC containers via Proxmox host
   hosts: lxcs

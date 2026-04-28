@@ -10,9 +10,9 @@
 
 ## Non-negotiables
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
-- The venv is on `PATH` automatically. If it doesn't exist yet, run `ansible-playbook bootstrap.yml` to create it.
+- Run Python and Ansible tools through `uv run --locked <tool>`. If `.venv/` does not exist, run `uv sync --locked`.
 - `ansible.cfg` expects the vault passphrase at `~/.ansible/vault-pass`.
-- Lifecycle playbooks skip any host whose `inventory_hostname` matches the controller's hostname (`proxmox_skip_self: true` by default). To manage the control node intentionally: `ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation` (`--limit` targets the host, `-e` disables the guard).
+- Lifecycle playbooks skip any host whose `inventory_hostname` matches the controller's hostname (`proxmox_skip_self: true` by default). To manage the control node intentionally: `uv run --locked ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation` (`--limit` targets the host, `-e` disables the guard).
 
 ## Standard Paths
 
@@ -23,7 +23,7 @@
 | Vault password | `~/.ansible/vault-pass` (home-dir, written by chezmoi from Bitwarden) |
 | Vaulted secrets | `inventory/group_vars/all/vault.yml` (encrypted) |
 | Fact cache | `.ansible/cache/` (project-relative, gitignored, 1h TTL) |
-| Venv | `.ansible/venv/` (project-relative, gitignored) |
+| Venv | `.venv/` (project-relative, gitignored) |
 | External roles | `.ansible/roles/` (project-relative, gitignored, auto-installed) |
 
 Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never commit plaintext credentials. The vault password file is machine-local and should be provisioned outside this repo.
@@ -58,26 +58,26 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 
 | Command | Purpose |
 |---------|---------|
-| `ansible-playbook site.yml` | Full lifecycle — deploy/update all LXCs |
-| `ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation` | Intentionally include the control node when running from `workstation` |
-| `ansible-playbook site.yml --limit <host>` | Target one host |
-| `ansible-playbook site.yml --limit <host> -e stack_filter=<stack>` | Deploy one stack on a host (skips all others) |
-| `ansible-playbook site.yml --check` | Dry run |
-| `ansible-playbook bootstrap.yml` | Recreate venv + SSH keys after clean install |
+| `uv run --locked ansible-playbook site.yml` | Full lifecycle — deploy/update all LXCs |
+| `uv run --locked ansible-playbook site.yml -e proxmox_skip_self=false --limit workstation` | Intentionally include the control node when running from `workstation` |
+| `uv run --locked ansible-playbook site.yml --limit <host>` | Target one host |
+| `uv run --locked ansible-playbook site.yml --limit <host> -e stack_filter=<stack>` | Deploy one stack on a host (skips all others) |
+| `uv run --locked ansible-playbook site.yml --check` | Dry run |
+| `uv run --locked ansible-playbook bootstrap.yml` | Recreate bootstrap artifacts after clean install |
 | `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
 | `ssh -l root -i .ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 
-**Timing**: `ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
+**Timing**: `uv run --locked ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
 
 **Long-running output discipline**: For live deploys or other noisy commands, avoid streaming full output into chat context. Prefer redirecting to a temp log and polling only high-signal excerpts:
 ```bash
-ansible-playbook site.yml --limit <host> > /tmp/<task>.log 2>&1
+uv run --locked ansible-playbook site.yml --limit <host> > /tmp/<task>.log 2>&1
 tail -40 /tmp/<task>.log
 rg "failed=|unreachable=|FAILED|changed=|<relevant-resource>" /tmp/<task>.log
 ```
 Only read the full log when the summarized output is insufficient to diagnose a failure. Never print secrets from logs or vault output.
 
-Debug: `ansible-playbook site.yml -vvv` for verbose output, `ansible-inventory -i inventory/hosts.yml --host <name> --yaml` for merged vars, `ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
+Debug: `uv run --locked ansible-playbook site.yml -vvv` for verbose output, `uv run --locked ansible-inventory -i inventory/hosts.yml --host <name> --yaml` for merged vars, `uv run --locked ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
 
 ## Role Design Principles
 

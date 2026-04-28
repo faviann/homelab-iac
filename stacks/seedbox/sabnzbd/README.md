@@ -21,5 +21,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-ansible-playbook site.yml --limit seedbox -e stack_filter=sabnzbd
+uv run --locked ansible-playbook site.yml --limit seedbox -e stack_filter=sabnzbd
 ```

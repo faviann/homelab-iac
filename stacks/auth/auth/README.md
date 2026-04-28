@@ -37,5 +37,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-ansible-playbook site.yml --limit auth -e stack_filter=auth
+uv run --locked ansible-playbook site.yml --limit auth -e stack_filter=auth
 ```

@@ -35,5 +35,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-ansible-playbook site.yml --limit public -e stack_filter=romm
+uv run --locked ansible-playbook site.yml --limit public -e stack_filter=romm
 ```

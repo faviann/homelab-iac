@@ -46,5 +46,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-ansible-playbook site.yml --limit public -e stack_filter=music
+uv run --locked ansible-playbook site.yml --limit public -e stack_filter=music
 ```

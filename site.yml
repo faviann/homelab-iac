@@ -4,10 +4,10 @@
 # guest configuration.
 #
 # Usage:
-#   ansible-playbook site.yml                    # Run full lifecycle
-#   ansible-playbook playbooks/validate-infrastructure.yml  # Just validation
-#   ansible-playbook playbooks/provision-lxcs.yml          # Just provisioning
-#   ansible-playbook playbooks/configure-lxcs.yml          # Just configuration
+#   uv run --locked ansible-playbook site.yml                    # Run full lifecycle
+#   uv run --locked ansible-playbook playbooks/validate-infrastructure.yml  # Just validation
+#   uv run --locked ansible-playbook playbooks/provision-lxcs.yml          # Just provisioning
+#   uv run --locked ansible-playbook playbooks/configure-lxcs.yml          # Just configuration
 
 - name: Run the full LXC lifecycle
   ansible.builtin.import_playbook: playbooks/lifecycle-lxcs.yml

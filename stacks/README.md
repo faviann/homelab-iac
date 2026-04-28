@@ -123,13 +123,13 @@ Rules:
 5. Deploy with:
 
 ```bash
-ansible-playbook site.yml --limit <host>
+uv run --locked ansible-playbook site.yml --limit <host>
 ```
 
 To iterate on a single stack without reconciling the others:
 
 ```bash
-ansible-playbook site.yml --limit <host> -e stack_filter=<stack>
+uv run --locked ansible-playbook site.yml --limit <host> -e stack_filter=<stack>
 ```
 
 No registration step is required; the role discovers everything under `stacks/<host>/` automatically.

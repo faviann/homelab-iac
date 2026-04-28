@@ -54,5 +54,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-ansible-playbook site.yml --limit seedbox -e stack_filter=bittorrent
+uv run --locked ansible-playbook site.yml --limit seedbox -e stack_filter=bittorrent
 ```

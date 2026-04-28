@@ -20,5 +20,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-ansible-playbook site.yml --limit public -e stack_filter=readmeabook
+uv run --locked ansible-playbook site.yml --limit public -e stack_filter=readmeabook
 ```

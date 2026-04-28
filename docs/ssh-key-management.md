@@ -8,16 +8,16 @@ LXC containers created outside of Ansible (manually or by other tools) won't hav
 
 ```bash
 # All containers
-ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
+uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
 
 # Specific container(s)
-ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
-ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal,seedbox
+uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
+uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal,seedbox
 ```
 
 The playbook uses `pct exec` on the Proxmox host — containers don't need to be SSH-accessible beforehand. It is idempotent and non-destructive (only adds, never removes keys).
 
-**Prerequisites**: Container must be running; Proxmox host SSH access must be configured (run `ansible-playbook site.yml --tags bootstrap` first if needed).
+**Prerequisites**: Container must be running; Proxmox host SSH access must be configured (run `uv run --locked ansible-playbook site.yml --tags bootstrap` first if needed).
 
 ## Manual Method (via Proxmox host)
 
