@@ -25,7 +25,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(defaults["workstation_uid"], "{{ docker_uid }}")
         self.assertEqual(defaults["workstation_gid"], "{{ docker_gid }}")
         self.assertEqual(defaults["workstation_home"], "/home/{{ workstation_username }}")
-        self.assertTrue(defaults["workstation_agent_state_enabled"])
+        self.assertFalse(defaults["workstation_agent_state_enabled"])
         self.assertEqual(defaults["workstation_agent_state_root"], "/ephemeral/workstation/agent-state")
         self.assertEqual(
             defaults["workstation_agent_state_links"],

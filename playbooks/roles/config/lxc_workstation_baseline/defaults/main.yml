@@ -3,7 +3,7 @@ workstation_username: "{{ docker_user }}"
 workstation_uid: "{{ docker_uid }}"
 workstation_gid: "{{ docker_gid }}"
 workstation_home: "/home/{{ workstation_username }}"
-workstation_agent_state_enabled: true
+workstation_agent_state_enabled: false
 workstation_agent_state_root: /ephemeral/workstation/agent-state
 workstation_agent_state_links:
   - name: claude

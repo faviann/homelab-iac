@@ -19,9 +19,18 @@ IDEMPOTENCY_PLAYBOOK = FIXTURE_ROOT / "workstation_agent_state_idempotency.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
-def run_playbook(playbook: Path, temp_root: str) -> subprocess.CompletedProcess[str]:
+def run_playbook(
+    playbook: Path,
+    temp_root: str,
+    *,
+    check_mode: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    command = [*ANSIBLE_PLAYBOOK, str(playbook), "-f", "1", "-e", f"temp_root={temp_root}"]
+    if check_mode:
+        command.append("--check")
+
     return subprocess.run(
-        [*ANSIBLE_PLAYBOOK, str(playbook), "-f", "1", "-e", f"temp_root={temp_root}"],
+        command,
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -65,6 +74,15 @@ def main() -> int:
     if not all(marker in conflict_output for marker in expected_markers):
         print("conflict failure did not explain the unsafe existing path", file=sys.stderr)
         print(conflict_output, file=sys.stderr)
+        return 1
+
+    with tempfile.TemporaryDirectory(prefix="workstation-agent-state-check-mode-") as temp_root:
+        check_mode = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root, check_mode=True)
+
+    check_mode_output = f"{check_mode.stdout}\n{check_mode.stderr}"
+    if check_mode.returncode != 0:
+        print("check-mode playbook failed unexpectedly", file=sys.stderr)
+        print(check_mode_output, file=sys.stderr)
         return 1
 
     with tempfile.TemporaryDirectory(prefix="workstation-agent-state-idempotency-") as temp_root:

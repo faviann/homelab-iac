@@ -4,6 +4,7 @@
 
 lxc_hwaddr: "BC:24:11:57:80:06"
 workstation_enabled: true
+workstation_agent_state_enabled: true
 
 docker_agents_enabled: false
 traefik_kop_enabled: false
