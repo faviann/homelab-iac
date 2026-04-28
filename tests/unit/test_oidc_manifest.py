@@ -254,6 +254,31 @@ class OidcBlueprintPlanTests(unittest.TestCase):
             names.index("repo-auth-providers"),
         )
 
+    def test_proxmox_oidc_blueprint_precedes_providers(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertIn("repo-auth-proxmox-oidc", names)
+        self.assertGreater(
+            names.index("repo-auth-proxmox-oidc"),
+            names.index("repo-auth-notifications"),
+        )
+        self.assertLess(
+            names.index("repo-auth-proxmox-oidc"),
+            names.index("repo-auth-providers"),
+        )
+
+    def test_proxmox_oidc_blueprint_path_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        paths = [path for _, path in plan]
+        self.assertIn("85-proxmox-oidc.yaml", paths)
+
+    def test_proxmox_blueprint_uses_provider_specific_issuer_mode(self):
+        content = (
+            REPO_ROOT / "stacks/auth/auth/appdata/authentik/blueprints/85-proxmox-oidc.yaml.j2"
+        ).read_text(encoding="utf-8")
+        self.assertIn("issuer_mode: per_provider", content)
+        self.assertNotIn("issuer_mode: global", content)
+
 
 if __name__ == "__main__":
     unittest.main()
