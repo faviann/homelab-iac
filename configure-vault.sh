@@ -37,24 +37,6 @@ echo -e "${BLUE}║  Configure Proxmox API Credentials                       ║
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo
 
-# Check if venv exists
-VENV_PATH=".ansible/venv"
-if [ ! -d "$VENV_PATH" ]; then
-    print_error "Virtual environment not found at $VENV_PATH"
-    print_info "Run ./setup.sh first to initialize the project"
-    exit 1
-fi
-
-# Activate venv
-source "$VENV_PATH/bin/activate"
-
-# Check if ansible-vault is available
-if ! command -v ansible-vault &> /dev/null; then
-    print_error "ansible-vault command not found"
-    print_info "Run ./setup.sh to set up the environment"
-    exit 1
-fi
-
 VAULT_FILE="inventory/group_vars/all/vault.yml"
 VAULT_BACKUP="$VAULT_FILE.backup.$(date +%s)"
 
@@ -119,7 +101,7 @@ print_status "Credentials captured"
 if [ "$CREATE_NEW" = false ]; then
     if [ "$IS_ENCRYPTED" = true ]; then
         print_info "Decrypting existing vault..."
-        ansible-vault decrypt "$VAULT_FILE"
+        uv run --locked ansible-vault decrypt "$VAULT_FILE"
         print_status "Vault decrypted"
     fi
     
@@ -144,7 +126,7 @@ print_status "Vault file updated"
 
 # Encrypt the vault
 print_info "Encrypting vault..."
-ansible-vault encrypt "$VAULT_FILE"
+uv run --locked ansible-vault encrypt "$VAULT_FILE"
 print_status "Vault encrypted"
 
 echo
@@ -153,8 +135,7 @@ echo -e "${GREEN}║  Credentials Updated Successfully!                        �
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo
 echo "You can now test connectivity with:"
-echo -e "${BLUE}  source activate-env.sh${NC}"
-echo -e "${BLUE}  ansible-playbook site.yml --tags validation${NC}"
+echo -e "${BLUE}  uv run --locked ansible-playbook site.yml --tags validation${NC}"
 echo
 
 if [ "$CREATE_NEW" = false ]; then
@@ -162,6 +143,3 @@ if [ "$CREATE_NEW" = false ]; then
     echo -e "${BLUE}  $VAULT_BACKUP${NC}"
     echo
 fi
-
-# Deactivate venv
-deactivate 2>/dev/null || true

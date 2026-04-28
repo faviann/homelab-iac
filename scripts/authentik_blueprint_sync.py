@@ -345,6 +345,7 @@ BlueprintDumper.add_representer(KeyOfRef, _represent_keyof)
 VAULT_FILE = REPO_ROOT / "inventory" / "group_vars" / "all" / "vault.yml"
 VAULT_PASS_FILE = Path.home() / ".ansible" / "vault-pass"
 VAULT_TOKEN_VAR = "vault_auth_blueprint_api_token"
+ANSIBLE_VAULT_COMMAND = "uv run --locked ansible-vault".split()
 
 
 def _extract_vault_token(yaml_str: str, var_name: str) -> str:
@@ -360,7 +361,8 @@ def token_from_vault(
     var_name: str = VAULT_TOKEN_VAR,
 ) -> str:
     result = subprocess.run(
-        ["ansible-vault", "view", str(vault_file), "--vault-password-file", str(vault_pass_file)],
+        [*ANSIBLE_VAULT_COMMAND, "view", str(vault_file), "--vault-password-file", str(vault_pass_file)],
+        cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,

@@ -12,7 +12,6 @@
     - community.crypto
   vars:
     control_node_project_root: "{{ playbook_dir }}"
-    control_node_pip_requirements: "{{ [playbook_dir, 'requirements', 'pip.txt'] | path_join }}"
     control_node_collection_requirements: "{{ [playbook_dir, 'collections', 'requirements.yml'] | path_join }}"
   roles:
     - base/control_node_bootstrap

@@ -54,24 +54,14 @@ if ! command -v python3 &> /dev/null; then
     MISSING_PACKAGES+=("python3")
 fi
 
-if ! dpkg -l | grep -q python3-venv; then
-    print_warning "python3-venv not installed"
-    MISSING_PACKAGES+=("python3-venv")
-fi
-
-if ! dpkg -l | grep -q python3-pip; then
-    print_warning "python3-pip not installed"
-    MISSING_PACKAGES+=("python3-pip")
+if ! command -v curl &> /dev/null; then
+    print_warning "curl not installed"
+    MISSING_PACKAGES+=("curl")
 fi
 
 if ! dpkg -l | grep -q sshpass; then
     print_warning "sshpass not installed"
     MISSING_PACKAGES+=("sshpass")
-fi
-
-if ! command -v direnv &> /dev/null; then
-    print_warning "direnv not installed"
-    MISSING_PACKAGES+=("direnv")
 fi
 
 # Install missing packages
@@ -87,7 +77,20 @@ else
 fi
 
 echo
-echo "Step 2: Setting up project structure..."
+echo "Step 2: Setting up uv..."
+echo "─────────────────────────────────────────"
+
+if ! command -v uv &> /dev/null; then
+    print_info "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+    print_status "uv installed"
+else
+    print_status "uv already installed ($(uv --version))"
+fi
+
+echo
+echo "Step 3: Setting up project structure..."
 echo "─────────────────────────────────────────"
 
 # Create .ansible directory if it doesn't exist
@@ -97,7 +100,7 @@ mkdir -p .ansible/cache
 print_status "Created .ansible directories"
 
 echo
-echo "Step 3: Vault password configuration..."
+echo "Step 4: Vault password configuration..."
 echo "─────────────────────────────────────────"
 
 VAULT_PASS_FILE="$HOME/.ansible/vault-pass"
@@ -117,7 +120,7 @@ else
 fi
 
 echo
-echo "Step 4: Proxmox API credentials..."
+echo "Step 5: Proxmox API credentials..."
 echo "─────────────────────────────────────────"
 
 # Prompt for Proxmox credentials
@@ -161,41 +164,15 @@ done
 print_status "Credentials captured"
 
 echo
-echo "Step 5: Creating Python virtual environment..."
+echo "Step 6: Installing Python dependencies..."
 echo "─────────────────────────────────────────"
 
-VENV_PATH=".ansible/venv"
-
-if [ -d "$VENV_PATH" ]; then
-    print_warning "Virtual environment already exists"
-    read -p "Recreate it? (y/n): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -rf "$VENV_PATH"
-        print_info "Removed existing venv"
-    fi
-fi
-
-if [ ! -d "$VENV_PATH" ]; then
-    python3 -m venv "$VENV_PATH"
-    print_status "Created virtual environment"
-    
-    # Activate and upgrade pip
-    source "$VENV_PATH/bin/activate"
-    pip install --quiet --upgrade pip
-    print_status "Upgraded pip"
-    
-    # Install ansible
-    print_info "Installing Ansible (this may take a moment)..."
-    pip install --quiet ansible
-    print_status "Installed Ansible"
-else
-    source "$VENV_PATH/bin/activate"
-    print_status "Using existing virtual environment"
-fi
+print_info "Running uv sync --locked..."
+uv sync --locked
+print_status "Python dependencies installed"
 
 echo
-echo "Step 6: Running bootstrap playbook..."
+echo "Step 7: Running bootstrap playbook..."
 echo "─────────────────────────────────────────"
 
 if [ ! -f "bootstrap.yml" ]; then
@@ -203,11 +180,11 @@ if [ ! -f "bootstrap.yml" ]; then
     exit 1
 fi
 
-ansible-playbook bootstrap.yml
+uv run --locked ansible-playbook bootstrap.yml
 print_status "Bootstrap completed"
 
 echo
-echo "Step 7: Creating and encrypting vault..."
+echo "Step 8: Creating and encrypting vault..."
 echo "─────────────────────────────────────────"
 
 VAULT_FILE="inventory/group_vars/all/vault.yml"
@@ -229,7 +206,7 @@ if [ -f "$VAULT_FILE" ]; then
             read -p "Encrypt existing vault? (y/n): " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                ansible-vault encrypt "$VAULT_FILE"
+                uv run --locked ansible-vault encrypt "$VAULT_FILE"
                 print_status "Vault encrypted"
             fi
         fi
@@ -254,12 +231,12 @@ EOF
     
     # Encrypt the vault file
     print_info "Encrypting vault.yml..."
-    ansible-vault encrypt "$VAULT_FILE"
+    uv run --locked ansible-vault encrypt "$VAULT_FILE"
     print_status "Vault encrypted and ready to use"
 fi
 
 echo
-echo "Step 8: Claude Code skills..."
+echo "Step 9: Claude Code skills..."
 echo "─────────────────────────────────────────"
 
 SKILLS_DIR="$HOME/.claude/skills"
@@ -276,7 +253,7 @@ for skill in "$PROJECT_ROOT/.agents/skills"/*/; do
 done
 
 echo
-echo "Step 9: VS Code configuration..."
+echo "Step 10: VS Code configuration..."
 echo "─────────────────────────────────────────"
 
 if command -v code &> /dev/null || [ -d "$HOME/.vscode" ]; then
@@ -289,7 +266,7 @@ if command -v code &> /dev/null || [ -d "$HOME/.vscode" ]; then
   "terminal.integrated.defaultProfile.linux": "bash"
 }
 EOF
-    print_status "VS Code terminal configured (login shell for direnv support)"
+    print_status "VS Code terminal configured"
 else
     print_info "VS Code not detected — skipping .vscode/settings.json"
 fi
@@ -301,40 +278,12 @@ echo -e "${GREEN}╚════════════════════
 echo
 echo "Project is ready to use. Quick reference:"
 echo
-echo "  • Activate environment:    ${BLUE}automatic via direnv on cd${NC}"
-echo "  • Test connectivity:       ${BLUE}ansible-playbook site.yml --tags validation${NC}"
-echo "  • Update credentials:      ${BLUE}./configure-vault.sh${NC}"
-echo "  • View vault password:     ${BLUE}cat ~/.ansible/vault-pass${NC}"
-echo "  • Edit encrypted vault:    ${BLUE}ansible-vault edit inventory/group_vars/all/vault.yml${NC}"
+echo "  • Sync environment:       ${BLUE}uv sync --locked${NC}"
+echo "  • Test connectivity:      ${BLUE}uv run --locked ansible-playbook site.yml --tags validation${NC}"
+echo "  • Update credentials:     ${BLUE}./configure-vault.sh${NC}"
+echo "  • Edit encrypted vault:   ${BLUE}uv run --locked ansible-vault edit inventory/group_vars/all/vault.yml${NC}"
 echo
 echo "Documentation:"
 echo "  • Main README:             ${BLUE}README.md${NC}"
 echo "  • Agent instructions:      ${BLUE}AGENTS.md${NC}"
 echo
-
-# Deactivate venv for clean exit
-deactivate 2>/dev/null || true
-
-# Set up direnv hook in shell profile if not already present
-if [ -f "$HOME/.zshrc" ]; then
-    SHELL_RC="$HOME/.zshrc"
-    SHELL_NAME="zsh"
-else
-    SHELL_RC="$HOME/.bashrc"
-    SHELL_NAME="bash"
-fi
-
-if ! grep -q "direnv hook" "$SHELL_RC" 2>/dev/null; then
-    echo '' >> "$SHELL_RC"
-    echo '# direnv' >> "$SHELL_RC"
-    echo "eval \"\$(direnv hook $SHELL_NAME)\"" >> "$SHELL_RC"
-    print_status "Added direnv hook to $SHELL_RC"
-else
-    print_status "direnv hook already in $SHELL_RC"
-fi
-
-# Allow .envrc in this project
-if [ -f ".envrc" ]; then
-    direnv allow .
-    print_status "direnv allowed for this project"
-fi

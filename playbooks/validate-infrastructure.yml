@@ -3,7 +3,7 @@
 # Can be run standalone for pre-flight checks or as part of full orchestration
 #
 # Usage:
-#   ansible-playbook playbooks/validate-infrastructure.yml
+#   uv run --locked ansible-playbook playbooks/validate-infrastructure.yml
 
 - name: Verify control node has been bootstrapped
   hosts: localhost
@@ -12,14 +12,14 @@
   become: false
   vars:
     control_node_project_root: "{{ playbook_dir | dirname }}"
-    control_node_pip_virtualenv: "{{ [playbook_dir | dirname, '.ansible', 'venv'] | path_join }}"
+    control_node_uv_virtualenv: "{{ [playbook_dir | dirname, '.venv'] | path_join }}"
     control_node_collection_install_path: "{{ [playbook_dir | dirname, 'collections'] | path_join }}"
     control_node_required_collections:
       - community.proxmox
   tasks:
-    - name: Check for control node virtual environment
+    - name: Check for uv-managed control node virtual environment
       ansible.builtin.stat:
-        path: "{{ control_node_pip_virtualenv }}"
+        path: "{{ control_node_uv_virtualenv }}"
       register: control_node_virtualenv_stat
       run_once: true
 
@@ -41,8 +41,8 @@
           - control_node_virtualenv_stat.stat.exists
           - control_node_missing_collections | length == 0
         fail_msg: >-
-          Bootstrap prerequisites are missing. Run `ansible-playbook bootstrap.yml` to install the
-          control node virtualenv and dependencies. Missing collections: {{ control_node_missing_collections }}.
+          Bootstrap prerequisites are missing. Run `uv run --locked ansible-playbook bootstrap.yml`
+          after `uv sync --locked`. Missing collections: {{ control_node_missing_collections }}.
         success_msg: Bootstrap prerequisites detected.
       run_once: true
 
