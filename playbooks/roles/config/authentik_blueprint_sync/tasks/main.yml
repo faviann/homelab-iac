@@ -22,7 +22,7 @@
   block:
     - name: Wait for Authentik API to be ready
       ansible.builtin.uri:
-        url: "{{ authentik_blueprint_sync_url }}/api/v3/-/healthcheck/"
+        url: "{{ authentik_blueprint_sync_url }}/-/health/ready/"
         status_code: 200
       register: _authentik_health
       delegate_to: localhost
