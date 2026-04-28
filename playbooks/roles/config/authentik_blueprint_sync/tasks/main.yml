@@ -63,18 +63,37 @@
       register: _authentik_blueprint_sync
       delegate_to: localhost
       become: false
-      changed_when: (_authentik_blueprint_sync.stdout | from_json).changed | bool
+      changed_when: false
+
+    - name: Parse blueprint apply script output
+      block:
+        - name: Decode blueprint apply script JSON
+          ansible.builtin.set_fact:
+            _authentik_blueprint_sync_result: "{{ _authentik_blueprint_sync.stdout | from_json }}"
+          delegate_to: localhost
+          become: false
+          changed_when: false
+      rescue:
+        - name: Fail when blueprint apply script output is not valid JSON
+          ansible.builtin.fail:
+            msg: >-
+              Authentik blueprint sync script did not return valid JSON on stdout.
+              stdout={{ _authentik_blueprint_sync.stdout | default('') | trim }}
+              stderr={{ _authentik_blueprint_sync.stderr | default('') | trim }}
+          delegate_to: localhost
+          become: false
+          changed_when: true
 
     - name: Assert blueprint apply script returned changed status
       ansible.builtin.assert:
         that:
-          - (_authentik_blueprint_sync.stdout | from_json).changed is boolean
+          - _authentik_blueprint_sync_result.changed is boolean
         fail_msg: >-
           Authentik blueprint sync script did not return a JSON boolean at
           top-level key 'changed'.
       delegate_to: localhost
       become: false
-      changed_when: false
+      changed_when: _authentik_blueprint_sync_result.changed | bool
 
   always:
     - name: Remove temporary token file

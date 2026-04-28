@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import json
 import sys
+import types
 import unittest
 from pathlib import Path
 from typing import Any
@@ -270,6 +274,45 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertEqual(client.applied, ["instance-pk"])
         self.assertEqual(result["applied"][0]["action"], "applied")
 
+    def test_metadata_repair_removes_stale_lookup_keys_between_plan_entries(self):
+        self.mod.blueprint_plan = lambda flow_slugs: [
+            ("repo-auth-groups", "10-groups.yaml"),
+            ("repo-auth-roles", "20-roles.yaml"),
+        ]
+        client = FakeBlueprintClient(
+            available=[
+                {"path": "custom/10-groups.yaml", "hash": "groups-hash"},
+                {"path": "custom/20-roles.yaml", "hash": "roles-hash"},
+            ],
+            instances=[
+                {
+                    "pk": "groups-pk",
+                    "name": "repo-auth-groups",
+                    "path": "custom/20-roles.yaml",
+                    "enabled": True,
+                    "status": "successful",
+                    "last_applied": "earlier",
+                    "last_applied_hash": "old",
+                }
+            ],
+        )
+
+        result = self.mod.reconcile_blueprint_instances(client, [])
+
+        self.assertTrue(result["changed"])
+        self.assertEqual(client.updated, [("groups-pk", {
+            "name": "repo-auth-groups",
+            "path": "custom/10-groups.yaml",
+            "enabled": True,
+        })])
+        self.assertEqual(client.created, [{
+            "name": "repo-auth-roles",
+            "path": "custom/20-roles.yaml",
+            "enabled": True,
+        }])
+        self.assertEqual(client.applied, ["groups-pk", "created-pk"])
+        self.assertEqual({item["name"] for item in result["applied"]}, {"repo-auth-groups", "repo-auth-roles"})
+
     def test_navidrome_unchanged_binding_reports_unchanged(self):
         self.mod.blueprint_plan = lambda flow_slugs: [
             (self.mod.NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME, "27-navidrome-password-change-sync.yaml")
@@ -435,6 +478,54 @@ class NavidromeBindingChangedReportingTests(unittest.TestCase):
         self.assertEqual(result["action"], "created-binding")
         self.assertEqual(client.created[0]["policy"], "policy-pk")
         self.assertEqual(client.created[0]["target"], "target-pk")
+
+
+class ScriptCliOutputTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def test_main_apply_emits_valid_json_with_changed_boolean(self):
+        fake_client = types.SimpleNamespace(base_url="https://auth.faviann.com")
+        original_parse_args = self.mod.parse_args
+        original_from_token_file = self.mod.AuthentikClient.from_token_file
+        original_generate = self.mod.generate_oidc_blueprint_file
+        original_collect_state = self.mod.collect_state
+        original_flow_slug_set = self.mod.flow_slug_set
+        original_reconcile = self.mod.reconcile_blueprint_instances
+        stdout = io.StringIO()
+
+        self.mod.parse_args = lambda: types.SimpleNamespace(
+            command="apply",
+            token_file="token-file",
+            base_url="https://auth.faviann.com",
+        )
+        self.mod.AuthentikClient.from_token_file = lambda token_file, base_url=None: fake_client
+        self.mod.generate_oidc_blueprint_file = lambda: None
+        self.mod.collect_state = lambda client: {"flows": []}
+        self.mod.flow_slug_set = lambda state: []
+        self.mod.reconcile_blueprint_instances = lambda client, flow_slugs: {
+            "changed": False,
+            "applied": [],
+            "available_paths": [],
+        }
+
+        try:
+            with contextlib.redirect_stdout(stdout):
+                exit_code = self.mod.main()
+        finally:
+            self.mod.parse_args = original_parse_args
+            self.mod.AuthentikClient.from_token_file = original_from_token_file
+            self.mod.generate_oidc_blueprint_file = original_generate
+            self.mod.collect_state = original_collect_state
+            self.mod.flow_slug_set = original_flow_slug_set
+            self.mod.reconcile_blueprint_instances = original_reconcile
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["base_url"], "https://auth.faviann.com")
+        self.assertIn("changed", payload)
+        self.assertIs(payload["changed"], False)
 
 
 if __name__ == "__main__":

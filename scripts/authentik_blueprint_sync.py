@@ -1100,6 +1100,7 @@ def wait_for_instance(client: AuthentikClient, instance_pk: str, previous_last_a
 def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]) -> dict[str, Any]:
     plan = blueprint_plan(flow_slugs)
     plan_names = {name for name, _ in plan}
+    expected_instance_names = plan_names - {NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME}
     available = find_available_paths(client)
     available_by_suffix = {item["path"]: item for item in available}
     instances = get_instances(client)
@@ -1147,6 +1148,8 @@ def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]
         instance = instances_by_name.get(name) or instances_by_path.get(available_path)
         action_parts = []
         needs_apply = False
+        previous_name = None
+        previous_path = None
 
         if instance is None:
             instance = create_instance(client, payload)
@@ -1154,6 +1157,8 @@ def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]
             action_parts.append("created")
             needs_apply = True
         else:
+            previous_name = instance.get("name")
+            previous_path = instance.get("path")
             needs_metadata_update = any(instance.get(field) != value for field, value in payload.items())
             if needs_metadata_update:
                 instance = update_instance(client, instance["pk"], payload)
@@ -1182,11 +1187,20 @@ def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]
                 "action": "+".join(action_parts) if action_parts else "unchanged",
             }
         )
+        if previous_name and previous_name != instance["name"]:
+            instances_by_name.pop(previous_name, None)
+        if previous_path and previous_path != instance.get("path"):
+            instances_by_path.pop(previous_path, None)
         instances_by_name[instance["name"]] = instance
         instances_by_path[instance.get("path")] = instance
 
     final_instances = get_instances(client)
-    repo_instances = [item for item in final_instances if item["name"] in plan_names]
+    repo_instances = [item for item in final_instances if item["name"] in expected_instance_names]
+    missing_names = sorted(expected_instance_names - {item["name"] for item in repo_instances})
+    if missing_names:
+        raise RuntimeError(
+            "Repo-managed blueprint instances missing after reconcile: " + ", ".join(missing_names)
+        )
     failures = [item for item in repo_instances if item.get("status") != "successful"]
     if failures:
         raise RuntimeError(
