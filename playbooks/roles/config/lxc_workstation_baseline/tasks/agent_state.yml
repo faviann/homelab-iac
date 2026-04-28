@@ -53,5 +53,5 @@
     state: link
     owner: "{{ workstation_uid }}"
     group: "{{ workstation_gid }}"
-    force: false
+    force: "{{ ansible_check_mode }}"
   loop: "{{ workstation_agent_state_links }}"

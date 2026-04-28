@@ -9,6 +9,7 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/faviann"
     workstation_packages: []
+    workstation_agent_state_enabled: false
     lxc_ssh_user: faviann
     lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
     lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
