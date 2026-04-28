@@ -93,6 +93,12 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             when_text = str(when_value)
         self.assertIn("workstation_enabled | default(false)", when_text)
 
+    def test_workstation_inventory_opt_in_contract(self) -> None:
+        workstation_vars = load_yaml(REPO_ROOT / "inventory/host_vars/workstation.yml")
+
+        self.assertTrue(workstation_vars["workstation_enabled"])
+        self.assertTrue(workstation_vars["workstation_agent_state_enabled"])
+
     def test_role_argument_specs_contract(self) -> None:
         specs = load_yaml(REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/meta/argument_specs.yml")
         options = specs["argument_specs"]["main"]["options"]

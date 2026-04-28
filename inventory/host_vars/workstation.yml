@@ -4,6 +4,7 @@
 
 lxc_hwaddr: "BC:24:11:57:80:06"
 workstation_enabled: true
+# Enabled after migrating the live workstation Claude state into /ephemeral/workstation/agent-state.
 workstation_agent_state_enabled: true
 
 docker_agents_enabled: false
