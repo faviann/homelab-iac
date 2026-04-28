@@ -38,6 +38,7 @@
       register: _authentik_token_file
       delegate_to: localhost
       become: false
+      changed_when: false
 
     - name: Write token to tempfile
       ansible.builtin.copy:
@@ -47,6 +48,7 @@
       delegate_to: localhost
       become: false
       no_log: true
+      changed_when: false
 
     - name: Run blueprint apply script
       ansible.builtin.command:
@@ -58,9 +60,21 @@
           - "{{ _authentik_token_file.path }}"
           - --base-url
           - "{{ authentik_blueprint_sync_url }}"
+      register: _authentik_blueprint_sync
       delegate_to: localhost
       become: false
-      changed_when: true
+      changed_when: (_authentik_blueprint_sync.stdout | from_json).changed | bool
+
+    - name: Assert blueprint apply script returned changed status
+      ansible.builtin.assert:
+        that:
+          - (_authentik_blueprint_sync.stdout | from_json).changed is boolean
+        fail_msg: >-
+          Authentik blueprint sync script did not return a JSON boolean at
+          top-level key 'changed'.
+      delegate_to: localhost
+      become: false
+      changed_when: false
 
   always:
     - name: Remove temporary token file
@@ -70,3 +84,4 @@
       delegate_to: localhost
       become: false
       when: _authentik_token_file.path is defined
+      changed_when: false
