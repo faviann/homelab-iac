@@ -4,7 +4,7 @@
 
 **Goal:** Formalise authentik group architecture with domain bundle groups, a `registration-approver` Role, and group-based access on all OIDC apps.
 
-**Architecture:** Flat groups in two tiers — domain bundles (`admins`, `media`, `reading`, `storage`) for automatic bundle access, and per-app groups created on demand for surgical access. The OIDC blueprint generator is extended to emit group bindings (orders 1+2) in addition to the existing expression-policy binding (order 0). A new `15-roles.yaml` blueprint defines the `registration-approver` Role.
+**Architecture:** Flat groups in three categories — domain bundles (`admins`, `media`, `reading`, `storage`) for application access, per-app groups created on demand for surgical access, and integration groups (`ldapsearch`, `PVEAdmins`) for external systems. The OIDC blueprint generator is extended to remove stale order-0 `always-allow` bindings and emit group bindings at orders 1+2. A new `15-roles.yaml` blueprint defines the `registration-approver` Role without assigning it.
 
 **Tech Stack:** authentik 2026.02, blueprint YAML, Python 3.12 (`scripts/authentik_blueprint_sync.py`), pytest
 
@@ -14,13 +14,26 @@
 
 | File | Change |
 |------|--------|
-| `stacks/auth/auth/appdata/authentik/blueprints/10-groups.yaml` | Remove `content-editors`; add `storage`, `reading` |
+| `stacks/auth/auth/appdata/authentik/blueprints/10-groups.yaml` | Stop managing `content-editors`; add `storage`, `reading`; keep integration group `PVEAdmins` |
 | `stacks/auth/auth/appdata/authentik/blueprints/15-roles.yaml` | **Create** — `registration-approver` role |
 | `stacks/auth/auth/appdata/authentik/blueprints/40-applications.yaml` | Fix `home-wildcard`, `media-wildcard` bindings; add `ldap` binding |
-| `stacks/auth/auth/appdata/authentik/blueprints/80-oidc-apps.yaml.j2` | Regenerated — group bindings replace `always-allow` |
+| `stacks/auth/auth/appdata/authentik/blueprints/80-oidc-apps.yaml.j2` | Regenerated — stale `always-allow` bindings removed; group bindings replace them |
+| `stacks/auth/auth/appdata/authentik/blueprints/90-cleanup-legacy.yaml` | **Create** — remove legacy `content-editors` group after bindings are gone |
 | `stacks/auth/auth/appdata/authentik/oidc-apps.yaml` | Replace `policy: always-allow` with `group:` on each app |
-| `scripts/authentik_blueprint_sync.py` | Add `ROLES_FILE` constant; update `blueprint_plan()`; extend `generate_oidc_blueprint_content()` for group bindings |
+| `scripts/authentik_blueprint_sync.py` | Add role and cleanup blueprint constants; update `blueprint_plan()`; extend `generate_oidc_blueprint_content()` for group bindings |
 | `tests/unit/test_oidc_manifest.py` | Add tests for group binding generation and roles plan ordering |
+
+---
+
+## Deployment Invariants
+
+- `reading` and `storage` are intentionally empty at deployment time. Do not add human memberships in this change.
+- `admins` must retain immediate access to every gated Authentik application.
+- `ldapsearch` and `PVEAdmins` are integration groups, not application domain bundles. Do not make them children of `admins`.
+- `PVEAdmins` remains repo-managed because `85-proxmox-oidc.yaml.j2` references it for the Proxmox groups claim.
+- This deployment creates `registration-approver` only. Do not assign the role to any user or group.
+- `content-editors` is intentionally removed in this deployment. Removal must happen in a late cleanup blueprint after application bindings no longer reference it.
+- Do not apply blueprints between tasks. Apply only after all tasks and final checks are complete.
 
 ---
 
@@ -48,12 +61,6 @@ entries:
   attrs:
     name: admins
 - model: authentik_core.group
-  state: absent
-  identifiers:
-    name: content-editors
-  attrs:
-    name: content-editors
-- model: authentik_core.group
   state: present
   identifiers:
     name: ldapsearch
@@ -65,6 +72,12 @@ entries:
     name: media
   attrs:
     name: media
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: PVEAdmins
+  attrs:
+    name: PVEAdmins
 - model: authentik_core.group
   state: present
   identifiers:
@@ -83,7 +96,7 @@ entries:
 
 ```bash
 git add stacks/auth/auth/appdata/authentik/blueprints/10-groups.yaml
-git commit -m "feat(auth): add reading/storage groups, retire content-editors"
+git commit -m "feat(auth): add reading and storage groups"
 ```
 
 ---
@@ -139,6 +152,8 @@ Expected: 4 failures — `repo-auth-roles` not found in plan.
 
 - [ ] **Step 3: Create `15-roles.yaml`**
 
+Create only the role. Do not assign it to any user or group in this deployment.
+
 ```yaml
 version: 1
 metadata:
@@ -158,12 +173,14 @@ entries:
     - authentik_core.change_user
 ```
 
-- [ ] **Step 4: Add `ROLES_FILE` constant to `scripts/authentik_blueprint_sync.py`**
+- [ ] **Step 4: Add role blueprint constants to `scripts/authentik_blueprint_sync.py`**
 
 After line `GROUPS_FILE = BLUEPRINT_ROOT / "10-groups.yaml"`, add:
 
 ```python
 ROLES_FILE = BLUEPRINT_ROOT / "15-roles.yaml"
+ROLES_BLUEPRINT_INSTANCE_NAME = "repo-auth-roles"
+ROLES_BLUEPRINT_DEPLOYED_NAME = str(ROLES_FILE.relative_to(BLUEPRINT_ROOT))
 ```
 
 - [ ] **Step 5: Update `blueprint_plan()` in `scripts/authentik_blueprint_sync.py`**
@@ -179,7 +196,7 @@ Replace with:
 def blueprint_plan(flow_slugs: list[str]) -> list[tuple[str, str]]:
     steps = [
         ("repo-auth-groups", "10-groups.yaml"),
-        ("repo-auth-roles", "15-roles.yaml"),
+        (ROLES_BLUEPRINT_INSTANCE_NAME, ROLES_BLUEPRINT_DEPLOYED_NAME),
     ]
 ```
 
@@ -197,7 +214,7 @@ Expected: 4 passed.
 python -m pytest tests/unit/test_oidc_manifest.py -v
 ```
 
-Expected: all 37 passed.
+Expected: all 38 passed.
 
 - [ ] **Step 8: Commit**
 
@@ -215,24 +232,61 @@ git commit -m "feat(auth): add registration-approver role blueprint"
 **Files:**
 - Modify: `stacks/auth/auth/appdata/authentik/blueprints/40-applications.yaml`
 
-- [ ] **Step 1: Fix `home-wildcard` binding**
+- [ ] **Step 1: Normalize `home-wildcard` bindings**
 
-Find the `home-wildcard` policy binding that references `content-editors` (order 0). The blueprint engine matches bindings by `(target, order)`, so updating the `group` attr in-place is enough — no absent+present dance needed.
+Find the `home-wildcard` binding at order 0 that references `content-editors`. Replace it with an absent tombstone that does not reference the old group:
 
-Change:
 ```yaml
-    group: !Find [authentik_core.group, [name, content-editors]]
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf 'app-home-wildcard'
+    order: 0
 ```
-To:
+
+Find the existing `home-wildcard` order 1 binding. It currently points at `admins`. Change only the group reference to `storage`, leaving the binding present at order 1:
+
 ```yaml
     group: !Find [authentik_core.group, [name, storage]]
 ```
 
-Leave `state: present` and all other fields unchanged.
+After that order 1 binding, add `admins` at order 2:
 
-- [ ] **Step 2: Fix `media-wildcard` binding**
+```yaml
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf 'app-home-wildcard'
+    order: 2
+  attrs:
+    target: !KeyOf 'app-home-wildcard'
+    order: 2
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, admins]]
+```
 
-Find the `media-wildcard` policy binding that references `content-editors` (order 2):
+- [ ] **Step 2: Normalize `media-wildcard` bindings**
+
+Find the `media-wildcard` order 0 binding that points at `media`. Replace it with an absent tombstone:
+
+```yaml
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf 'app-media-wildcard'
+    order: 0
+```
+
+Find the existing `media-wildcard` order 1 binding. It currently points at `admins`. Change only the group reference to `media`:
+
+```yaml
+    group: !Find [authentik_core.group, [name, media]]
+```
+
+Find the existing `media-wildcard` order 2 binding that references `content-editors`. Keep it present at order 2 and change the group reference to `admins`:
 
 ```yaml
 - model: authentik_policies.policybinding
@@ -247,25 +301,7 @@ Find the `media-wildcard` policy binding that references `content-editors` (orde
     negate: false
     failure_result: false
     timeout: 30
-    group: !Find [authentik_core.group, [name, content-editors]]
-```
-
-Replace `state: present` with `state: absent`:
-
-```yaml
-- model: authentik_policies.policybinding
-  state: absent
-  identifiers:
-    target: !KeyOf 'app-media-wildcard'
-    order: 2
-  attrs:
-    target: !KeyOf 'app-media-wildcard'
-    order: 2
-    enabled: true
-    negate: false
-    failure_result: false
-    timeout: 30
-    group: !Find [authentik_core.group, [name, content-editors]]
+    group: !Find [authentik_core.group, [name, admins]]
 ```
 
 - [ ] **Step 3: Add `ldapsearch` binding to `ldap` app**
@@ -288,11 +324,21 @@ After the `app-ldap` application entry, add:
     group: !Find [authentik_core.group, [name, ldapsearch]]
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Verify `content-editors` is no longer actively referenced**
+
+Run:
+
+```bash
+rg "content-editors" stacks/auth/auth/appdata/authentik/blueprints/40-applications.yaml
+```
+
+Expected: no matches.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add stacks/auth/auth/appdata/authentik/blueprints/40-applications.yaml
-git commit -m "feat(auth): migrate application bindings to storage group; gate ldap app"
+git commit -m "feat(auth): normalize application group bindings"
 ```
 
 ---
@@ -330,9 +376,9 @@ class OidcGroupBindingTests(unittest.TestCase):
         content = self.mod.generate_oidc_blueprint_content([minimal_app(group="media")])
         self.assertNotIn("expressionpolicy", content)
 
-    def test_group_binding_does_not_use_order_0(self):
+    def test_group_binding_emits_order_0_absent_tombstone(self):
         content = self.mod.generate_oidc_blueprint_content([minimal_app(group="media")])
-        self.assertNotIn("order: 0", content)
+        self.assertIn("  state: absent\n  identifiers:\n    target: !KeyOf app-test-app\n    order: 0", content)
 
     def test_policy_binding_still_uses_order_0(self):
         content = self.mod.generate_oidc_blueprint_content([minimal_app(policy="always-allow")])
@@ -352,7 +398,7 @@ class OidcGroupBindingTests(unittest.TestCase):
 python -m pytest tests/unit/test_oidc_manifest.py::OidcGroupBindingTests -v
 ```
 
-Expected: 7 failures.
+Expected: 6 failures and 1 pass. The policy fallback test may already pass before implementation.
 
 - [ ] **Step 3: Update `generate_oidc_blueprint_content()` in `scripts/authentik_blueprint_sync.py`**
 
@@ -367,8 +413,69 @@ Replace with:
         policy = app.get("policy", "always-allow")
 ```
 
-Then find this block (around lines 244-258):
+Then find the tail of the existing `lines += [...]` block (lines 247–262 — this is the
+end of the same list that also contains the application definition above it):
 ```python
+            "",
+            "- model: authentik_policies.policybinding",
+            "  state: present",
+            "  identifiers:",
+            f"    target: !KeyOf {app_id}",
+            "    order: 0",
+            "  attrs:",
+            f"    target: !KeyOf {app_id}",
+            "    order: 0",
+            "    enabled: true",
+            "    negate: false",
+            "    failure_result: false",
+            "    timeout: 30",
+            f"    policy: !Find [authentik_policies_expression.expressionpolicy, [name, {policy}]]",
+            "",
+        ]
+```
+
+Replace with (closes the existing list at the separator, then branches on `group`):
+```python
+            "",
+        ]
+        if group:
+            lines += [
+                "- model: authentik_policies.policybinding",
+                "  state: absent",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 0",
+                "",
+                "- model: authentik_policies.policybinding",
+                "  state: present",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 1",
+                "  attrs:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 1",
+                "    enabled: true",
+                "    negate: false",
+                "    failure_result: false",
+                "    timeout: 30",
+                f"    group: !Find [authentik_core.group, [name, {group}]]",
+                "",
+                "- model: authentik_policies.policybinding",
+                "  state: present",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 2",
+                "  attrs:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 2",
+                "    enabled: true",
+                "    negate: false",
+                "    failure_result: false",
+                "    timeout: 30",
+                "    group: !Find [authentik_core.group, [name, admins]]",
+                "",
+            ]
+        else:
             lines += [
                 "- model: authentik_policies.policybinding",
                 "  state: present",
@@ -387,58 +494,6 @@ Then find this block (around lines 244-258):
             ]
 ```
 
-Replace with:
-```python
-            if group:
-                lines += [
-                    "- model: authentik_policies.policybinding",
-                    "  state: present",
-                    "  identifiers:",
-                    f"    target: !KeyOf {app_id}",
-                    "    order: 1",
-                    "  attrs:",
-                    f"    target: !KeyOf {app_id}",
-                    "    order: 1",
-                    "    enabled: true",
-                    "    negate: false",
-                    "    failure_result: false",
-                    "    timeout: 30",
-                    f"    group: !Find [authentik_core.group, [name, {group}]]",
-                    "",
-                    "- model: authentik_policies.policybinding",
-                    "  state: present",
-                    "  identifiers:",
-                    f"    target: !KeyOf {app_id}",
-                    "    order: 2",
-                    "  attrs:",
-                    f"    target: !KeyOf {app_id}",
-                    "    order: 2",
-                    "    enabled: true",
-                    "    negate: false",
-                    "    failure_result: false",
-                    "    timeout: 30",
-                    "    group: !Find [authentik_core.group, [name, admins]]",
-                    "",
-                ]
-            else:
-                lines += [
-                    "- model: authentik_policies.policybinding",
-                    "  state: present",
-                    "  identifiers:",
-                    f"    target: !KeyOf {app_id}",
-                    "    order: 0",
-                    "  attrs:",
-                    f"    target: !KeyOf {app_id}",
-                    "    order: 0",
-                    "    enabled: true",
-                    "    negate: false",
-                    "    failure_result: false",
-                    "    timeout: 30",
-                    f"    policy: !Find [authentik_policies_expression.expressionpolicy, [name, {policy}]]",
-                    "",
-                ]
-```
-
 - [ ] **Step 4: Run tests to confirm they pass**
 
 ```bash
@@ -453,7 +508,7 @@ Expected: 7 passed.
 python -m pytest tests/unit/test_oidc_manifest.py -v
 ```
 
-Expected: all 44 passed.
+Expected: all 45 passed.
 
 - [ ] **Step 6: Commit**
 
@@ -471,9 +526,9 @@ git commit -m "feat(auth): extend OIDC blueprint generator to support group bind
 - Modify (generated): `stacks/auth/auth/appdata/authentik/blueprints/80-oidc-apps.yaml.j2`
 - Test: `tests/unit/test_oidc_manifest.py`
 
-- [ ] **Step 1: Write failing test**
+- [ ] **Step 1: Write failing and drift-detection tests**
 
-Add this test to `OidcBlueprintGenerationTests` in `tests/unit/test_oidc_manifest.py`:
+Add these tests to `OidcBlueprintGenerationTests` in `tests/unit/test_oidc_manifest.py`:
 
 ```python
 def test_real_manifest_uses_group_bindings_not_always_allow(self):
@@ -481,6 +536,12 @@ def test_real_manifest_uses_group_bindings_not_always_allow(self):
     content = self.mod.generate_oidc_blueprint_content(apps)
     self.assertNotIn("name, always-allow", content)
     self.assertIn("name, admins", content)
+
+def test_committed_oidc_blueprint_matches_generator(self):
+    apps = self.mod.load_oidc_manifest()
+    expected = self.mod.generate_oidc_blueprint_content(apps)
+    actual = self.mod.OIDC_BLUEPRINT_FILE.read_text(encoding="utf-8")
+    self.assertEqual(actual, expected)
 ```
 
 - [ ] **Step 2: Run test to confirm it fails**
@@ -613,13 +674,13 @@ python -m pytest tests/unit/test_oidc_manifest.py::OidcBlueprintGenerationTests:
 
 Expected: PASS.
 
-- [ ] **Step 5: Run full test suite**
+- [ ] **Step 5: Run drift-detection test to confirm the committed blueprint is stale**
 
 ```bash
-python -m pytest tests/unit/test_oidc_manifest.py -v
+python -m pytest tests/unit/test_oidc_manifest.py::OidcBlueprintGenerationTests::test_committed_oidc_blueprint_matches_generator -v
 ```
 
-Expected: all 45 passed.
+Expected: FAIL — `80-oidc-apps.yaml.j2` has not been regenerated yet.
 
 - [ ] **Step 6: Regenerate `80-oidc-apps.yaml.j2`**
 
@@ -635,7 +696,23 @@ print(f'Generated: {path}')
 
 Expected output: `Generated: .../80-oidc-apps.yaml.j2`
 
-- [ ] **Step 7: Verify generated blueprint contains group references, not always-allow**
+- [ ] **Step 7: Run drift-detection test again**
+
+```bash
+python -m pytest tests/unit/test_oidc_manifest.py::OidcBlueprintGenerationTests::test_committed_oidc_blueprint_matches_generator -v
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Run full test suite**
+
+```bash
+python -m pytest tests/unit/test_oidc_manifest.py -v
+```
+
+Expected: all 47 passed.
+
+- [ ] **Step 9: Verify generated blueprint contains group references, not always-allow**
 
 ```bash
 grep -E "name, (media|reading|admins|always-allow)" \
@@ -644,13 +721,124 @@ grep -E "name, (media|reading|admins|always-allow)" \
 
 Expected: lines with `media`, `reading`, `admins` — no `always-allow`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add stacks/auth/auth/appdata/authentik/oidc-apps.yaml \
         stacks/auth/auth/appdata/authentik/blueprints/80-oidc-apps.yaml.j2 \
         tests/unit/test_oidc_manifest.py
 git commit -m "feat(auth): gate OIDC apps on reading/media groups via blueprint generator"
+```
+
+---
+
+## Task 6: Remove legacy `content-editors` after binding migration
+
+**Files:**
+- Create: `stacks/auth/auth/appdata/authentik/blueprints/90-cleanup-legacy.yaml`
+- Modify: `scripts/authentik_blueprint_sync.py`
+- Test: `tests/unit/test_oidc_manifest.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+Add this class to `tests/unit/test_oidc_manifest.py` after `OidcGroupBindingTests`:
+
+```python
+class LegacyCleanupBlueprintPlanTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def test_legacy_cleanup_blueprint_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertIn("repo-auth-legacy-cleanup", names)
+
+    def test_legacy_cleanup_blueprint_path_in_plan(self):
+        plan = self.mod.blueprint_plan([])
+        paths = [path for _, path in plan]
+        self.assertIn("90-cleanup-legacy.yaml", paths)
+
+    def test_legacy_cleanup_runs_after_applications_and_oidc(self):
+        plan = self.mod.blueprint_plan([])
+        names = [name for name, _ in plan]
+        self.assertGreater(
+            names.index("repo-auth-legacy-cleanup"),
+            names.index("repo-auth-applications"),
+        )
+        self.assertGreater(
+            names.index("repo-auth-legacy-cleanup"),
+            names.index("repo-auth-oidc-apps"),
+        )
+```
+
+- [ ] **Step 2: Run tests to confirm they fail**
+
+```bash
+python -m pytest tests/unit/test_oidc_manifest.py::LegacyCleanupBlueprintPlanTests -v
+```
+
+Expected: 3 failures — `repo-auth-legacy-cleanup` is not in the plan.
+
+- [ ] **Step 3: Create `90-cleanup-legacy.yaml`**
+
+```yaml
+version: 1
+metadata:
+  name: repo-auth-legacy-cleanup
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- model: authentik_core.group
+  state: absent
+  identifiers:
+    name: content-editors
+```
+
+- [ ] **Step 4: Add legacy cleanup constants to `scripts/authentik_blueprint_sync.py`**
+
+After the role blueprint constants, add:
+
+```python
+LEGACY_CLEANUP_FILE = BLUEPRINT_ROOT / "90-cleanup-legacy.yaml"
+LEGACY_CLEANUP_BLUEPRINT_INSTANCE_NAME = "repo-auth-legacy-cleanup"
+LEGACY_CLEANUP_BLUEPRINT_DEPLOYED_NAME = str(LEGACY_CLEANUP_FILE.relative_to(BLUEPRINT_ROOT))
+```
+
+- [ ] **Step 5: Append cleanup to the end of `blueprint_plan()`**
+
+Find the final `steps.extend([...])` block in `blueprint_plan()`. After that block and before `return steps`, add:
+
+```python
+    steps.append((LEGACY_CLEANUP_BLUEPRINT_INSTANCE_NAME, LEGACY_CLEANUP_BLUEPRINT_DEPLOYED_NAME))
+```
+
+The cleanup blueprint must run after `repo-auth-applications` and `repo-auth-oidc-apps`.
+
+- [ ] **Step 6: Run tests to confirm they pass**
+
+```bash
+python -m pytest tests/unit/test_oidc_manifest.py::LegacyCleanupBlueprintPlanTests -v
+```
+
+Expected: 3 passed.
+
+- [ ] **Step 7: Run full test suite**
+
+```bash
+python -m pytest tests/unit/test_oidc_manifest.py -v
+```
+
+Expected: all 50 passed.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add stacks/auth/auth/appdata/authentik/blueprints/90-cleanup-legacy.yaml \
+        scripts/authentik_blueprint_sync.py \
+        tests/unit/test_oidc_manifest.py
+git commit -m "feat(auth): remove legacy content-editors group after migration"
 ```
 
 ---
@@ -664,3 +852,20 @@ python -m pytest tests/unit/ -v
 ```
 
 Expected: all tests pass with no failures.
+
+- [ ] **Verify legacy group references are gone from active blueprints**
+
+```bash
+rg "content-editors" stacks/auth/auth/appdata/authentik/blueprints
+```
+
+Expected: the only match is the `state: absent` tombstone in `90-cleanup-legacy.yaml`.
+
+- [ ] **Verify Proxmox integration group remains managed**
+
+```bash
+rg "PVEAdmins" stacks/auth/auth/appdata/authentik/blueprints/10-groups.yaml \
+  stacks/auth/auth/appdata/authentik/blueprints/85-proxmox-oidc.yaml.j2
+```
+
+Expected: matches in both files.
