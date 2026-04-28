@@ -1,16 +1,8 @@
 ---
 # Main tasks file for lxc_docker_runtime role
-# Installs Docker using geerlingguy.docker role
-
-- name: Assert Docker runtime inputs are present
-  ansible.builtin.assert:
-    that:
-      - docker_user is defined
-      - docker_user | string | length > 0
-    fail_msg: >-
-      config/lxc_docker_runtime requires docker_user.
-      Add {{ inventory_hostname }} to the cap_docker group in inventory/hosts.yml or
-      define docker_user explicitly for the host.
+# Installs Docker using geerlingguy.docker role.
+# Managed account creation and Docker group membership are owned by
+# config/lxc_docker_environment so UID/GID are enforced in one place.
 
 - name: Install Docker using geerlingguy.docker role
   ansible.builtin.include_role:
@@ -19,8 +11,6 @@
     docker_install_compose_plugin: "{{ lxc_docker_runtime_install_compose_plugin }}"
     docker_compose_package: "{{ lxc_docker_runtime_compose_package }}"
     docker_compose_package_state: "{{ lxc_docker_runtime_compose_package_state }}"
-    docker_users:
-      - "{{ docker_user }}"
     docker_daemon_options: "{{ lxc_docker_runtime_daemon_options }}"
 
 - name: Ensure Docker service is started and enabled
