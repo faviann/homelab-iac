@@ -1,0 +1,26 @@
+---
+- name: Ensure workstation user local bin exists
+  ansible.builtin.file:
+    path: "{{ workstation_home }}/.local/bin"
+    state: directory
+    owner: "{{ workstation_uid }}"
+    group: "{{ workstation_gid }}"
+    mode: "0755"
+
+- name: Install mise for workstation user
+  ansible.builtin.shell:
+    cmd: "curl -fsSL {{ workstation_mise_install_url }} | sh"
+    creates: "{{ workstation_mise_bin }}"
+  become: true
+  become_user: "{{ workstation_username }}"
+  environment:
+    HOME: "{{ workstation_home }}"
+
+- name: Verify mise is installed
+  ansible.builtin.command:
+    cmd: "{{ workstation_mise_bin }} --version"
+  become: true
+  become_user: "{{ workstation_username }}"
+  environment:
+    HOME: "{{ workstation_home }}"
+  changed_when: false

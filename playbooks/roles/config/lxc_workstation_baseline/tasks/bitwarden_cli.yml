@@ -1,0 +1,70 @@
+---
+- name: Assert Bitwarden CLI release metadata is configured
+  ansible.builtin.assert:
+    that:
+      - workstation_bw_release_api_url is defined
+      - workstation_bw_release_api_url | string | length > 0
+    fail_msg: >-
+      workstation_bw_release_api_url must point to the Bitwarden CLI GitHub
+      release metadata for {{ workstation_bw_download_url }} before installing bw.
+
+- name: Fetch Bitwarden CLI release metadata
+  ansible.builtin.uri:
+    url: "{{ workstation_bw_release_api_url }}"
+    return_content: true
+  register: _workstation_bw_release
+
+- name: Create temporary Bitwarden CLI download directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: workstation-bw
+  register: _workstation_bw_tmp
+
+- name: Select Bitwarden CLI asset digest
+  ansible.builtin.set_fact:
+    _workstation_bw_asset_name: "{{ workstation_bw_download_url.split('/')[-1] }}"
+    _workstation_bw_asset_digests: >-
+      {{
+        _workstation_bw_release.json.assets
+        | selectattr('name', 'equalto', workstation_bw_download_url.split('/')[-1])
+        | map(attribute='digest')
+        | list
+      }}
+
+- name: Assert Bitwarden CLI asset digest is available
+  ansible.builtin.assert:
+    that:
+      - _workstation_bw_asset_digests | length == 1
+      - _workstation_bw_asset_digests[0] is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      Bitwarden release metadata did not expose exactly one sha256 digest for
+      {{ _workstation_bw_asset_name }}.
+
+- name: Download Bitwarden CLI archive
+  ansible.builtin.get_url:
+    url: "{{ workstation_bw_download_url }}"
+    dest: "{{ _workstation_bw_tmp.path }}/bw.zip"
+    mode: "0600"
+    checksum: "{{ _workstation_bw_asset_digests[0] }}"
+
+- name: Extract Bitwarden CLI archive
+  ansible.builtin.unarchive:
+    src: "{{ _workstation_bw_tmp.path }}/bw.zip"
+    dest: "{{ _workstation_bw_tmp.path }}"
+    remote_src: true
+    mode: "0755"
+
+- name: Install Bitwarden CLI system binary
+  ansible.builtin.copy:
+    src: "{{ _workstation_bw_tmp.path }}/bw"
+    dest: /usr/local/bin/bw
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+
+- name: Remove temporary Bitwarden CLI download directory
+  ansible.builtin.file:
+    path: "{{ _workstation_bw_tmp.path }}"
+    state: absent
+  when: _workstation_bw_tmp.path is defined

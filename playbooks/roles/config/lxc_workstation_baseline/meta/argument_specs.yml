@@ -49,3 +49,64 @@ argument_specs:
         elements: str
         required: false
         description: Package list to install for the workstation baseline.
+      workstation_bootstrap_unattended:
+        type: bool
+        required: false
+        description: Whether to stage a short-lived Bitwarden bootstrap envelope and run unattended workstation bootstrap.
+      workstation_bootstrap_run_dir:
+        type: str
+        required: false
+        description: Tmpfs directory used for the short-lived bootstrap envelope.
+      workstation_bootstrap_env_path:
+        type: str
+        required: false
+        description: Full path to the short-lived bootstrap envelope on the workstation.
+      workstation_bootstrap_marker_path:
+        type: str
+        required: false
+        description: Durable marker written after successful workstation bootstrap.
+      workstation_bootstrap_version:
+        type: str
+        required: false
+        description: Bootstrap contract version recorded in the durable marker.
+      workstation_dotfiles_repo_url:
+        type: str
+        required: false
+        description: HTTPS dotfiles repository URL used before SSH keys are rendered.
+      workstation_github_cli_token_item:
+        type: str
+        required: false
+        description: Bitwarden item name containing the GitHub CLI token in notes.
+      workstation_bootstrap_controller_env:
+        type: dict
+        required: false
+        description: Mapping from target Bitwarden environment keys to controller environment variable names.
+      workstation_mise_install_url:
+        type: str
+        required: false
+        description: Official mise installer URL.
+      workstation_mise_bin:
+        type: str
+        required: false
+        description: Expected mise executable path for the workstation user.
+      workstation_mise_shims_dir:
+        type: str
+        required: false
+        description: Mise shims directory for non-interactive command contexts.
+      workstation_mise_tools:
+        type: list
+        elements: str
+        required: false
+        description: Global user-space tools managed by mise.
+      workstation_bw_version:
+        type: str
+        required: false
+        description: Bitwarden CLI version installed as the bootstrap-critical system binary.
+      workstation_bw_download_url:
+        type: str
+        required: false
+        description: Bitwarden CLI native Linux artifact URL.
+      workstation_bw_release_api_url:
+        type: str
+        required: false
+        description: GitHub release API URL used to retrieve the published digest for the Bitwarden CLI artifact.

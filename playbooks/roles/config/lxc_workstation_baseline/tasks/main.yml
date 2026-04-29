@@ -33,7 +33,20 @@
     cmd: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
     creates: /usr/local/bin/chezmoi
 
-- name: Install bw CLI
-  ansible.builtin.shell:
-    cmd: npm install -g @bitwarden/cli
-    creates: /usr/local/bin/bw
+- name: Install Bitwarden CLI
+  ansible.builtin.include_tasks: bitwarden_cli.yml
+
+- name: Install mise
+  ansible.builtin.include_tasks: mise.yml
+
+- name: Install workstation bootstrap script
+  ansible.builtin.template:
+    src: workstation-bootstrap.sh.j2
+    dest: /usr/local/bin/workstation-bootstrap
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Run unattended workstation bootstrap
+  ansible.builtin.include_tasks: bootstrap.yml
+  when: workstation_bootstrap_unattended | bool
