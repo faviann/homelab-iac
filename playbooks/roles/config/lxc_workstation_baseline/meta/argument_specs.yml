@@ -110,3 +110,19 @@ argument_specs:
         type: str
         required: false
         description: GitHub release API URL used to retrieve the published digest for the Bitwarden CLI artifact.
+      workstation_bw_bin_path:
+        type: str
+        required: false
+        description: Filesystem path where the bootstrap-critical bw executable should be installed.
+      workstation_bootstrap_bin_path:
+        type: str
+        required: false
+        description: Filesystem path where the workstation bootstrap entrypoint should be installed.
+      workstation_system_bin_owner:
+        type: str
+        required: false
+        description: Owner to apply to system-level workstation helper binaries.
+      workstation_system_bin_group:
+        type: str
+        required: false
+        description: Group to apply to system-level workstation helper binaries.

@@ -57,9 +57,9 @@
 - name: Install Bitwarden CLI system binary
   ansible.builtin.copy:
     src: "{{ _workstation_bw_tmp.path }}/bw"
-    dest: /usr/local/bin/bw
-    owner: root
-    group: root
+    dest: "{{ workstation_bw_bin_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
     mode: "0755"
     remote_src: true
 

@@ -4,13 +4,17 @@
   connection: local
   gather_facts: false
   vars:
-    workstation_username: faviann
+    workstation_username: "{{ lookup('pipe', 'id -un') }}"
     workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
-    workstation_home: "{{ temp_root }}/home/faviann"
+    workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
     workstation_persistent_home_enabled: true
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
+    workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
+    workstation_bootstrap_bin_path: "{{ temp_root }}/bin/workstation-bootstrap"
+    workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
+    workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
     workstation_persistent_home_links:
       - name: claude
         path: "{{ workstation_home }}/.claude"
@@ -24,16 +28,22 @@
         path: "{{ workstation_home }}/repos"
         target: "{{ workstation_persistent_home_root }}/repos"
         mode: "0755"
-    lxc_ssh_user: faviann
+    lxc_ssh_user: "{{ workstation_username }}"
     lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
     lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
-    lxc_github_keys_home: "{{ temp_root }}/home/faviann"
+    lxc_github_keys_home: "{{ workstation_home }}"
     lxc_github_users:
       - faviann
-    docker_user: faviann
+    docker_user: "{{ workstation_username }}"
     docker_uid: "{{ lookup('pipe', 'id -u') | int }}"
     docker_gid: "{{ lookup('pipe', 'id -g') | int }}"
   tasks:
+    - name: Ensure writable test bin directory exists
+      ansible.builtin.file:
+        path: "{{ temp_root }}/bin"
+        state: directory
+        mode: "0755"
+
     - name: Place mock curl on PATH
       ansible.builtin.copy:
         dest: "{{ temp_root }}/curl"
@@ -47,18 +57,25 @@
             *get.chezmoi.io*)
               printf '%s\n' '#!/bin/sh' 'exit 0'
               ;;
+            *mise.run*)
+              printf '%s\n' \
+                '#!/bin/sh' \
+                'set -eu' \
+                'install -d "$HOME/.local/bin"' \
+                'cat > "$HOME/.local/bin/mise" <<"EOF"' \
+                '#!/bin/sh' \
+                'if [ "$1" = "--version" ]; then' \
+                '  echo mise-test' \
+                '  exit 0' \
+                'fi' \
+                'exit 0' \
+                'EOF' \
+                'chmod 0755 "$HOME/.local/bin/mise"'
+              ;;
             *)
               exit 0
               ;;
           esac
-
-    - name: Place mock npm on PATH
-      ansible.builtin.copy:
-        dest: "{{ temp_root }}/npm"
-        mode: "0755"
-        content: |
-          #!/bin/sh
-          exit 0
 
     - name: Ensure workstation home exists
       ansible.builtin.file:

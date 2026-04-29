@@ -17,3 +17,9 @@
 - **Location**: `stacks/public/storyteller/`
 - **Context**: Storyteller stack was deployed without OIDC; needs Authentik provider and application wired up like other SSO-enabled stacks.
 - **Added**: 2026-04-19
+
+## [BUG-001] ansible-inventory host view exposes vaulted values
+- **Category**: bug
+- **Location**: `inventory/` verification workflow
+- **Context**: While verifying workstation bootstrap, `uv run --locked ansible-inventory -i inventory/hosts.yml --host workstation --yaml` emitted decrypted unrelated secret vars, making that verification step unsafe to paste or relay verbatim.
+- **Added**: 2026-04-29

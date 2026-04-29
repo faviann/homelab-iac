@@ -58,3 +58,7 @@ workstation_mise_tools:
 workstation_bw_version: "2025.12.0"
 workstation_bw_download_url: "https://github.com/bitwarden/clients/releases/download/cli-v{{ workstation_bw_version }}/bw-linux-{{ workstation_bw_version }}.zip"
 workstation_bw_release_api_url: "https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v{{ workstation_bw_version }}"
+workstation_bw_bin_path: /usr/local/bin/bw
+workstation_bootstrap_bin_path: /usr/local/bin/workstation-bootstrap
+workstation_system_bin_owner: root
+workstation_system_bin_group: root

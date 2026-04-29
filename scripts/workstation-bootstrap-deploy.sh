@@ -8,6 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="${WORKSTATION_BOOTSTRAP_LOG_DIR:-$REPO_ROOT/.ansible/logs}"
 LOG_PATH="${WORKSTATION_BOOTSTRAP_LOG:-$LOG_DIR/workstation-bootstrap.log}"
 API_ITEM="${WORKSTATION_BW_API_ITEM:-dotfiles/workstation-bitwarden-api-key}"
+LOCAL_HOSTNAME="$(hostname -s 2>/dev/null || hostname)"
 
 cleanup() {
   unset BW_SESSION
@@ -74,5 +75,9 @@ esac
 export WORKSTATION_BW_CLIENTID WORKSTATION_BW_CLIENTSECRET WORKSTATION_BW_PASSWORD
 
 cd "$REPO_ROOT"
+if [ "$LOCAL_HOSTNAME" = "workstation" ] && [[ " $* " != *" proxmox_skip_self=false "* ]]; then
+  fail "running from workstation would be skipped by default; rerun with -e proxmox_skip_self=false"
+fi
+
 printf 'Writing private deploy log to %s\n' "$LOG_PATH"
 uv run --locked ansible-playbook site.yml --limit workstation -e workstation_bootstrap_unattended=true "$@" > "$LOG_PATH" 2>&1

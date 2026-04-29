@@ -42,9 +42,9 @@
 - name: Install workstation bootstrap script
   ansible.builtin.template:
     src: workstation-bootstrap.sh.j2
-    dest: /usr/local/bin/workstation-bootstrap
-    owner: root
-    group: root
+    dest: "{{ workstation_bootstrap_bin_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
     mode: "0755"
 
 - name: Run unattended workstation bootstrap

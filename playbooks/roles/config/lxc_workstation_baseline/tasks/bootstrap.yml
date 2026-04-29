@@ -40,7 +40,7 @@
 
     - name: Run workstation bootstrap
       ansible.builtin.command:
-        cmd: /usr/local/bin/workstation-bootstrap
+        cmd: "{{ workstation_bootstrap_bin_path }}"
       become: true
       become_user: "{{ workstation_username }}"
       environment:

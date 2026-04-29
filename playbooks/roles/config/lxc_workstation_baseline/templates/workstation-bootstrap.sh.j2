@@ -12,6 +12,8 @@ GITHUB_CLI_TOKEN_ITEM="{{ workstation_github_cli_token_item }}"
 MISE_BIN="{{ workstation_mise_bin }}"
 MISE_SHIMS_DIR="{{ workstation_mise_shims_dir }}"
 WORKSTATION_HOME="{{ workstation_home }}"
+BW_BIN="{{ workstation_bw_bin_path }}"
+MARKER_FINGERPRINT="{{ workstation_bootstrap_version }}|{{ workstation_dotfiles_repo_url }}|{{ workstation_github_cli_token_item }}|{{ workstation_mise_bin }}|{{ workstation_mise_shims_dir }}|{{ workstation_bw_bin_path }}"
 
 export HOME="$WORKSTATION_HOME"
 export PATH="$MISE_SHIMS_DIR:$WORKSTATION_HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
@@ -34,6 +36,7 @@ validate_marker_state() {
   test -f "$MARKER_PATH" || return 1
   grep -Fxq "version=$BOOTSTRAP_VERSION" "$MARKER_PATH" || return 1
   grep -Fxq "dotfiles=$DOTFILES_REPO_URL" "$MARKER_PATH" || return 1
+  grep -Fxq "fingerprint=$MARKER_FINGERPRINT" "$MARKER_PATH" || return 1
   test -f "$HOME/.ansible/vault-pass" || return 1
   test -f "$HOME/.ssh/id_ed25519" || return 1
   test -f "$HOME/.ssh/allowed_signers" || return 1
@@ -82,7 +85,7 @@ require_envelope_permissions() {
 }
 
 bitwarden_status() {
-  /usr/local/bin/bw status
+  "$BW_BIN" status
 }
 
 ensure_bitwarden_unlocked() {
@@ -90,13 +93,13 @@ ensure_bitwarden_unlocked() {
   status="$(printf '%s' "$status_json" | status_from_json 2>/dev/null || true)"
 
   if [ "$status" = "unauthenticated" ] || [ -z "$status" ]; then
-    /usr/local/bin/bw login --apikey >/dev/null
+    "$BW_BIN" login --apikey >/dev/null
     status_json="$(bitwarden_status)"
     status="$(printf '%s' "$status_json" | status_from_json)"
   fi
 
   if [ "$status" = "locked" ]; then
-    BW_SESSION="$(/usr/local/bin/bw unlock --passwordenv BW_PASSWORD --raw)"
+    BW_SESSION="$("$BW_BIN" unlock --passwordenv BW_PASSWORD --raw)"
     export BW_SESSION
     test -n "${BW_SESSION:-}" || fail "Bitwarden unlock returned an empty session"
     status_json="$(bitwarden_status)"
@@ -104,7 +107,7 @@ ensure_bitwarden_unlocked() {
   fi
 
   test "$status" = "unlocked" || fail "Bitwarden is not unlocked after login/unlock"
-  /usr/local/bin/bw sync >/dev/null
+  "$BW_BIN" sync >/dev/null
 }
 
 ensure_chezmoi() {
@@ -143,7 +146,7 @@ ensure_github_known_hosts() {
 }
 
 authenticate_gh() {
-  token="$(/usr/local/bin/bw get notes "$GITHUB_CLI_TOKEN_ITEM")" || fail "GitHub CLI token item is missing"
+  token="$("$BW_BIN" get notes "$GITHUB_CLI_TOKEN_ITEM")" || fail "GitHub CLI token item is missing"
   test -n "$token" || fail "GitHub CLI token item is empty"
   test "$token" != "null" || fail "GitHub CLI token item notes are empty"
   printf '%s\n' "$token" | gh auth login --hostname github.com --with-token >/dev/null
@@ -186,6 +189,7 @@ write_marker() {
   {
     printf 'version=%s\n' "$BOOTSTRAP_VERSION"
     printf 'dotfiles=%s\n' "$DOTFILES_REPO_URL"
+    printf 'fingerprint=%s\n' "$MARKER_FINGERPRINT"
     printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$MARKER_PATH"
 }

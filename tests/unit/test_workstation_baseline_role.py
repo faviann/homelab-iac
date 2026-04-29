@@ -117,6 +117,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             defaults["workstation_bw_release_api_url"],
             "https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v{{ workstation_bw_version }}",
         )
+        self.assertEqual(defaults["workstation_bw_bin_path"], "/usr/local/bin/bw")
+        self.assertEqual(defaults["workstation_bootstrap_bin_path"], "/usr/local/bin/workstation-bootstrap")
 
     def test_lifecycle_wires_workstation_baseline_role_once(self) -> None:
         tasks = load_yaml(REPO_ROOT / "playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/configure.yml")
@@ -172,6 +174,10 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(options["workstation_mise_tools"]["type"], "list")
         self.assertEqual(options["workstation_mise_tools"]["elements"], "str")
         self.assertEqual(options["workstation_bw_release_api_url"]["type"], "str")
+        self.assertEqual(options["workstation_bw_bin_path"]["type"], "str")
+        self.assertEqual(options["workstation_bootstrap_bin_path"]["type"], "str")
+        self.assertEqual(options["workstation_system_bin_owner"]["type"], "str")
+        self.assertEqual(options["workstation_system_bin_group"]["type"], "str")
         self.assertNotIn("workstation_agent_state_enabled", options)
         self.assertNotIn("workstation_agent_state_root", options)
         self.assertNotIn("workstation_agent_state_links", options)

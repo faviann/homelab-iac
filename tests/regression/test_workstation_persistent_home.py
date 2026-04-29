@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -38,77 +37,45 @@ def run_playbook(
     )
 
 
-def main() -> int:
+def test_workstation_persistent_home_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-success-") as temp_root:
         success = run_playbook(SUCCESS_PLAYBOOK, temp_root)
 
     success_output = f"{success.stdout}\n{success.stderr}"
-    if success.returncode != 0:
-        print("success playbook failed unexpectedly", file=sys.stderr)
-        print(success_output, file=sys.stderr)
-        return 1
+    assert success.returncode == 0, success_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-disabled-") as temp_root:
         disabled = run_playbook(DISABLED_PLAYBOOK, temp_root)
 
     disabled_output = f"{disabled.stdout}\n{disabled.stderr}"
-    if disabled.returncode != 0:
-        print("disabled playbook failed unexpectedly", file=sys.stderr)
-        print(disabled_output, file=sys.stderr)
-        return 1
+    assert disabled.returncode == 0, disabled_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-conflict-") as temp_root:
         conflict = run_playbook(CONFLICT_PLAYBOOK, temp_root)
 
     conflict_output = f"{conflict.stdout}\n{conflict.stderr}"
-    if conflict.returncode == 0:
-        print("conflict playbook succeeded unexpectedly", file=sys.stderr)
-        print(conflict_output, file=sys.stderr)
-        return 1
+    assert conflict.returncode != 0, conflict_output
 
     expected_markers = [
         "exists and is not the managed symlink",
         "Move or migrate it manually",
         ".claude",
     ]
-    if not all(marker in conflict_output for marker in expected_markers):
-        print("conflict failure did not explain the unsafe existing path", file=sys.stderr)
-        print(conflict_output, file=sys.stderr)
-        return 1
+    assert all(marker in conflict_output for marker in expected_markers), conflict_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-check-mode-") as temp_root:
         check_mode = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root, check_mode=True)
 
     check_mode_output = f"{check_mode.stdout}\n{check_mode.stderr}"
-    if check_mode.returncode != 0:
-        print("check-mode playbook failed unexpectedly", file=sys.stderr)
-        print(check_mode_output, file=sys.stderr)
-        return 1
+    assert check_mode.returncode == 0, check_mode_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-idempotency-") as temp_root:
         first_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
         second_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
 
     first_idempotency_output = f"{first_idempotency.stdout}\n{first_idempotency.stderr}"
-    if first_idempotency.returncode != 0:
-        print("idempotency setup playbook failed unexpectedly", file=sys.stderr)
-        print(first_idempotency_output, file=sys.stderr)
-        return 1
+    assert first_idempotency.returncode == 0, first_idempotency_output
 
     second_idempotency_output = f"{second_idempotency.stdout}\n{second_idempotency.stderr}"
-    if second_idempotency.returncode != 0:
-        print("idempotency verification playbook failed unexpectedly", file=sys.stderr)
-        print(second_idempotency_output, file=sys.stderr)
-        return 1
-
-    if "changed=0" not in second_idempotency_output:
-        print("second persistent-home-only run was not idempotent", file=sys.stderr)
-        print(second_idempotency_output, file=sys.stderr)
-        return 1
-
-    print("ok: workstation persistent home links are managed safely")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    assert second_idempotency.returncode == 0, second_idempotency_output
+    assert "changed=0" in second_idempotency_output, second_idempotency_output
