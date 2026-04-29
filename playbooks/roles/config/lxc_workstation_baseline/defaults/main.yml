@@ -3,15 +3,21 @@ workstation_username: "{{ docker_user }}"
 workstation_uid: "{{ docker_uid }}"
 workstation_gid: "{{ docker_gid }}"
 workstation_home: "/home/{{ workstation_username }}"
-workstation_agent_state_enabled: false
-workstation_agent_state_root: /ephemeral/workstation/agent-state
-workstation_agent_state_links:
+workstation_persistent_home_enabled: false
+workstation_persistent_home_root: /ephemeral/workstation/home
+workstation_persistent_home_links:
   - name: claude
     path: "{{ workstation_home }}/.claude"
-    target: "{{ workstation_agent_state_root }}/claude"
+    target: "{{ workstation_persistent_home_root }}/.claude"
+    mode: "0700"
   - name: codex
     path: "{{ workstation_home }}/.codex"
-    target: "{{ workstation_agent_state_root }}/codex"
+    target: "{{ workstation_persistent_home_root }}/.codex"
+    mode: "0700"
+  - name: repos
+    path: "{{ workstation_home }}/repos"
+    target: "{{ workstation_persistent_home_root }}/repos"
+    mode: "0755"
 workstation_packages:
   - tmux
   - mosh

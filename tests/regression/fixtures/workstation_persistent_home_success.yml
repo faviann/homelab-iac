@@ -1,5 +1,5 @@
 ---
-- name: Test workstation agent state success path
+- name: Test workstation persistent home success path
   hosts: localhost
   connection: local
   gather_facts: false
@@ -9,15 +9,21 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/faviann"
     workstation_packages: []
-    workstation_agent_state_enabled: true
-    workstation_agent_state_root: "{{ temp_root }}/ephemeral/workstation/agent-state"
-    workstation_agent_state_links:
+    workstation_persistent_home_enabled: true
+    workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
+    workstation_persistent_home_links:
       - name: claude
         path: "{{ workstation_home }}/.claude"
-        target: "{{ workstation_agent_state_root }}/claude"
+        target: "{{ workstation_persistent_home_root }}/.claude"
+        mode: "0700"
       - name: codex
         path: "{{ workstation_home }}/.codex"
-        target: "{{ workstation_agent_state_root }}/codex"
+        target: "{{ workstation_persistent_home_root }}/.codex"
+        mode: "0700"
+      - name: repos
+        path: "{{ workstation_home }}/repos"
+        target: "{{ workstation_persistent_home_root }}/repos"
+        mode: "0755"
     lxc_ssh_user: faviann
     lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
     lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
@@ -60,7 +66,7 @@
         state: directory
         mode: "0755"
 
-    - name: Create existing workstation state parent with loose mode
+    - name: Create existing workstation persistent parent with loose mode
       ansible.builtin.file:
         path: "{{ temp_root }}/ephemeral/workstation"
         state: directory
@@ -73,25 +79,30 @@
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
 
-    - name: Stat agent state root
+    - name: Stat persistent home root
       ansible.builtin.stat:
-        path: "{{ workstation_agent_state_root }}"
-      register: agent_state_root_stat
+        path: "{{ temp_root }}/ephemeral/workstation/home"
+      register: persistent_home_root_stat
 
     - name: Stat workstation state parent
       ansible.builtin.stat:
         path: "{{ temp_root }}/ephemeral/workstation"
       register: workstation_state_parent_stat
 
-    - name: Stat Claude agent state directory
+    - name: Stat Claude persistent home directory
       ansible.builtin.stat:
-        path: "{{ workstation_agent_state_root }}/claude"
+        path: "{{ temp_root }}/ephemeral/workstation/home/.claude"
       register: claude_state_dir_stat
 
-    - name: Stat Codex agent state directory
+    - name: Stat Codex persistent home directory
       ansible.builtin.stat:
-        path: "{{ workstation_agent_state_root }}/codex"
+        path: "{{ temp_root }}/ephemeral/workstation/home/.codex"
       register: codex_state_dir_stat
+
+    - name: Stat repos persistent home directory
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/ephemeral/workstation/home/repos"
+      register: repos_dir_stat
 
     - name: Stat Claude home symlink
       ansible.builtin.stat:
@@ -103,17 +114,22 @@
         path: "{{ workstation_home }}/.codex"
       register: codex_home_link_stat
 
-    - name: Assert workstation agent state was linked safely
+    - name: Stat repos home symlink
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/repos"
+      register: repos_home_link_stat
+
+    - name: Assert workstation persistent home was linked safely
       ansible.builtin.assert:
         that:
           - workstation_state_parent_stat.stat.isdir
           - workstation_state_parent_stat.stat.uid == workstation_uid
           - workstation_state_parent_stat.stat.gid == workstation_gid
           - workstation_state_parent_stat.stat.mode == "0700"
-          - agent_state_root_stat.stat.isdir
-          - agent_state_root_stat.stat.uid == workstation_uid
-          - agent_state_root_stat.stat.gid == workstation_gid
-          - agent_state_root_stat.stat.mode == "0700"
+          - persistent_home_root_stat.stat.isdir
+          - persistent_home_root_stat.stat.uid == workstation_uid
+          - persistent_home_root_stat.stat.gid == workstation_gid
+          - persistent_home_root_stat.stat.mode == "0700"
           - claude_state_dir_stat.stat.isdir
           - claude_state_dir_stat.stat.uid == workstation_uid
           - claude_state_dir_stat.stat.gid == workstation_gid
@@ -122,8 +138,14 @@
           - codex_state_dir_stat.stat.uid == workstation_uid
           - codex_state_dir_stat.stat.gid == workstation_gid
           - codex_state_dir_stat.stat.mode == "0700"
+          - repos_dir_stat.stat.isdir
+          - repos_dir_stat.stat.uid == workstation_uid
+          - repos_dir_stat.stat.gid == workstation_gid
+          - repos_dir_stat.stat.mode == "0755"
           - claude_home_link_stat.stat.islnk
-          - claude_home_link_stat.stat.lnk_source == workstation_agent_state_root ~ "/claude"
+          - claude_home_link_stat.stat.lnk_source == temp_root ~ "/ephemeral/workstation/home/.claude"
           - codex_home_link_stat.stat.islnk
-          - codex_home_link_stat.stat.lnk_source == workstation_agent_state_root ~ "/codex"
-        fail_msg: "Workstation agent state directories or symlinks were not created as expected"
+          - codex_home_link_stat.stat.lnk_source == temp_root ~ "/ephemeral/workstation/home/.codex"
+          - repos_home_link_stat.stat.islnk
+          - repos_home_link_stat.stat.lnk_source == temp_root ~ "/ephemeral/workstation/home/repos"
+        fail_msg: "Workstation persistent home directories or symlinks were not created as expected"

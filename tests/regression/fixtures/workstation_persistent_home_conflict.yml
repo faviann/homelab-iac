@@ -1,5 +1,5 @@
 ---
-- name: Test workstation agent state conflict path
+- name: Test workstation persistent home conflict path
   hosts: localhost
   connection: local
   gather_facts: false
@@ -9,15 +9,21 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/faviann"
     workstation_packages: []
-    workstation_agent_state_enabled: true
-    workstation_agent_state_root: "{{ temp_root }}/ephemeral/workstation/agent-state"
-    workstation_agent_state_links:
+    workstation_persistent_home_enabled: true
+    workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
+    workstation_persistent_home_links:
       - name: claude
         path: "{{ workstation_home }}/.claude"
-        target: "{{ workstation_agent_state_root }}/claude"
+        target: "{{ workstation_persistent_home_root }}/.claude"
+        mode: "0700"
       - name: codex
         path: "{{ workstation_home }}/.codex"
-        target: "{{ workstation_agent_state_root }}/codex"
+        target: "{{ workstation_persistent_home_root }}/.codex"
+        mode: "0700"
+      - name: repos
+        path: "{{ workstation_home }}/repos"
+        target: "{{ workstation_persistent_home_root }}/repos"
+        mode: "0755"
     lxc_ssh_user: faviann
     lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
     lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"

@@ -4,8 +4,8 @@
 
 lxc_hwaddr: "BC:24:11:57:80:06"
 workstation_enabled: true
-# Enabled after migrating the live workstation Claude state into /ephemeral/workstation/agent-state.
-workstation_agent_state_enabled: true
+# Persist selected workstation home paths across intentional LXC rebuilds.
+workstation_persistent_home_enabled: true
 
 docker_agents_enabled: false
 traefik_kop_enabled: false

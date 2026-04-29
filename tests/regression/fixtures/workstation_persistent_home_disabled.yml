@@ -1,5 +1,5 @@
 ---
-- name: Test workstation agent state disabled path
+- name: Test workstation persistent home disabled path
   hosts: localhost
   connection: local
   gather_facts: false
@@ -9,8 +9,21 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/faviann"
     workstation_packages: []
-    workstation_agent_state_enabled: false
-    workstation_agent_state_root: "{{ temp_root }}/ephemeral/workstation/agent-state"
+    workstation_persistent_home_enabled: false
+    workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
+    workstation_persistent_home_links:
+      - name: claude
+        path: "{{ workstation_home }}/.claude"
+        target: "{{ workstation_persistent_home_root }}/.claude"
+        mode: "0700"
+      - name: codex
+        path: "{{ workstation_home }}/.codex"
+        target: "{{ workstation_persistent_home_root }}/.codex"
+        mode: "0700"
+      - name: repos
+        path: "{{ workstation_home }}/repos"
+        target: "{{ workstation_persistent_home_root }}/repos"
+        mode: "0755"
     lxc_ssh_user: faviann
     lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
     lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
@@ -60,10 +73,10 @@
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
 
-    - name: Stat agent state root
+    - name: Stat persistent home root
       ansible.builtin.stat:
-        path: "{{ workstation_agent_state_root }}"
-      register: agent_state_root_stat
+        path: "{{ temp_root }}/ephemeral/workstation/home"
+      register: persistent_home_root_stat
 
     - name: Stat Claude home path
       ansible.builtin.stat:
@@ -75,10 +88,16 @@
         path: "{{ workstation_home }}/.codex"
       register: codex_home_stat
 
-    - name: Assert workstation agent state was skipped
+    - name: Stat repos home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/repos"
+      register: repos_home_stat
+
+    - name: Assert workstation persistent home was skipped
       ansible.builtin.assert:
         that:
-          - not agent_state_root_stat.stat.exists
+          - not persistent_home_root_stat.stat.exists
           - not claude_home_stat.stat.exists
           - not codex_home_stat.stat.exists
-        fail_msg: "Disabled workstation agent state should not create directories or links"
+          - not repos_home_stat.stat.exists
+        fail_msg: "Disabled workstation persistent home should not create directories or links"

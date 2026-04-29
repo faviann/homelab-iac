@@ -31,19 +31,19 @@ argument_specs:
         type: str
         required: false
         description: Filesystem home directory for the workstation login account.
-      workstation_agent_state_enabled:
+      workstation_persistent_home_enabled:
         type: bool
         required: false
-        description: Whether to manage persistent Claude/Codex comfort-state links for the workstation user.
-      workstation_agent_state_root:
+        description: Whether to manage selected workstation home paths as persistent symlinks.
+      workstation_persistent_home_root:
         type: str
         required: false
-        description: Persistent local path used for selected agent CLI state directories.
-      workstation_agent_state_links:
+        description: Persistent root directory for selected workstation home path targets.
+      workstation_persistent_home_links:
         type: list
         elements: dict
         required: false
-        description: Agent state symlinks to create from the workstation home into workstation_agent_state_root.
+        description: Home symlinks to create from the workstation home into persistent /ephemeral storage.
       workstation_packages:
         type: list
         elements: str

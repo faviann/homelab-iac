@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for workstation agent-state persistence links."""
+"""Regression tests for workstation persistent home links."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "tests" / "regression" / "fixtures"
-SUCCESS_PLAYBOOK = FIXTURE_ROOT / "workstation_agent_state_success.yml"
-DISABLED_PLAYBOOK = FIXTURE_ROOT / "workstation_agent_state_disabled.yml"
-CONFLICT_PLAYBOOK = FIXTURE_ROOT / "workstation_agent_state_conflict.yml"
-IDEMPOTENCY_PLAYBOOK = FIXTURE_ROOT / "workstation_agent_state_idempotency.yml"
+SUCCESS_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_success.yml"
+DISABLED_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_disabled.yml"
+CONFLICT_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_conflict.yml"
+IDEMPOTENCY_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_idempotency.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
@@ -39,7 +39,7 @@ def run_playbook(
 
 
 def main() -> int:
-    with tempfile.TemporaryDirectory(prefix="workstation-agent-state-success-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-success-") as temp_root:
         success = run_playbook(SUCCESS_PLAYBOOK, temp_root)
 
     success_output = f"{success.stdout}\n{success.stderr}"
@@ -48,7 +48,7 @@ def main() -> int:
         print(success_output, file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="workstation-agent-state-disabled-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-disabled-") as temp_root:
         disabled = run_playbook(DISABLED_PLAYBOOK, temp_root)
 
     disabled_output = f"{disabled.stdout}\n{disabled.stderr}"
@@ -57,7 +57,7 @@ def main() -> int:
         print(disabled_output, file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="workstation-agent-state-conflict-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-conflict-") as temp_root:
         conflict = run_playbook(CONFLICT_PLAYBOOK, temp_root)
 
     conflict_output = f"{conflict.stdout}\n{conflict.stderr}"
@@ -76,7 +76,7 @@ def main() -> int:
         print(conflict_output, file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="workstation-agent-state-check-mode-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-check-mode-") as temp_root:
         check_mode = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root, check_mode=True)
 
     check_mode_output = f"{check_mode.stdout}\n{check_mode.stderr}"
@@ -85,7 +85,7 @@ def main() -> int:
         print(check_mode_output, file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="workstation-agent-state-idempotency-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-idempotency-") as temp_root:
         first_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
         second_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
 
@@ -102,11 +102,11 @@ def main() -> int:
         return 1
 
     if "changed=0" not in second_idempotency_output:
-        print("second agent-state-only run was not idempotent", file=sys.stderr)
+        print("second persistent-home-only run was not idempotent", file=sys.stderr)
         print(second_idempotency_output, file=sys.stderr)
         return 1
 
-    print("ok: workstation agent state links are managed safely")
+    print("ok: workstation persistent home links are managed safely")
     return 0
 
 
