@@ -22,7 +22,11 @@
     owner: "{{ workstation_uid }}"
     group: "{{ workstation_gid }}"
     mode: "0700"
-  loop: "{{ [workstation_agent_state_root] + (workstation_agent_state_links | map(attribute='target') | list) }}"
+  loop: >-
+    {{
+      [workstation_agent_state_root | dirname, workstation_agent_state_root]
+      + (workstation_agent_state_links | map(attribute='target') | list)
+    }}
 
 - name: Inspect workstation agent state home links
   ansible.builtin.stat:

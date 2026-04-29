@@ -60,6 +60,12 @@
         state: directory
         mode: "0755"
 
+    - name: Create existing workstation state parent with loose mode
+      ansible.builtin.file:
+        path: "{{ temp_root }}/ephemeral/workstation"
+        state: directory
+        mode: "0755"
+
     - name: Include workstation baseline role with PATH mocks
       block:
         - ansible.builtin.include_role:
@@ -71,6 +77,11 @@
       ansible.builtin.stat:
         path: "{{ workstation_agent_state_root }}"
       register: agent_state_root_stat
+
+    - name: Stat workstation state parent
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/ephemeral/workstation"
+      register: workstation_state_parent_stat
 
     - name: Stat Claude agent state directory
       ansible.builtin.stat:
@@ -95,6 +106,10 @@
     - name: Assert workstation agent state was linked safely
       ansible.builtin.assert:
         that:
+          - workstation_state_parent_stat.stat.isdir
+          - workstation_state_parent_stat.stat.uid == workstation_uid
+          - workstation_state_parent_stat.stat.gid == workstation_gid
+          - workstation_state_parent_stat.stat.mode == "0700"
           - agent_state_root_stat.stat.isdir
           - agent_state_root_stat.stat.uid == workstation_uid
           - agent_state_root_stat.stat.gid == workstation_gid
