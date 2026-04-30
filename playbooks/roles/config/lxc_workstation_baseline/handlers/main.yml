@@ -1,0 +1,6 @@
+---
+- name: Restart AoE LAN proxy firewall
+  ansible.builtin.systemd:
+    name: workstation-aoe-proxy-firewall.service
+    daemon_reload: true
+    state: restarted

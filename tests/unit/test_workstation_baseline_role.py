@@ -287,6 +287,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("Deploy AoE LAN proxy firewall rules", firewall_task_names)
         self.assertIn("Deploy AoE LAN proxy firewall service", firewall_task_names)
         self.assertIn("Enable AoE LAN proxy firewall service", firewall_task_names)
+        self.assertIn("Flush AoE LAN proxy firewall handlers", firewall_task_names)
         self.assertIn("Stop AoE LAN proxy firewall service when disabled", firewall_task_names)
         self.assertIn("Remove AoE LAN proxy firewall rules when disabled", firewall_task_names)
         self.assertIn("Validate workstation persistent home links", persistent_home_task_names)
@@ -324,6 +325,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             "daemon_reload: true",
             "state: absent",
             "delegate_to: localhost",
+            "check_mode: false",
+            "notify: Restart AoE LAN proxy firewall",
         ):
             self.assertIn(expected_fragment, rendered_firewall_tasks)
 
@@ -331,6 +334,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             self.assertIn(expected_fragment, rendered_firewall_tasks)
 
         self.assertNotIn("/etc/nftables.conf", rendered_firewall_tasks)
+        self.assertIn("state: started", rendered_firewall_tasks)
+        self.assertNotIn("state: restarted", rendered_firewall_tasks)
 
         firewall_template = (
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-aoe-proxy.nft.j2"
@@ -346,6 +351,15 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn('ExecStart=/usr/sbin/nft -f /etc/nftables.d/workstation-aoe-proxy.nft', firewall_service_template)
         self.assertIn('ExecStop=/usr/sbin/nft delete table inet workstation_aoe_proxy', firewall_service_template)
         self.assertIn('RemainAfterExit=yes', firewall_service_template)
+
+        firewall_handlers = load_yaml(
+            REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/handlers/main.yml"
+        )
+        self.assertEqual(len(firewall_handlers), 1)
+        self.assertEqual(firewall_handlers[0]["name"], "Restart AoE LAN proxy firewall")
+        rendered_firewall_handlers = yaml.safe_dump(firewall_handlers, sort_keys=True)
+        self.assertIn("workstation-aoe-proxy-firewall.service", rendered_firewall_handlers)
+        self.assertIn("state: restarted", rendered_firewall_handlers)
 
     def test_workstation_bootstrap_deploy_wrapper_removed(self) -> None:
         self.assertFalse((REPO_ROOT / "scripts/workstation-bootstrap-deploy.sh").exists())

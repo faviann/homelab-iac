@@ -39,6 +39,7 @@
     cmd: "getent ahostsv4 {{ item | quote }} | awk '{print $1}' | sort -u"
   register: workstation_aoe_proxy_firewall_resolution
   changed_when: false
+  check_mode: false
   delegate_to: localhost
   loop: "{{ workstation_aoe_proxy_firewall_allowed_endpoints | unique }}"
   loop_control:
@@ -109,6 +110,8 @@
     owner: root
     group: root
     mode: "0644"
+  register: workstation_aoe_proxy_firewall_rules_file
+  notify: Restart AoE LAN proxy firewall
   when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Validate AoE LAN proxy firewall ruleset
@@ -119,7 +122,9 @@
       - -f
       - /etc/nftables.d/workstation-aoe-proxy.nft
   changed_when: false
-  when: workstation_aoe_proxy_firewall_enabled | bool
+  when:
+    - workstation_aoe_proxy_firewall_enabled | bool
+    - not ansible_check_mode
 
 - name: Deploy AoE LAN proxy firewall service
   ansible.builtin.template:
@@ -128,6 +133,8 @@
     owner: root
     group: root
     mode: "0644"
+  register: workstation_aoe_proxy_firewall_service_file
+  notify: Restart AoE LAN proxy firewall
   when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Enable AoE LAN proxy firewall service
@@ -135,8 +142,14 @@
     name: workstation-aoe-proxy-firewall.service
     daemon_reload: true
     enabled: true
-    state: restarted
+    state: started
   when: workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Flush AoE LAN proxy firewall handlers
+  ansible.builtin.meta: flush_handlers
+  when:
+    - workstation_aoe_proxy_firewall_enabled | bool
+    - not ansible_check_mode
 
 - name: Stop AoE LAN proxy firewall service when disabled
   ansible.builtin.systemd:
