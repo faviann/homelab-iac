@@ -4,46 +4,62 @@
     that:
       - workstation_aoe_proxy_firewall_port | int > 0
       - workstation_aoe_proxy_firewall_port | int < 65536
-      - workstation_aoe_proxy_firewall_allowed_hosts | length > 0
+      - workstation_aoe_proxy_firewall_allowed_hosts | length == 1
     fail_msg: >-
-      config/lxc_workstation_baseline requires at least one allowed inventory host
+      config/lxc_workstation_baseline requires exactly one allowed inventory host
       when workstation_aoe_proxy_firewall_enabled is true.
   when: workstation_aoe_proxy_firewall_enabled | bool
 
-- name: Assert AoE LAN proxy firewall hosts exist in inventory
+- name: Set AoE LAN proxy firewall allowlist host
+  ansible.builtin.set_fact:
+    workstation_aoe_proxy_firewall_allowed_host: "{{ workstation_aoe_proxy_firewall_allowed_hosts | first }}"
+  when: workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Assert AoE LAN proxy firewall host exists in inventory
   ansible.builtin.assert:
     that:
-      - item in hostvars
+      - workstation_aoe_proxy_firewall_allowed_host in hostvars
     fail_msg: >-
-      config/lxc_workstation_baseline cannot resolve allowed host '{{ item }}'
+      config/lxc_workstation_baseline cannot resolve allowed host '{{ workstation_aoe_proxy_firewall_allowed_host }}'
       because it is not present in inventory.
-  loop: "{{ workstation_aoe_proxy_firewall_allowed_hosts }}"
-  loop_control:
-    label: "{{ item }}"
   when: workstation_aoe_proxy_firewall_enabled | bool
 
-- name: Derive AoE LAN proxy firewall allowlist endpoints
+- name: Derive AoE LAN proxy firewall allowlist endpoint
   ansible.builtin.set_fact:
-    workstation_aoe_proxy_firewall_allowed_endpoints: >-
+    workstation_aoe_proxy_firewall_allowed_endpoint: >-
       {{
-        (workstation_aoe_proxy_firewall_allowed_endpoints | default([]))
-        + [hostvars[item].ansible_host | default(item)]
+        hostvars[workstation_aoe_proxy_firewall_allowed_host].ansible_host
+        | default(workstation_aoe_proxy_firewall_allowed_host)
       }}
-  loop: "{{ workstation_aoe_proxy_firewall_allowed_hosts }}"
-  loop_control:
-    label: "{{ item }}"
   when: workstation_aoe_proxy_firewall_enabled | bool
 
-- name: Resolve AoE LAN proxy firewall allowlist addresses
+- name: Resolve AoE LAN proxy firewall allowlist address
   ansible.builtin.shell:
-    cmd: "getent ahostsv4 {{ item | quote }} | awk '{print $1}' | sort -u"
+    cmd: "getent ahostsv4 {{ workstation_aoe_proxy_firewall_allowed_endpoint | quote }} | awk '{print $1}' | sort -u"
   register: workstation_aoe_proxy_firewall_resolution
+  failed_when: false
   changed_when: false
   check_mode: false
   delegate_to: localhost
-  loop: "{{ workstation_aoe_proxy_firewall_allowed_endpoints | unique }}"
-  loop_control:
-    label: "{{ item }}"
+  when: workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Assert AoE LAN proxy firewall host resolution succeeded
+  ansible.builtin.assert:
+    that:
+      - workstation_aoe_proxy_firewall_resolution.rc == 0
+      - (
+          workstation_aoe_proxy_firewall_resolution.stdout_lines
+          | default([])
+          | select('match', '^[0-9]+(?:\\.[0-9]+){3}$')
+          | list
+          | length
+        ) > 0
+    fail_msg: >-
+      config/lxc_workstation_baseline could not resolve any IPv4 address for
+      allowed host '{{ workstation_aoe_proxy_firewall_allowed_host }}' using endpoint
+      '{{ workstation_aoe_proxy_firewall_allowed_endpoint }}'.
+      Fix inventory ansible_host/DNS for this host before enabling
+      workstation_aoe_proxy_firewall_enabled.
   when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Initialize AoE LAN proxy firewall IPv4 allowlist
@@ -57,15 +73,12 @@
       {{
         (workstation_aoe_proxy_firewall_allowed_ipv4 | default([]))
         + (
-          item.stdout_lines
+          workstation_aoe_proxy_firewall_resolution.stdout_lines
           | default([])
           | select('match', '^[0-9]+(?:\.[0-9]+){3}$')
           | list
         )
       }}
-  loop: "{{ workstation_aoe_proxy_firewall_resolution.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item | default('resolved-host') }}"
   when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Deduplicate AoE LAN proxy firewall IPv4 allowlist

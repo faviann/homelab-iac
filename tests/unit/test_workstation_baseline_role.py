@@ -282,7 +282,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         persistent_home_task_names = [t.get("name") for t in persistent_home_tasks]
         firewall_task_names = [t.get("name") for t in firewall_tasks]
         self.assertIn("Assert AoE LAN proxy firewall inputs are valid", firewall_task_names)
-        self.assertIn("Resolve AoE LAN proxy firewall allowlist addresses", firewall_task_names)
+        self.assertIn("Resolve AoE LAN proxy firewall allowlist address", firewall_task_names)
+        self.assertIn("Assert AoE LAN proxy firewall host resolution succeeded", firewall_task_names)
         self.assertIn("Install AoE LAN proxy firewall package", firewall_task_names)
         self.assertIn("Deploy AoE LAN proxy firewall rules", firewall_task_names)
         self.assertIn("Deploy AoE LAN proxy firewall service", firewall_task_names)
@@ -326,7 +327,12 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             "state: absent",
             "delegate_to: localhost",
             "check_mode: false",
+            "failed_when: false",
             "notify: Restart AoE LAN proxy firewall",
+            "could not resolve any IPv4 address for",
+            "requires exactly one allowed inventory",
+            "workstation_aoe_proxy_firewall_allowed_endpoint",
+            "workstation_aoe_proxy_firewall_allowed_host",
         ):
             self.assertIn(expected_fragment, rendered_firewall_tasks)
 

@@ -1,0 +1,40 @@
+---
+- name: Test AoE firewall allowlist resolution failure behavior
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    workstation_username: "{{ lookup('pipe', 'id -un') }}"
+    workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
+    workstation_packages: []
+    workstation_persistent_home_enabled: false
+    workstation_aoe_proxy_firewall_enabled: true
+    workstation_aoe_proxy_firewall_allowed_hosts:
+      - broken-portal
+    workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
+    workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
+    workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
+    workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
+    docker_user: "{{ workstation_username }}"
+    docker_uid: "{{ workstation_uid }}"
+    docker_gid: "{{ workstation_gid }}"
+  tasks:
+    - name: Define unresolved allowlist host
+      ansible.builtin.add_host:
+        name: broken-portal
+        ansible_host: "unresolvable-hostname.invalid"
+
+    - name: Ensure writable test directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ temp_root }}/bin"
+        - "{{ temp_root }}/etc/profile.d"
+
+    - name: Include workstation baseline role
+      ansible.builtin.include_role:
+        name: config/lxc_workstation_baseline
