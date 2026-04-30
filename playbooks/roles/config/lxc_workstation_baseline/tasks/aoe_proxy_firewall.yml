@@ -8,6 +8,7 @@
     fail_msg: >-
       config/lxc_workstation_baseline requires at least one allowed inventory host
       when workstation_aoe_proxy_firewall_enabled is true.
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Assert AoE LAN proxy firewall hosts exist in inventory
   ansible.builtin.assert:
@@ -19,6 +20,7 @@
   loop: "{{ workstation_aoe_proxy_firewall_allowed_hosts }}"
   loop_control:
     label: "{{ item }}"
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Derive AoE LAN proxy firewall allowlist endpoints
   ansible.builtin.set_fact:
@@ -30,6 +32,7 @@
   loop: "{{ workstation_aoe_proxy_firewall_allowed_hosts }}"
   loop_control:
     label: "{{ item }}"
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Resolve AoE LAN proxy firewall allowlist addresses
   ansible.builtin.command:
@@ -39,9 +42,11 @@
       - "{{ item }}"
   register: workstation_aoe_proxy_firewall_resolution
   changed_when: false
+  delegate_to: localhost
   loop: "{{ workstation_aoe_proxy_firewall_allowed_endpoints | unique }}"
   loop_control:
     label: "{{ item }}"
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Collect AoE LAN proxy firewall IPv4 allowlist
   ansible.builtin.set_fact:
@@ -50,11 +55,12 @@
         workstation_aoe_proxy_firewall_resolution.results
         | map(attribute='stdout_lines')
         | flatten
-        | map('regex_replace', '^([^[:space:]]+).*$','\\1')
+        | map('regex_replace', '^(\\S+).*$','\\1')
         | select('match', '^[0-9]+(?:\\.[0-9]+){3}$')
         | unique
         | list
       }}
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Assert AoE LAN proxy firewall allowlist resolved
   ansible.builtin.assert:
@@ -63,12 +69,14 @@
     fail_msg: >-
       config/lxc_workstation_baseline could not resolve any IPv4 addresses for
       workstation_aoe_proxy_firewall_allowed_hosts.
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Install AoE LAN proxy firewall package
   ansible.builtin.apt:
     name: nftables
     state: present
     update_cache: true
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Ensure AoE LAN proxy firewall include directory exists
   ansible.builtin.file:
@@ -77,14 +85,7 @@
     owner: root
     group: root
     mode: "0755"
-
-- name: Deploy AoE LAN proxy firewall base config
-  ansible.builtin.template:
-    src: nftables.conf.j2
-    dest: /etc/nftables.conf
-    owner: root
-    group: root
-    mode: "0644"
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Deploy AoE LAN proxy firewall rules
   ansible.builtin.template:
@@ -93,6 +94,7 @@
     owner: root
     group: root
     mode: "0644"
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Validate AoE LAN proxy firewall ruleset
   ansible.builtin.command:
@@ -100,11 +102,62 @@
       - nft
       - -c
       - -f
-      - /etc/nftables.conf
+      - /etc/nftables.d/workstation-aoe-proxy.nft
   changed_when: false
+  when: workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Deploy AoE LAN proxy firewall service
+  ansible.builtin.template:
+    src: workstation-aoe-proxy-firewall.service.j2
+    dest: /etc/systemd/system/workstation-aoe-proxy-firewall.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Enable AoE LAN proxy firewall service
   ansible.builtin.systemd:
-    name: nftables.service
+    name: workstation-aoe-proxy-firewall.service
+    daemon_reload: true
     enabled: true
     state: restarted
+  when: workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Stop AoE LAN proxy firewall service when disabled
+  ansible.builtin.systemd:
+    name: workstation-aoe-proxy-firewall.service
+    daemon_reload: true
+    enabled: false
+    state: stopped
+  failed_when: false
+  when: not workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Remove live AoE LAN proxy firewall table when disabled
+  ansible.builtin.command:
+    argv:
+      - nft
+      - delete
+      - table
+      - inet
+      - workstation_aoe_proxy
+  changed_when: workstation_aoe_proxy_firewall_delete_result.rc == 0
+  failed_when: false
+  register: workstation_aoe_proxy_firewall_delete_result
+  when: not workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Remove AoE LAN proxy firewall service file when disabled
+  ansible.builtin.file:
+    path: /etc/systemd/system/workstation-aoe-proxy-firewall.service
+    state: absent
+  when: not workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Remove AoE LAN proxy firewall rules when disabled
+  ansible.builtin.file:
+    path: /etc/nftables.d/workstation-aoe-proxy.nft
+    state: absent
+  when: not workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Reload systemd after AoE LAN proxy firewall cleanup
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not workstation_aoe_proxy_firewall_enabled | bool

@@ -285,7 +285,10 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("Resolve AoE LAN proxy firewall allowlist addresses", firewall_task_names)
         self.assertIn("Install AoE LAN proxy firewall package", firewall_task_names)
         self.assertIn("Deploy AoE LAN proxy firewall rules", firewall_task_names)
+        self.assertIn("Deploy AoE LAN proxy firewall service", firewall_task_names)
         self.assertIn("Enable AoE LAN proxy firewall service", firewall_task_names)
+        self.assertIn("Stop AoE LAN proxy firewall service when disabled", firewall_task_names)
+        self.assertIn("Remove AoE LAN proxy firewall rules when disabled", firewall_task_names)
         self.assertIn("Validate workstation persistent home links", persistent_home_task_names)
         self.assertIn("Ensure workstation persistent home targets exist", persistent_home_task_names)
         self.assertIn("Inspect workstation persistent home links", persistent_home_task_names)
@@ -316,13 +319,18 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             "ahostsv4",
             "workstation_aoe_proxy_firewall_allowed_hosts",
             "/etc/nftables.d/workstation-aoe-proxy.nft",
-            "/etc/nftables.conf",
-            "nftables.service",
+            "/etc/systemd/system/workstation-aoe-proxy-firewall.service",
+            "workstation-aoe-proxy-firewall.service",
+            "daemon_reload: true",
+            "state: absent",
+            "delegate_to: localhost",
         ):
             self.assertIn(expected_fragment, rendered_firewall_tasks)
 
         for expected_fragment in ("- nft", "- -c", "- -f"):
             self.assertIn(expected_fragment, rendered_firewall_tasks)
+
+        self.assertNotIn("/etc/nftables.conf", rendered_firewall_tasks)
 
         firewall_template = (
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-aoe-proxy.nft.j2"
@@ -331,11 +339,13 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn('@allowed_ipv4', firewall_template)
         self.assertIn('tcp dport {{ workstation_aoe_proxy_firewall_port }} drop', firewall_template)
 
-        nftables_template = (
-            REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/nftables.conf.j2"
+        firewall_service_template = (
+            REPO_ROOT
+            / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-aoe-proxy-firewall.service.j2"
         ).read_text(encoding="utf-8")
-        self.assertIn('flush ruleset', nftables_template)
-        self.assertIn('include "/etc/nftables.d/*.nft"', nftables_template)
+        self.assertIn('ExecStart=/usr/sbin/nft -f /etc/nftables.d/workstation-aoe-proxy.nft', firewall_service_template)
+        self.assertIn('ExecStop=/usr/sbin/nft delete table inet workstation_aoe_proxy', firewall_service_template)
+        self.assertIn('RemainAfterExit=yes', firewall_service_template)
 
     def test_workstation_bootstrap_deploy_wrapper_removed(self) -> None:
         self.assertFalse((REPO_ROOT / "scripts/workstation-bootstrap-deploy.sh").exists())
