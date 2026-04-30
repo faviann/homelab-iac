@@ -1,5 +1,5 @@
 ---
-- name: Test workstation persistent home idempotency
+- name: Test workstation persistent home symlink migration
   hosts: localhost
   connection: local
   gather_facts: false
@@ -40,7 +40,31 @@
         state: directory
         mode: "0755"
 
+    - name: Ensure persistent target exists for legacy symlink
+      ansible.builtin.file:
+        path: "{{ workstation_persistent_home_root }}/.claude"
+        state: directory
+        mode: "0700"
+
+    - name: Create legacy managed symlink for migration
+      ansible.builtin.file:
+        src: "{{ workstation_persistent_home_root }}/.claude"
+        dest: "{{ workstation_home }}/.claude"
+        state: link
+
     - name: Include focused workstation persistent home tasks
       ansible.builtin.include_role:
         name: config/lxc_workstation_baseline
         tasks_from: persistent_home
+
+    - name: Stat migrated Claude home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.claude"
+      register: claude_home_path_stat
+
+    - name: Assert managed symlink was migrated to managed bind-mount path
+      ansible.builtin.assert:
+        that:
+          - claude_home_path_stat.stat.isdir
+          - not (claude_home_path_stat.stat.islnk | default(false))
+        fail_msg: "Managed symlink migration to bind-mount path failed for .claude"

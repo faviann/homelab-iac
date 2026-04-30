@@ -8,16 +8,26 @@ workstation_aoe_proxy_firewall_port: 4001
 workstation_aoe_proxy_firewall_allowed_hosts: []
 workstation_persistent_home_enabled: false
 workstation_persistent_home_root: /ephemeral/workstation/home
+workstation_persistent_home_mount_state: mounted
+workstation_persistent_home_fstab_path: /etc/fstab
 workstation_persistent_home_links:
   - name: claude
+    type: bind_mount
     path: "{{ workstation_home }}/.claude"
     target: "{{ workstation_persistent_home_root }}/.claude"
     mode: "0700"
   - name: codex
+    type: bind_mount
     path: "{{ workstation_home }}/.codex"
     target: "{{ workstation_persistent_home_root }}/.codex"
     mode: "0700"
+  - name: agent_of_empires
+    type: bind_mount
+    path: "{{ workstation_home }}/.config/agent-of-empires"
+    target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
+    mode: "0700"
   - name: repos
+    type: bind_mount
     path: "{{ workstation_home }}/repos"
     target: "{{ workstation_persistent_home_root }}/repos"
     mode: "0755"

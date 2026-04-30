@@ -41,23 +41,35 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(defaults["workstation_aoe_proxy_firewall_allowed_hosts"], [])
         self.assertFalse(defaults["workstation_persistent_home_enabled"])
         self.assertEqual(defaults["workstation_persistent_home_root"], "/ephemeral/workstation/home")
+        self.assertEqual(defaults["workstation_persistent_home_mount_state"], "mounted")
+        self.assertEqual(defaults["workstation_persistent_home_fstab_path"], "/etc/fstab")
         self.assertEqual(
             defaults["workstation_persistent_home_links"],
             [
                 {
                     "name": "claude",
+                    "type": "bind_mount",
                     "path": "{{ workstation_home }}/.claude",
                     "target": "{{ workstation_persistent_home_root }}/.claude",
                     "mode": "0700",
                 },
                 {
                     "name": "codex",
+                    "type": "bind_mount",
                     "path": "{{ workstation_home }}/.codex",
                     "target": "{{ workstation_persistent_home_root }}/.codex",
                     "mode": "0700",
                 },
                 {
+                    "name": "agent_of_empires",
+                    "type": "bind_mount",
+                    "path": "{{ workstation_home }}/.config/agent-of-empires",
+                    "target": "{{ workstation_persistent_home_root }}/.config/agent-of-empires",
+                    "mode": "0700",
+                },
+                {
                     "name": "repos",
+                    "type": "bind_mount",
                     "path": "{{ workstation_home }}/repos",
                     "target": "{{ workstation_persistent_home_root }}/repos",
                     "mode": "0755",
@@ -173,6 +185,10 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(options["workstation_persistent_home_links"]["type"], "list")
         self.assertEqual(options["workstation_persistent_home_links"]["elements"], "dict")
         self.assertFalse(options["workstation_persistent_home_links"]["required"])
+        self.assertEqual(options["workstation_persistent_home_mount_state"]["type"], "str")
+        self.assertFalse(options["workstation_persistent_home_mount_state"]["required"])
+        self.assertEqual(options["workstation_persistent_home_fstab_path"]["type"], "str")
+        self.assertFalse(options["workstation_persistent_home_fstab_path"]["required"])
         self.assertEqual(options["workstation_setup_marker_path"]["type"], "str")
         self.assertEqual(options["workstation_setup_bin_path"]["type"], "str")
         self.assertEqual(options["workstation_setup_profile_hook_path"]["type"], "str")
@@ -197,7 +213,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         task_names = [t.get("name") for t in tasks]
         self.assertIn("Install workstation baseline packages", task_names)
         self.assertIn("Configure AoE LAN proxy firewall", task_names)
-        self.assertIn("Configure workstation persistent home links", task_names)
+        self.assertIn("Configure workstation persistent home mounts", task_names)
         self.assertIn("Configure GitHub SSH keys", task_names)
         self.assertIn("Install chezmoi", task_names, "missing chezmoi install task")
         self.assertIn("Install Bitwarden CLI", task_names, "missing bw CLI install task")
@@ -291,14 +307,19 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("Flush AoE LAN proxy firewall handlers", firewall_task_names)
         self.assertIn("Stop AoE LAN proxy firewall service when disabled", firewall_task_names)
         self.assertIn("Remove AoE LAN proxy firewall rules when disabled", firewall_task_names)
-        self.assertIn("Validate workstation persistent home links", persistent_home_task_names)
+        self.assertIn("Validate workstation persistent home mounts", persistent_home_task_names)
         self.assertIn("Ensure workstation persistent home targets exist", persistent_home_task_names)
-        self.assertIn("Inspect workstation persistent home links", persistent_home_task_names)
+        self.assertIn("Inspect workstation persistent home paths", persistent_home_task_names)
         self.assertIn(
-            "Fail when workstation persistent home path is not the managed symlink",
+            "Fail when workstation persistent home path conflicts with managed bind mount",
             persistent_home_task_names,
         )
-        self.assertIn("Link workstation persistent home paths", persistent_home_task_names)
+        self.assertIn(
+            "Remove legacy workstation persistent home symlinks before bind-mount migration",
+            persistent_home_task_names,
+        )
+        self.assertIn("Ensure workstation persistent home mount points exist", persistent_home_task_names)
+        self.assertIn("Mount workstation persistent home bind mounts", persistent_home_task_names)
         for removed_fragment in ("workstation_github_", "gh auth status", "user/keys"):
             self.assertNotIn(removed_fragment, rendered_tasks)
 
@@ -308,9 +329,14 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             "workstation_persistent_home_enabled",
             "workstation_persistent_home_root",
             "workstation_persistent_home_links",
-            "islnk",
-            "lnk_source",
-            "state: link",
+            "workstation_persistent_home_mount_state",
+            "workstation_persistent_home_fstab_path",
+            "type",
+            "findmnt",
+            "state: '{{ workstation_persistent_home_mount_state",
+            "opts: bind",
+            "fstype: none",
+            "ansible.posix.mount",
             "mode: '{{ item.mode",
         )
         for expected_fragment in expected_fragments:

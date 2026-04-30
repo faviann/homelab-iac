@@ -23,7 +23,7 @@
 - name: Configure AoE LAN proxy firewall
   ansible.builtin.include_tasks: aoe_proxy_firewall.yml
 
-- name: Configure workstation persistent home links
+- name: Configure workstation persistent home mounts
   ansible.builtin.include_tasks: persistent_home.yml
   when: workstation_persistent_home_enabled | bool
 

@@ -11,6 +11,8 @@
     workstation_packages: []
     workstation_persistent_home_enabled: false
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
+    workstation_persistent_home_mount_state: present
+    workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
@@ -18,14 +20,22 @@
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
     workstation_persistent_home_links:
       - name: claude
+        type: bind_mount
         path: "{{ workstation_home }}/.claude"
         target: "{{ workstation_persistent_home_root }}/.claude"
         mode: "0700"
       - name: codex
+        type: bind_mount
         path: "{{ workstation_home }}/.codex"
         target: "{{ workstation_persistent_home_root }}/.codex"
         mode: "0700"
+      - name: agent_of_empires
+        type: bind_mount
+        path: "{{ workstation_home }}/.config/agent-of-empires"
+        target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
+        mode: "0700"
       - name: repos
+        type: bind_mount
         path: "{{ workstation_home }}/repos"
         target: "{{ workstation_persistent_home_root }}/repos"
         mode: "0755"
@@ -114,11 +124,17 @@
         path: "{{ workstation_home }}/repos"
       register: repos_home_stat
 
+    - name: Stat AoE home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.config/agent-of-empires"
+      register: aoe_home_stat
+
     - name: Assert workstation persistent home was skipped
       ansible.builtin.assert:
         that:
           - not persistent_home_root_stat.stat.exists
           - not claude_home_stat.stat.exists
           - not codex_home_stat.stat.exists
+          - not aoe_home_stat.stat.exists
           - not repos_home_stat.stat.exists
         fail_msg: "Disabled workstation persistent home should not create directories or links"

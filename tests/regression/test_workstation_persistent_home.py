@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for workstation persistent home links."""
+"""Regression tests for workstation persistent home mounts."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ SUCCESS_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_success.yml"
 DISABLED_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_disabled.yml"
 CONFLICT_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_conflict.yml"
 IDEMPOTENCY_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_idempotency.yml"
+SYMLINK_MIGRATION_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_symlink_migration.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
@@ -57,11 +58,17 @@ def test_workstation_persistent_home_contract() -> None:
     assert conflict.returncode != 0, conflict_output
 
     expected_markers = [
-        "exists and is not the managed symlink",
+        "exists and is not the managed bind mount path",
         "Move or migrate it manually",
         ".claude",
     ]
     assert all(marker in conflict_output for marker in expected_markers), conflict_output
+
+    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-symlink-migration-") as temp_root:
+        migration = run_playbook(SYMLINK_MIGRATION_PLAYBOOK, temp_root)
+
+    migration_output = f"{migration.stdout}\n{migration.stderr}"
+    assert migration.returncode == 0, migration_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-check-mode-") as temp_root:
         check_mode = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root, check_mode=True)

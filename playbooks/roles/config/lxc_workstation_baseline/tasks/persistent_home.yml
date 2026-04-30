@@ -1,5 +1,5 @@
 ---
-- name: Validate workstation persistent home links
+- name: Validate workstation persistent home mounts
   ansible.builtin.assert:
     that:
       - workstation_persistent_home_enabled | default(true) | bool
@@ -8,16 +8,22 @@
       - workstation_persistent_home_links is defined
       - workstation_persistent_home_links | length > 0
       - workstation_persistent_home_links | selectattr('name', 'defined') | list | length == workstation_persistent_home_links | length
+      - workstation_persistent_home_links | selectattr('type', 'defined') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | selectattr('path', 'defined') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | selectattr('target', 'defined') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | selectattr('mode', 'defined') | list | length == workstation_persistent_home_links | length
+      - workstation_persistent_home_links | map(attribute='type') | map('string') | select('equalto', 'bind_mount') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | map(attribute='path') | map('string') | select('match', '^' ~ workstation_home ~ '/.+') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | map(attribute='target') | map('string') | select('match', '^' ~ workstation_persistent_home_root ~ '/.+') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | map(attribute='mode') | map('string') | select('match', '^0[0-7]{3}$') | list | length == workstation_persistent_home_links | length
+      - workstation_persistent_home_mount_state in ['mounted', 'present']
+      - workstation_persistent_home_fstab_path | string | length > 0
     fail_msg: >-
-      workstation_persistent_home_links must define name, path, target, and mode.
+      workstation_persistent_home_links must define name, type, path, target, and mode.
+      Only type=bind_mount is supported.
       Paths must be under workstation_home, targets must be under
-      workstation_persistent_home_root, and modes must be four-digit octal strings.
+      workstation_persistent_home_root, modes must be four-digit octal strings,
+      mount state must be mounted/present, and fstab path must be non-empty.
 
 - name: Ensure workstation persistent home parent directories exist
   ansible.builtin.file:
@@ -39,13 +45,24 @@
     mode: "{{ item.mode }}"
   loop: "{{ workstation_persistent_home_links }}"
 
-- name: Inspect workstation persistent home links
+- name: Inspect workstation persistent home paths
   ansible.builtin.stat:
     path: "{{ item.path }}"
   loop: "{{ workstation_persistent_home_links }}"
   register: _workstation_persistent_home_paths
 
-- name: Fail when workstation persistent home path is not the managed symlink
+- name: Inspect existing mount status for persistent home paths
+  ansible.builtin.command:
+    cmd: "findmnt -n -o TARGET --target {{ item.item.path | quote }}"
+  loop: "{{ _workstation_persistent_home_paths.results }}"
+  register: _workstation_persistent_home_mount_status
+  changed_when: false
+  failed_when: false
+  when:
+    - item.stat.exists
+    - not (item.stat.islnk | default(false))
+
+- name: Fail when workstation persistent home path conflicts with managed bind mount
   ansible.builtin.assert:
     that:
       - >-
@@ -55,18 +72,51 @@
           item.stat.islnk | default(false)
           and item.stat.lnk_source == item.item.target
         )
+        or
+        (
+          _workstation_persistent_home_mount_status.results[_workstation_persistent_home_idx].rc == 0
+          and
+          (_workstation_persistent_home_mount_status.results[_workstation_persistent_home_idx].stdout | trim == item.item.path)
+        )
+        or
+        (
+          workstation_persistent_home_mount_state == 'present'
+          and
+          (item.stat.isdir | default(false))
+        )
     fail_msg: >-
-      {{ item.item.path }} exists and is not the managed symlink to
+      {{ item.item.path }} exists and is not the managed bind mount path from
       {{ item.item.target }}. Move or migrate it manually before enabling
-      workstation persistent home links.
+      workstation persistent home mounts.
   loop: "{{ _workstation_persistent_home_paths.results }}"
+  loop_control:
+    index_var: _workstation_persistent_home_idx
 
-- name: Link workstation persistent home paths
+- name: Remove legacy workstation persistent home symlinks before bind-mount migration
   ansible.builtin.file:
-    src: "{{ item.target }}"
-    dest: "{{ item.path }}"
-    state: link
+    path: "{{ item.item.path }}"
+    state: absent
+  loop: "{{ _workstation_persistent_home_paths.results }}"
+  when:
+    - item.stat.exists
+    - item.stat.islnk | default(false)
+    - item.stat.lnk_source == item.item.target
+
+- name: Ensure workstation persistent home mount points exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
     owner: "{{ workstation_uid }}"
     group: "{{ workstation_gid }}"
-    force: "{{ ansible_check_mode }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ workstation_persistent_home_links }}"
+
+- name: Mount workstation persistent home bind mounts
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "{{ item.target }}"
+    fstype: none
+    opts: bind
+    state: "{{ workstation_persistent_home_mount_state }}"
+    fstab: "{{ workstation_persistent_home_fstab_path }}"
   loop: "{{ workstation_persistent_home_links }}"

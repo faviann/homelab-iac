@@ -11,6 +11,8 @@
     workstation_packages: []
     workstation_persistent_home_enabled: true
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
+    workstation_persistent_home_mount_state: present
+    workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
@@ -18,14 +20,22 @@
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
     workstation_persistent_home_links:
       - name: claude
+        type: bind_mount
         path: "{{ workstation_home }}/.claude"
         target: "{{ workstation_persistent_home_root }}/.claude"
         mode: "0700"
       - name: codex
+        type: bind_mount
         path: "{{ workstation_home }}/.codex"
         target: "{{ workstation_persistent_home_root }}/.codex"
         mode: "0700"
+      - name: agent_of_empires
+        type: bind_mount
+        path: "{{ workstation_home }}/.config/agent-of-empires"
+        target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
+        mode: "0700"
       - name: repos
+        type: bind_mount
         path: "{{ workstation_home }}/repos"
         target: "{{ workstation_persistent_home_root }}/repos"
         mode: "0755"
@@ -125,22 +135,32 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/repos"
       register: repos_dir_stat
 
-    - name: Stat Claude home symlink
+    - name: Stat AoE persistent home directory
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/ephemeral/workstation/home/.config/agent-of-empires"
+      register: aoe_state_dir_stat
+
+    - name: Stat Claude home path
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.claude"
-      register: claude_home_link_stat
+      register: claude_home_path_stat
 
-    - name: Stat Codex home symlink
+    - name: Stat Codex home path
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.codex"
-      register: codex_home_link_stat
+      register: codex_home_path_stat
 
-    - name: Stat repos home symlink
+    - name: Stat AoE home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.config/agent-of-empires"
+      register: aoe_home_path_stat
+
+    - name: Stat repos home path
       ansible.builtin.stat:
         path: "{{ workstation_home }}/repos"
-      register: repos_home_link_stat
+      register: repos_home_path_stat
 
-    - name: Assert workstation persistent home was linked safely
+    - name: Assert workstation persistent home mount paths were prepared safely
       ansible.builtin.assert:
         that:
           - workstation_state_parent_stat.stat.isdir
@@ -163,10 +183,16 @@
           - repos_dir_stat.stat.uid == workstation_uid
           - repos_dir_stat.stat.gid == workstation_gid
           - repos_dir_stat.stat.mode == "0755"
-          - claude_home_link_stat.stat.islnk
-          - claude_home_link_stat.stat.lnk_source == temp_root ~ "/ephemeral/workstation/home/.claude"
-          - codex_home_link_stat.stat.islnk
-          - codex_home_link_stat.stat.lnk_source == temp_root ~ "/ephemeral/workstation/home/.codex"
-          - repos_home_link_stat.stat.islnk
-          - repos_home_link_stat.stat.lnk_source == temp_root ~ "/ephemeral/workstation/home/repos"
-        fail_msg: "Workstation persistent home directories or symlinks were not created as expected"
+          - aoe_state_dir_stat.stat.isdir
+          - aoe_state_dir_stat.stat.uid == workstation_uid
+          - aoe_state_dir_stat.stat.gid == workstation_gid
+          - aoe_state_dir_stat.stat.mode == "0700"
+          - claude_home_path_stat.stat.isdir
+          - not (claude_home_path_stat.stat.islnk | default(false))
+          - codex_home_path_stat.stat.isdir
+          - not (codex_home_path_stat.stat.islnk | default(false))
+          - aoe_home_path_stat.stat.isdir
+          - not (aoe_home_path_stat.stat.islnk | default(false))
+          - repos_home_path_stat.stat.isdir
+          - not (repos_home_path_stat.stat.islnk | default(false))
+        fail_msg: "Workstation persistent home directories or mount paths were not prepared as expected"

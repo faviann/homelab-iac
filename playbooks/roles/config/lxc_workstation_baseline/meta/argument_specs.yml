@@ -47,7 +47,7 @@ argument_specs:
       workstation_persistent_home_enabled:
         type: bool
         required: false
-        description: Whether to manage selected workstation home paths as persistent symlinks.
+        description: Whether to manage selected workstation home paths as persistent bind mounts.
       workstation_persistent_home_root:
         type: str
         required: false
@@ -56,7 +56,15 @@ argument_specs:
         type: list
         elements: dict
         required: false
-        description: Home symlinks to create from the workstation home into persistent /ephemeral storage.
+        description: Home mount definitions from the workstation home into persistent /ephemeral storage.
+      workstation_persistent_home_mount_state:
+        type: str
+        required: false
+        description: Mount state used for persistent home bind mounts (mounted on real hosts, present in tests).
+      workstation_persistent_home_fstab_path:
+        type: str
+        required: false
+        description: Fstab file path used when managing persistent home bind mounts.
       workstation_packages:
         type: list
         elements: str
