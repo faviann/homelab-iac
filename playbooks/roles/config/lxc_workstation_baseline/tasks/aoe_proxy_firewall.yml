@@ -1,0 +1,110 @@
+---
+- name: Assert AoE LAN proxy firewall inputs are valid
+  ansible.builtin.assert:
+    that:
+      - workstation_aoe_proxy_firewall_port | int > 0
+      - workstation_aoe_proxy_firewall_port | int < 65536
+      - workstation_aoe_proxy_firewall_allowed_hosts | length > 0
+    fail_msg: >-
+      config/lxc_workstation_baseline requires at least one allowed inventory host
+      when workstation_aoe_proxy_firewall_enabled is true.
+
+- name: Assert AoE LAN proxy firewall hosts exist in inventory
+  ansible.builtin.assert:
+    that:
+      - item in hostvars
+    fail_msg: >-
+      config/lxc_workstation_baseline cannot resolve allowed host '{{ item }}'
+      because it is not present in inventory.
+  loop: "{{ workstation_aoe_proxy_firewall_allowed_hosts }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Derive AoE LAN proxy firewall allowlist endpoints
+  ansible.builtin.set_fact:
+    workstation_aoe_proxy_firewall_allowed_endpoints: >-
+      {{
+        (workstation_aoe_proxy_firewall_allowed_endpoints | default([]))
+        + [hostvars[item].ansible_host | default(item)]
+      }}
+  loop: "{{ workstation_aoe_proxy_firewall_allowed_hosts }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Resolve AoE LAN proxy firewall allowlist addresses
+  ansible.builtin.command:
+    argv:
+      - getent
+      - ahostsv4
+      - "{{ item }}"
+  register: workstation_aoe_proxy_firewall_resolution
+  changed_when: false
+  loop: "{{ workstation_aoe_proxy_firewall_allowed_endpoints | unique }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Collect AoE LAN proxy firewall IPv4 allowlist
+  ansible.builtin.set_fact:
+    workstation_aoe_proxy_firewall_allowed_ipv4: >-
+      {{
+        workstation_aoe_proxy_firewall_resolution.results
+        | map(attribute='stdout_lines')
+        | flatten
+        | map('regex_replace', '^([^[:space:]]+).*$','\\1')
+        | select('match', '^[0-9]+(?:\\.[0-9]+){3}$')
+        | unique
+        | list
+      }}
+
+- name: Assert AoE LAN proxy firewall allowlist resolved
+  ansible.builtin.assert:
+    that:
+      - workstation_aoe_proxy_firewall_allowed_ipv4 | length > 0
+    fail_msg: >-
+      config/lxc_workstation_baseline could not resolve any IPv4 addresses for
+      workstation_aoe_proxy_firewall_allowed_hosts.
+
+- name: Install AoE LAN proxy firewall package
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: true
+
+- name: Ensure AoE LAN proxy firewall include directory exists
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy AoE LAN proxy firewall base config
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy AoE LAN proxy firewall rules
+  ansible.builtin.template:
+    src: workstation-aoe-proxy.nft.j2
+    dest: /etc/nftables.d/workstation-aoe-proxy.nft
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate AoE LAN proxy firewall ruleset
+  ansible.builtin.command:
+    argv:
+      - nft
+      - -c
+      - -f
+      - /etc/nftables.conf
+  changed_when: false
+
+- name: Enable AoE LAN proxy firewall service
+  ansible.builtin.systemd:
+    name: nftables.service
+    enabled: true
+    state: restarted

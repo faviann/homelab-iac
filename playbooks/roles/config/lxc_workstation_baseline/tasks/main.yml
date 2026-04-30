@@ -20,6 +20,10 @@
     update_cache: true
   when: workstation_packages | length > 0
 
+- name: Configure AoE LAN proxy firewall
+  ansible.builtin.include_tasks: aoe_proxy_firewall.yml
+  when: workstation_aoe_proxy_firewall_enabled | bool
+
 - name: Configure workstation persistent home links
   ansible.builtin.include_tasks: persistent_home.yml
   when: workstation_persistent_home_enabled | bool

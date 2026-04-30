@@ -31,6 +31,19 @@ argument_specs:
         type: str
         required: false
         description: Filesystem home directory for the workstation login account.
+      workstation_aoe_proxy_firewall_enabled:
+        type: bool
+        required: false
+        description: Whether to restrict the AoE LAN proxy port inside the workstation LXC.
+      workstation_aoe_proxy_firewall_port:
+        type: int
+        required: false
+        description: TCP port exposed by the workstation-local AoE LAN proxy.
+      workstation_aoe_proxy_firewall_allowed_hosts:
+        type: list
+        elements: str
+        required: false
+        description: Inventory hosts allowed to reach the AoE LAN proxy port.
       workstation_persistent_home_enabled:
         type: bool
         required: false

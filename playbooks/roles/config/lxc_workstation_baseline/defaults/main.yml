@@ -3,6 +3,9 @@ workstation_username: "{{ docker_user }}"
 workstation_uid: "{{ docker_uid }}"
 workstation_gid: "{{ docker_gid }}"
 workstation_home: "/home/{{ workstation_username }}"
+workstation_aoe_proxy_firewall_enabled: false
+workstation_aoe_proxy_firewall_port: 4001
+workstation_aoe_proxy_firewall_allowed_hosts: []
 workstation_persistent_home_enabled: false
 workstation_persistent_home_root: /ephemeral/workstation/home
 workstation_persistent_home_links:

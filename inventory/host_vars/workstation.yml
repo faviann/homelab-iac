@@ -4,6 +4,9 @@
 
 lxc_hwaddr: "BC:24:11:57:80:06"
 workstation_enabled: true
+workstation_aoe_proxy_firewall_enabled: true
+workstation_aoe_proxy_firewall_allowed_hosts:
+  - portal
 # Persist selected workstation home paths across intentional LXC rebuilds.
 workstation_persistent_home_enabled: true
 
