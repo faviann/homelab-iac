@@ -48,10 +48,6 @@ Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never com
 
 Roles live in `playbooks/roles/{base,infrastructure,provisioning,config}/`.
 
-## Workstation User Tools
-
-User-level workstation tools such as Agent of Empires (`aoe`) are owned by the dotfiles repo, not Ansible roles or Docker stacks. This repo should keep the workstation LXC capable of running user services, but AoE install, SSH auto-launch, and the `aoe-serve` user systemd service live in `~/repos/dotfiles`.
-
 ## Docker Stacks
 
 Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered and started with `docker compose up -d` — no registration needed.
