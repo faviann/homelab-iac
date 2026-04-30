@@ -11,7 +11,8 @@ services:
       SERVER_PORT: ${SERVER_PORT}
     volumes:
       - ./appdata/config:/config
-      - /data/media/comics:/data:ro
+      - /data/media/comics:/data/media/comics
+      - /data/media/manga:/data/media/manga
     ports:
       - "25600:25600"
     labels:
