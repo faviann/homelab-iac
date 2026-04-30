@@ -35,11 +35,8 @@
   when: workstation_aoe_proxy_firewall_enabled | bool
 
 - name: Resolve AoE LAN proxy firewall allowlist addresses
-  ansible.builtin.command:
-    argv:
-      - getent
-      - ahostsv4
-      - "{{ item }}"
+  ansible.builtin.shell:
+    cmd: "getent ahostsv4 {{ item | quote }} | awk '{print $1}' | sort -u"
   register: workstation_aoe_proxy_firewall_resolution
   changed_when: false
   delegate_to: localhost
@@ -48,15 +45,33 @@
     label: "{{ item }}"
   when: workstation_aoe_proxy_firewall_enabled | bool
 
+- name: Initialize AoE LAN proxy firewall IPv4 allowlist
+  ansible.builtin.set_fact:
+    workstation_aoe_proxy_firewall_allowed_ipv4: []
+  when: workstation_aoe_proxy_firewall_enabled | bool
+
 - name: Collect AoE LAN proxy firewall IPv4 allowlist
   ansible.builtin.set_fact:
     workstation_aoe_proxy_firewall_allowed_ipv4: >-
       {{
-        workstation_aoe_proxy_firewall_resolution.results
-        | map(attribute='stdout_lines')
-        | flatten
-        | map('regex_replace', '^(\\S+).*$','\\1')
-        | select('match', '^[0-9]+(?:\\.[0-9]+){3}$')
+        (workstation_aoe_proxy_firewall_allowed_ipv4 | default([]))
+        + (
+          item.stdout_lines
+          | default([])
+          | select('match', '^[0-9]+(?:\.[0-9]+){3}$')
+          | list
+        )
+      }}
+  loop: "{{ workstation_aoe_proxy_firewall_resolution.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('resolved-host') }}"
+  when: workstation_aoe_proxy_firewall_enabled | bool
+
+- name: Deduplicate AoE LAN proxy firewall IPv4 allowlist
+  ansible.builtin.set_fact:
+    workstation_aoe_proxy_firewall_allowed_ipv4: >-
+      {{
+        workstation_aoe_proxy_firewall_allowed_ipv4
         | unique
         | list
       }}
