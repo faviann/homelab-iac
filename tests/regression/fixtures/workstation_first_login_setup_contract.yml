@@ -122,6 +122,9 @@
       ansible.builtin.assert:
         that:
           - (setup_command_raw.content | b64decode) is search('bw status')
+          - (setup_command_raw.content | b64decode) is search('Bitwarden is unauthenticated')
+          - (setup_command_raw.content | b64decode) is search('Bitwarden is locked')
+          - (setup_command_raw.content | b64decode) is search('Bitwarden account password')
           - (setup_command_raw.content | b64decode) is search('bw login')
           - (setup_command_raw.content | b64decode) is search('bw unlock --raw')
           - (setup_command_raw.content | b64decode) is search('chezmoi init --apply')
@@ -138,6 +141,8 @@
           - (setup_hook_raw.content | b64decode) is search('SSH_CONNECTION')
           - (setup_hook_raw.content | b64decode) is search('SSH_TTY')
           - (setup_hook_raw.content | b64decode) is search('WORKSTATION_SETUP_SKIP')
+          - (setup_hook_raw.content | b64decode) is search('/.local/share/mise/shims')
+          - (setup_hook_raw.content | b64decode) is search('export PATH=')
           - (setup_hook_raw.content | b64decode) is search('workstation-setup')
           - not ((setup_hook_raw.content | b64decode) is search('/run/workstation-bootstrap'))
           - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTID'))

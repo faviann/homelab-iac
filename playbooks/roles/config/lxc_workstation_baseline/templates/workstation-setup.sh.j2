@@ -62,12 +62,14 @@ ensure_bitwarden_unlocked() {
   status="$(printf '%s' "$status_json" | status_from_json 2>/dev/null || true)"
 
   if [ "$status" = "unauthenticated" ] || [ -z "$status" ]; then
+    printf 'Bitwarden is unauthenticated. Log in to the Bitwarden account used by chezmoi for workstation secrets.\n' >&2
     bw login
     status_json="$(bw status)"
     status="$(printf '%s' "$status_json" | status_from_json)"
   fi
 
   if [ "$status" = "locked" ]; then
+    printf 'Bitwarden is locked. Enter your Bitwarden account password to unlock workstation secrets for this setup run.\n' >&2
     BW_SESSION="$(bw unlock --raw)"
     export BW_SESSION
     test -n "${BW_SESSION:-}" || fail "Bitwarden unlock returned an empty session"

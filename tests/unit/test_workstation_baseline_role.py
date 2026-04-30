@@ -229,6 +229,9 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-setup.sh.j2"
         ).read_text(encoding="utf-8")
         self.assertIn("bw status", setup_template)
+        self.assertIn("Bitwarden is unauthenticated", setup_template)
+        self.assertIn("Bitwarden is locked", setup_template)
+        self.assertIn("Bitwarden account password", setup_template)
         self.assertIn("bw login", setup_template)
         self.assertIn("bw unlock --raw", setup_template)
         self.assertIn("chezmoi init --apply", setup_template)
@@ -246,6 +249,9 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         profile_hook = (
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-setup-profile.sh.j2"
         ).read_text(encoding="utf-8")
+        self.assertIn("workstation_mise_shims_dir", profile_hook)
+        self.assertIn("workstation_home }}/.local/bin", profile_hook)
+        self.assertIn("export PATH=", profile_hook)
         self.assertIn("-t 0", profile_hook)
         self.assertIn("-t 1", profile_hook)
         self.assertIn("SSH_CONNECTION", profile_hook)
