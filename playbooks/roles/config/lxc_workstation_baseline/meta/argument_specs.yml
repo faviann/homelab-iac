@@ -49,26 +49,14 @@ argument_specs:
         elements: str
         required: false
         description: Package list to install for the workstation baseline.
-      workstation_bootstrap_unattended:
-        type: bool
-        required: false
-        description: Whether to stage a short-lived Bitwarden bootstrap envelope and run unattended workstation bootstrap.
-      workstation_bootstrap_run_dir:
+      workstation_setup_marker_path:
         type: str
         required: false
-        description: Tmpfs directory used for the short-lived bootstrap envelope.
-      workstation_bootstrap_env_path:
+        description: Durable marker written after successful interactive workstation setup.
+      workstation_setup_version:
         type: str
         required: false
-        description: Full path to the short-lived bootstrap envelope on the workstation.
-      workstation_bootstrap_marker_path:
-        type: str
-        required: false
-        description: Durable marker written after successful workstation bootstrap.
-      workstation_bootstrap_version:
-        type: str
-        required: false
-        description: Bootstrap contract version recorded in the durable marker.
+        description: Setup contract version recorded in the durable marker.
       workstation_dotfiles_repo_url:
         type: str
         required: false
@@ -77,10 +65,6 @@ argument_specs:
         type: str
         required: false
         description: Bitwarden item name containing the GitHub CLI token in notes.
-      workstation_bootstrap_controller_env:
-        type: dict
-        required: false
-        description: Mapping from target Bitwarden environment keys to controller environment variable names.
       workstation_mise_install_url:
         type: str
         required: false
@@ -93,11 +77,6 @@ argument_specs:
         type: str
         required: false
         description: Mise shims directory for non-interactive command contexts.
-      workstation_mise_tools:
-        type: list
-        elements: str
-        required: false
-        description: Global user-space tools managed by mise.
       workstation_bw_version:
         type: str
         required: false
@@ -113,11 +92,15 @@ argument_specs:
       workstation_bw_bin_path:
         type: str
         required: false
-        description: Filesystem path where the bootstrap-critical bw executable should be installed.
-      workstation_bootstrap_bin_path:
+        description: Filesystem path where the setup-critical bw executable should be installed.
+      workstation_setup_bin_path:
         type: str
         required: false
-        description: Filesystem path where the workstation bootstrap entrypoint should be installed.
+        description: Filesystem path where the interactive workstation setup command should be installed.
+      workstation_setup_profile_hook_path:
+        type: str
+        required: false
+        description: Filesystem path where the interactive SSH login hook should be installed.
       workstation_system_bin_owner:
         type: str
         required: false

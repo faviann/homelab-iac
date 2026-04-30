@@ -1,0 +1,144 @@
+---
+- name: Validate workstation first-login setup contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    role_root: "{{ playbook_dir }}/../../../playbooks/roles/config/lxc_workstation_baseline"
+    workstation_username: "{{ lookup('pipe', 'id -un') }}"
+    workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
+    workstation_packages: []
+    workstation_persistent_home_enabled: false
+    workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
+    workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
+    workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
+    workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
+    workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
+    lxc_ssh_user: "{{ workstation_username }}"
+    lxc_ssh_uid: "{{ workstation_uid }}"
+    lxc_ssh_gid: "{{ workstation_gid }}"
+    lxc_github_keys_home: "{{ workstation_home }}"
+    lxc_github_users:
+      - faviann
+    docker_user: "{{ workstation_username }}"
+    docker_uid: "{{ workstation_uid }}"
+    docker_gid: "{{ workstation_gid }}"
+  tasks:
+    - name: Ensure writable test directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ temp_root }}/bin"
+        - "{{ temp_root }}/etc/profile.d"
+        - "{{ workstation_home }}"
+
+    - name: Place mock curl on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/curl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          case "$*" in
+            *faviann.keys*)
+              printf '%s\n' 'ssh-ed25519 AAAATESTKEYONE faviann@laptop'
+              ;;
+            *get.chezmoi.io*)
+              printf '%s\n' '#!/bin/sh' 'exit 0'
+              ;;
+            *mise.run*)
+              printf '%s\n' \
+                '#!/bin/sh' \
+                'set -eu' \
+                'install -d "$HOME/.local/bin"' \
+                'cat > "$HOME/.local/bin/mise" <<"EOF"' \
+                '#!/bin/sh' \
+                'if [ "$1" = "--version" ]; then' \
+                '  echo mise-test' \
+                '  exit 0' \
+                'fi' \
+                'exit 0' \
+                'EOF' \
+                'chmod 0755 "$HOME/.local/bin/mise"'
+              ;;
+            *)
+              exit 0
+              ;;
+          esac
+
+    - name: Include workstation baseline role with PATH mocks
+      block:
+        - ansible.builtin.include_role:
+            name: config/lxc_workstation_baseline
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Stat workstation setup command
+      ansible.builtin.stat:
+        path: "{{ workstation_setup_bin_path }}"
+      register: setup_command_stat
+
+    - name: Stat workstation setup login hook
+      ansible.builtin.stat:
+        path: "{{ workstation_setup_profile_hook_path }}"
+      register: setup_hook_stat
+
+    - name: Read workstation setup command
+      ansible.builtin.slurp:
+        src: "{{ workstation_setup_bin_path }}"
+      register: setup_command_raw
+
+    - name: Read workstation setup login hook
+      ansible.builtin.slurp:
+        src: "{{ workstation_setup_profile_hook_path }}"
+      register: setup_hook_raw
+
+    - name: Syntax-check workstation setup command
+      ansible.builtin.command:
+        cmd: "bash -n {{ workstation_setup_bin_path }}"
+      changed_when: false
+
+    - name: Syntax-check workstation setup login hook
+      ansible.builtin.command:
+        cmd: "bash -n {{ workstation_setup_profile_hook_path }}"
+      changed_when: false
+
+    - name: Assert first-login setup files are installed
+      ansible.builtin.assert:
+        that:
+          - setup_command_stat.stat.exists
+          - setup_command_stat.stat.uid == workstation_uid
+          - setup_command_stat.stat.gid == workstation_gid
+          - setup_command_stat.stat.mode == "0755"
+          - setup_hook_stat.stat.exists
+          - setup_hook_stat.stat.uid == workstation_uid
+          - setup_hook_stat.stat.gid == workstation_gid
+          - setup_hook_stat.stat.mode == "0644"
+
+    - name: Assert first-login setup contract is local and interactive
+      ansible.builtin.assert:
+        that:
+          - (setup_command_raw.content | b64decode) is search('bw status')
+          - (setup_command_raw.content | b64decode) is search('bw login')
+          - (setup_command_raw.content | b64decode) is search('bw unlock --raw')
+          - (setup_command_raw.content | b64decode) is search('chezmoi init --apply')
+          - (setup_command_raw.content | b64decode) is search('chezmoi update')
+          - (setup_command_raw.content | b64decode) is search('mise install')
+          - (setup_command_raw.content | b64decode) is search('mise reshim')
+          - (setup_command_raw.content | b64decode) is search('dotfiles/github-cli-token')
+          - (setup_command_raw.content | b64decode) is search('gh api user')
+          - (setup_command_raw.content | b64decode) is search('git@github.com')
+          - not ((setup_command_raw.content | b64decode) is search('/run/workstation-bootstrap'))
+          - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTID'))
+          - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTSECRET'))
+          - not ((setup_command_raw.content | b64decode) is search('WORKSTATION_BW_'))
+          - (setup_hook_raw.content | b64decode) is search('SSH_CONNECTION')
+          - (setup_hook_raw.content | b64decode) is search('SSH_TTY')
+          - (setup_hook_raw.content | b64decode) is search('WORKSTATION_SETUP_SKIP')
+          - (setup_hook_raw.content | b64decode) is search('workstation-setup')
+          - not ((setup_hook_raw.content | b64decode) is search('/run/workstation-bootstrap'))
+          - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTID'))
+          - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTSECRET'))

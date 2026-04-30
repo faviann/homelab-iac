@@ -39,14 +39,18 @@
 - name: Install mise
   ansible.builtin.include_tasks: mise.yml
 
-- name: Install workstation bootstrap script
+- name: Install workstation setup command
   ansible.builtin.template:
-    src: workstation-bootstrap.sh.j2
-    dest: "{{ workstation_bootstrap_bin_path }}"
+    src: workstation-setup.sh.j2
+    dest: "{{ workstation_setup_bin_path }}"
     owner: "{{ workstation_system_bin_owner }}"
     group: "{{ workstation_system_bin_group }}"
     mode: "0755"
 
-- name: Run unattended workstation bootstrap
-  ansible.builtin.include_tasks: bootstrap.yml
-  when: workstation_bootstrap_unattended | bool
+- name: Install workstation setup login hook
+  ansible.builtin.template:
+    src: workstation-setup-profile.sh.j2
+    dest: "{{ workstation_setup_profile_hook_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
+    mode: "0644"

@@ -1,0 +1,25 @@
+# Managed by Ansible. Prompts only on interactive SSH logins before setup completes.
+_workstation_setup_prompt() {
+  [ -t 0 ] || return 0
+  [ -t 1 ] || return 0
+  [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ] || return 0
+  [ "$(id -un 2>/dev/null || printf '')" = "{{ workstation_username }}" ] || return 0
+  [ -z "${WORKSTATION_SETUP_SKIP:-}" ] || return 0
+  [ ! -e "{{ workstation_setup_marker_path }}" ] || return 0
+  [ -x "{{ workstation_setup_bin_path }}" ] || return 0
+
+  printf 'Workstation setup has not completed. Run workstation-setup now? [y/N] '
+  IFS= read -r _workstation_setup_answer || return 0
+  case "$_workstation_setup_answer" in
+    y|Y|yes|YES|Yes)
+      "{{ workstation_setup_bin_path }}" || printf 'workstation-setup did not complete; it will be offered again on your next SSH login.\n' >&2
+      ;;
+    *)
+      printf 'Skipping workstation-setup; it will be offered again on your next SSH login.\n' >&2
+      ;;
+  esac
+}
+
+_workstation_setup_prompt
+unset -f _workstation_setup_prompt
+unset _workstation_setup_answer

@@ -31,34 +31,18 @@ workstation_packages:
   - pkg-config
   - python3-venv
   - python3-pip
-workstation_bootstrap_unattended: false
-workstation_bootstrap_run_dir: /run/workstation-bootstrap
-workstation_bootstrap_env_path: "{{ workstation_bootstrap_run_dir }}/bootstrap.env"
-workstation_bootstrap_marker_path: "{{ workstation_home }}/.local/state/workstation-bootstrap/complete"
-workstation_bootstrap_version: "1"
+workstation_setup_marker_path: "{{ workstation_home }}/.local/state/workstation-setup/complete"
+workstation_setup_version: "1"
 workstation_dotfiles_repo_url: https://github.com/faviann/dotfiles.git
 workstation_github_cli_token_item: dotfiles/github-cli-token
-workstation_bootstrap_controller_env:
-  BW_CLIENTID: WORKSTATION_BW_CLIENTID
-  BW_CLIENTSECRET: WORKSTATION_BW_CLIENTSECRET
-  BW_PASSWORD: WORKSTATION_BW_PASSWORD
 workstation_mise_install_url: https://mise.run
 workstation_mise_bin: "{{ workstation_home }}/.local/bin/mise"
 workstation_mise_shims_dir: "{{ workstation_home }}/.local/share/mise/shims"
-workstation_mise_tools:
-  - node
-  - uv
-  - gh
-  - jq
-  - ripgrep
-  - fd
-  - fzf
-  - codex
-  - claude-code
 workstation_bw_version: "2025.12.0"
 workstation_bw_download_url: "https://github.com/bitwarden/clients/releases/download/cli-v{{ workstation_bw_version }}/bw-linux-{{ workstation_bw_version }}.zip"
 workstation_bw_release_api_url: "https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v{{ workstation_bw_version }}"
 workstation_bw_bin_path: /usr/local/bin/bw
-workstation_bootstrap_bin_path: /usr/local/bin/workstation-bootstrap
+workstation_setup_bin_path: /usr/local/bin/workstation-setup
+workstation_setup_profile_hook_path: /etc/profile.d/workstation-setup.sh
 workstation_system_bin_owner: root
 workstation_system_bin_group: root

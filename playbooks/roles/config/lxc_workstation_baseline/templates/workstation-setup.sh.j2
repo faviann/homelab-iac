@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+set -euo pipefail
+set +x
+umask 077
+
+SETUP_VERSION="{{ workstation_setup_version }}"
+MARKER_PATH="{{ workstation_setup_marker_path }}"
+DOTFILES_REPO_URL="{{ workstation_dotfiles_repo_url }}"
+GITHUB_CLI_TOKEN_ITEM="{{ workstation_github_cli_token_item }}"
+MISE_BIN="{{ workstation_mise_bin }}"
+MISE_SHIMS_DIR="{{ workstation_mise_shims_dir }}"
+WORKSTATION_HOME="{{ workstation_home }}"
+BW_BIN="{{ workstation_bw_bin_path }}"
+MARKER_FINGERPRINT="{{ workstation_setup_version }}|{{ workstation_dotfiles_repo_url }}|{{ workstation_github_cli_token_item }}|{{ workstation_mise_bin }}|{{ workstation_mise_shims_dir }}|{{ workstation_bw_bin_path }}"
+
+export HOME="$WORKSTATION_HOME"
+export PATH="$MISE_SHIMS_DIR:$WORKSTATION_HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+tmpdir=""
+
+cleanup() {
+  if [ -n "$tmpdir" ] && [ -d "$tmpdir" ]; then
+    rm -rf "$tmpdir"
+  fi
+}
+trap cleanup EXIT
+
+fail() {
+  printf 'workstation-setup: %s\n' "$*" >&2
+  exit 1
+}
+
+bw() {
+  "$BW_BIN" "$@"
+}
+
+mise() {
+  "$MISE_BIN" "$@"
+}
+
+status_from_json() {
+  python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", ""))'
+}
+
+mode_is_private() {
+  case "$(stat -c '%a' "$1")" in
+    400|600) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_marker_state() {
+  test -f "$MARKER_PATH" || return 1
+  grep -Fxq "version=$SETUP_VERSION" "$MARKER_PATH" || return 1
+  grep -Fxq "dotfiles=$DOTFILES_REPO_URL" "$MARKER_PATH" || return 1
+  grep -Fxq "fingerprint=$MARKER_FINGERPRINT" "$MARKER_PATH" || return 1
+  validate_environment >/dev/null 2>&1 || return 1
+}
+
+ensure_bitwarden_unlocked() {
+  status_json="$(bw status 2>/dev/null || true)"
+  status="$(printf '%s' "$status_json" | status_from_json 2>/dev/null || true)"
+
+  if [ "$status" = "unauthenticated" ] || [ -z "$status" ]; then
+    bw login
+    status_json="$(bw status)"
+    status="$(printf '%s' "$status_json" | status_from_json)"
+  fi
+
+  if [ "$status" = "locked" ]; then
+    BW_SESSION="$(bw unlock --raw)"
+    export BW_SESSION
+    test -n "${BW_SESSION:-}" || fail "Bitwarden unlock returned an empty session"
+    status_json="$(bw status)"
+    status="$(printf '%s' "$status_json" | status_from_json)"
+  fi
+
+  test "$status" = "unlocked" || fail "Bitwarden is not unlocked after login/unlock"
+  bw sync >/dev/null
+}
+
+ensure_chezmoi() {
+  if [ ! -d "$HOME/.local/share/chezmoi/.git" ]; then
+    chezmoi init --apply "$DOTFILES_REPO_URL"
+    return
+  fi
+
+  chezmoi update
+}
+
+install_mise_tools() {
+  test -x "$MISE_BIN" || fail "mise missing at $MISE_BIN"
+  mise install
+  mise reshim
+}
+
+authenticate_gh() {
+  if gh auth status --hostname github.com >/dev/null 2>&1; then
+    return
+  fi
+
+  token="$(bw get notes "$GITHUB_CLI_TOKEN_ITEM")" || fail "GitHub CLI token item is missing"
+  test -n "$token" || fail "GitHub CLI token item is empty"
+  test "$token" != "null" || fail "GitHub CLI token item notes are empty"
+  printf '%s\n' "$token" | gh auth login --hostname github.com --with-token >/dev/null
+  unset token
+}
+
+validate_environment() {
+  test -f "$HOME/.ansible/vault-pass" || fail "vault pass missing"
+  mode_is_private "$HOME/.ansible/vault-pass" || fail "vault pass must be mode 0400 or 0600"
+
+  test -f "$HOME/.ssh/id_ed25519" || fail "SSH private key missing"
+  mode_is_private "$HOME/.ssh/id_ed25519" || fail "SSH private key must be mode 0400 or 0600"
+  test -f "$HOME/.ssh/id_ed25519.pub" || fail "SSH public key missing"
+  test -f "$HOME/.ssh/allowed_signers" || fail "allowed_signers missing"
+
+  test -f "$HOME/.ssh/known_hosts" || fail "known_hosts missing"
+  ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" >/dev/null \
+    || fail "github.com is missing from known_hosts"
+
+  test -f "$HOME/.config/mise/config.toml" || fail "mise config missing"
+
+  uv --version >/dev/null
+  gh auth status --hostname github.com >/dev/null
+  gh api user --jq .login >/dev/null
+  codex --version >/dev/null
+  claude --version >/dev/null
+
+  ssh_output="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -T git@github.com 2>&1 || true)"
+  printf '%s' "$ssh_output" | grep -Eq "successfully authenticated|You've successfully authenticated" \
+    || fail "GitHub SSH auth did not report authenticated"
+
+  tmpdir="$(mktemp -d)"
+  git -C "$tmpdir" init >/dev/null
+  git -C "$tmpdir" config user.name "Workstation Setup Test"
+  git -C "$tmpdir" config user.email "workstation-setup@example.invalid"
+  git -C "$tmpdir" config gpg.format ssh
+  git -C "$tmpdir" config user.signingkey "$HOME/.ssh/id_ed25519.pub"
+  git -C "$tmpdir" config commit.gpgsign true
+  git -C "$tmpdir" config gpg.ssh.allowedSignersFile "$HOME/.ssh/allowed_signers"
+  touch "$tmpdir/test"
+  git -C "$tmpdir" add test
+  git -C "$tmpdir" commit -m "workstation setup signing test" >/dev/null
+  git -C "$tmpdir" log --show-signature -1 >/dev/null
+}
+
+write_marker() {
+  mkdir -p "$(dirname "$MARKER_PATH")"
+  {
+    printf 'version=%s\n' "$SETUP_VERSION"
+    printf 'dotfiles=%s\n' "$DOTFILES_REPO_URL"
+    printf 'fingerprint=%s\n' "$MARKER_FINGERPRINT"
+    printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  } > "$MARKER_PATH"
+}
+
+if validate_marker_state; then
+  exit 0
+fi
+
+ensure_bitwarden_unlocked
+ensure_chezmoi
+install_mise_tools
+authenticate_gh
+validate_environment
+write_marker
