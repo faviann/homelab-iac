@@ -14,7 +14,7 @@ services:
     volumes:
       - ./appdata/db:/app/db
       - /ephemeral/kapowarr/downloads:/app/temp_downloads
-      - /data/media/comics:/comics
+      - /data:/data
     ports:
       - 5656:5656
     labels:
