@@ -32,6 +32,7 @@ workstation_persistent_home_links:
     target: "{{ workstation_persistent_home_root }}/repos"
     mode: "0755"
 workstation_packages:
+  - locales
   - tmux
   - mosh
   - wget
