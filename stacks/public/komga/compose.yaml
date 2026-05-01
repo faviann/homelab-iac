@@ -21,4 +21,4 @@ services:
       homepage.name: Komga
       homepage.icon: komga
       homepage.href: https://${HOMEPAGE_FQDN}
-      homepage.description: Comics and manga server
+      homepage.description: Manga reading server
