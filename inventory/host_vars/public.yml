@@ -54,3 +54,4 @@ proxmox_lxc_overrides:
     - ansible
     - public
     - web
+    - gpu
