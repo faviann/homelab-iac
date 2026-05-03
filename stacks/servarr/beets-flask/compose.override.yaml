@@ -1,0 +1,24 @@
+x-prereq-dirs:
+  - /data/media/_ingest/music
+
+services:
+  beets-flask:
+    volumes:
+      - ./appdata:/config
+      - /data/media/_ingest/music:/data/media/_ingest/music
+      - /data/media/music:/data/media/music
+    labels:
+      traefik.enable: true
+      traefik.http.routers.beets-flask.middlewares: protected-edge-auth@file
+      homepage.instance.admin.group: Arr
+      homepage.instance.admin.name: Beets Flask
+      homepage.instance.admin.href: "https://${HOMEPAGE_FQDN:?missing HOMEPAGE_FQDN}"
+      homepage.instance.admin.description: Soundtrack tagging and import UI
+      homepage.instance.admin.icon: mdi-music-note-plus
+    networks:
+      - shared
+
+networks:
+  shared:
+    name: shared
+    external: true

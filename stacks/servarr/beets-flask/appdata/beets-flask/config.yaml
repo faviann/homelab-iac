@@ -1,0 +1,9 @@
+gui:
+  terminal:
+    start_path: /data/media/_ingest/music
+  inbox:
+    folders:
+      SoundtrackInbox:
+        name: Soundtrack Inbox
+        path: /data/media/_ingest/music
+        autotag: preview

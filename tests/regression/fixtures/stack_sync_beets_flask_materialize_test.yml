@@ -1,0 +1,207 @@
+---
+- name: Test actual beets-flask stack renders expected contract
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      stacks_source: "{{ repo_root }}/stacks/servarr"
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+      docker_uid: "{{ ansible_user_uid }}"
+      docker_gid: "{{ ansible_user_gid }}"
+    docker_uid: "{{ ansible_user_uid }}"
+    docker_gid: "{{ ansible_user_gid }}"
+    default_domain: admin.example.invalid
+    lxc_docker_env_desired_top_level_stack_dirs:
+      - beets-flask
+    lxc_docker_env_stack_vars:
+      beets-flask:
+        acoustid_apikey: "acoustid-pa$$"
+        discogs_token: "discogs-pa$$"
+    _per_host_stack_metadata_files:
+      files: []
+  tasks:
+    - name: Create target stack root
+      ansible.builtin.file:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+        state: directory
+        mode: "0755"
+
+    - name: Find template files in the beets-flask stack source
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}/beets-flask"
+        patterns: "*.j2"
+        hidden: true
+        recurse: true
+        file_type: file
+      register: _per_host_j2_files
+      delegate_to: localhost
+      become: false
+
+    - name: Find static files in the beets-flask stack source
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}/beets-flask"
+        patterns: "*"
+        excludes: "*.j2,.gitkeep"
+        hidden: true
+        recurse: true
+        file_type: file
+      register: _per_host_static_files
+      delegate_to: localhost
+      become: false
+
+    - name: Find directories in the beets-flask stack source
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stacks_source }}/beets-flask"
+        recurse: true
+        file_type: directory
+      register: _per_host_dirs
+      delegate_to: localhost
+      become: false
+
+    - name: Plan desired stack materialization inputs
+      ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/planner.yml"
+
+    - name: Check which per-host stack directories already exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]) }}"
+      register: _stack_sync_stack_dir_stats
+      when: (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([])) | length > 0
+
+    - name: Create per-host stack directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+        group: "{{ lxc_docker_environment_internal.shared_group }}"
+        mode: "0755"
+      loop: "{{ lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]) }}"
+      register: _stack_sync_stack_dir_results
+      when: (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([])) | length > 0
+
+    - name: Render templated files for per-host stacks
+      ansible.builtin.template:
+        src: "{{ item.source_path }}"
+        dest: "{{ item.dest_path }}"
+        owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+        group: "{{ lxc_docker_environment_internal.shared_group }}"
+        mode: "0644"
+      vars:
+        stack_name: "{{ item.stack_name }}"
+        stack_vars: "{{ (lxc_docker_env_stack_vars | default({}))[item.stack_name] | default({}) }}"
+      loop: "{{ lxc_stack_sync_manifest_plan.files_to_render | default([]) }}"
+      loop_control:
+        label: "{{ item.relative_path }}"
+      register: _stack_sync_template_results
+
+    - name: Copy static files for per-host stacks
+      ansible.builtin.copy:
+        src: "{{ item.source_path }}"
+        dest: "{{ item.dest_path }}"
+        owner: "{{ lxc_docker_environment_internal.shared_owner }}"
+        group: "{{ lxc_docker_environment_internal.shared_group }}"
+        mode: "0644"
+      loop: "{{ lxc_stack_sync_manifest_plan.files_to_copy | default([]) }}"
+      loop_control:
+        label: "{{ item.relative_path }}"
+      register: _stack_sync_copy_results
+
+    - name: Assert rendered beets-flask files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: _rendered_file_stats
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/.env"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/compose.yaml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/compose.override.yaml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/requirements.txt"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/beets/config.yaml"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/beets-flask/config.yaml"
+
+    - name: Verify rendered beets-flask files exist
+      ansible.builtin.assert:
+        that:
+          - _rendered_file_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 6
+        fail_msg: "Expected beets-flask stack files were not all materialized"
+
+    - name: Read rendered compose and config files
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      register: _rendered_files
+      loop:
+        - path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/.env"
+          key: env
+        - path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/compose.yaml"
+          key: compose
+        - path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/compose.override.yaml"
+          key: override
+        - path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/beets/config.yaml"
+          key: beets_config
+        - path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/beets-flask/config.yaml"
+          key: gui_config
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Publish rendered content map
+      ansible.builtin.set_fact:
+        _rendered_content: >-
+          {{
+            dict(
+              _rendered_files.results
+              | map(attribute='item.key')
+              | zip(_rendered_files.results | map(attribute='content') | map('b64decode'))
+            )
+          }}
+
+    - name: Assert .j2 sources were not copied to the target stack
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: _source_template_stats
+      loop:
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/.env.j2"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/beets/config.yaml.j2"
+
+    - name: Verify .j2 sources are absent from the target stack
+      ansible.builtin.assert:
+        that:
+          - _source_template_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 0
+        fail_msg: ".j2 source files should not be copied into the deployed beets-flask stack"
+
+    - name: Assert rendered beets-flask contract
+      ansible.builtin.assert:
+        that:
+          - "'USER_ID=' ~ (ansible_user_uid | string) in _rendered_content.env"
+          - "'GROUP_ID=' ~ (ansible_user_gid | string) in _rendered_content.env"
+          - "'TZ=America/Montreal' in _rendered_content.env"
+          - "'HOMEPAGE_FQDN=beets-flask.admin.example.invalid' in _rendered_content.env"
+          - "'ACOUSTID_APIKEY=acoustid-pa$$$$' in _rendered_content.env"
+          - "'DISCOGS_TOKEN=discogs-pa$$$$' in _rendered_content.env"
+          - "'TZ: \"${TZ:?missing TZ}\"' in _rendered_content.compose"
+          - "'USER_ID: \"${USER_ID:?missing USER_ID}\"' in _rendered_content.compose"
+          - "'GROUP_ID: \"${GROUP_ID:?missing GROUP_ID}\"' in _rendered_content.compose"
+          - "'Europe/Berlin' not in _rendered_content.compose"
+          - "'USER_ID: 1000' not in _rendered_content.compose"
+          - "'GROUP_ID: 1000' not in _rendered_content.compose"
+          - "'/music_path/inbox/:/data/media/_ingest/music' in _rendered_content.compose"
+          - "'/music_path/clean/:/data/media/music' in _rendered_content.compose"
+          - "'/music_path/inbox/:/music_path/inbox/' not in _rendered_content.compose"
+          - "'./appdata:/config' in _rendered_content.override"
+          - "'/data/media/_ingest/music:/data/media/_ingest/music' in _rendered_content.override"
+          - "'/data/media/music:/data/media/music' in _rendered_content.override"
+          - "'https://${HOMEPAGE_FQDN:?missing HOMEPAGE_FQDN}' in _rendered_content.override"
+          - "'apikey: \"acoustid-pa$$\"' in _rendered_content.beets_config"
+          - "'user_token: \"discogs-pa$$\"' in _rendered_content.beets_config"
+          - "'albumtype:soundtrack albumtype2:game' in _rendered_content.beets_config"
+          - "'Soundtracks/Game/$album ($year)/$track - $title' in _rendered_content.beets_config"
+          - "'Soundtracks/Screen/$album ($year)/$track - $title' in _rendered_content.beets_config"
+          - "'Music/$albumartist/$album ($year)/$track - $title' in _rendered_content.beets_config"
+          - "'start_path: /data/media/_ingest/music' in _rendered_content.gui_config"
+          - "'path: /data/media/_ingest/music' in _rendered_content.gui_config"
+          - "'autotag: preview' in _rendered_content.gui_config"
+          - "'beets-flask/.env' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
+          - "'beets-flask/appdata/beets/config.yaml' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
+          - "'/data/media/_ingest/music' in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+        fail_msg: "Rendered beets-flask stack contract did not match expectations"

@@ -1,5 +1,8 @@
 x-prereq-dirs:
   - ./appdata/lidarr
+x-managed-files:
+  - path: ./appdata/lidarr/scripts/beets-post-import.sh
+    mode: "0755"
 
 services:
   lidarr:

@@ -1,0 +1,21 @@
+services:
+  beets-flask:
+    image: pspitzner/beets-flask:stable
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      # 502 is default on macOS, 1000 on Linux.
+      TZ: "${TZ:?missing TZ}"
+      USER_ID: "${USER_ID:?missing USER_ID}"
+      GROUP_ID: "${GROUP_ID:?missing GROUP_ID}"
+      # Optional: add extra groups for file permissions.
+      # Format: "group_name1:gid1,group_name2:gid2"
+      # EXTRA_GROUPS: "media:1002"
+    volumes:
+      - /wherever/config/:/config
+      # For music folders, match paths inside and outside the container.
+      - /music_path/inbox/:/data/media/_ingest/music
+      - /music_path/clean/:/data/media/music
+      # If you want to persist logs, mount a logs directory.
+      # - /wherever/logs/:/logs

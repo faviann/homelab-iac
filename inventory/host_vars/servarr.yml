@@ -19,9 +19,15 @@ lxc_docker_env_host_directories:
   - path: /data/media/tv/asian
   - path: /data/media/tv/foreign
   - path: /data/media/tv/anime
+  - path: /data/media/_ingest/music
+    owner: "{{ docker_uid }}"
+    group: "{{ docker_gid }}"
 
-# Komf stack secrets (resolved from vault)
+# Stack vars resolved from vault
 lxc_docker_env_stack_vars:
+  beets-flask:
+    acoustid_apikey: "{{ vault_beets_acoustid_apikey }}"
+    discogs_token: "{{ vault_beets_discogs_token }}"
   komf:
     komga_user: "{{ vault_servarr_komf_komga_user }}"
     komga_password: "{{ vault_servarr_komf_komga_password }}"

@@ -1,0 +1,29 @@
+directory: /data/media/music
+library: /config/beets/library.db
+
+plugins:
+  - vgmdb
+  - chroma
+  - lastgenre
+  - discogs
+  - fetchart
+  - embedart
+  - replaygain
+  - scrub
+
+import:
+  timid: no
+  incremental: yes
+  move: yes
+  write: yes
+
+paths:
+  "albumtype:soundtrack albumtype2:game": "Soundtracks/Game/$album ($year)/$track - $title"
+  "albumtype:soundtrack": "Soundtracks/Screen/$album ($year)/$track - $title"
+  default: "Music/$albumartist/$album ($year)/$track - $title"
+
+chroma:
+  apikey: "{{ stack_vars.acoustid_apikey }}"
+
+discogs:
+  user_token: "{{ stack_vars.discogs_token }}"
