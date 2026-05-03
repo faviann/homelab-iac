@@ -1,0 +1,28 @@
+x-prereq-dirs:
+  - /data/media/photos
+  - ./appdata/pgdata
+
+services:
+  immich-server:
+    labels:
+      traefik.enable: true
+      traefik.http.services.immich-server.loadbalancer.server.port: 2283
+      homepage.instance.home.group: Photos
+      homepage.instance.home.name: ${COMPOSE_PROJECT_NAME}
+      homepage.instance.home.icon: immich
+      homepage.instance.home.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.home.description: Personal photo library
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}-cuda
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  database:
+    stop_grace_period: 60s

@@ -85,6 +85,30 @@ apps:
     sub_mode: user_email
     issuer_mode: global
 
+  - name: Immich
+    slug: immich-public
+    provider_name: immich-public-oidc
+    launch_url: https://immich.public.faviann.com
+    client_id: immich-public
+    client_secret_var: stack_vars.immich_oidc_client_secret
+    signing_certificate_var: stack_vars.public_oidc_signing_certificate_name
+    redirect_uris:
+      - https://immich.public.faviann.com/auth/login
+      - https://immich.public.faviann.com/user-settings
+      - https://immich.public.faviann.com/api/oauth/mobile-redirect
+    custom_scope_mappings:
+      - name: Immich Email Verification
+        scope_name: email
+        description: Ensures Immich receives a verified email claim
+        expression: |-
+          return {
+              "email": user.email,
+              "email_verified": True,
+          }
+    group: media
+    sub_mode: user_email
+    issuer_mode: global
+
   - name: ReadMeABook
     slug: readmeabook-public
     provider_name: readmeabook-public-oidc
