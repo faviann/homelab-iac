@@ -34,6 +34,8 @@ services:
       retries: 5
     restart: unless-stopped
     labels:
+      traefik.enable: true
+      traefik.http.services.gluetun.loadbalancer.server.port: $QBIT_WEBUI_PORT
       homepage.instance.admin.group: Downloads
       homepage.instance.admin.name: qBittorrent
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
@@ -56,7 +58,6 @@ services:
     restart: unless-stopped
     labels:
       deunhealth.restart.on.unhealthy: true
-      traefik.enable: true
     environment:
       - PUID=$PUID
       - PGID=$PGID
