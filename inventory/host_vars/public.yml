@@ -34,8 +34,8 @@ lxc_docker_env_path_ownership_overrides:
     group: '999'
     recurse: true
   - path: "/shared/{{ inventory_hostname }}/stacks/readmeabook/appdata/pgdata"
-    owner: '103'
-    group: '103'
+    owner: '102'
+    group: '1000'
     recurse: true
 
 # Container definition for proxmox_lxc_provision role
