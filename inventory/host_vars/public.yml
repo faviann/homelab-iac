@@ -27,9 +27,15 @@ lxc_docker_env_stack_vars:
   music:
     authentik_token: "{{ vault_authentik_reconciler_token }}"
     navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
+  immich:
+    db_password: "{{ vault_public_immich_db_password }}"
 
 lxc_docker_env_path_ownership_overrides:
   - path: "/shared/{{ inventory_hostname }}/stacks/romm/appdata/db"
+    owner: '999'
+    group: '999'
+    recurse: true
+  - path: "/shared/{{ inventory_hostname }}/stacks/immich/appdata/pgdata"
     owner: '999'
     group: '999'
     recurse: true
