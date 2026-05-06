@@ -2,7 +2,7 @@ directory: /data/media/music
 library: /config/beets/library.db
 
 plugins:
-  - vgmdb
+  - VGMplug
   - chroma
   - lastgenre
   - discogs
@@ -27,3 +27,6 @@ chroma:
 
 discogs:
   user_token: "{{ stack_vars.discogs_token }}"
+
+replaygain:
+  backend: ffmpeg

@@ -118,13 +118,14 @@
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/compose.yaml"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/compose.override.yaml"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/requirements.txt"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/startup.sh"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/beets/config.yaml"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/beets-flask/appdata/beets-flask/config.yaml"
 
     - name: Verify rendered beets-flask files exist
       ansible.builtin.assert:
         that:
-          - _rendered_file_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 6
+          - _rendered_file_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 7
         fail_msg: "Expected beets-flask stack files were not all materialized"
 
     - name: Read rendered compose and config files
@@ -189,11 +190,17 @@
           - "'/music_path/clean/:/data/media/music' in _rendered_content.compose"
           - "'/music_path/inbox/:/music_path/inbox/' not in _rendered_content.compose"
           - "'./appdata:/config' in _rendered_content.override"
+          - "'path: ./appdata/startup.sh' in _rendered_content.override"
+          - "'mode: \"0755\"' in _rendered_content.override"
           - "'/data/media/_ingest/music:/data/media/_ingest/music' in _rendered_content.override"
           - "'/data/media/music:/data/media/music' in _rendered_content.override"
           - "'https://${HOMEPAGE_FQDN:?missing HOMEPAGE_FQDN}' in _rendered_content.override"
           - "'apikey: \"acoustid-pa$$\"' in _rendered_content.beets_config"
           - "'user_token: \"discogs-pa$$\"' in _rendered_content.beets_config"
+          - "'replaygain:' in _rendered_content.beets_config"
+          - "'backend: ffmpeg' in _rendered_content.beets_config"
+          - "'  - VGMplug' in _rendered_content.beets_config"
+          - "'  - vgmdb' not in _rendered_content.beets_config"
           - "'albumtype:soundtrack albumtype2:game' in _rendered_content.beets_config"
           - "'Soundtracks/Game/$album ($year)/$track - $title' in _rendered_content.beets_config"
           - "'Soundtracks/Screen/$album ($year)/$track - $title' in _rendered_content.beets_config"
@@ -204,4 +211,5 @@
           - "'beets-flask/.env' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
           - "'beets-flask/appdata/beets/config.yaml' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
           - "'/data/media/_ingest/music' in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/beets-flask/appdata/startup.sh') in (lxc_stack_sync_manifest_plan.managed_files | map(attribute='path') | list)"
         fail_msg: "Rendered beets-flask stack contract did not match expectations"

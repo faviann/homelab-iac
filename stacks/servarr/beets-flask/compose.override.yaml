@@ -1,6 +1,10 @@
 x-prereq-dirs:
   - /data/media/_ingest/music
 
+x-managed-files:
+  - path: ./appdata/startup.sh
+    mode: "0755"
+
 services:
   beets-flask:
     volumes:

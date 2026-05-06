@@ -47,6 +47,45 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         )
         self.assertEqual(beets_script["mode"], "0755")
 
+    def test_beets_vgmdb_requirement_is_compatible_with_beets_flask_image(self) -> None:
+        requirements_path = REPO_ROOT / "stacks/servarr/beets-flask/appdata/requirements.txt"
+        requirements = requirements_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertIn("beets-vgmdb==1.3.2", requirements)
+        self.assertIn("pyacoustid==1.3.1", requirements)
+        self.assertIn("python3-discogs-client==2.8", requirements)
+
+    def test_beets_config_uses_installed_vgmdb_plugin_module_name(self) -> None:
+        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+
+        self.assertIn("VGMplug", beets_config["plugins"])
+        self.assertNotIn("vgmdb", beets_config["plugins"])
+
+    def test_replaygain_uses_available_ffmpeg_backend(self) -> None:
+        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+
+        self.assertEqual(beets_config["replaygain"]["backend"], "ffmpeg")
+
+    def test_beets_flask_startup_hook_is_executable_and_patches_vgmplug(self) -> None:
+        compose_override = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/compose.override.yaml")
+        managed_files = compose_override["x-managed-files"]
+
+        startup_hook = next(
+            entry
+            for entry in managed_files
+            if entry["path"] == "./appdata/startup.sh"
+        )
+        self.assertEqual(startup_hook["mode"], "0755")
+
+        startup_script = (REPO_ROOT / "stacks/servarr/beets-flask/appdata/startup.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("python -m pip install -r /config/requirements.txt", startup_script)
+        self.assertIn("apk add --no-cache chromaprint", startup_script)
+        self.assertIn("from beets.autotag.distance import Distance, string_dist", startup_script)
+        self.assertIn('self._log.setLevel("ERROR")', startup_script)
+        self.assertIn("import beetsplug.VGMplug", startup_script)
+
 
 if __name__ == "__main__":
     unittest.main()
