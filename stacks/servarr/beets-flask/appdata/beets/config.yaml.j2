@@ -19,8 +19,18 @@ import:
 
 paths:
   "genre:=Game": "Soundtracks/Game/$album ($year)/$track - $title"
+  "style:Video": "Soundtracks/Game/$album ($year)/$track - $title"
   "albumtype:soundtrack": "Soundtracks/Screen/$album ($year)/$track - $title"
   default: "Music/$albumartist/$album ($year)/$track - $title"
+
+replace:
+  '[\\/]': _
+  '^\.': _
+  '[\x00-\x1f]': _
+  ':': ' -'
+  '[<>"\?\*\|]': _
+  '\.$': _
+  '\s+$': ''
 
 chroma:
   apikey: "{{ stack_vars.acoustid_apikey }}"
