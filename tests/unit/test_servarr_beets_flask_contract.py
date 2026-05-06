@@ -66,6 +66,16 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
 
         self.assertEqual(beets_config["replaygain"]["backend"], "ffmpeg")
 
+    def test_game_soundtracks_route_by_exact_vgmdb_genre(self) -> None:
+        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+        paths = beets_config["paths"]
+
+        self.assertEqual(
+            paths["genre:=Game"],
+            "Soundtracks/Game/$album ($year)/$track - $title",
+        )
+        self.assertNotIn("albumtype:soundtrack albumtype2:game", paths)
+
     def test_beets_flask_startup_hook_is_executable_and_patches_vgmplug(self) -> None:
         compose_override = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/compose.override.yaml")
         managed_files = compose_override["x-managed-files"]

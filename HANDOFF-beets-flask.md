@@ -32,7 +32,7 @@ Soundtracks/Screen/$album ($year)/$track - $title    ← movies + TV merged
 ```
 
 Routing rules (first match wins):
-1. `albumtype:soundtrack albumtype2:game` → `Soundtracks/Game/` (VGMdb source only)
+1. `genre:=Game` → `Soundtracks/Game/` (VGMdb/VGMplug category `Game`)
 2. `albumtype:soundtrack` → `Soundtracks/Screen/`
 3. default → `Music/`
 
@@ -108,7 +108,7 @@ Verify exact endpoint at `/api/docs` on the running instance. The call triggers 
 
 - **Not a Linuxserver image** — use `USER_ID`/`GROUP_ID`, not `PUID`/`PGID`
 - **Path matching** — mount music volumes with identical host:container paths
-- **`albumtype2`** — only populated by VGMdb; MusicBrainz soundtracks won't have it (falls through to Screen rule correctly)
+- **VGMdb game routing** — VGMplug maps VGMdb `category` to Beets `genre`; use exact `genre:=Game`. Do not use `albumtype2`; it is not emitted by VGMplug in this runtime.
 - **beets config location** — vendor sets `BEETSDIR=/config/beets`; config is at `/config/beets/config.yaml` inside container → committed at `./appdata/beets/config.yaml`
 - **`./appdata/beets/` needs no `x-prereq-dirs`** — Ansible auto-creates dirs with committed files
 
