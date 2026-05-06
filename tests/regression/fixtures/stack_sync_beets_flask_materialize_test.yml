@@ -202,6 +202,8 @@
           - "'  - VGMplug' in _rendered_content.beets_config"
           - "'  - vgmdb' not in _rendered_content.beets_config"
           - "'genre:=Game' in _rendered_content.beets_config"
+          - "'style:Video' in _rendered_content.beets_config"
+          - "_rendered_content.beets_config.index('style:Video') < _rendered_content.beets_config.index('albumtype:soundtrack')"
           - "'albumtype:soundtrack albumtype2:game' not in _rendered_content.beets_config"
           - "'Soundtracks/Game/$album ($year)/$track - $title' in _rendered_content.beets_config"
           - "'Soundtracks/Screen/$album ($year)/$track - $title' in _rendered_content.beets_config"

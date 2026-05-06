@@ -76,6 +76,19 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         )
         self.assertNotIn("albumtype:soundtrack albumtype2:game", paths)
 
+    def test_discogs_video_game_music_style_routes_to_game_soundtracks(self) -> None:
+        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+        paths = beets_config["paths"]
+
+        self.assertEqual(
+            paths["style:Video"],
+            "Soundtracks/Game/$album ($year)/$track - $title",
+        )
+        self.assertLess(
+            list(paths).index("style:Video"),
+            list(paths).index("albumtype:soundtrack"),
+        )
+
     def test_beets_flask_startup_hook_is_executable_and_patches_vgmplug(self) -> None:
         compose_override = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/compose.override.yaml")
         managed_files = compose_override["x-managed-files"]
