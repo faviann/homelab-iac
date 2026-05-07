@@ -1,0 +1,32 @@
+x-prereq-dirs:
+  - ./appdata/lazylibrarian
+
+services:
+  lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian:latest
+    container_name: lazylibrarian
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ./appdata/lazylibrarian:/config
+      - /data:/data
+    ports:
+      - 5299:5299
+    labels:
+      traefik.enable: true
+      traefik.http.routers.lazylibrarian.middlewares: protected-edge-auth@file
+      homepage.instance.admin.group: Arr
+      homepage.instance.admin.name: LazyLibrarian
+      homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
+      homepage.instance.admin.description: Book and magazine management
+      homepage.instance.admin.icon: lazylibrarian
+    networks:
+      - shared
+
+networks:
+  shared:
+    name: shared
+    external: true

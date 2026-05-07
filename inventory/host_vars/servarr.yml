@@ -19,6 +19,9 @@ lxc_docker_env_host_directories:
   - path: /data/media/tv/asian
   - path: /data/media/tv/foreign
   - path: /data/media/tv/anime
+  - path: /data/media/books
+    owner: "{{ docker_uid }}"
+    group: "{{ docker_gid }}"
   - path: /data/media/_ingest/music
     owner: "{{ docker_uid }}"
     group: "{{ docker_gid }}"
