@@ -129,3 +129,25 @@ apps:
     group: reading
     sub_mode: user_email
     issuer_mode: global
+
+  - name: Dockhand
+    slug: dockhand-admin
+    provider_name: dockhand-admin-oidc
+    launch_url: https://dockhand.admin.faviann.com
+    client_id: dockhand-admin
+    client_secret_var: stack_vars.dockhand_oidc_client_secret
+    signing_certificate_var: stack_vars.public_oidc_signing_certificate_name
+    redirect_uris:
+      - https://dockhand.admin.faviann.com/api/auth/oidc/callback
+    custom_scope_mappings:
+      - name: Admin Apps Email Verification
+        scope_name: email
+        description: Ensures admin apps receive a verified email claim
+        expression: |-
+          return {
+              "email": user.email,
+              "email_verified": True,
+          }
+    group: admins
+    sub_mode: user_email
+    issuer_mode: global
