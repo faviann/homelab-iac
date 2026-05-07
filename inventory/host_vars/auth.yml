@@ -20,6 +20,7 @@ lxc_docker_env_stack_vars:
     readmeabook_oidc_client_secret: "{{ vault_public_readmeabook_oidc_client_secret }}"
     immich_oidc_client_secret: "{{ vault_public_immich_oidc_client_secret }}"
     public_oidc_signing_certificate_name: "authentik Self-signed Certificate"
+    dockhand_oidc_client_secret: "{{ vault_admin_dockhand_oidc_client_secret }}"
     proxmox_oidc_client_secret: "{{ vault_proxmox_oidc_client_secret }}"
     postgres_password: "{{ vault_auth_postgres_password }}"
     secret_key: "{{ vault_auth_secret_key }}"
