@@ -26,7 +26,6 @@ services:
     labels:
       traefik.enable: true
       traefik.domain: admin.faviann.com
-      traefik.http.routers.dockhand.middlewares: protected-edge-auth@file
       homepage.instance.admin.group: Operations
       homepage.instance.admin.name: Dockhand
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
