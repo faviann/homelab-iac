@@ -21,6 +21,7 @@ services:
       PUID: ${PUID}
       PGID: ${PGID}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      DISABLE_LOCAL_LOGIN: "true"
     networks:
       - shared
     labels:
