@@ -145,6 +145,7 @@ validate_environment() {
   codex --version >/dev/null
   claude --version >/dev/null
   hermes version >/dev/null
+  openclaw --version >/dev/null
 
   ssh_output="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -T git@github.com 2>&1 || true)"
   printf '%s' "$ssh_output" | grep -Eq "successfully authenticated|You've successfully authenticated" \
