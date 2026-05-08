@@ -1,0 +1,25 @@
+---
+- name: Assert Determinate Nix installer is configured
+  ansible.builtin.assert:
+    that:
+      - workstation_nix_install_url is defined
+      - workstation_nix_install_url | string | length > 0
+    fail_msg: workstation_nix_install_url must point to the Determinate Nix installer.
+
+- name: Inspect Nix profile binary
+  ansible.builtin.stat:
+    path: /nix/var/nix/profiles/default/bin/nix
+  register: _workstation_nix_bin
+
+- name: Install Determinate Nix
+  ansible.builtin.shell:
+    cmd: >-
+      curl --proto '=https' --tlsv1.2 -sSf -L {{ workstation_nix_install_url | quote }}
+      | sh -s -- install --no-confirm
+    creates: /nix/receipt.json
+
+- name: Verify Nix is installed
+  ansible.builtin.command:
+    cmd: /nix/var/nix/profiles/default/bin/nix --version
+  changed_when: false
+  when: (not ansible_check_mode) or _workstation_nix_bin.stat.exists

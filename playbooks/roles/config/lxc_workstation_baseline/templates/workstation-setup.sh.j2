@@ -7,14 +7,23 @@ SETUP_VERSION="{{ workstation_setup_version }}"
 MARKER_PATH="{{ workstation_setup_marker_path }}"
 DOTFILES_REPO_URL="{{ workstation_dotfiles_repo_url }}"
 GITHUB_CLI_TOKEN_ITEM="{{ workstation_github_cli_token_item }}"
-MISE_BIN="{{ workstation_mise_bin }}"
-MISE_SHIMS_DIR="{{ workstation_mise_shims_dir }}"
+HOME_MANAGER_FLAKE_REF="{{ workstation_home_manager_flake_ref }}"
 WORKSTATION_HOME="{{ workstation_home }}"
 BW_BIN="{{ workstation_bw_bin_path }}"
-MARKER_FINGERPRINT="{{ workstation_setup_version }}|{{ workstation_dotfiles_repo_url }}|{{ workstation_github_cli_token_item }}|{{ workstation_mise_bin }}|{{ workstation_mise_shims_dir }}|{{ workstation_bw_bin_path }}"
+MARKER_FINGERPRINT="{{ workstation_setup_version }}|{{ workstation_dotfiles_repo_url }}|{{ workstation_github_cli_token_item }}|{{ workstation_home_manager_flake_ref }}|{{ workstation_bw_bin_path }}"
 
 export HOME="$WORKSTATION_HOME"
-export PATH="$MISE_SHIMS_DIR:$WORKSTATION_HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="$WORKSTATION_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$WORKSTATION_HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+if [ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
+  # shellcheck disable=SC1091
+  . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+fi
+
+if [ -r "$WORKSTATION_HOME/.nix-profile/etc/profile.d/hm-session-vars.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$WORKSTATION_HOME/.nix-profile/etc/profile.d/hm-session-vars.sh"
+fi
 
 tmpdir=""
 
@@ -32,10 +41,6 @@ fail() {
 
 bw() {
   "$BW_BIN" "$@"
-}
-
-mise() {
-  "$MISE_BIN" "$@"
 }
 
 status_from_json() {
@@ -90,10 +95,16 @@ ensure_chezmoi() {
   chezmoi update
 }
 
-install_mise_tools() {
-  test -x "$MISE_BIN" || fail "mise missing at $MISE_BIN"
-  mise install
-  mise reshim
+switch_home_manager() {
+  command -v nix >/dev/null 2>&1 || fail "nix missing from PATH"
+  rm -f \
+    "$WORKSTATION_HOME/.config/systemd/user/default.target.wants/aoe-serve.service" \
+    "$WORKSTATION_HOME/.config/systemd/user/sockets.target.wants/aoe-lan-proxy.socket"
+  if command -v home-manager >/dev/null 2>&1; then
+    home-manager switch -b workstation-setup-backup --flake "$HOME_MANAGER_FLAKE_REF"
+  else
+    nix run github:nix-community/home-manager -- switch -b workstation-setup-backup --flake "$HOME_MANAGER_FLAKE_REF"
+  fi
 }
 
 authenticate_gh() {
@@ -121,13 +132,19 @@ validate_environment() {
   ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" >/dev/null \
     || fail "github.com is missing from known_hosts"
 
-  test -f "$HOME/.config/mise/config.toml" || fail "mise config missing"
-
+  nix --version >/dev/null
+  home-manager --version >/dev/null
+  node --version >/dev/null
   uv --version >/dev/null
+  jq --version >/dev/null
+  rg --version >/dev/null
+  fd --version >/dev/null
+  fzf --version >/dev/null
   gh auth status --hostname github.com >/dev/null
   gh api user --jq .login >/dev/null
   codex --version >/dev/null
   claude --version >/dev/null
+  hermes version >/dev/null
 
   ssh_output="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -T git@github.com 2>&1 || true)"
   printf '%s' "$ssh_output" | grep -Eq "successfully authenticated|You've successfully authenticated" \
@@ -163,7 +180,7 @@ fi
 
 ensure_bitwarden_unlocked
 ensure_chezmoi
-install_mise_tools
+switch_home_manager
 authenticate_gh
 validate_environment
 write_marker

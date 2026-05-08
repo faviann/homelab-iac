@@ -1,13 +1,23 @@
 # Managed by Ansible. Prompts only on interactive SSH logins before setup completes.
 if [ "$(id -un 2>/dev/null || printf '')" = "{{ workstation_username }}" ]; then
   case ":$PATH:" in
-    *:"{{ workstation_mise_shims_dir }}":*) ;;
-    *) export PATH="{{ workstation_mise_shims_dir }}:$PATH" ;;
+    *:"{{ workstation_home }}/.nix-profile/bin":*) ;;
+    *) export PATH="{{ workstation_home }}/.nix-profile/bin:$PATH" ;;
+  esac
+  case ":$PATH:" in
+    *:"/nix/var/nix/profiles/default/bin":*) ;;
+    *) export PATH="/nix/var/nix/profiles/default/bin:$PATH" ;;
   esac
   case ":$PATH:" in
     *:"{{ workstation_home }}/.local/bin":*) ;;
     *) export PATH="{{ workstation_home }}/.local/bin:$PATH" ;;
   esac
+  if [ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
+    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+  fi
+  if [ -r "{{ workstation_home }}/.nix-profile/etc/profile.d/hm-session-vars.sh" ]; then
+    . "{{ workstation_home }}/.nix-profile/etc/profile.d/hm-session-vars.sh"
+  fi
 fi
 
 _workstation_setup_prompt() {

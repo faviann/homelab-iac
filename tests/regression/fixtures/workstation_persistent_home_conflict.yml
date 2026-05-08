@@ -10,6 +10,8 @@
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
     workstation_persistent_home_enabled: true
+    workstation_nix_install_enabled: false
+    workstation_enable_linger: false
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
     workstation_persistent_home_mount_state: mounted
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
@@ -32,6 +34,11 @@
         type: bind_mount
         path: "{{ workstation_home }}/.config/agent-of-empires"
         target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
+        mode: "0700"
+      - name: hermes
+        type: bind_mount
+        path: "{{ workstation_home }}/.hermes"
+        target: "{{ workstation_persistent_home_root }}/.hermes"
         mode: "0700"
       - name: repos
         type: bind_mount
@@ -69,21 +76,6 @@
               ;;
             *get.chezmoi.io*)
               printf '%s\n' '#!/bin/sh' 'exit 0'
-              ;;
-            *mise.run*)
-              printf '%s\n' \
-                '#!/bin/sh' \
-                'set -eu' \
-                'install -d "$HOME/.local/bin"' \
-                'cat > "$HOME/.local/bin/mise" <<"EOF"' \
-                '#!/bin/sh' \
-                'if [ "$1" = "--version" ]; then' \
-                '  echo mise-test' \
-                '  exit 0' \
-                'fi' \
-                'exit 0' \
-                'EOF' \
-                'chmod 0755 "$HOME/.local/bin/mise"'
               ;;
             *)
               exit 0

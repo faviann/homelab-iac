@@ -10,6 +10,8 @@
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
     workstation_persistent_home_enabled: false
+    workstation_nix_install_enabled: false
+    workstation_enable_linger: false
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
@@ -63,21 +65,6 @@
               printf '%s\n' \
                 '#!/bin/sh' \
                 'exit 0'
-              ;;
-            *mise.run)
-              printf '%s\n' \
-                '#!/bin/sh' \
-                'set -eu' \
-                'install -d "$HOME/.local/bin"' \
-                'cat > "$HOME/.local/bin/mise" <<"EOF"' \
-                '#!/bin/sh' \
-                'if [ "$1" = "--version" ]; then' \
-                '  echo mise-test' \
-                '  exit 0' \
-                'fi' \
-                'exit 0' \
-                'EOF' \
-                'chmod 0755 "$HOME/.local/bin/mise"'
               ;;
             *)
               echo "unexpected curl url: $url" >&2

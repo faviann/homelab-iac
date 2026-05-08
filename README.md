@@ -4,13 +4,18 @@ Ansible automation for managing Proxmox LXC containers via API from a remote con
 
 ## Quick Start (New Workstation)
 
-**One-command automated setup:**
+**Generic controller setup:**
 
 ```bash
 git clone https://github.com/faviann/ServerManagementScripts.git
 cd ServerManagementScripts
 ./setup.sh
 ```
+
+On the Ansible-managed `workstation` LXC, complete `workstation-setup` first.
+That command applies the dotfiles Home Manager flake, which supplies `uv`,
+`gh`, `codex`, `claude`, and related user tooling there. `setup.sh` is still
+safe as a generic controller bootstrap and installs `uv` itself when needed.
 
 The `setup.sh` script will:
 - ✅ Install system prerequisites (`python3`, `curl`, `sshpass`)
@@ -98,7 +103,7 @@ Run the automated setup script:
 ./setup.sh
 ```
 
-This handles the workstation prerequisites, installs `uv` when needed, syncs `.venv/`, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use.
+This handles controller prerequisites, installs `uv` when needed, syncs `.venv/`, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use. On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides the normal user tools.
 
 ### Manual Setup
 

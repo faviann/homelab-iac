@@ -10,6 +10,8 @@
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
     workstation_persistent_home_enabled: true
+    workstation_nix_install_enabled: false
+    workstation_enable_linger: false
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
     workstation_persistent_home_mount_state: present
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
@@ -33,6 +35,11 @@
         type: bind_mount
         path: "{{ workstation_home }}/.config/agent-of-empires"
         target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
+        mode: "0700"
+      - name: hermes
+        type: bind_mount
+        path: "{{ workstation_home }}/.hermes"
+        target: "{{ workstation_persistent_home_root }}/.hermes"
         mode: "0700"
       - name: repos
         type: bind_mount
@@ -70,21 +77,6 @@
               ;;
             *get.chezmoi.io*)
               printf '%s\n' '#!/bin/sh' 'exit 0'
-              ;;
-            *mise.run*)
-              printf '%s\n' \
-                '#!/bin/sh' \
-                'set -eu' \
-                'install -d "$HOME/.local/bin"' \
-                'cat > "$HOME/.local/bin/mise" <<"EOF"' \
-                '#!/bin/sh' \
-                'if [ "$1" = "--version" ]; then' \
-                '  echo mise-test' \
-                '  exit 0' \
-                'fi' \
-                'exit 0' \
-                'EOF' \
-                'chmod 0755 "$HOME/.local/bin/mise"'
               ;;
             *)
               exit 0
@@ -135,6 +127,11 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/repos"
       register: repos_dir_stat
 
+    - name: Stat Hermes persistent home directory
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/ephemeral/workstation/home/.hermes"
+      register: hermes_state_dir_stat
+
     - name: Stat AoE persistent home directory
       ansible.builtin.stat:
         path: "{{ temp_root }}/ephemeral/workstation/home/.config/agent-of-empires"
@@ -159,6 +156,11 @@
       ansible.builtin.stat:
         path: "{{ workstation_home }}/repos"
       register: repos_home_path_stat
+
+    - name: Stat Hermes home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.hermes"
+      register: hermes_home_path_stat
 
     - name: Assert workstation persistent home mount paths were prepared safely
       ansible.builtin.assert:
@@ -187,12 +189,18 @@
           - aoe_state_dir_stat.stat.uid == workstation_uid
           - aoe_state_dir_stat.stat.gid == workstation_gid
           - aoe_state_dir_stat.stat.mode == "0700"
+          - hermes_state_dir_stat.stat.isdir
+          - hermes_state_dir_stat.stat.uid == workstation_uid
+          - hermes_state_dir_stat.stat.gid == workstation_gid
+          - hermes_state_dir_stat.stat.mode == "0700"
           - claude_home_path_stat.stat.isdir
           - not (claude_home_path_stat.stat.islnk | default(false))
           - codex_home_path_stat.stat.isdir
           - not (codex_home_path_stat.stat.islnk | default(false))
           - aoe_home_path_stat.stat.isdir
           - not (aoe_home_path_stat.stat.islnk | default(false))
+          - hermes_home_path_stat.stat.isdir
+          - not (hermes_home_path_stat.stat.islnk | default(false))
           - repos_home_path_stat.stat.isdir
           - not (repos_home_path_stat.stat.islnk | default(false))
         fail_msg: "Workstation persistent home directories or mount paths were not prepared as expected"

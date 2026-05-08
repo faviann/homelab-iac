@@ -16,7 +16,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  ServerManagementScripts - Workstation Setup              ║${NC}"
+echo -e "${BLUE}║  ServerManagementScripts - Controller Setup               ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo
 
@@ -79,6 +79,8 @@ fi
 echo
 echo "Step 2: Setting up uv..."
 echo "─────────────────────────────────────────"
+
+print_info "On the managed workstation LXC, run workstation-setup first; Home Manager supplies uv there."
 
 if ! command -v uv &> /dev/null; then
     print_info "Installing uv..."

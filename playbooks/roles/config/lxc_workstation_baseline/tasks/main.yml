@@ -50,11 +50,32 @@
     cmd: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
     creates: /usr/local/bin/chezmoi
 
+- name: Inspect Bitwarden CLI binary
+  ansible.builtin.stat:
+    path: "{{ workstation_bw_bin_path }}"
+  register: _workstation_bw_bin
+
+- name: Note Bitwarden CLI would be installed in normal mode
+  ansible.builtin.debug:
+    msg: "Bitwarden CLI would be installed at {{ workstation_bw_bin_path }}"
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not _workstation_bw_bin.stat.exists
+
 - name: Install Bitwarden CLI
   ansible.builtin.include_tasks: bitwarden_cli.yml
+  when: not ansible_check_mode
 
-- name: Install mise
-  ansible.builtin.include_tasks: mise.yml
+- name: Install Determinate Nix
+  ansible.builtin.include_tasks: nix.yml
+  when: workstation_nix_install_enabled | bool
+
+- name: Enable workstation user lingering
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ workstation_username }}"
+    creates: "/var/lib/systemd/linger/{{ workstation_username }}"
+  when: workstation_enable_linger | bool
 
 - name: Install workstation setup command
   ansible.builtin.template:

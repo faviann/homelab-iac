@@ -68,6 +68,13 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
                     "mode": "0700",
                 },
                 {
+                    "name": "hermes",
+                    "type": "bind_mount",
+                    "path": "{{ workstation_home }}/.hermes",
+                    "target": "{{ workstation_persistent_home_root }}/.hermes",
+                    "mode": "0700",
+                },
+                {
                     "name": "repos",
                     "type": "bind_mount",
                     "path": "{{ workstation_home }}/repos",
@@ -111,7 +118,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
                 "npm",
                 "pipx",
             }.isdisjoint(set(defaults["workstation_packages"])),
-            msg="mise-owned tools must not be installed through apt",
+            msg="Home Manager-owned tools must not be installed through apt",
         )
         self.assertEqual(
             defaults["workstation_setup_marker_path"],
@@ -124,9 +131,19 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertNotIn("workstation_bootstrap_env_path", defaults)
         self.assertNotIn("workstation_bootstrap_marker_path", defaults)
         self.assertNotIn("workstation_bootstrap_controller_env", defaults)
+        self.assertNotIn("workstation_mise_install_url", defaults)
+        self.assertNotIn("workstation_mise_bin", defaults)
+        self.assertNotIn("workstation_mise_shims_dir", defaults)
         self.assertNotIn("workstation_mise_tools", defaults)
         self.assertEqual(defaults["workstation_dotfiles_repo_url"], "https://github.com/faviann/dotfiles.git")
         self.assertEqual(defaults["workstation_github_cli_token_item"], "dotfiles/github-cli-token")
+        self.assertTrue(defaults["workstation_nix_install_enabled"])
+        self.assertTrue(defaults["workstation_enable_linger"])
+        self.assertEqual(defaults["workstation_nix_install_url"], "https://install.determinate.systems/nix")
+        self.assertEqual(
+            defaults["workstation_home_manager_flake_ref"],
+            "{{ workstation_home }}/.local/share/chezmoi#workstation",
+        )
         self.assertEqual(
             defaults["workstation_bw_release_api_url"],
             "https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v{{ workstation_bw_version }}",
@@ -194,6 +211,10 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(options["workstation_setup_profile_hook_path"]["type"], "str")
         self.assertEqual(options["workstation_dotfiles_repo_url"]["type"], "str")
         self.assertEqual(options["workstation_github_cli_token_item"]["type"], "str")
+        self.assertEqual(options["workstation_nix_install_enabled"]["type"], "bool")
+        self.assertEqual(options["workstation_nix_install_url"]["type"], "str")
+        self.assertEqual(options["workstation_home_manager_flake_ref"]["type"], "str")
+        self.assertEqual(options["workstation_enable_linger"]["type"], "bool")
         self.assertEqual(options["workstation_bw_release_api_url"]["type"], "str")
         self.assertEqual(options["workstation_bw_bin_path"]["type"], "str")
         self.assertEqual(options["workstation_system_bin_owner"]["type"], "str")
@@ -203,6 +224,9 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertNotIn("workstation_bootstrap_env_path", options)
         self.assertNotIn("workstation_bootstrap_marker_path", options)
         self.assertNotIn("workstation_bootstrap_controller_env", options)
+        self.assertNotIn("workstation_mise_install_url", options)
+        self.assertNotIn("workstation_mise_bin", options)
+        self.assertNotIn("workstation_mise_shims_dir", options)
         self.assertNotIn("workstation_mise_tools", options)
         self.assertNotIn("workstation_agent_state_enabled", options)
         self.assertNotIn("workstation_agent_state_root", options)
@@ -217,9 +241,11 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("Configure GitHub SSH keys", task_names)
         self.assertIn("Install chezmoi", task_names, "missing chezmoi install task")
         self.assertIn("Install Bitwarden CLI", task_names, "missing bw CLI install task")
-        self.assertIn("Install mise", task_names, "missing mise install task")
+        self.assertIn("Install Determinate Nix", task_names, "missing Nix install task")
+        self.assertIn("Enable workstation user lingering", task_names, "missing linger task")
         self.assertIn("Install workstation setup command", task_names, "missing setup command task")
         self.assertIn("Install workstation setup login hook", task_names, "missing setup login hook task")
+        self.assertNotIn("Install mise", task_names)
         self.assertNotIn("Install workstation bootstrap script", task_names)
         self.assertNotIn("Run unattended workstation bootstrap", task_names)
 
@@ -243,9 +269,11 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         rendered_tasks = yaml.safe_dump(tasks, sort_keys=True)
         self.assertIn("aoe_proxy_firewall.yml", rendered_tasks)
         self.assertIn("bitwarden_cli.yml", rendered_tasks)
-        self.assertIn("mise.yml", rendered_tasks)
+        self.assertIn("nix.yml", rendered_tasks)
+        self.assertIn("loginctl", rendered_tasks)
         self.assertIn("workstation-setup.sh.j2", rendered_tasks)
         self.assertIn("workstation-setup-profile.sh.j2", rendered_tasks)
+        self.assertNotIn("mise.yml", rendered_tasks)
         self.assertNotIn("bootstrap.yml", rendered_tasks)
         self.assertNotIn("workstation_bootstrap_unattended", rendered_tasks)
         self.assertNotIn("/run/workstation-bootstrap", rendered_tasks)
@@ -266,11 +294,14 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("bw unlock --raw", setup_template)
         self.assertIn("chezmoi init --apply", setup_template)
         self.assertIn("chezmoi update", setup_template)
-        self.assertIn("mise install", setup_template)
-        self.assertIn("mise reshim", setup_template)
+        self.assertIn("home-manager switch -b workstation-setup-backup --flake", setup_template)
+        self.assertIn("nix --version", setup_template)
+        self.assertIn("home-manager --version", setup_template)
+        self.assertIn("hermes version", setup_template)
         self.assertIn("gh auth login --hostname github.com --with-token", setup_template)
         self.assertIn("gh api user", setup_template)
         self.assertIn("git@github.com", setup_template)
+        self.assertNotIn("mise", setup_template)
         self.assertNotIn("parse_env_file", setup_template)
         self.assertNotIn("/run/workstation-bootstrap", setup_template)
         self.assertNotIn("BW_CLIENTID", setup_template)
@@ -279,9 +310,11 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         profile_hook = (
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-setup-profile.sh.j2"
         ).read_text(encoding="utf-8")
-        self.assertIn("workstation_mise_shims_dir", profile_hook)
+        self.assertIn("/nix/var/nix/profiles/default/bin", profile_hook)
+        self.assertIn(".nix-profile/bin", profile_hook)
         self.assertIn("workstation_home }}/.local/bin", profile_hook)
         self.assertIn("export PATH=", profile_hook)
+        self.assertNotIn("mise", profile_hook)
         self.assertIn("-t 0", profile_hook)
         self.assertIn("-t 1", profile_hook)
         self.assertIn("SSH_CONNECTION", profile_hook)

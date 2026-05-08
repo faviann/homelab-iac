@@ -11,6 +11,8 @@
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
     workstation_persistent_home_enabled: false
+    workstation_nix_install_enabled: false
+    workstation_enable_linger: false
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
@@ -48,21 +50,6 @@
               ;;
             *get.chezmoi.io*)
               printf '%s\n' '#!/bin/sh' 'exit 0'
-              ;;
-            *mise.run*)
-              printf '%s\n' \
-                '#!/bin/sh' \
-                'set -eu' \
-                'install -d "$HOME/.local/bin"' \
-                'cat > "$HOME/.local/bin/mise" <<"EOF"' \
-                '#!/bin/sh' \
-                'if [ "$1" = "--version" ]; then' \
-                '  echo mise-test' \
-                '  exit 0' \
-                'fi' \
-                'exit 0' \
-                'EOF' \
-                'chmod 0755 "$HOME/.local/bin/mise"'
               ;;
             *)
               exit 0
@@ -129,11 +116,14 @@
           - (setup_command_raw.content | b64decode) is search('bw unlock --raw')
           - (setup_command_raw.content | b64decode) is search('chezmoi init --apply')
           - (setup_command_raw.content | b64decode) is search('chezmoi update')
-          - (setup_command_raw.content | b64decode) is search('mise install')
-          - (setup_command_raw.content | b64decode) is search('mise reshim')
+          - (setup_command_raw.content | b64decode) is search('home-manager switch -b workstation-setup-backup --flake')
+          - (setup_command_raw.content | b64decode) is search('nix --version')
+          - (setup_command_raw.content | b64decode) is search('home-manager --version')
+          - (setup_command_raw.content | b64decode) is search('hermes version')
           - (setup_command_raw.content | b64decode) is search('dotfiles/github-cli-token')
           - (setup_command_raw.content | b64decode) is search('gh api user')
           - (setup_command_raw.content | b64decode) is search('git@github.com')
+          - not ((setup_command_raw.content | b64decode) is search('mise'))
           - not ((setup_command_raw.content | b64decode) is search('/run/workstation-bootstrap'))
           - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTID'))
           - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTSECRET'))
@@ -141,9 +131,11 @@
           - (setup_hook_raw.content | b64decode) is search('SSH_CONNECTION')
           - (setup_hook_raw.content | b64decode) is search('SSH_TTY')
           - (setup_hook_raw.content | b64decode) is search('WORKSTATION_SETUP_SKIP')
-          - (setup_hook_raw.content | b64decode) is search('/.local/share/mise/shims')
+          - (setup_hook_raw.content | b64decode) is search('/.nix-profile/bin')
+          - (setup_hook_raw.content | b64decode) is search('/nix/var/nix/profiles/default/bin')
           - (setup_hook_raw.content | b64decode) is search('export PATH=')
           - (setup_hook_raw.content | b64decode) is search('workstation-setup')
+          - not ((setup_hook_raw.content | b64decode) is search('mise'))
           - not ((setup_hook_raw.content | b64decode) is search('/run/workstation-bootstrap'))
           - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTID'))
           - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTSECRET'))

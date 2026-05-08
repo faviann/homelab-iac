@@ -10,6 +10,8 @@
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
     workstation_persistent_home_enabled: false
+    workstation_nix_install_enabled: false
+    workstation_enable_linger: false
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
     workstation_persistent_home_mount_state: present
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
@@ -33,6 +35,11 @@
         type: bind_mount
         path: "{{ workstation_home }}/.config/agent-of-empires"
         target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
+        mode: "0700"
+      - name: hermes
+        type: bind_mount
+        path: "{{ workstation_home }}/.hermes"
+        target: "{{ workstation_persistent_home_root }}/.hermes"
         mode: "0700"
       - name: repos
         type: bind_mount
@@ -70,21 +77,6 @@
               ;;
             *get.chezmoi.io*)
               printf '%s\n' '#!/bin/sh' 'exit 0'
-              ;;
-            *mise.run*)
-              printf '%s\n' \
-                '#!/bin/sh' \
-                'set -eu' \
-                'install -d "$HOME/.local/bin"' \
-                'cat > "$HOME/.local/bin/mise" <<"EOF"' \
-                '#!/bin/sh' \
-                'if [ "$1" = "--version" ]; then' \
-                '  echo mise-test' \
-                '  exit 0' \
-                'fi' \
-                'exit 0' \
-                'EOF' \
-                'chmod 0755 "$HOME/.local/bin/mise"'
               ;;
             *)
               exit 0
@@ -129,6 +121,11 @@
         path: "{{ workstation_home }}/.config/agent-of-empires"
       register: aoe_home_stat
 
+    - name: Stat Hermes home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.hermes"
+      register: hermes_home_stat
+
     - name: Assert workstation persistent home was skipped
       ansible.builtin.assert:
         that:
@@ -136,5 +133,6 @@
           - not claude_home_stat.stat.exists
           - not codex_home_stat.stat.exists
           - not aoe_home_stat.stat.exists
+          - not hermes_home_stat.stat.exists
           - not repos_home_stat.stat.exists
         fail_msg: "Disabled workstation persistent home should not create directories or links"
