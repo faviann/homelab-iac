@@ -132,20 +132,20 @@ validate_environment() {
   ssh-keygen -F github.com -f "$HOME/.ssh/known_hosts" >/dev/null \
     || fail "github.com is missing from known_hosts"
 
-  nix --version >/dev/null
-  home-manager --version >/dev/null
-  node --version >/dev/null
-  uv --version >/dev/null
-  jq --version >/dev/null
-  rg --version >/dev/null
-  fd --version >/dev/null
-  fzf --version >/dev/null
-  gh auth status --hostname github.com >/dev/null
-  gh api user --jq .login >/dev/null
-  codex --version >/dev/null
-  claude --version >/dev/null
-  hermes version >/dev/null
-  openclaw --version >/dev/null
+  nix --version >/dev/null || fail "nix missing or not working"
+  home-manager --version >/dev/null || fail "home-manager missing or not working"
+  node --version >/dev/null || fail "node missing or not working"
+  uv --version >/dev/null || fail "uv missing or not working"
+  jq --version >/dev/null || fail "jq missing or not working"
+  rg --version >/dev/null || fail "rg missing or not working"
+  fd --version >/dev/null || fail "fd missing or not working"
+  fzf --version >/dev/null || fail "fzf missing or not working"
+  gh auth status --hostname github.com >/dev/null || fail "gh auth not configured"
+  gh api user --jq .login >/dev/null || fail "gh api not working"
+  codex --version >/dev/null || fail "codex missing or not working"
+  claude --version >/dev/null || fail "claude missing or not working"
+  hermes version >/dev/null || fail "hermes missing or not working"
+  openclaw --version >/dev/null || fail "openclaw missing or not working"
 
   ssh_output="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -T git@github.com 2>&1 || true)"
   printf '%s' "$ssh_output" | grep -Eq "successfully authenticated|You've successfully authenticated" \
