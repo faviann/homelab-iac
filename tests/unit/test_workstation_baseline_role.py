@@ -75,6 +75,13 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
                     "mode": "0700",
                 },
                 {
+                    "name": "openclaw",
+                    "type": "bind_mount",
+                    "path": "{{ workstation_home }}/.openclaw",
+                    "target": "{{ workstation_persistent_home_root }}/.openclaw",
+                    "mode": "0700",
+                },
+                {
                     "name": "repos",
                     "type": "bind_mount",
                     "path": "{{ workstation_home }}/repos",
