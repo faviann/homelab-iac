@@ -29,6 +29,14 @@ http:
       middlewares:
         - local-ip-restriction
 
+    hermes:
+      rule: "Host(`hermes.local.faviann.com`)"
+      entryPoints: websecure
+      service: hermes-dashboard
+      priority: 1000
+      middlewares:
+        - local-ip-restriction
+
     # Authentik itself stays edge-open at Traefik so it can handle its own login
     # and callback flows without being wrapped by Traefik forwardAuth.
     authentik:
@@ -106,6 +114,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://workstation.faviann.vms:4001"
+    hermes-dashboard:
+      loadBalancer:
+        servers:
+          - url: "http://workstation.faviann.vms:9119"
     authentik:
       loadBalancer:
         servers:

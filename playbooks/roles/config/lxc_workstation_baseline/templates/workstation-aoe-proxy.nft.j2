@@ -14,5 +14,9 @@ table inet workstation_aoe_proxy {
     iifname "lo" tcp dport {{ workstation_aoe_proxy_firewall_port }} accept
     tcp dport {{ workstation_aoe_proxy_firewall_port }} ip saddr @allowed_ipv4 accept
     tcp dport {{ workstation_aoe_proxy_firewall_port }} drop
+
+    iifname "lo" tcp dport {{ workstation_hermes_dashboard_port }} accept
+    tcp dport {{ workstation_hermes_dashboard_port }} ip saddr @allowed_ipv4 accept
+    tcp dport {{ workstation_hermes_dashboard_port }} drop
   }
 }

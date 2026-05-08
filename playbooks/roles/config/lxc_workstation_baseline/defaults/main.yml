@@ -6,6 +6,7 @@ workstation_home: "/home/{{ workstation_username }}"
 workstation_aoe_proxy_firewall_enabled: false
 workstation_aoe_proxy_firewall_port: 4001
 workstation_aoe_proxy_firewall_allowed_hosts: []
+workstation_hermes_dashboard_port: 9119
 workstation_persistent_home_enabled: false
 workstation_persistent_home_root: /ephemeral/workstation/home
 workstation_persistent_home_mount_state: mounted
@@ -25,6 +26,11 @@ workstation_persistent_home_links:
     type: bind_mount
     path: "{{ workstation_home }}/.config/agent-of-empires"
     target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
+    mode: "0700"
+  - name: hermes
+    type: bind_mount
+    path: "{{ workstation_home }}/.hermes"
+    target: "{{ workstation_persistent_home_root }}/.hermes"
     mode: "0700"
   - name: repos
     type: bind_mount
@@ -49,9 +55,10 @@ workstation_setup_marker_path: "{{ workstation_home }}/.local/state/workstation-
 workstation_setup_version: "1"
 workstation_dotfiles_repo_url: https://github.com/faviann/dotfiles.git
 workstation_github_cli_token_item: dotfiles/github-cli-token
-workstation_mise_install_url: https://mise.run
-workstation_mise_bin: "{{ workstation_home }}/.local/bin/mise"
-workstation_mise_shims_dir: "{{ workstation_home }}/.local/share/mise/shims"
+workstation_nix_install_enabled: true
+workstation_nix_install_url: https://install.determinate.systems/nix
+workstation_home_manager_flake_ref: "{{ workstation_home }}/.local/share/chezmoi#workstation"
+workstation_enable_linger: true
 workstation_bw_version: "2025.12.0"
 workstation_bw_download_url: "https://github.com/bitwarden/clients/releases/download/cli-v{{ workstation_bw_version }}/bw-linux-{{ workstation_bw_version }}.zip"
 workstation_bw_release_api_url: "https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v{{ workstation_bw_version }}"

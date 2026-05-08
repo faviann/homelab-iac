@@ -44,6 +44,13 @@ argument_specs:
         elements: str
         required: false
         description: Inventory hosts allowed to reach the AoE LAN proxy port.
+      workstation_hermes_dashboard_port:
+        type: int
+        required: false
+        description: >-
+          Port the Hermes Agent dashboard binds to (default 9119). Firewall
+          rules for this port are added to the AoE nft table when
+          workstation_aoe_proxy_firewall_enabled is true.
       workstation_persistent_home_enabled:
         type: bool
         required: false
@@ -86,18 +93,22 @@ argument_specs:
         type: str
         required: false
         description: Bitwarden item name containing the GitHub CLI token in notes.
-      workstation_mise_install_url:
+      workstation_nix_install_enabled:
+        type: bool
+        required: false
+        description: Whether to install Determinate Nix for workstation user tooling.
+      workstation_nix_install_url:
         type: str
         required: false
-        description: Official mise installer URL.
-      workstation_mise_bin:
+        description: Determinate Nix installer URL.
+      workstation_home_manager_flake_ref:
         type: str
         required: false
-        description: Expected mise executable path for the workstation user.
-      workstation_mise_shims_dir:
-        type: str
+        description: Home Manager flake reference used by workstation-setup.
+      workstation_enable_linger:
+        type: bool
         required: false
-        description: Mise shims directory for non-interactive command contexts.
+        description: Whether to enable systemd user lingering for the workstation account.
       workstation_bw_version:
         type: str
         required: false
