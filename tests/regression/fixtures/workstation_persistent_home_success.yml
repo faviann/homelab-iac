@@ -41,6 +41,11 @@
         path: "{{ workstation_home }}/.hermes"
         target: "{{ workstation_persistent_home_root }}/.hermes"
         mode: "0700"
+      - name: openclaw
+        type: bind_mount
+        path: "{{ workstation_home }}/.openclaw"
+        target: "{{ workstation_persistent_home_root }}/.openclaw"
+        mode: "0700"
       - name: repos
         type: bind_mount
         path: "{{ workstation_home }}/repos"
@@ -137,6 +142,11 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/.config/agent-of-empires"
       register: aoe_state_dir_stat
 
+    - name: Stat OpenClaw persistent home directory
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/ephemeral/workstation/home/.openclaw"
+      register: openclaw_state_dir_stat
+
     - name: Stat Claude home path
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.claude"
@@ -161,6 +171,11 @@
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.hermes"
       register: hermes_home_path_stat
+
+    - name: Stat OpenClaw home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.openclaw"
+      register: openclaw_home_path_stat
 
     - name: Assert workstation persistent home mount paths were prepared safely
       ansible.builtin.assert:
@@ -193,6 +208,10 @@
           - hermes_state_dir_stat.stat.uid == workstation_uid
           - hermes_state_dir_stat.stat.gid == workstation_gid
           - hermes_state_dir_stat.stat.mode == "0700"
+          - openclaw_state_dir_stat.stat.isdir
+          - openclaw_state_dir_stat.stat.uid == workstation_uid
+          - openclaw_state_dir_stat.stat.gid == workstation_gid
+          - openclaw_state_dir_stat.stat.mode == "0700"
           - claude_home_path_stat.stat.isdir
           - not (claude_home_path_stat.stat.islnk | default(false))
           - codex_home_path_stat.stat.isdir
@@ -201,6 +220,8 @@
           - not (aoe_home_path_stat.stat.islnk | default(false))
           - hermes_home_path_stat.stat.isdir
           - not (hermes_home_path_stat.stat.islnk | default(false))
+          - openclaw_home_path_stat.stat.isdir
+          - not (openclaw_home_path_stat.stat.islnk | default(false))
           - repos_home_path_stat.stat.isdir
           - not (repos_home_path_stat.stat.islnk | default(false))
         fail_msg: "Workstation persistent home directories or mount paths were not prepared as expected"
