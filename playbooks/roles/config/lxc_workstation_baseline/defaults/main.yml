@@ -7,6 +7,7 @@ workstation_aoe_proxy_firewall_enabled: false
 workstation_aoe_proxy_firewall_port: 4001
 workstation_aoe_proxy_firewall_allowed_hosts: []
 workstation_hermes_dashboard_port: 9119
+workstation_openclaw_gateway_port: 18789
 workstation_persistent_home_enabled: false
 workstation_persistent_home_root: /ephemeral/workstation/home
 workstation_persistent_home_mount_state: mounted

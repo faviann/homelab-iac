@@ -52,6 +52,7 @@ entries:
     - !Find [authentik_providers_proxy.proxyprovider, [name, admin-wildcard-forwardauth]]
     - !Find [authentik_providers_proxy.proxyprovider, [name, home-wildcard-forwardauth]]
     - !Find [authentik_providers_proxy.proxyprovider, [name, media-wildcard-forwardauth]]
+    - !Find [authentik_providers_proxy.proxyprovider, [name, openclaw-ai-forwardauth]]
     config:
       log_level: info
       docker_labels: null

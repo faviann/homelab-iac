@@ -37,6 +37,23 @@ http:
       middlewares:
         - local-ip-restriction
 
+    authentik-outpost-ai:
+      rule: "Host(`ai.local.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)"
+      entryPoints: websecure
+      service: authentik
+      priority: 1001
+      middlewares:
+        - sslheader
+
+    ai:
+      rule: "Host(`ai.local.faviann.com`)"
+      entryPoints: websecure
+      service: openclaw-dashboard
+      priority: 1000
+      middlewares:
+        - local-ip-restriction
+        - protected-edge-auth@file
+
     # Authentik itself stays edge-open at Traefik so it can handle its own login
     # and callback flows without being wrapped by Traefik forwardAuth.
     authentik:
@@ -118,6 +135,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://workstation.faviann.vms:9119"
+    openclaw-dashboard:
+      loadBalancer:
+        servers:
+          - url: "http://workstation.faviann.vms:18789"
     authentik:
       loadBalancer:
         servers:

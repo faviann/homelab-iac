@@ -51,6 +51,13 @@ argument_specs:
           Port the Hermes Agent dashboard binds to (default 9119). Firewall
           rules for this port are added to the AoE nft table when
           workstation_aoe_proxy_firewall_enabled is true.
+      workstation_openclaw_gateway_port:
+        type: int
+        required: false
+        description: >-
+          Port the OpenClaw gateway dashboard binds to (default 18789). Firewall
+          rules for this port are added to the AoE nft table when
+          workstation_aoe_proxy_firewall_enabled is true.
       workstation_persistent_home_enabled:
         type: bool
         required: false

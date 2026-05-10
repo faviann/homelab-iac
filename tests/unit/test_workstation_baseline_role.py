@@ -39,6 +39,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertFalse(defaults["workstation_aoe_proxy_firewall_enabled"])
         self.assertEqual(defaults["workstation_aoe_proxy_firewall_port"], 4001)
         self.assertEqual(defaults["workstation_aoe_proxy_firewall_allowed_hosts"], [])
+        self.assertEqual(defaults["workstation_openclaw_gateway_port"], 18789)
         self.assertFalse(defaults["workstation_persistent_home_enabled"])
         self.assertEqual(defaults["workstation_persistent_home_root"], "/ephemeral/workstation/home")
         self.assertEqual(defaults["workstation_persistent_home_mount_state"], "mounted")
@@ -202,6 +203,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(options["workstation_aoe_proxy_firewall_allowed_hosts"]["type"], "list")
         self.assertEqual(options["workstation_aoe_proxy_firewall_allowed_hosts"]["elements"], "str")
         self.assertFalse(options["workstation_aoe_proxy_firewall_allowed_hosts"]["required"])
+        self.assertEqual(options["workstation_openclaw_gateway_port"]["type"], "int")
+        self.assertFalse(options["workstation_openclaw_gateway_port"]["required"])
         self.assertEqual(options["workstation_persistent_home_enabled"]["type"], "bool")
         self.assertFalse(options["workstation_persistent_home_enabled"]["required"])
         self.assertEqual(options["workstation_persistent_home_root"]["type"], "str")
@@ -415,6 +418,9 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn('iifname "lo" tcp dport {{ workstation_aoe_proxy_firewall_port }} accept', firewall_template)
         self.assertIn('@allowed_ipv4', firewall_template)
         self.assertIn('tcp dport {{ workstation_aoe_proxy_firewall_port }} drop', firewall_template)
+        self.assertIn('iifname "lo" tcp dport {{ workstation_openclaw_gateway_port }} accept', firewall_template)
+        self.assertIn('tcp dport {{ workstation_openclaw_gateway_port }} ip saddr @allowed_ipv4 accept', firewall_template)
+        self.assertIn('tcp dport {{ workstation_openclaw_gateway_port }} drop', firewall_template)
 
         firewall_service_template = (
             REPO_ROOT

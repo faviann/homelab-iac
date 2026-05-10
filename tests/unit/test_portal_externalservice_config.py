@@ -38,6 +38,41 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             },
         )
 
+    def test_openclaw_external_route_contract(self) -> None:
+        externalservice_path = (
+            REPO_ROOT / "stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml"
+        )
+        config = yaml.safe_load(externalservice_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            config["http"]["routers"]["authentik-outpost-ai"],
+            {
+                "rule": "Host(`ai.local.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)",
+                "entryPoints": "websecure",
+                "service": "authentik",
+                "priority": 1001,
+                "middlewares": ["sslheader"],
+            },
+        )
+        self.assertEqual(
+            config["http"]["routers"]["ai"],
+            {
+                "rule": "Host(`ai.local.faviann.com`)",
+                "entryPoints": "websecure",
+                "service": "openclaw-dashboard",
+                "priority": 1000,
+                "middlewares": ["local-ip-restriction", "protected-edge-auth@file"],
+            },
+        )
+        self.assertEqual(
+            config["http"]["services"]["openclaw-dashboard"],
+            {
+                "loadBalancer": {
+                    "servers": [{"url": "http://workstation.faviann.vms:18789"}],
+                }
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
