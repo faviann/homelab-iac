@@ -61,7 +61,17 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
                 "entryPoints": "websecure",
                 "service": "openclaw-dashboard",
                 "priority": 1000,
-                "middlewares": ["local-ip-restriction", "protected-edge-auth@file"],
+                "middlewares": ["local-ip-restriction", "protected-edge-auth@file", "openclaw-operator-scopes"],
+            },
+        )
+        self.assertEqual(
+            config["http"]["middlewares"]["openclaw-operator-scopes"],
+            {
+                "headers": {
+                    "customRequestHeaders": {
+                        "X-OpenClaw-Scopes": "operator.read,operator.write,operator.admin",
+                    }
+                }
             },
         )
         self.assertEqual(

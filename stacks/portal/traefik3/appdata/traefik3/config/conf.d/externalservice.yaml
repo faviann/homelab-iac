@@ -53,6 +53,7 @@ http:
       middlewares:
         - local-ip-restriction
         - protected-edge-auth@file
+        - openclaw-operator-scopes
 
     # Authentik itself stays edge-open at Traefik so it can handle its own login
     # and callback flows without being wrapped by Traefik forwardAuth.
@@ -152,6 +153,10 @@ http:
       headers:
         customRequestHeaders:
           X-Forwarded-Proto: "https"
+    openclaw-operator-scopes:
+      headers:
+        customRequestHeaders:
+          X-OpenClaw-Scopes: "operator.read,operator.write,operator.admin"
     local-ip-restriction:
       IPAllowList:
         sourceRange:
