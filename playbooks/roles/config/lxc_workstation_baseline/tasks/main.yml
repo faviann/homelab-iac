@@ -25,6 +25,7 @@
     cmd: locale -a 2>/dev/null | grep -qi 'en_US.utf8' || locale-gen en_US.UTF-8
   register: workstation_locale_gen
   changed_when: workstation_locale_gen.stdout | length > 0
+  when: workstation_locale_enabled | default(true) | bool
 
 - name: Set system default locale
   ansible.builtin.copy:
@@ -33,6 +34,7 @@
     owner: root
     group: root
     mode: "0644"
+  when: workstation_locale_enabled | default(true) | bool
 
 - name: Configure AoE LAN proxy firewall
   ansible.builtin.include_tasks: aoe_proxy_firewall.yml
