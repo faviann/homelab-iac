@@ -51,6 +51,7 @@
   ansible.builtin.shell:
     cmd: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
     creates: /usr/local/bin/chezmoi
+  when: workstation_chezmoi_install_enabled | bool
 
 - name: Inspect Bitwarden CLI binary
   ansible.builtin.stat:

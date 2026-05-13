@@ -1,11 +1,7 @@
 # Backlog
 
-## [BUG-004] Workstation regression fixtures need sudo-free role boundaries
-- **Category**: bug
-- **Location**: `tests/regression/fixtures/workstation_*` and `playbooks/roles/config/lxc_workstation_baseline/`
-- **Context**: Some workstation regression tests include the full baseline role and can hit system-level tasks such as locale files, systemd cleanup, or Bitwarden CLI installation that require root/sudo permissions. The fixtures should either include only the contract-relevant task files or redirect/mock privileged paths so they run reliably as an unprivileged developer.
-- **Added**: 2026-05-13
-- **Status**: open
+## Open
+
 
 ## [DES-003] Add Hardcover metadata provider to CWA
 - **Category**: design
@@ -45,3 +41,21 @@
 - **Context**: Cortex v1 requires Hermes as the on-demand reasoning agent. Depends on n8n stack (OTH-001) being up and MCP configured first.
 - **Added**: 2026-05-03
 - **Status**: open
+
+## Done
+
+## [BUG-005] Install chezmoi task has no feature flag guard
+- **Category**: bug
+- **Location**: `playbooks/roles/config/lxc_workstation_baseline/tasks/main.yml:50`
+- **Context**: `sh -c "$(curl ...) -- -b /usr/local/bin"` was gated only by `creates: /usr/local/bin/chezmoi`. Added `workstation_chezmoi_install_enabled` flag (default true); fixtures set it false.
+- **Added**: 2026-05-13
+- **Completed**: 2026-05-13
+- **Status**: done
+
+## [BUG-004] Workstation regression fixtures need sudo-free role boundaries
+- **Category**: bug
+- **Location**: `tests/regression/fixtures/workstation_*` and `playbooks/roles/config/lxc_workstation_baseline/`
+- **Context**: Some workstation regression tests include the full baseline role and can hit system-level tasks such as locale files, systemd cleanup, or Bitwarden CLI installation that require root/sudo permissions. The fixtures should either include only the contract-relevant task files or redirect/mock privileged paths so they run reliably as an unprivileged developer.
+- **Added**: 2026-05-13
+- **Completed**: 2026-05-13
+- **Status**: done

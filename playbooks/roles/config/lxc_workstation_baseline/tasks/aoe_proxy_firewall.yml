@@ -164,6 +164,12 @@
     - workstation_aoe_proxy_firewall_enabled | bool
     - not ansible_check_mode
 
+- name: Stat AoE LAN proxy firewall unit file
+  ansible.builtin.stat:
+    path: /etc/systemd/system/workstation-aoe-proxy-firewall.service
+  register: _aoe_fw_service_stat
+  when: not workstation_aoe_proxy_firewall_enabled | bool
+
 - name: Stop AoE LAN proxy firewall service when disabled
   ansible.builtin.systemd:
     name: workstation-aoe-proxy-firewall.service
@@ -171,7 +177,7 @@
     enabled: false
     state: stopped
   failed_when: false
-  when: not workstation_aoe_proxy_firewall_enabled | bool
+  when: (not workstation_aoe_proxy_firewall_enabled | bool) and (_aoe_fw_service_stat.stat.exists | default(false))
 
 - name: Remove live AoE LAN proxy firewall table when disabled
   ansible.builtin.command:
@@ -184,21 +190,21 @@
   changed_when: workstation_aoe_proxy_firewall_delete_result.rc == 0
   failed_when: false
   register: workstation_aoe_proxy_firewall_delete_result
-  when: not workstation_aoe_proxy_firewall_enabled | bool
+  when: (not workstation_aoe_proxy_firewall_enabled | bool) and (_aoe_fw_service_stat.stat.exists | default(false))
 
 - name: Remove AoE LAN proxy firewall service file when disabled
   ansible.builtin.file:
     path: /etc/systemd/system/workstation-aoe-proxy-firewall.service
     state: absent
-  when: not workstation_aoe_proxy_firewall_enabled | bool
+  when: (not workstation_aoe_proxy_firewall_enabled | bool) and (_aoe_fw_service_stat.stat.exists | default(false))
 
 - name: Remove AoE LAN proxy firewall rules when disabled
   ansible.builtin.file:
     path: /etc/nftables.d/workstation-aoe-proxy.nft
     state: absent
-  when: not workstation_aoe_proxy_firewall_enabled | bool
+  when: (not workstation_aoe_proxy_firewall_enabled | bool) and (_aoe_fw_service_stat.stat.exists | default(false))
 
 - name: Reload systemd after AoE LAN proxy firewall cleanup
   ansible.builtin.systemd:
     daemon_reload: true
-  when: not workstation_aoe_proxy_firewall_enabled | bool
+  when: (not workstation_aoe_proxy_firewall_enabled | bool) and (_aoe_fw_service_stat.stat.exists | default(false))

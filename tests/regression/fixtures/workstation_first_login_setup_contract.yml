@@ -11,6 +11,7 @@
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
     workstation_locale_enabled: false
+    workstation_chezmoi_install_enabled: false
     workstation_persistent_home_enabled: false
     workstation_nix_install_enabled: false
     workstation_enable_linger: false
