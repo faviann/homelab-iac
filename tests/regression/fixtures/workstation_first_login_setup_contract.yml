@@ -10,6 +10,7 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
+    workstation_locale_enabled: false
     workstation_persistent_home_enabled: false
     workstation_nix_install_enabled: false
     workstation_enable_linger: false
@@ -117,14 +118,26 @@
           - (setup_command_raw.content | b64decode) is search('chezmoi init --apply')
           - (setup_command_raw.content | b64decode) is search('chezmoi update')
           - (setup_command_raw.content | b64decode) is search('home-manager switch -b workstation-setup-backup --flake')
+          - (setup_command_raw.content | b64decode) is search('update-agent-tools')
           - (setup_command_raw.content | b64decode) is search('nix --version')
           - (setup_command_raw.content | b64decode) is search('home-manager --version')
+          - (setup_command_raw.content | b64decode) is search('npm --version')
+          - (setup_command_raw.content | b64decode) is search('command -v codex')
+          - (setup_command_raw.content | b64decode) is search('/.local/bin/codex')
+          - (setup_command_raw.content | b64decode) is search('command -v claude')
+          - (setup_command_raw.content | b64decode) is search('/.local/bin/claude')
+          - (setup_command_raw.content | b64decode) is search('command -v pi')
+          - (setup_command_raw.content | b64decode) is search('/.local/bin/pi')
+          - (setup_command_raw.content | b64decode) is search('codex --version')
+          - (setup_command_raw.content | b64decode) is search('claude --version')
+          - (setup_command_raw.content | b64decode) is search('pi --version')
           - (setup_command_raw.content | b64decode) is search('hermes version')
           - (setup_command_raw.content | b64decode) is search('openclaw --version')
+          - (setup_command_raw.content | b64decode) is search('export PATH="\$WORKSTATION_HOME/.local/bin:\$WORKSTATION_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin')
           - (setup_command_raw.content | b64decode) is search('dotfiles/github-cli-token')
           - (setup_command_raw.content | b64decode) is search('gh api user')
           - (setup_command_raw.content | b64decode) is search('git@github.com')
-          - (setup_command_raw.content | b64decode) is search('workstation-setup: environment ready')
+          - (setup_command_raw.content | b64decode) is search('environment ready')
           - not ((setup_command_raw.content | b64decode) is search('mise'))
           - not ((setup_command_raw.content | b64decode) is search('/run/workstation-bootstrap'))
           - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTID'))
@@ -135,7 +148,10 @@
           - (setup_hook_raw.content | b64decode) is search('WORKSTATION_SETUP_SKIP')
           - (setup_hook_raw.content | b64decode) is search('/.nix-profile/bin')
           - (setup_hook_raw.content | b64decode) is search('/nix/var/nix/profiles/default/bin')
+          - (setup_hook_raw.content | b64decode) is search('/.local/bin')
           - (setup_hook_raw.content | b64decode) is search('export PATH=')
+          - (setup_hook_raw.content | b64decode) is search('version=2')
+          - not ((setup_hook_raw.content | b64decode) is search('\\[ ! -e '))
           - (setup_hook_raw.content | b64decode) is search('workstation-setup')
           - not ((setup_hook_raw.content | b64decode) is search('mise'))
           - not ((setup_hook_raw.content | b64decode) is search('/run/workstation-bootstrap'))

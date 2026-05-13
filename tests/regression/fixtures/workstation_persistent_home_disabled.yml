@@ -9,6 +9,7 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
+    workstation_locale_enabled: false
     workstation_persistent_home_enabled: false
     workstation_nix_install_enabled: false
     workstation_enable_linger: false
@@ -30,6 +31,11 @@
         type: bind_mount
         path: "{{ workstation_home }}/.codex"
         target: "{{ workstation_persistent_home_root }}/.codex"
+        mode: "0700"
+      - name: pi
+        type: bind_mount
+        path: "{{ workstation_home }}/.pi"
+        target: "{{ workstation_persistent_home_root }}/.pi"
         mode: "0700"
       - name: agent_of_empires
         type: bind_mount
@@ -116,6 +122,11 @@
         path: "{{ workstation_home }}/.codex"
       register: codex_home_stat
 
+    - name: Stat Pi home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.pi"
+      register: pi_home_stat
+
     - name: Stat repos home path
       ansible.builtin.stat:
         path: "{{ workstation_home }}/repos"
@@ -137,6 +148,7 @@
           - not persistent_home_root_stat.stat.exists
           - not claude_home_stat.stat.exists
           - not codex_home_stat.stat.exists
+          - not pi_home_stat.stat.exists
           - not aoe_home_stat.stat.exists
           - not hermes_home_stat.stat.exists
           - not repos_home_stat.stat.exists

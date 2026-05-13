@@ -1,5 +1,12 @@
 # Backlog
 
+## [BUG-004] Workstation regression fixtures need sudo-free role boundaries
+- **Category**: bug
+- **Location**: `tests/regression/fixtures/workstation_*` and `playbooks/roles/config/lxc_workstation_baseline/`
+- **Context**: Some workstation regression tests include the full baseline role and can hit system-level tasks such as locale files, systemd cleanup, or Bitwarden CLI installation that require root/sudo permissions. The fixtures should either include only the contract-relevant task files or redirect/mock privileged paths so they run reliably as an unprivileged developer.
+- **Added**: 2026-05-13
+- **Status**: open
+
 ## [DES-003] Add Hardcover metadata provider to CWA
 - **Category**: design
 - **Location**: `stacks/` (CWA stack)

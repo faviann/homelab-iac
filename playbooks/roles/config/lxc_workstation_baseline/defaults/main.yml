@@ -23,6 +23,11 @@ workstation_persistent_home_links:
     path: "{{ workstation_home }}/.codex"
     target: "{{ workstation_persistent_home_root }}/.codex"
     mode: "0700"
+  - name: pi
+    type: bind_mount
+    path: "{{ workstation_home }}/.pi"
+    target: "{{ workstation_persistent_home_root }}/.pi"
+    mode: "0700"
   - name: agent_of_empires
     type: bind_mount
     path: "{{ workstation_home }}/.config/agent-of-empires"
@@ -58,7 +63,7 @@ workstation_packages:
   - python3-venv
   - python3-pip
 workstation_setup_marker_path: "{{ workstation_home }}/.local/state/workstation-setup/complete"
-workstation_setup_version: "1"
+workstation_setup_version: "2"
 workstation_dotfiles_repo_url: https://github.com/faviann/dotfiles.git
 workstation_github_cli_token_item: dotfiles/github-cli-token
 workstation_nix_install_enabled: true

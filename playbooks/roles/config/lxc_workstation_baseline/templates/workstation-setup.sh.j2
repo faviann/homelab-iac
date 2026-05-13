@@ -13,7 +13,7 @@ BW_BIN="{{ workstation_bw_bin_path }}"
 MARKER_FINGERPRINT="{{ workstation_setup_version }}|{{ workstation_dotfiles_repo_url }}|{{ workstation_github_cli_token_item }}|{{ workstation_home_manager_flake_ref }}|{{ workstation_bw_bin_path }}"
 
 export HOME="$WORKSTATION_HOME"
-export PATH="$WORKSTATION_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$WORKSTATION_HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="$WORKSTATION_HOME/.local/bin:$WORKSTATION_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 if [ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
   # shellcheck disable=SC1091
@@ -109,6 +109,18 @@ switch_home_manager() {
   fi
 }
 
+ensure_agent_tools() {
+  if [ -x "$WORKSTATION_HOME/.local/bin/codex" ] \
+    && [ -x "$WORKSTATION_HOME/.local/bin/claude" ] \
+    && [ -x "$WORKSTATION_HOME/.local/bin/pi" ]; then
+    return
+  fi
+
+  command -v update-agent-tools >/dev/null 2>&1 || fail "update-agent-tools missing from PATH"
+  update-agent-tools
+  hash -r 2>/dev/null || true
+}
+
 authenticate_gh() {
   if gh auth status --hostname github.com >/dev/null 2>&1; then
     return
@@ -137,6 +149,7 @@ validate_environment() {
   nix --version >/dev/null || fail "nix missing or not working"
   home-manager --version >/dev/null || fail "home-manager missing or not working"
   node --version >/dev/null || fail "node missing or not working"
+  npm --version >/dev/null || fail "npm missing or not working"
   uv --version >/dev/null || fail "uv missing or not working"
   jq --version >/dev/null || fail "jq missing or not working"
   rg --version >/dev/null || fail "rg missing or not working"
@@ -144,8 +157,15 @@ validate_environment() {
   fzf --version >/dev/null || fail "fzf missing or not working"
   gh auth status --hostname github.com >/dev/null || fail "gh auth not configured"
   gh api user --jq .login >/dev/null || fail "gh api not working"
+  test "$(command -v codex)" = "$WORKSTATION_HOME/.local/bin/codex" \
+    || fail "codex must resolve from $WORKSTATION_HOME/.local/bin"
   codex --version >/dev/null || fail "codex missing or not working"
+  test "$(command -v claude)" = "$WORKSTATION_HOME/.local/bin/claude" \
+    || fail "claude must resolve from $WORKSTATION_HOME/.local/bin"
   claude --version >/dev/null || fail "claude missing or not working"
+  test "$(command -v pi)" = "$WORKSTATION_HOME/.local/bin/pi" \
+    || fail "pi must resolve from $WORKSTATION_HOME/.local/bin"
+  pi --version >/dev/null || fail "pi missing or not working"
   hermes version >/dev/null || fail "hermes missing or not working"
   openclaw --version >/dev/null || fail "openclaw missing or not working"
 
@@ -184,6 +204,7 @@ fi
 ensure_bitwarden_unlocked
 ensure_chezmoi
 switch_home_manager
+ensure_agent_tools
 authenticate_gh
 validate_environment
 write_marker

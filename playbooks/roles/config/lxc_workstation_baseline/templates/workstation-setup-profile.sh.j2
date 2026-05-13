@@ -1,24 +1,19 @@
 # Managed by Ansible. Prompts only on interactive SSH logins before setup completes.
 if [ "$(id -un 2>/dev/null || printf '')" = "{{ workstation_username }}" ]; then
-  case ":$PATH:" in
-    *:"{{ workstation_home }}/.nix-profile/bin":*) ;;
-    *) export PATH="{{ workstation_home }}/.nix-profile/bin:$PATH" ;;
-  esac
-  case ":$PATH:" in
-    *:"/nix/var/nix/profiles/default/bin":*) ;;
-    *) export PATH="/nix/var/nix/profiles/default/bin:$PATH" ;;
-  esac
-  case ":$PATH:" in
-    *:"{{ workstation_home }}/.local/bin":*) ;;
-    *) export PATH="{{ workstation_home }}/.local/bin:$PATH" ;;
-  esac
+  export PATH="{{ workstation_home }}/.local/bin:{{ workstation_home }}/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
   if [ -r /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
     . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
   fi
   if [ -r "{{ workstation_home }}/.nix-profile/etc/profile.d/hm-session-vars.sh" ]; then
     . "{{ workstation_home }}/.nix-profile/etc/profile.d/hm-session-vars.sh"
   fi
+  export PATH="{{ workstation_home }}/.local/bin:{{ workstation_home }}/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
 fi
+
+_workstation_setup_complete() {
+  [ -f "{{ workstation_setup_marker_path }}" ] || return 1
+  grep -Fxq "version={{ workstation_setup_version }}" "{{ workstation_setup_marker_path }}" || return 1
+}
 
 _workstation_setup_prompt() {
   [ -t 0 ] || return 0
@@ -26,7 +21,9 @@ _workstation_setup_prompt() {
   [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ] || return 0
   [ "$(id -un 2>/dev/null || printf '')" = "{{ workstation_username }}" ] || return 0
   [ -z "${WORKSTATION_SETUP_SKIP:-}" ] || return 0
-  [ ! -e "{{ workstation_setup_marker_path }}" ] || return 0
+  if _workstation_setup_complete; then
+    return 0
+  fi
   [ -x "{{ workstation_setup_bin_path }}" ] || return 0
 
   printf 'Workstation setup has not completed. Run workstation-setup now? [y/N] '
@@ -47,4 +44,5 @@ _workstation_setup_prompt() {
 
 _workstation_setup_prompt
 unset -f _workstation_setup_prompt
+unset -f _workstation_setup_complete
 unset _workstation_setup_answer

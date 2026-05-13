@@ -9,6 +9,7 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_packages: []
+    workstation_locale_enabled: false
     workstation_persistent_home_enabled: true
     workstation_nix_install_enabled: false
     workstation_enable_linger: false
@@ -30,6 +31,11 @@
         type: bind_mount
         path: "{{ workstation_home }}/.codex"
         target: "{{ workstation_persistent_home_root }}/.codex"
+        mode: "0700"
+      - name: pi
+        type: bind_mount
+        path: "{{ workstation_home }}/.pi"
+        target: "{{ workstation_persistent_home_root }}/.pi"
         mode: "0700"
       - name: agent_of_empires
         type: bind_mount
@@ -127,6 +133,11 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/.codex"
       register: codex_state_dir_stat
 
+    - name: Stat Pi persistent home directory
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/ephemeral/workstation/home/.pi"
+      register: pi_state_dir_stat
+
     - name: Stat repos persistent home directory
       ansible.builtin.stat:
         path: "{{ temp_root }}/ephemeral/workstation/home/repos"
@@ -156,6 +167,11 @@
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.codex"
       register: codex_home_path_stat
+
+    - name: Stat Pi home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.pi"
+      register: pi_home_path_stat
 
     - name: Stat AoE home path
       ansible.builtin.stat:
@@ -196,6 +212,10 @@
           - codex_state_dir_stat.stat.uid == workstation_uid
           - codex_state_dir_stat.stat.gid == workstation_gid
           - codex_state_dir_stat.stat.mode == "0700"
+          - pi_state_dir_stat.stat.isdir
+          - pi_state_dir_stat.stat.uid == workstation_uid
+          - pi_state_dir_stat.stat.gid == workstation_gid
+          - pi_state_dir_stat.stat.mode == "0700"
           - repos_dir_stat.stat.isdir
           - repos_dir_stat.stat.uid == workstation_uid
           - repos_dir_stat.stat.gid == workstation_gid
@@ -216,6 +236,8 @@
           - not (claude_home_path_stat.stat.islnk | default(false))
           - codex_home_path_stat.stat.isdir
           - not (codex_home_path_stat.stat.islnk | default(false))
+          - pi_home_path_stat.stat.isdir
+          - not (pi_home_path_stat.stat.islnk | default(false))
           - aoe_home_path_stat.stat.isdir
           - not (aoe_home_path_stat.stat.islnk | default(false))
           - hermes_home_path_stat.stat.isdir

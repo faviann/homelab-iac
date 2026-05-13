@@ -13,9 +13,11 @@ cd ServerManagementScripts
 ```
 
 On the Ansible-managed `workstation` LXC, complete `workstation-setup` first.
-That command applies the dotfiles Home Manager flake, which supplies `uv`,
-`gh`, `codex`, `claude`, and related user tooling there. `setup.sh` is still
-safe as a generic controller bootstrap and installs `uv` itself when needed.
+That command applies the dotfiles Home Manager flake for Node/npm, `uv`, `gh`,
+and other baseline tools, then repairs missing npm-managed agent CLIs. Use
+`update-agent-tools` on the workstation when you want the latest Codex, Claude
+Code, and Pi.dev CLIs. `setup.sh` is still safe as a generic controller
+bootstrap and installs `uv` itself when needed.
 
 The `setup.sh` script will:
 - ✅ Install system prerequisites (`python3`, `curl`, `sshpass`)
@@ -103,7 +105,7 @@ Run the automated setup script:
 ./setup.sh
 ```
 
-This handles controller prerequisites, installs `uv` when needed, syncs `.venv/`, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use. On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides the normal user tools.
+This handles controller prerequisites, installs `uv` when needed, syncs `.venv/`, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use. On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides the stable base tools and the npm agent CLI layer is present.
 
 ### Manual Setup
 

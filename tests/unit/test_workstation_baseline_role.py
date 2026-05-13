@@ -62,6 +62,13 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
                     "mode": "0700",
                 },
                 {
+                    "name": "pi",
+                    "type": "bind_mount",
+                    "path": "{{ workstation_home }}/.pi",
+                    "target": "{{ workstation_persistent_home_root }}/.pi",
+                    "mode": "0700",
+                },
+                {
                     "name": "agent_of_empires",
                     "type": "bind_mount",
                     "path": "{{ workstation_home }}/.config/agent-of-empires",
@@ -132,6 +139,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             defaults["workstation_setup_marker_path"],
             "{{ workstation_home }}/.local/state/workstation-setup/complete",
         )
+        self.assertEqual(defaults["workstation_setup_version"], "2")
         self.assertEqual(defaults["workstation_setup_bin_path"], "/usr/local/bin/workstation-setup")
         self.assertEqual(defaults["workstation_setup_profile_hook_path"], "/etc/profile.d/workstation-setup.sh")
         self.assertNotIn("workstation_bootstrap_unattended", defaults)
