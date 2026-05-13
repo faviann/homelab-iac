@@ -19,43 +19,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - admin
-  dockwatch-socket-proxy:
-    image: tecnativa/docker-socket-proxy
-    container_name: dockwatch-socket-proxy
-    security_opt:
-      - no-new-privileges:true
-    restart: unless-stopped
-    environment:
-      - ALLOW_START=1
-      - ALLOW_STOP=1
-      - ALLOW_RESTARTS=1
-      - CONTAINERS=1
-      - IMAGES=1
-      - PORTS=1
-      - NETWORKS=1
-      - POST=1
-      - VOLUMES=1
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - admin
-  dockwatch:
-    container_name: dockwatch
-    image: ghcr.io/notifiarr/dockwatch:main
-    restart: unless-stopped
-    depends_on:
-      - dockwatch-socket-proxy
-    ports:
-      - 9999:80/tcp
-    environment:
-      - DOCKER_HOST=tcp://dockwatch-socket-proxy:2375
-      - PUID=1000
-      - PGID=1000
-      - TZ=America/Montreal
-    volumes:
-      - ./appdata/dockwatch:/config
-    networks:
-      - admin
 {% if lxc_docker_env_hawser_enabled | default(false) %}
   hawser:
     container_name: hawser

@@ -6,8 +6,6 @@ By default, every `cap_docker` host gets the managed `docker-agents` stack from 
 
 Base services:
 - `docker-metadata-proxy`: read-only Docker API for Homepage discovery
-- `dockwatch-socket-proxy`: write-capable proxy for Dockwatch
-- `dockwatch`: container monitoring UI
 
 Optional when `traefik_kop_enabled: true`:
 - `traefik-kop`: copies Docker labels into portal's Redis for Traefik routing

@@ -24,8 +24,6 @@ Hosts can belong to **multiple** capability groups:
 Every `cap_docker` host receives Docker runtime support. By default, `docker_agents_enabled: true`
 also seeds the managed `docker-agents` stack:
 - `docker-metadata-proxy` — read-only Docker socket proxy for Homepage discovery
-- `dockwatch-socket-proxy` — write-capable proxy for container management
-- `dockwatch` — container monitoring UI
 - `traefik-kop` — Traefik label replication (controlled by `traefik_kop_enabled`, default `true`; set `false` on portal)
 - `hawser` — Standard-mode Dockhand remote agent on every non-`portal` Docker host where `docker_agents_enabled: true`
 

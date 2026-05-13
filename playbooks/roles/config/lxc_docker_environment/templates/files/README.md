@@ -7,14 +7,13 @@ This directory contains template files and folders that the `lxc_docker_environm
 ```
 files/
 ├── docker-agents/        # Universal managed helper stack templates
-│   ├── compose.yml.j2    # Base: metadata-proxy, dockwatch-socket-proxy, dockwatch, and Hawser on remote hosts
+│   ├── compose.yml.j2    # Base: metadata-proxy and Hawser on remote hosts
 │   ├── compose.override.yaml.j2  # Override: traefik-kop (only when traefik_kop_enabled)
 │   └── .env.j2           # Override env: REDISURL/DOMAIN and Hawser token for remote hosts
 └── stacks/
     └── docker-agents/    # Static assets copied into the managed helper stack
         └── appdata/
-            └── dockwatch/    # Persistent dockwatch config directory
-```
+    ```
 
 ## How It Works
 
@@ -26,7 +25,7 @@ The `docker-agents/` templates are rendered to `/shared/<hostname>/stacks/docker
 - `compose.override.yaml.j2` → `compose.override.yaml` — rendered **only** when `traefik_kop_enabled` is true. Docker Compose automatically merges `compose.override.yaml` with `compose.yml`.
 - `.env.j2` → `.env` — rendered when `traefik_kop_enabled` is true or the host is a non-`portal` Docker host. Contains the Redis URL/domain for traefik-kop and the Hawser Standard token on remote hosts.
 
-Static assets from `stacks/docker-agents/` (like the dockwatch appdata directory) are copied alongside the rendered templates.
+Static assets from `stacks/docker-agents/` are copied alongside the rendered templates.
 
 ### Per-Host Stacks
 
