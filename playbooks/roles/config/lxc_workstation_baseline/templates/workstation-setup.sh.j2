@@ -114,6 +114,24 @@ ensure_chezmoi() {
   chezmoi update
 }
 
+update_chezmoi_source_without_secrets() {
+  test -d "$HOME/.local/share/chezmoi/.git" || return 1
+  git -C "$HOME/.local/share/chezmoi" pull --ff-only
+}
+
+install_setup_dotfiles_without_secrets() {
+  update_agent_tools_source="$HOME/.local/share/chezmoi/dot_local/bin/executable_update-agent-tools"
+  npmrc_source="$HOME/.local/share/chezmoi/dot_npmrc"
+
+  if [ -f "$update_agent_tools_source" ]; then
+    install -m 0755 "$update_agent_tools_source" "$HOME/.local/bin/update-agent-tools"
+  fi
+
+  if [ -f "$npmrc_source" ]; then
+    install -m 0600 "$npmrc_source" "$HOME/.npmrc"
+  fi
+}
+
 switch_home_manager() {
   command -v nix >/dev/null 2>&1 || fail "nix missing from PATH"
   rm -f \
@@ -224,9 +242,11 @@ if ! local_bootstrap_ready; then
   ensure_bitwarden_unlocked
   ensure_chezmoi
 else
-  if ! ensure_chezmoi; then
+  if ! update_chezmoi_source_without_secrets; then
     ensure_bitwarden_unlocked
     ensure_chezmoi
+  else
+    install_setup_dotfiles_without_secrets
   fi
 fi
 switch_home_manager
