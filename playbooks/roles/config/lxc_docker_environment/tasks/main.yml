@@ -171,6 +171,14 @@
   ansible.builtin.include_tasks: host_directories.yml
   when: (lxc_docker_env_host_directories | default([])) | length > 0
 
+- name: Remove retired containers
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ lxc_docker_env_absent_containers }}"
+  become: true
+  become_user: "{{ lxc_docker_environment_internal.docker_user }}"
+
 - name: Reconcile repo-managed stacks
   ansible.builtin.include_role:
     name: config/lxc_stack_sync

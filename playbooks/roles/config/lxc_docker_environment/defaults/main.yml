@@ -45,3 +45,9 @@ lxc_docker_env_path_ownership_overrides: []
 # Optional host-level directories to create before stack reconciliation.
 # Each item supports: path, owner, group, mode.
 lxc_docker_env_host_directories: []
+
+# Tombstone list of container names that must be absent on every run.
+# Add retired containers here so they are cleaned up fleet-wide on next deploy.
+lxc_docker_env_absent_containers:
+  - dockwatch
+  - dockwatch-socket-proxy
