@@ -43,6 +43,28 @@ _workstation_setup_prompt() {
 }
 
 _workstation_setup_prompt
+{% if workstation_autosync_enabled | bool %}
+
+# Backgrounded dotfiles autosync. Only after setup completes (the prompt above
+# owns the pre-marker state, so the two never run at once). Prints reminders
+# queued by the PREVIOUS login's sync, then launches a fresh detached run.
+_workstation_autosync() {
+  [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ] || return 0
+  [ "$(id -un 2>/dev/null || printf '')" = "{{ workstation_username }}" ] || return 0
+  [ -z "${WORKSTATION_SETUP_SKIP:-}" ] || return 0
+  _workstation_setup_complete || return 0
+  if [ -s "{{ workstation_autosync_notices_path }}" ]; then
+    cat "{{ workstation_autosync_notices_path }}"
+    : > "{{ workstation_autosync_notices_path }}"
+  fi
+  [ -x "{{ workstation_autosync_bin_path }}" ] || return 0
+  # setsid + </dev/null detaches so login never waits on git/chezmoi.
+  setsid "{{ workstation_autosync_bin_path }}" \
+    >> "{{ workstation_autosync_log_path }}" 2>&1 < /dev/null &
+}
+_workstation_autosync
+unset -f _workstation_autosync
+{% endif %}
 unset -f _workstation_setup_prompt
 unset -f _workstation_setup_complete
 unset _workstation_setup_answer
