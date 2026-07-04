@@ -61,9 +61,19 @@ print_info() {
 BW_ITEM="${BW_ITEM:-<REPLACE_ME_BITWARDEN_ITEM_ID>}"   # PLACEHOLDER — set to the real item id
 BW_FIELD="${BW_FIELD:-auto}"                            # auto | password | notes | <custom-field-name>
 
-# Paths
-VAULT_FILE="inventory/group_vars/all/vault.yml"
-LIVE_PASS_FILE="$HOME/.ansible/vault-pass"
+# Paths (env-overridable so a --dry-run can point at a throwaway vault/pass pair).
+# NOTE: overriding these is intended for --dry-run ONLY. In a real rotation, Step 7
+# (`chezmoi apply`) and Step 8 (verify via ansible.cfg) always target the REAL
+# ~/.ansible/vault-pass regardless of LIVE_PASS_FILE, so overriding it for a real run would
+# rekey/verify against a throwaway file while chezmoi rewrites the real one — an OLD/NEW split.
+VAULT_FILE="${VAULT_FILE:-inventory/group_vars/all/vault.yml}"
+LIVE_PASS_FILE="${LIVE_PASS_FILE:-$HOME/.ansible/vault-pass}"
+
+# Dry run: exercise the OLD->NEW rekey + verify cycle on throwaway tmpfs COPIES of the vault
+# and pass file, then stop. Never touches the real files, Bitwarden, or chezmoi. Does NOT
+# exercise the Bitwarden publish or `chezmoi apply` steps (those cannot run without mutating
+# the real item). Generates the NEW passphrase locally, so no unlocked bw session is needed.
+DRY_RUN=false
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Argument parsing
@@ -78,6 +88,10 @@ while [ $# -gt 0 ]; do
             BW_FIELD="${2:-}"
             shift 2
             ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
         -h|--help)
             cat <<EOF
 Usage: ./rotate-vault-passphrase.sh [--item <bitwarden-item-id>] [--field <name>]
@@ -88,10 +102,14 @@ Options:
   --item <id>     Bitwarden item id the chezmoi template reads (env: BW_ITEM)
   --field <name>  Field holding the passphrase: auto|password|notes|<custom>
                   (env: BW_FIELD; default: auto)
+  --dry-run       Rekey + verify a throwaway COPY of the vault only. No bw session,
+                  no Bitwarden write, no chezmoi apply. Safe to run against defaults.
   -h, --help      Show this help
 
-Requires a pre-unlocked Bitwarden session (export BW_SESSION before running).
-The script never handles the Bitwarden master password.
+Paths are env-overridable: VAULT_FILE, LIVE_PASS_FILE.
+
+A real (non --dry-run) rotation requires a pre-unlocked Bitwarden session
+(export BW_SESSION before running). The script never handles the master password.
 EOF
             exit 0
             ;;
@@ -183,21 +201,28 @@ echo
 echo "Step 1: Preflight checks..."
 echo "─────────────────────────────────────────"
 
-for cmd in bw jq chezmoi uv shred; do
+# A dry run rekeys a throwaway copy and generates the passphrase locally, so it needs neither
+# bw/jq/chezmoi nor an unlocked session.
+if $DRY_RUN; then
+    REQUIRED_CMDS="uv shred"
+else
+    REQUIRED_CMDS="bw jq chezmoi uv shred"
+fi
+for cmd in $REQUIRED_CMDS; do
     if ! command -v "$cmd" &> /dev/null; then
         die "Required command not found: $cmd"
     fi
 done
-print_status "Required tools present (bw, jq, chezmoi, uv, shred)"
+print_status "Required tools present ($REQUIRED_CMDS)"
 
 # Bitwarden session must be unlocked; the script never handles the master password.
-if [ "$(bw status 2>/dev/null | jq -r '.status')" != "unlocked" ]; then
+if ! $DRY_RUN && [ "$(bw status 2>/dev/null | jq -r '.status')" != "unlocked" ]; then
     print_error "Bitwarden is not unlocked."
     print_info "Unlock and export the session, then rerun:"
     echo "  export BW_SESSION=\$(bw unlock --raw)"
     exit 1
 fi
-print_status "Bitwarden session is unlocked"
+$DRY_RUN || print_status "Bitwarden session is unlocked"
 
 # Live password file = OLD passphrase, used directly as --vault-password-file (no temp copy).
 if [ ! -s "$LIVE_PASS_FILE" ]; then
@@ -215,7 +240,8 @@ if ! head -n1 "$VAULT_FILE" | grep -q '\$ANSIBLE_VAULT'; then
 fi
 print_status "Vault file present and encrypted"
 
-# Resolve the Bitwarden item + field.
+# Resolve the Bitwarden item + field (skipped for --dry-run, which never publishes).
+if ! $DRY_RUN; then
 if [ -z "$BW_ITEM" ] || [ "$BW_ITEM" = "<REPLACE_ME_BITWARDEN_ITEM_ID>" ]; then
     print_error "Bitwarden item id is not configured (still the placeholder)."
     print_info "Set the real item id and rerun. Confirm it against the faviann/dotfiles"
@@ -263,29 +289,40 @@ case "$BW_FIELD" in
         ;;
 esac
 print_status "Bitwarden item and field resolved"
+fi  # ! DRY_RUN
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Confirmation — explicit yes required before any mutation
 # ─────────────────────────────────────────────────────────────────────────────
-echo "This will rotate the Ansible Vault passphrase. Steps:"
-echo "  1. Generate a new 32-char passphrase (bw generate)."
-echo "  2. Back up $VAULT_FILE to ~/.ansible/vault.yml.bak.<timestamp> (outside the repo)."
-echo "  3. Re-encrypt $VAULT_FILE from the OLD to the NEW passphrase (local)."
-echo "  4. Verify the NEW passphrase decrypts the vault."
-echo "  5. Publish the NEW passphrase to Bitwarden item '$BW_ITEM' (field: $BW_FIELD)."
-echo "  6. Run 'chezmoi apply' to regenerate $LIVE_PASS_FILE."
-echo "  7. Verify end-to-end via the live password file."
-echo
-print_warning "Bitwarden is mutated LAST, only after the local rekey verifies."
-print_warning "No passphrase (old or new) will be printed."
-echo
-read -r -p "Proceed with rotation? Type 'yes' to continue: " CONFIRM
-if [ "$CONFIRM" != "yes" ]; then
-    print_info "Aborted by user. Nothing changed."
-    exit 0
+if $DRY_RUN; then
+    print_warning "DRY RUN — exercises the rekey + verify cycle on a throwaway COPY only."
+    echo "  1. Copy $VAULT_FILE and $LIVE_PASS_FILE into a tmpfs workspace."
+    echo "  2. Generate a new 32-char passphrase locally (no bw)."
+    echo "  3. Re-encrypt the COPY from OLD to NEW and verify NEW decrypts it."
+    echo "  Skipped: Bitwarden publish, chezmoi apply, live-file verify."
+    print_info "The real vault, Bitwarden, and $LIVE_PASS_FILE are never touched."
+    echo
+else
+    echo "This will rotate the Ansible Vault passphrase. Steps:"
+    echo "  1. Generate a new 32-char passphrase (bw generate)."
+    echo "  2. Back up $VAULT_FILE to ~/.ansible/vault.yml.bak.<timestamp> (outside the repo)."
+    echo "  3. Re-encrypt $VAULT_FILE from the OLD to the NEW passphrase (local)."
+    echo "  4. Verify the NEW passphrase decrypts the vault."
+    echo "  5. Publish the NEW passphrase to Bitwarden item '$BW_ITEM' (field: $BW_FIELD)."
+    echo "  6. Run 'chezmoi apply $LIVE_PASS_FILE' to regenerate just that file (no other scripts)."
+    echo "  7. Verify end-to-end via the live password file."
+    echo
+    print_warning "Bitwarden is mutated LAST, only after the local rekey verifies."
+    print_warning "No passphrase (old or new) will be printed."
+    echo
+    read -r -p "Proceed with rotation? Type 'yes' to continue: " CONFIRM
+    if [ "$CONFIRM" != "yes" ]; then
+        print_info "Aborted by user. Nothing changed."
+        exit 0
+    fi
+    echo
 fi
-echo
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Workspace (create only after confirmation)
@@ -293,6 +330,16 @@ echo
 WORKDIR="$(mktemp -d -p /dev/shm rotate-vault.XXXXXX)" || die "Failed to create tmpfs workspace in /dev/shm"
 chmod 700 "$WORKDIR"
 NEW="$WORKDIR/new-passphrase"
+
+# Dry run operates on throwaway copies so the rekey can never touch the real vault/pass file.
+# Repoint the path vars at the copies; every step below then works on them transparently.
+if $DRY_RUN; then
+    (umask 077 && cp "$VAULT_FILE" "$WORKDIR/test-vault.yml" && cp "$LIVE_PASS_FILE" "$WORKDIR/test-old-pass") \
+        || die "Failed to stage dry-run copies in the tmpfs workspace"
+    VAULT_FILE="$WORKDIR/test-vault.yml"
+    LIVE_PASS_FILE="$WORKDIR/test-old-pass"
+    print_status "Staged throwaway copies of the vault and pass file (tmpfs)"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 2: Generate the new passphrase
@@ -302,9 +349,22 @@ echo "────────────────────────�
 # Capture directly into the tmpfs file; create mode-600 first so it is never briefly readable.
 (umask 077 && : > "$NEW")
 chmod 600 "$NEW"
-bw generate -ulns --length 32 > "$NEW" || die "bw generate failed"
+if $DRY_RUN; then
+    # Local generation — no bw session. Read a fixed 512 random bytes (no SIGPIPE on the
+    # source), filter to the charset, take 32. 512 bytes yields ~130 in-charset chars on
+    # average, so falling short of 32 is astronomically unlikely.
+    LC_ALL=C tr -dc 'A-Za-z0-9!@#%*_-' < <(head -c 512 /dev/urandom) | cut -c1-32 > "$NEW" \
+        || die "local passphrase generation failed"
+else
+    bw generate -ulns --length 32 > "$NEW" || die "bw generate failed"
+fi
 if [ ! -s "$NEW" ]; then
     die "Generated passphrase file is empty"
+fi
+# Guard against a short passphrase (e.g. a truncated random draw), not just an empty one.
+# rtrimstr on the trailing newline both generators append; expect exactly 32 chars.
+if [ "$(tr -d '\n' < "$NEW" | wc -c)" -ne 32 ]; then
+    die "Generated passphrase is not 32 characters — refusing to proceed"
 fi
 print_status "New passphrase generated (not shown)"
 echo
@@ -316,7 +376,12 @@ echo "Step 3: Backing up vault.yml..."
 echo "─────────────────────────────────────────"
 # Kept outside the working tree so it can never be swept into a commit. Note: .gitignore's
 # '*.bak' glob does NOT match 'vault.yml.bak.<ts>', which is another reason to keep it out.
-BACKUP="$HOME/.ansible/vault.yml.bak.$(date +%Y%m%d-%H%M%S)"
+# Dry run keeps the backup inside the tmpfs workspace so it does not litter ~/.ansible.
+if $DRY_RUN; then
+    BACKUP="$WORKDIR/test-vault.bak"
+else
+    BACKUP="$HOME/.ansible/vault.yml.bak.$(date +%Y%m%d-%H%M%S)"
+fi
 (umask 077 && cp "$VAULT_FILE" "$BACKUP") || die "Failed to back up vault.yml"
 chmod 600 "$BACKUP"
 print_status "Backed up to $BACKUP (mode 600, old-passphrase ciphertext)"
@@ -353,6 +418,21 @@ else
 fi
 echo
 
+# Dry run ends here: the OLD->NEW rekey + verify cycle succeeded on the throwaway copy.
+if $DRY_RUN; then
+    ROTATION_COMPLETE=true  # nothing real to recover; the trap shreds the tmpfs workspace
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  Dry Run Complete — rekey + verify cycle OK                ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    print_info "Ran on throwaway copies. Real vault, Bitwarden, and live pass file untouched."
+    print_warning "Not exercised: Bitwarden publish and 'chezmoi apply' (need the real item)."
+    print_info "For the real rotation, drop --dry-run and unlock bw first:"
+    echo "  export BW_SESSION=\$(bw unlock --raw)"
+    echo "  BW_ITEM='dotfiles/ansible-vault-pass' BW_FIELD=notes ./rotate-vault-passphrase.sh"
+    exit 0
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 6: Re-check session, then publish to Bitwarden
 # ─────────────────────────────────────────────────────────────────────────────
@@ -366,6 +446,11 @@ fi
 
 # Re-fetch the item immediately before edit (fresh revision; avoids clobbering).
 ITEM_JSON="$(bw get item "$BW_ITEM" 2>/dev/null)" || die "Bitwarden item not found at publish time: $BW_ITEM"
+
+# `bw get item` resolves a name/search term, but `bw edit item` requires the object id (GUID).
+# Passing a name to `bw edit` returns "Not found." — so resolve the real id from the JSON.
+BW_ITEM_ID="$(printf '%s' "$ITEM_JSON" | jq -r '.id // empty')"
+[ -n "$BW_ITEM_ID" ] || die "Could not resolve the Bitwarden item id for '$BW_ITEM'."
 
 # Build the jq filter that writes the NEW passphrase into the resolved field. The secret is
 # passed via --rawfile (read from the tmpfs file), never --arg or string interpolation, so
@@ -389,7 +474,7 @@ esac
 if printf '%s' "$ITEM_JSON" \
         | jq --rawfile pass "$NEW" --arg fname "$BW_FIELD" "$JQ_FILTER" \
         | bw encode \
-        | bw edit item "$BW_ITEM" > /dev/null; then
+        | bw edit item "$BW_ITEM_ID" > /dev/null; then
     print_status "Bitwarden item updated (field: $BW_FIELD)"
 else
     die "Failed to publish to Bitwarden. vault.yml restored to OLD; Bitwarden edit did not complete."
@@ -404,13 +489,17 @@ echo "────────────────────────�
 # From here on the live pass file may be NEW, so recovery rolls FORWARD to NEW/NEW (see
 # recover()): vault.yml is verified-NEW and Bitwarden holds NEW, so on any failure we make
 # the live file NEW rather than stranding vault.yml on an OLD backup we can no longer decrypt.
+#
+# Apply ONLY the live pass file's target, not the whole tree. A bare `chezmoi apply` would
+# also run every unrelated run_ script (package/tool installs, etc.) as a side effect of
+# rotating a passphrase — scoping to the single path regenerates just this file and runs none.
 LIVE_MAY_BE_NEW=true
-if ! chezmoi apply; then
+if ! chezmoi apply "$LIVE_PASS_FILE"; then
     # recover() forces the live file to NEW from the tmpfs copy — no manual step needed in
     # the common case. If that write also fails, recover() prints the manual chezmoi path.
     die "chezmoi apply failed. Attempting forward recovery to the NEW passphrase."
 fi
-print_status "chezmoi apply completed"
+print_status "chezmoi apply completed (live pass file only)"
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
