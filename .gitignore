@@ -79,3 +79,6 @@ stacks/portal/homepage-editors/appdata/homepage/config/logs/
 stacks/portal/homepage-admin/appdata/homepage/config/icons/
 stacks/portal/homepage-admin/appdata/homepage/config/logs/
 .superpowers/
+
+# Superpowers dev artifacts (plans, specs, handoffs) — not tracked
+docs/superpowers/
