@@ -54,6 +54,7 @@ workstation_packages:
   - mosh
   - wget
   - git
+  - sshpass
   - htop
   - tree
   - zip
