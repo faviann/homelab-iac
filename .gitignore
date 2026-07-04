@@ -59,7 +59,10 @@ __pycache__/
 
 # Temporary files
 /tmp/
-inventory/group_vars/all/vault.yml
+
+# NOTE: inventory/group_vars/all/vault.yml is intentionally TRACKED. It is safe to commit
+# because it is ansible-vault-encrypted with a long random passphrase (see
+# rotate-vault-passphrase.sh). Never commit the passphrase or any plaintext secrets.
 
 # Rendered env files (secrets injected at deploy time)
 stacks/**/.env
