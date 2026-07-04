@@ -1,5 +1,5 @@
 #!/bin/bash
-# Automated workstation setup for ServerManagementScripts
+# Automated workstation setup for homelab-iac
 # This script prepares a fresh workstation to run Ansible playbooks
 
 set -e  # Exit on error
@@ -16,7 +16,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  ServerManagementScripts - Controller Setup               ║${NC}"
+echo -e "${BLUE}║  homelab-iac - Controller Setup                            ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo
 

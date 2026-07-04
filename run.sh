@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick-run script for ServerManagementScripts
+# Quick-run script for homelab-iac
 
 set -e
 

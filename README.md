@@ -1,4 +1,4 @@
-# ServerManagementScripts
+# homelab-iac
 
 Ansible automation for managing Proxmox LXC containers via API from a remote controller.
 
@@ -7,8 +7,8 @@ Ansible automation for managing Proxmox LXC containers via API from a remote con
 **Generic controller setup:**
 
 ```bash
-git clone https://github.com/faviann/ServerManagementScripts.git
-cd ServerManagementScripts
+git clone https://github.com/faviann/homelab-iac.git
+cd homelab-iac
 ./setup.sh
 ```
 
@@ -395,9 +395,9 @@ When adding new playbooks or roles:
 
 ## Support
 
-- Issues: https://github.com/faviann/ServerManagementScripts/issues
+- Issues: https://github.com/faviann/homelab-iac/issues
 - Documentation: See [docs/](docs/) directory
 
 ## License
 
-Part of ServerManagementScripts repository.
+Part of homelab-iac repository.

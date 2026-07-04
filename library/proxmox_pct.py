@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2025, ServerManagementScripts
+# Copyright: (c) 2025, homelab-iac
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -16,7 +16,7 @@ description:
     - "Wraps common pct operations: status, config, set, exec, start, stop, restart, reboot, shutdown"
 version_added: "1.0.0"
 author:
-    - "ServerManagementScripts"
+    - "homelab-iac"
 options:
     vmid:
         description:
