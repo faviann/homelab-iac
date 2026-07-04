@@ -117,6 +117,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             "pkg-config",
             "python3-venv",
             "python3-pip",
+            "bubblewrap",
         }
         self.assertTrue(
             expected_apt_packages.issubset(set(defaults["workstation_packages"])),

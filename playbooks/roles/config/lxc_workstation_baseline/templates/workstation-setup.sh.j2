@@ -187,6 +187,7 @@ validate_environment() {
   home-manager --version >/dev/null || fail "home-manager missing or not working"
   node --version >/dev/null || fail "node missing or not working"
   npm --version >/dev/null || fail "npm missing or not working"
+  command -v bwrap >/dev/null 2>&1 || fail "bwrap missing from PATH"
   uv --version >/dev/null || fail "uv missing or not working"
   jq --version >/dev/null || fail "jq missing or not working"
   rg --version >/dev/null || fail "rg missing or not working"

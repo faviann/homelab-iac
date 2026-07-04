@@ -133,6 +133,7 @@
           - (setup_command_raw.content | b64decode) is search('nix --version')
           - (setup_command_raw.content | b64decode) is search('home-manager --version')
           - (setup_command_raw.content | b64decode) is search('npm --version')
+          - (setup_command_raw.content | b64decode) is search('command -v bwrap')
           - (setup_command_raw.content | b64decode) is search('command -v codex')
           - (setup_command_raw.content | b64decode) is search('/.local/bin/codex')
           - (setup_command_raw.content | b64decode) is search('command -v claude')

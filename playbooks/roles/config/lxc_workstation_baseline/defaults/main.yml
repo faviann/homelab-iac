@@ -62,6 +62,7 @@ workstation_packages:
   - pkg-config
   - python3-venv
   - python3-pip
+  - bubblewrap
 workstation_setup_marker_path: "{{ workstation_home }}/.local/state/workstation-setup/complete"
 workstation_setup_version: "2"
 workstation_dotfiles_repo_url: https://github.com/faviann/dotfiles.git
