@@ -43,23 +43,20 @@ print_info() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Configuration — OPEN ITEMS (confirm against the faviann/dotfiles chezmoi template)
+# Configuration — Bitwarden item + field
 # ─────────────────────────────────────────────────────────────────────────────
-# The chezmoi template that regenerates ~/.ansible/vault-pass reads the passphrase from
-# a Bitwarden item. Two things must match that template exactly:
-#   1. BW_ITEM  — the item id (or name) the template's `bw get` targets.
-#   2. BW_FIELD — which field holds the value: "password", "notes", or a custom field name.
+# The chezmoi template that regenerates ~/.ansible/vault-pass reads the passphrase from a
+# Bitwarden item; the script must publish to the same item and field. Both are PROMPTED at
+# runtime with the defaults below (Enter accepts). The current dotfiles template reads
+# (bitwarden "item" "dotfiles/ansible-vault-pass").notes — hence these defaults.
 #
-# These are OPEN ITEMS in the design spec. Confirm both by reading the dotfiles template
-# (the file under faviann/dotfiles that renders ~/.ansible/vault-pass via `bw get ...`).
-# Until confirmed here, the defaults below are PLACEHOLDERS and the script will refuse to
-# publish rather than clobber the wrong field.
-#
-# Override without editing the file:
+# You normally just run the script and press Enter at the prompts. Setting BW_ITEM / BW_FIELD
+# in the environment pre-fills the corresponding prompt default instead:
 #   BW_ITEM=<id> BW_FIELD=password ./rotate-vault-passphrase.sh
-#   ./rotate-vault-passphrase.sh --item <id> --field password
-BW_ITEM="${BW_ITEM:-<REPLACE_ME_BITWARDEN_ITEM_ID>}"   # PLACEHOLDER — set to the real item id
-BW_FIELD="${BW_FIELD:-auto}"                            # auto | password | notes | <custom-field-name>
+DEFAULT_BW_ITEM="dotfiles/ansible-vault-pass"
+DEFAULT_BW_FIELD="notes"
+BW_ITEM="${BW_ITEM:-}"    # empty ⇒ prompt defaults to DEFAULT_BW_ITEM
+BW_FIELD="${BW_FIELD:-}"  # empty ⇒ prompt defaults to DEFAULT_BW_FIELD
 
 # Paths (env-overridable so a --dry-run can point at a throwaway vault/pass pair).
 # NOTE: overriding these is intended for --dry-run ONLY. In a real rotation, Step 7
@@ -80,36 +77,26 @@ DRY_RUN=false
 # ─────────────────────────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
-        --item)
-            BW_ITEM="${2:-}"
-            shift 2
-            ;;
-        --field)
-            BW_FIELD="${2:-}"
-            shift 2
-            ;;
         --dry-run)
             DRY_RUN=true
             shift
             ;;
         -h|--help)
             cat <<EOF
-Usage: ./rotate-vault-passphrase.sh [--item <bitwarden-item-id>] [--field <name>]
+Usage: ./rotate-vault-passphrase.sh [--dry-run]
 
-Rotates the Ansible Vault passphrase for $VAULT_FILE.
+Rotates the Ansible Vault passphrase for $VAULT_FILE. Interactive: just run it and
+follow the prompts — it unlocks Bitwarden (bw asks for your master password) and prompts
+for the item and field, defaulting to '$DEFAULT_BW_ITEM' / '$DEFAULT_BW_FIELD'.
 
 Options:
-  --item <id>     Bitwarden item id the chezmoi template reads (env: BW_ITEM)
-  --field <name>  Field holding the passphrase: auto|password|notes|<custom>
-                  (env: BW_FIELD; default: auto)
-  --dry-run       Rekey + verify a throwaway COPY of the vault only. No bw session,
-                  no Bitwarden write, no chezmoi apply. Safe to run against defaults.
-  -h, --help      Show this help
+  --dry-run   Rekey + verify a throwaway COPY of the vault only. No bw session,
+              no Bitwarden write, no chezmoi apply. Safe to run against defaults.
+  -h, --help  Show this help
 
-Paths are env-overridable: VAULT_FILE, LIVE_PASS_FILE.
-
-A real (non --dry-run) rotation requires a pre-unlocked Bitwarden session
-(export BW_SESSION before running). The script never handles the master password.
+Setting BW_ITEM / BW_FIELD in the environment pre-fills those prompt defaults.
+Paths are env-overridable (dry-run only): VAULT_FILE, LIVE_PASS_FILE.
+You must be logged into Bitwarden ('bw login'); the script never handles the master password.
 EOF
             exit 0
             ;;
@@ -215,14 +202,27 @@ for cmd in $REQUIRED_CMDS; do
 done
 print_status "Required tools present ($REQUIRED_CMDS)"
 
-# Bitwarden session must be unlocked; the script never handles the master password.
-if ! $DRY_RUN && [ "$(bw status 2>/dev/null | jq -r '.status')" != "unlocked" ]; then
-    print_error "Bitwarden is not unlocked."
-    print_info "Unlock and export the session, then rerun:"
-    echo "  export BW_SESSION=\$(bw unlock --raw)"
-    exit 1
+# Ensure an unlocked Bitwarden session. The script never handles the master password: on a
+# locked vault it delegates to `bw unlock`, which prompts on the tty and returns only a session
+# token. A dry run needs no session at all.
+if ! $DRY_RUN; then
+    case "$(bw status 2>/dev/null | jq -r '.status')" in
+        unlocked)
+            print_status "Bitwarden session already unlocked"
+            ;;
+        locked)
+            print_info "Bitwarden is locked — unlock to continue (bw will prompt for your master password)."
+            BW_SESSION="$(bw unlock --raw)" || die "Bitwarden unlock failed."
+            export BW_SESSION
+            [ "$(bw status 2>/dev/null | jq -r '.status')" = "unlocked" ] \
+                || die "Bitwarden still locked after unlock attempt."
+            print_status "Bitwarden unlocked"
+            ;;
+        *)
+            die "Bitwarden is not logged in (status: $(bw status 2>/dev/null | jq -r '.status')). Run 'bw login' first, then rerun."
+            ;;
+    esac
 fi
-$DRY_RUN || print_status "Bitwarden session is unlocked"
 
 # Live password file = OLD passphrase, used directly as --vault-password-file (no temp copy).
 if [ ! -s "$LIVE_PASS_FILE" ]; then
@@ -242,14 +242,16 @@ print_status "Vault file present and encrypted"
 
 # Resolve the Bitwarden item + field (skipped for --dry-run, which never publishes).
 if ! $DRY_RUN; then
-if [ -z "$BW_ITEM" ] || [ "$BW_ITEM" = "<REPLACE_ME_BITWARDEN_ITEM_ID>" ]; then
-    print_error "Bitwarden item id is not configured (still the placeholder)."
-    print_info "Set the real item id and rerun. Confirm it against the faviann/dotfiles"
-    print_info "chezmoi template that renders $LIVE_PASS_FILE via 'bw get ...':"
-    echo "  BW_ITEM=<id> BW_FIELD=<field> ./rotate-vault-passphrase.sh"
-    echo "  # or: ./rotate-vault-passphrase.sh --item <id> --field <field>"
-    exit 1
-fi
+# Prompt for both, defaulting to the env pre-fill if set, else the baked-in default. Enter
+# accepts the shown default.
+item_default="${BW_ITEM:-$DEFAULT_BW_ITEM}"
+read -r -p "Bitwarden item [$item_default]: " ans
+BW_ITEM="${ans:-$item_default}"
+
+field_default="${BW_FIELD:-$DEFAULT_BW_FIELD}"
+read -r -p "Field — password|notes|auto [$field_default]: " ans
+BW_FIELD="${ans:-$field_default}"
+echo
 
 # Pull the item JSON once to validate the reference and (if needed) auto-resolve the field.
 ITEM_JSON="$(bw get item "$BW_ITEM" 2>/dev/null)" || die "Bitwarden item not found: $BW_ITEM"
@@ -262,13 +264,13 @@ resolve_field() {
     has_password="$(printf '%s' "$ITEM_JSON" | jq -r '((.login.password // "") | length) > 0')"
     has_notes="$(printf '%s' "$ITEM_JSON" | jq -r '((.notes // "") | length) > 0')"
     if [ "$has_password" = "true" ] && [ "$has_notes" = "true" ]; then
-        die "Ambiguous field: item has BOTH a password and notes populated. Re-run with an explicit --field (password|notes|<custom-field-name>)."
+        die "Ambiguous field: item has BOTH a password and notes populated. Re-run and enter an explicit field (password|notes|<custom-field-name>) instead of 'auto'."
     elif [ "$has_password" = "true" ]; then
         BW_FIELD="password"
     elif [ "$has_notes" = "true" ]; then
         BW_FIELD="notes"
     else
-        die "Cannot auto-detect the passphrase field (neither password nor notes populated). Re-run with an explicit --field. Confirm against the dotfiles chezmoi template."
+        die "Cannot auto-detect the passphrase field (neither password nor notes populated). Re-run and enter an explicit field. Confirm against the dotfiles chezmoi template."
     fi
 }
 
@@ -427,9 +429,8 @@ if $DRY_RUN; then
     echo
     print_info "Ran on throwaway copies. Real vault, Bitwarden, and live pass file untouched."
     print_warning "Not exercised: Bitwarden publish and 'chezmoi apply' (need the real item)."
-    print_info "For the real rotation, drop --dry-run and unlock bw first:"
-    echo "  export BW_SESSION=\$(bw unlock --raw)"
-    echo "  BW_ITEM='dotfiles/ansible-vault-pass' BW_FIELD=notes ./rotate-vault-passphrase.sh"
+    print_info "For the real rotation, just run it without --dry-run (it unlocks bw and prompts):"
+    echo "  ./rotate-vault-passphrase.sh"
     exit 0
 fi
 
@@ -441,7 +442,7 @@ echo "────────────────────────�
 # The rekey can take minutes; the session may have timed out. Re-check before mutating.
 # Locked here is still fully recoverable (vault.yml gets restored to OLD).
 if [ "$(bw status 2>/dev/null | jq -r '.status')" != "unlocked" ]; then
-    die "Bitwarden session locked before publish. Re-unlock (export BW_SESSION=\$(bw unlock --raw)) and rerun the whole script."
+    die "Bitwarden session locked before publish (it timed out during the rekey). Rerun the whole script — it will unlock again. vault.yml has been restored to OLD."
 fi
 
 # Re-fetch the item immediately before edit (fresh revision; avoids clobbering).
