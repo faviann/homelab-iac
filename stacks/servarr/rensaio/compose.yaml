@@ -3,9 +3,9 @@ x-prereq-dirs:
   - /data/media/manga
 
 services:
-  kaizoku-net:
-    image: maxpiva/kaizoku-net:2.0
-    container_name: kaizoku-net
+  rensaio:
+    image: maxpiva/rensaio:latest
+    container_name: rensaio
     restart: unless-stopped
     environment:
       UID: ${PUID}
@@ -19,9 +19,9 @@ services:
       - 9833:9833
     labels:
       traefik.enable: true
-      traefik.http.routers.kaizoku-net.middlewares: protected-edge-auth@file
+      traefik.http.routers.rensaio.middlewares: protected-edge-auth@file
       homepage.instance.admin.group: Arr
-      homepage.instance.admin.name: Kaizoku.NET
+      homepage.instance.admin.name: Rensaio
       homepage.instance.admin.href: https://${HOMEPAGE_FQDN}
       homepage.instance.admin.description: Manga and series download manager
       homepage.instance.admin.icon: mdi-book-open-page-variant
