@@ -21,11 +21,6 @@
       vars:
         lxc_ssh_key_injector_pubkey_path: "{{ ssh_key_shared_resolved_public_key_path }}"
 
-  post_tasks:
-    - name: Report SSH key installation status
-      ansible.builtin.debug:
-        msg: "SSH key successfully installed on {{ inventory_hostname }} (VMID {{ proxmox_lxc_overrides.vmid }})"
-
 - name: Test SSH connectivity to updated containers
   hosts: lxcs
   gather_facts: false
