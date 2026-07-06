@@ -278,55 +278,31 @@
     - validation
     - proxmox
 
+- name: Initialize guest release probe result map
+  ansible.builtin.set_fact:
+    lxc_release_probe_results_by_key: {}
+  tags:
+    - validation
+    - proxmox
+
 - name: Query guest Debian release for running matched LXCs
-  proxmox_pct:
-    vmid: "{{ hostvars[item].proxmox_lxc_overrides.vmid }}"
-    command: exec
-    exec_command: ". /etc/os-release && printf '%s' \"$VERSION_ID\""
-  register: lxc_release_probe_results
-  ignore_errors: true
-  delegate_to: "{{ proxmox_pct_delegate_host }}"
+  ansible.builtin.include_tasks:
+    file: "{{ [playbook_dir, 'tasks', 'probe_lxc_release.yml'] | path_join }}"
+    apply:
+      tags:
+        - validation
+        - proxmox
   vars:
-    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+    lxc_release_probe_vmid: "{{ hostvars[item].proxmox_lxc_overrides.vmid }}"
+    lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"
+    lxc_release_probe_delegate_user: "{{ proxmox_host_delegate_user | default('root') }}"
+    lxc_release_probe_result_key: "{{ item }}"
   loop: "{{ groups['lxcs'] | default([]) }}"
   loop_control:
     label: "{{ item }}"
   when:
     - lxc_validation_results[item].type == 'match_ok'
     - lxc_runtime_state_map[item] | default('unknown') == 'running'
-  tags:
-    - validation
-    - proxmox
-
-- name: Build guest release lookup for running matched LXCs
-  ansible.builtin.set_fact:
-    lxc_actual_release_map: >-
-      {{
-        lxc_actual_release_map | default({}) | combine({
-          item.item: (
-            item.stdout | regex_findall('([0-9]+)') | first | default('')
-          )
-        })
-      }}
-  loop: "{{ lxc_release_probe_results.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item }}"
-  when:
-    - not (item.skipped | default(false))
-    - item.rc == 0
-  tags:
-    - validation
-    - proxmox
-
-- name: Build list of release probe failures
-  ansible.builtin.set_fact:
-    lxc_release_probe_failed_hosts: "{{ lxc_release_probe_failed_hosts | default([]) + [item.item] }}"
-  loop: "{{ lxc_release_probe_results.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item }}"
-  when:
-    - not (item.skipped | default(false))
-    - item.rc != 0 or ((item.stdout | regex_findall('([0-9]+)') | first | default('')) | length == 0)
   tags:
     - validation
     - proxmox
@@ -351,7 +327,8 @@
   vars:
     _current_result: "{{ lxc_validation_results[item] }}"
     _desired_release: "{{ lxc_desired_release_map[item] | default('') }}"
-    _actual_release: "{{ lxc_actual_release_map[item] | default('') }}"
+    _probe_result: "{{ (lxc_release_probe_results_by_key | default({})).get(item, {}) }}"
+    _actual_release: "{{ _probe_result.actual_release | default('') }}"
     _runtime_state: "{{ lxc_runtime_state_map[item] | default('absent' if _current_result.type == 'absent_ok' else 'unknown') }}"
     _probe_state: >-
       {%- if _current_result.type == 'absent_ok' -%}
@@ -360,9 +337,9 @@
       skipped_conflict
       {%- elif _runtime_state == 'stopped' -%}
       skipped_stopped
-      {%- elif item in (lxc_release_probe_failed_hosts | default([])) -%}
+      {%- elif _probe_result.state | default('') == 'probe_failed' -%}
       probe_failed
-      {%- elif _actual_release | length > 0 -%}
+      {%- elif _probe_result.state | default('') == 'probed' and _actual_release | length > 0 -%}
       probed
       {%- else -%}
       probe_failed

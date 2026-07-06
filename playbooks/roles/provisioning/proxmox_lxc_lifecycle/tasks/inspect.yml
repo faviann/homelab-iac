@@ -110,15 +110,12 @@
     - proxmox_lifecycle_runtime_state == 'absent'
 
 - name: Probe guest Debian release from running container
-  proxmox_pct:
-    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    command: exec
-    exec_command: ". /etc/os-release && printf '%s' \"$VERSION_ID\""
-  register: proxmox_lifecycle_release_probe_result
-  ignore_errors: true
-  delegate_to: "{{ proxmox_pct_delegate_host }}"
+  ansible.builtin.include_tasks:
+    file: "{{ [playbook_dir, 'tasks', 'probe_lxc_release.yml'] | path_join }}"
   vars:
-    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+    lxc_release_probe_vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
+    lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"
+    lxc_release_probe_delegate_user: "{{ proxmox_host_delegate_user | default('root') }}"
   when:
     - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
     - proxmox_lifecycle_release_probe_state == 'unavailable'
@@ -126,22 +123,8 @@
 
 - name: Finalize release state from local probe
   ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: "{{ _probed_release }}"
-    proxmox_lifecycle_release_probe_state: >-
-      {%- if _probed_release | length == 0 or (proxmox_lifecycle_release_probe_result.rc | default(1)) != 0 -%}
-      probe_failed
-      {%- else -%}
-      probed
-      {%- endif -%}
-  vars:
-    _probed_release: >-
-      {{
-        proxmox_lifecycle_release_probe_result.stdout
-        | default('')
-        | regex_findall('([0-9]+)')
-        | first
-        | default('')
-      }}
+    proxmox_lifecycle_actual_release: "{{ lxc_release_probe_actual_release | default('') }}"
+    proxmox_lifecycle_release_probe_state: "{{ lxc_release_probe_state | default('probe_failed') }}"
   when:
     - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
     - proxmox_lifecycle_release_probe_state == 'unavailable'

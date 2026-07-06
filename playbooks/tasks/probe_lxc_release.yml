@@ -1,0 +1,52 @@
+---
+- name: Probe guest Debian release
+  proxmox_pct:
+    vmid: "{{ lxc_release_probe_vmid }}"
+    command: exec
+    exec_command: ". /etc/os-release && printf '%s' \"$VERSION_ID\""
+  register: lxc_release_probe_command_result
+  ignore_errors: true
+  delegate_to: "{{ lxc_release_probe_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_release_probe_delegate_user | default('root') }}"
+
+- name: Publish guest Debian release probe result
+  ansible.builtin.set_fact:
+    lxc_release_probe_actual_release: "{{ _lxc_release_probe_actual_release }}"
+    lxc_release_probe_state: "{{ _lxc_release_probe_state }}"
+  vars:
+    _lxc_release_probe_actual_release: >-
+      {{
+        lxc_release_probe_command_result.stdout
+        | default('')
+        | regex_findall('([0-9]+)')
+        | first
+        | default('')
+      }}
+    _lxc_release_probe_state: >-
+      {%- if (
+        lxc_release_probe_command_result.stdout
+        | default('')
+        | regex_findall('([0-9]+)')
+        | first
+        | default('')
+      ) | length == 0 or (lxc_release_probe_command_result.rc | default(1)) != 0 -%}
+      probe_failed
+      {%- else -%}
+      probed
+      {%- endif -%}
+
+- name: Publish keyed guest Debian release probe result
+  ansible.builtin.set_fact:
+    lxc_release_probe_results_by_key: >-
+      {{
+        lxc_release_probe_results_by_key | default({})
+        | combine({
+            lxc_release_probe_result_key: {
+              'actual_release': lxc_release_probe_actual_release,
+              'state': lxc_release_probe_state,
+              'rc': lxc_release_probe_command_result.rc | default(1)
+            }
+          }, recursive=True)
+      }}
+  when: lxc_release_probe_result_key | default('') | length > 0
