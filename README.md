@@ -237,8 +237,7 @@ uv run --locked ansible-playbook site.yml --tags validation
 |   |-- add-ssh-keys-to-lxcs.yml      # Manual SSH key injection
 |   |-- validate-credentials.yml      # Test API credentials
 |   |-- lab-connectivity.yml          # SSH + Proxmox API connectivity checks
-|   |-- proxmox_api_check.yml         # API connectivity test
-|   `-- lxc-provision.yml             # Legacy provisioning playbook
+|   `-- proxmox_api_check.yml         # API connectivity test
 |-- pyproject.toml                     # Python dependency declarations for uv
 |-- uv.lock                            # Locked Python dependency resolution
 |-- site.yml                           # Top-level orchestration playbook
