@@ -80,7 +80,7 @@ Look up `docker_uid`/`docker_gid` for the host if a `chown` is needed
 
 ```bash
 # Stop old stack and rename folder in place (bind appdata rides along).
-ssh -l root -i .ansible/ssh/proxmox_lxc <host> \
+ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> \
   'cd /shared/<host>/stacks/<old> && docker compose down; \
    mv /shared/<host>/stacks/<old> /shared/<host>/stacks/<new> && \
    chown -R <docker_uid>:<docker_gid> /shared/<host>/stacks/<new>'

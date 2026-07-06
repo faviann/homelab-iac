@@ -10,9 +10,6 @@
   hosts: lxcs
   gather_facts: false
 
-  vars:
-    lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir }}/../.ansible/ssh/proxmox_lxc.pub"
-
   roles:
     - infrastructure/lxc_ssh_key_injector
       delegate_to: "{{ proxmox_api_host }}"

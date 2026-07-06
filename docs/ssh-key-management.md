@@ -27,7 +27,7 @@ If the playbook isn't working:
 ssh root@proxmox.lan
 
 VMID=300
-PUBKEY="$(cat .ansible/ssh/proxmox_lxc.pub)"  # run on control node first
+PUBKEY="$(cat ~/.ansible/ssh/proxmox_lxc.pub)"  # run on control node first
 
 pct exec $VMID -- mkdir -p /root/.ssh
 pct exec $VMID -- chmod 700 /root/.ssh

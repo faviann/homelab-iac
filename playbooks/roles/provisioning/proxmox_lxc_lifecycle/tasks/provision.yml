@@ -73,8 +73,6 @@
 - name: Ensure controller SSH key is installed in the guest
   ansible.builtin.include_role:
     name: infrastructure/lxc_ssh_key_injector
-  vars:
-    lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir | dirname }}/.ansible/ssh/proxmox_lxc.pub"
   when: "'ensure_ssh_key' in proxmox_lifecycle_host_actions"
 
 - name: Find cached facts for rebuilt host
