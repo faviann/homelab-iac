@@ -33,6 +33,9 @@
       - proxmox_lxc_overrides.vmid is defined
     fail_msg: "VMID not defined for {{ inventory_hostname }}"
 
+# In check mode the derived state below ignores pct status anyway, and when
+# the controller key could not be installed (proxmox_ssh_ready false) the
+# Proxmox host is unreachable — skip the probe instead of failing the host.
 - name: Check if container exists on Proxmox
   proxmox_pct:
     vmid: "{{ proxmox_lxc_overrides.vmid }}"
@@ -42,6 +45,7 @@
   vars:
     ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
   ignore_errors: true
+  when: hostvars['localhost'].proxmox_ssh_ready | default(true)
 
 - name: Derive container runtime state from pct status
   ansible.builtin.set_fact:
@@ -205,5 +209,5 @@
   ansible.builtin.debug:
     msg: "SSH key verified in container {{ inventory_hostname }} ({{ _key_count.stdout | default('0') }} occurrence(s))"
   when:
-    - _container_status.rc == 0
+    - _container_status.rc | default(1) == 0
     - _key_count.stdout is defined

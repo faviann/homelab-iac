@@ -256,6 +256,7 @@
     label: "{{ item }}"
   when:
     - lxc_validation_results[item].type == 'match_ok'
+    - hostvars['localhost'].proxmox_ssh_ready | default(true)
   tags:
     - validation
     - proxmox
@@ -303,6 +304,7 @@
   when:
     - lxc_validation_results[item].type == 'match_ok'
     - lxc_runtime_state_map[item] | default('unknown') == 'running'
+    - hostvars['localhost'].proxmox_ssh_ready | default(true)
   tags:
     - validation
     - proxmox

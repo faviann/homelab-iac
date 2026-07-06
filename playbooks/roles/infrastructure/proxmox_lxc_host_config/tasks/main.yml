@@ -71,12 +71,24 @@
     _proxmox_lxc_host_config_file: >-
       {{ proxmox_lxc_host_config_path_root }}/{{ proxmox_lxc_host_config_spec.vmid }}.conf
 
+# proxmox_ssh_ready is false only when check mode could not install the
+# controller key (set by proxmox_host_bootstrap on localhost); the Proxmox
+# host is then unreachable, so skip everything that delegates to it.
 - name: Check if host-config LXC configuration file exists
   ansible.builtin.stat:
     path: "{{ _proxmox_lxc_host_config_file }}"
   register: _proxmox_lxc_host_config_file_stat
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
+  when: hostvars['localhost'].proxmox_ssh_ready | default(true)
+
+- name: Skip host reconciliation in check mode when Proxmox SSH is unavailable
+  ansible.builtin.debug:
+    msg: >-
+      Check mode skips host-config reconciliation for container
+      {{ proxmox_lxc_host_config_spec.vmid }} ({{ proxmox_lxc_host_config_spec.hostname }})
+      because SSH key authentication to the Proxmox host is not configured.
+  when: not (hostvars['localhost'].proxmox_ssh_ready | default(true))
 
 - name: Skip runtime-sensitive host reconciliation in check mode when config is absent
   ansible.builtin.debug:
@@ -86,11 +98,12 @@
       because {{ _proxmox_lxc_host_config_file }} does not exist yet.
   when:
     - ansible_check_mode | bool
+    - hostvars['localhost'].proxmox_ssh_ready | default(true)
     - not _proxmox_lxc_host_config_file_stat.stat.exists
 
 - name: Apply LXC config file modifications
   ansible.builtin.include_tasks: config_file.yml
-  when: not (ansible_check_mode | bool and not _proxmox_lxc_host_config_file_stat.stat.exists)
+  when: not (ansible_check_mode | bool and not (_proxmox_lxc_host_config_file_stat.stat.exists | default(false)))
   tags:
     - config_file
     - idmap
@@ -101,7 +114,7 @@
   ansible.builtin.include_tasks: features.yml
   when:
     - proxmox_lxc_host_config_spec.features | default([]) | length > 0
-    - not (ansible_check_mode | bool and not _proxmox_lxc_host_config_file_stat.stat.exists)
+    - not (ansible_check_mode | bool and not (_proxmox_lxc_host_config_file_stat.stat.exists | default(false)))
   tags:
     - features
 

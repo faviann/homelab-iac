@@ -1,14 +1,20 @@
 ---
 # Validate Proxmox host readiness for Ansible management
 # Ensures required tools and access are available
+# Live SSH tasks are read-only (check_mode: false) so --check still validates
+# fully when key auth works; proxmox_ssh_ready is false only when check mode
+# could not install the key, in which case live validation is skipped.
 
 - name: Check if pct command is available
-  when: proxmox_validate_pct | bool
+  when:
+    - proxmox_validate_pct | bool
+    - proxmox_ssh_ready | default(true)
   ansible.builtin.command:
     cmd: which pct
   register: pct_check
   changed_when: false
   failed_when: false
+  check_mode: false
   delegate_to: "{{ proxmox_host }}"
   vars:
     ansible_connection: ssh
@@ -19,11 +25,13 @@
 - name: Verify pct command works
   when:
     - proxmox_validate_pct | bool
+    - proxmox_ssh_ready | default(true)
     - pct_check.rc == 0
   ansible.builtin.command:
     cmd: pct list
   register: pct_list
   changed_when: false
+  check_mode: false
   delegate_to: "{{ proxmox_host }}"
   vars:
     ansible_connection: ssh
@@ -32,7 +40,9 @@
     ansible_ssh_common_args: "-o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 
 - name: Check installed lxc-pve version
-  when: proxmox_validate_pct | bool
+  when:
+    - proxmox_validate_pct | bool
+    - proxmox_ssh_ready | default(true)
   ansible.builtin.command:
     argv:
       - dpkg-query
@@ -41,6 +51,7 @@
       - lxc-pve
   register: lxc_pve_version
   changed_when: false
+  check_mode: false
   delegate_to: "{{ proxmox_host }}"
   vars:
     ansible_connection: ssh
@@ -51,7 +62,8 @@
 - name: Assert lxc-pve meets nested Docker minimum
   when:
     - proxmox_validate_pct | bool
-    - lxc_pve_version is defined
+    - proxmox_ssh_ready | default(true)
+    - lxc_pve_version.stdout is defined
   ansible.builtin.command:
     argv:
       - dpkg
@@ -62,6 +74,7 @@
   register: lxc_pve_version_check
   changed_when: false
   failed_when: lxc_pve_version_check.rc != 0
+  check_mode: false
   delegate_to: "{{ proxmox_host }}"
   vars:
     ansible_connection: ssh
@@ -72,8 +85,9 @@
 - name: Display detected containers
   when:
     - proxmox_validate_pct | bool
+    - proxmox_ssh_ready | default(true)
     - pct_check.rc == 0
-    - pct_list is defined
+    - pct_list.stdout_lines is defined
   ansible.builtin.debug:
     msg: "Detected {{ pct_list.stdout_lines | length - 1 }} LXC container(s) on {{ proxmox_host }}"
 
@@ -91,10 +105,11 @@
   delegate_to: localhost
 
 - name: Proxmox host validation summary
+  when: proxmox_ssh_ready | default(true)
   ansible.builtin.debug:
     msg:
       - "✓ SSH access: configured"
       - "✓ pct command: available"
-      - "✓ lxc-pve: {{ lxc_pve_version.stdout | trim }}"
+      - "✓ lxc-pve: {{ lxc_pve_version.stdout | default('not checked') | trim }}"
       - "✓ API access: working"
       - "Proxmox host {{ proxmox_host }} is ready for Ansible management"

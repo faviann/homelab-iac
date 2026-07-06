@@ -44,6 +44,7 @@
   register: ssh_key_test
   failed_when: false
   changed_when: false
+  check_mode: false
   delegate_to: localhost
 
 - name: SSH key authentication status
@@ -51,8 +52,25 @@
     msg: >-
       SSH key auth {{ 'already configured ✓' if ssh_key_test.rc == 0 else 'not configured - will prompt for password' }}
 
+# Check mode cannot run the interactive password path below, so record whether
+# the key already works; validation tasks skip live SSH when it does not.
+- name: Record Proxmox SSH readiness
+  ansible.builtin.set_fact:
+    proxmox_ssh_ready: "{{ ssh_key_test.rc == 0 or not ansible_check_mode }}"
+
+- name: Warn that live Proxmox validation is skipped in check mode
+  ansible.builtin.debug:
+    msg: >-
+      SSH key authentication to {{ proxmox_host }} is not configured and check mode
+      cannot prompt for a password. Skipping live Proxmox host validation. Run
+      without --check (or ssh-copy-id -i .ansible/ssh/proxmox_lxc.pub
+      {{ proxmox_ssh_user }}@{{ proxmox_host }}) to install the key.
+  when: not proxmox_ssh_ready
+
 - name: Configure SSH key authentication (interactive)
-  when: ssh_key_test.rc != 0
+  when:
+    - ssh_key_test.rc != 0
+    - not ansible_check_mode
   block:
     - name: Prompt for Proxmox root password
       ansible.builtin.pause:
