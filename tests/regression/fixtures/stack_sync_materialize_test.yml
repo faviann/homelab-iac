@@ -48,7 +48,7 @@
         content: |
           KOMF_KOMGA_BASE_URI=https://komga.example.invalid
           KOMF_KOMGA_USER={{ '{{' }} stack_vars.komga_user {{ '}}' }}
-          KOMF_KOMGA_PASSWORD={{ '{{' }} stack_vars.komga_password | replace('$', '$$') {{ '}}' }}
+          KOMF_KOMGA_PASSWORD={{ '{{' }} stack_vars.komga_password | compose_env {{ '}}' }}
           STACK_NAME={{ '{{' }} stack_name {{ '}}' }}
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/.env.j2"
 

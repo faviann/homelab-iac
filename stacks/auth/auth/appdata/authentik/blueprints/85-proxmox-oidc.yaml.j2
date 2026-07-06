@@ -35,7 +35,7 @@ entries:
     - !KeyOf scope-proxmox-groups
     client_type: confidential
     client_id: proxmox
-    client_secret: "{{ stack_vars.proxmox_oidc_client_secret | replace('$', '$$') }}"
+    client_secret: "{{ stack_vars.proxmox_oidc_client_secret }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30

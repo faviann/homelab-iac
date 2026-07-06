@@ -220,7 +220,7 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
         lines += [
             "    client_type: confidential",
             f"    client_id: {app['client_id']}",
-            f"    client_secret: \"{{{{ {secret_var} | replace('$', '$$') }}}}\"",
+            f"    client_secret: \"{{{{ {secret_var} }}}}\"",
             "    access_code_validity: minutes=1",
             "    access_token_validity: hours=24",
             "    refresh_token_validity: days=30",
@@ -309,6 +309,8 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
                 "",
             ]
 
+    if lines and lines[-1] == "":
+        lines = lines[:-1]
     return "\n".join(lines) + "\n"
 
 

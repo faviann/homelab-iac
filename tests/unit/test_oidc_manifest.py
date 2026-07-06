@@ -147,7 +147,7 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
     def test_jinja_client_secret_expression_is_literal(self):
         apps = [minimal_app()]
         content = self.mod.generate_oidc_blueprint_content(apps)
-        self.assertIn("{{ auth_test_oidc_client_secret | replace('$', '$$') }}", content)
+        self.assertIn("{{ auth_test_oidc_client_secret }}", content)
 
     def test_jinja_signing_key_expression_is_literal(self):
         apps = [minimal_app()]
