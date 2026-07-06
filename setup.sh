@@ -96,10 +96,14 @@ echo "Step 3: Setting up project structure..."
 echo "─────────────────────────────────────────"
 
 # Create .ansible directory if it doesn't exist
-mkdir -p .ansible/ssh
 mkdir -p .ansible/cp
 mkdir -p .ansible/cache
 print_status "Created .ansible directories"
+
+# Machine-local SSH key directory (shared across git worktrees)
+mkdir -p "$HOME/.ansible/ssh"
+chmod 700 "$HOME/.ansible" "$HOME/.ansible/ssh"
+print_status "Ensured $HOME/.ansible/ssh exists"
 
 echo
 echo "Step 4: Vault password configuration..."

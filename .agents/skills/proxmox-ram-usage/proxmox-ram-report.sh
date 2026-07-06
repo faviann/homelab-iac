@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 host="${PROXMOX_RAM_HOST:-root@proxmox.lan}"
-key="${PROXMOX_RAM_KEY:-$repo_root/.ansible/ssh/proxmox_lxc}"
+key="${PROXMOX_RAM_KEY:-$HOME/.ansible/ssh/proxmox_lxc}"
 
 if [[ ! -r "$key" ]]; then
   printf 'ERROR: SSH key not readable: %s\n' "$key" >&2

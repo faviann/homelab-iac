@@ -116,21 +116,21 @@ docker exec beets-flask-beets-flask-1 beet move -y album:"<ALBUM_NAME>"
 For a misrouted album, inspect metadata before moving anything:
 
 ```bash
-ssh -o BatchMode=yes -l root -i .ansible/ssh/proxmox_lxc servarr.faviann.vms \
+ssh -o BatchMode=yes -l root -i ~/.ansible/ssh/proxmox_lxc servarr.faviann.vms \
   'cd /conf/docker/stacks/beets-flask && docker compose exec -T beets-flask beet -c /config/beets/config.yaml ls -a -f "$album | $genre | $path" "album:<ALBUM_NAME>"'
 ```
 
 Run a pretend move and confirm the destination:
 
 ```bash
-ssh -o BatchMode=yes -l root -i .ansible/ssh/proxmox_lxc servarr.faviann.vms \
+ssh -o BatchMode=yes -l root -i ~/.ansible/ssh/proxmox_lxc servarr.faviann.vms \
   'cd /conf/docker/stacks/beets-flask && docker compose exec -T beets-flask beet -c /config/beets/config.yaml move -p "album:<ALBUM_NAME>"'
 ```
 
 Only after the pretend output is correct, run the real move:
 
 ```bash
-ssh -o BatchMode=yes -l root -i .ansible/ssh/proxmox_lxc servarr.faviann.vms \
+ssh -o BatchMode=yes -l root -i ~/.ansible/ssh/proxmox_lxc servarr.faviann.vms \
   'cd /conf/docker/stacks/beets-flask && docker compose exec -T beets-flask beet -c /config/beets/config.yaml move "album:<ALBUM_NAME>"'
 ```
 
@@ -168,14 +168,14 @@ rg "failed=|unreachable=|FAILED|beets-flask|config.yaml|changed=" /tmp/beets-fla
 Confirm the rendered path rules inside the running container:
 
 ```bash
-ssh -o BatchMode=yes -l root -i .ansible/ssh/proxmox_lxc servarr.faviann.vms \
+ssh -o BatchMode=yes -l root -i ~/.ansible/ssh/proxmox_lxc servarr.faviann.vms \
   'cd /conf/docker/stacks/beets-flask && docker compose exec -T beets-flask sh -lc "sed -n '\''/^paths:/,/^[^[:space:]\"-]/p'\'' /config/beets/config.yaml"'
 ```
 
 Confirm the plugin imports:
 
 ```bash
-ssh -o BatchMode=yes -l root -i .ansible/ssh/proxmox_lxc servarr.faviann.vms \
+ssh -o BatchMode=yes -l root -i ~/.ansible/ssh/proxmox_lxc servarr.faviann.vms \
   'cd /conf/docker/stacks/beets-flask && docker compose exec -T beets-flask python -c "import beetsplug.VGMplug"'
 ```
 

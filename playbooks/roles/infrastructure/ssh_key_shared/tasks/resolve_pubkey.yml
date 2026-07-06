@@ -9,21 +9,8 @@
           else []
         )
         + (ssh_key_shared_additional_candidates | default([]))
-        + (
-          [
-            [
-              (lookup('env', 'VIRTUAL_ENV') | dirname | dirname),
-              '.ansible',
-              'ssh',
-              'proxmox_lxc.pub'
-            ] | path_join
-          ]
-          if (lookup('env', 'VIRTUAL_ENV') | default('') | length > 0)
-          else []
-        )
         + [
-            [playbook_dir, '.ansible', 'ssh', 'proxmox_lxc.pub'] | path_join,
-            [playbook_dir, '..', '.ansible', 'ssh', 'proxmox_lxc.pub'] | path_join
+            [lookup('env', 'HOME'), '.ansible', 'ssh', 'proxmox_lxc.pub'] | path_join
           ]
         | unique
       }}

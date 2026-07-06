@@ -22,7 +22,7 @@ Defaults:
 | Setting | Value |
 |---|---|
 | Host | `root@proxmox.lan` |
-| SSH key | `.ansible/ssh/proxmox_lxc` |
+| SSH key | `~/.ansible/ssh/proxmox_lxc` |
 | Override host | `PROXMOX_RAM_HOST=root@host` |
 | Override key | `PROXMOX_RAM_KEY=/path/to/key` |
 

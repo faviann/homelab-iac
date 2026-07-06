@@ -18,8 +18,8 @@
 
 | Item | Location |
 |------|----------|
-| SSH key (private) | `.ansible/ssh/proxmox_lxc` (project-relative, gitignored) |
-| SSH key (public) | `.ansible/ssh/proxmox_lxc.pub` (project-relative, gitignored) |
+| SSH key (private) | `~/.ansible/ssh/proxmox_lxc` (home-dir, machine-local, shared across worktrees) |
+| SSH key (public) | `~/.ansible/ssh/proxmox_lxc.pub` (home-dir, machine-local, shared across worktrees) |
 | Vault password | `~/.ansible/vault-pass` (home-dir, written by chezmoi from Bitwarden) |
 | Vaulted secrets | `inventory/group_vars/all/vault.yml` (encrypted) |
 | Fact cache | `.ansible/cache/` (project-relative, gitignored, 1h TTL) |
@@ -65,7 +65,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `uv run --locked ansible-playbook site.yml --check` | Dry run |
 | `uv run --locked ansible-playbook bootstrap.yml` | Recreate bootstrap artifacts after clean install |
 | `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
-| `ssh -l root -i .ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
+| `ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 
 **Timing**: `uv run --locked ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
 

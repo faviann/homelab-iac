@@ -309,7 +309,7 @@ The automation requires SSH access to the Proxmox host to apply certain configur
 **Manual Setup** (optional): If you prefer to configure SSH access manually:
 ```bash
 # Copy your public key to Proxmox
-ssh-copy-id -i .ansible/ssh/proxmox_lxc.pub root@proxmox.lan
+ssh-copy-id -i ~/.ansible/ssh/proxmox_lxc.pub root@proxmox.lan
 ```
 
 After initial setup, all subsequent playbook runs will use passwordless SSH authentication.
