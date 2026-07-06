@@ -6,6 +6,9 @@ workstation_home: "/home/{{ workstation_username }}"
 workstation_aoe_proxy_firewall_enabled: false
 workstation_aoe_proxy_firewall_port: 4001
 workstation_aoe_proxy_firewall_allowed_hosts: []
+workstation_aoe_proxy_firewall_nft_dir: /etc/nftables.d
+workstation_aoe_proxy_firewall_nft_path: "{{ workstation_aoe_proxy_firewall_nft_dir }}/workstation-aoe-proxy.nft"
+workstation_aoe_proxy_firewall_service_path: /etc/systemd/system/workstation-aoe-proxy-firewall.service
 workstation_hermes_dashboard_port: 9119
 workstation_openclaw_gateway_port: 18789
 workstation_persistent_home_enabled: false

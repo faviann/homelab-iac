@@ -39,6 +39,15 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertFalse(defaults["workstation_aoe_proxy_firewall_enabled"])
         self.assertEqual(defaults["workstation_aoe_proxy_firewall_port"], 4001)
         self.assertEqual(defaults["workstation_aoe_proxy_firewall_allowed_hosts"], [])
+        self.assertEqual(defaults["workstation_aoe_proxy_firewall_nft_dir"], "/etc/nftables.d")
+        self.assertEqual(
+            defaults["workstation_aoe_proxy_firewall_nft_path"],
+            "{{ workstation_aoe_proxy_firewall_nft_dir }}/workstation-aoe-proxy.nft",
+        )
+        self.assertEqual(
+            defaults["workstation_aoe_proxy_firewall_service_path"],
+            "/etc/systemd/system/workstation-aoe-proxy-firewall.service",
+        )
         self.assertEqual(defaults["workstation_openclaw_gateway_port"], 18789)
         self.assertFalse(defaults["workstation_persistent_home_enabled"])
         self.assertEqual(defaults["workstation_persistent_home_root"], "/ephemeral/workstation/home")
@@ -398,8 +407,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             "getent",
             "ahostsv4",
             "workstation_aoe_proxy_firewall_allowed_hosts",
-            "/etc/nftables.d/workstation-aoe-proxy.nft",
-            "/etc/systemd/system/workstation-aoe-proxy-firewall.service",
+            "workstation_aoe_proxy_firewall_nft_path",
+            "workstation_aoe_proxy_firewall_service_path",
             "workstation-aoe-proxy-firewall.service",
             "daemon_reload: true",
             "state: absent",
