@@ -10,7 +10,7 @@ proxmox_ssh_user: root
 # These paths should match what control_node_bootstrap generates
 # Project-relative paths (all configs in .ansible/ subdirectory)
 proxmox_ssh_key_private: "{{ control_node_ssh_private_key_path | default(playbook_dir + '/../.ansible/ssh/proxmox_lxc') }}"
-proxmox_ssh_key_public: "{{ control_node_ssh_public_key_path | default(playbook_dir + '/../.ansible/ssh/proxmox_lxc.pub') }}"
+proxmox_ssh_key_public: "{{ control_node_ssh_public_key_path | default(ssh_key_shared_resolved_public_key_path | default('')) }}"
 
 # Connection timeouts
 proxmox_ssh_connect_timeout: 5

@@ -2,7 +2,7 @@
 # Default variables for lxc_ssh_key_injector role
 
 # Path to the control node SSH public key
-lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir }}/.ansible/ssh/proxmox_lxc.pub"
+lxc_ssh_key_injector_pubkey_path: "{{ ssh_key_shared_resolved_public_key_path | default('') }}"
 
 # Proxmox host to delegate pct commands to
 # pct commands must run on the Proxmox host itself

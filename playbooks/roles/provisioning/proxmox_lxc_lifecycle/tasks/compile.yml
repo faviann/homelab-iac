@@ -1,4 +1,12 @@
 ---
+- name: Resolve control-node SSH public key for LXC provisioning
+  ansible.builtin.include_role:
+    name: infrastructure/ssh_key_shared
+    tasks_from: resolve_pubkey
+  vars:
+    ssh_key_shared_explicit_path: "{{ proxmox_lxc_controller_pubkey_path | default('') }}"
+  when: proxmox_lxc_controller_pubkey_enabled | default(true) | bool
+
 - name: Build the effective LXC specification
   ansible.builtin.include_role:
     name: provisioning/lxc_spec_builder

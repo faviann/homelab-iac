@@ -62,7 +62,7 @@
   ansible.builtin.include_role:
     name: infrastructure/lxc_ssh_key_injector
   vars:
-    lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir | dirname }}/.ansible/ssh/proxmox_lxc.pub"
+    lxc_ssh_key_injector_pubkey_path: "{{ ssh_key_shared_resolved_public_key_path | default('') }}"
   when: "'ensure_ssh_key' in proxmox_lifecycle_host_actions"
 
 - name: Find cached facts for rebuilt host

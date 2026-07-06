@@ -10,23 +10,21 @@
   hosts: lxcs
   gather_facts: false
 
-  vars:
-    lxc_ssh_key_injector_pubkey_path: "{{ playbook_dir }}/../.ansible/ssh/proxmox_lxc.pub"
+  pre_tasks:
+    - name: Resolve control-node SSH public key
+      ansible.builtin.include_role:
+        name: infrastructure/ssh_key_shared
+        tasks_from: resolve_pubkey
 
   roles:
-    - infrastructure/lxc_ssh_key_injector
-      delegate_to: "{{ proxmox_api_host }}"
+    - role: infrastructure/lxc_ssh_key_injector
       vars:
-        ansible_user: root
-      register: key_verify
-      when: container_status.rc == 0
-      changed_when: false
-      failed_when: key_verify.stdout == "0"
+        lxc_ssh_key_injector_pubkey_path: "{{ ssh_key_shared_resolved_public_key_path }}"
 
+  post_tasks:
     - name: Report SSH key installation status
       ansible.builtin.debug:
         msg: "SSH key successfully installed on {{ inventory_hostname }} (VMID {{ proxmox_lxc_overrides.vmid }})"
-      when: container_status.rc == 0
 
 - name: Test SSH connectivity to updated containers
   hosts: lxcs
