@@ -236,6 +236,7 @@
       host_config:
         vmid: "{{ _proxmox_lxc_contract_identity.vmid }}"
         hostname: "{{ _proxmox_lxc_contract_identity.hostname }}"
+        host_directories: "{{ proxmox_lxc_host_directories | default([]) }}"
         bind_mounts: "{{ _proxmox_lxc_bind_mounts | default({}) }}"
         idmap: "{{ _proxmox_lxc_idmap | default([]) }}"
         features: "{{ _proxmox_lxc_compiled_spec.features | default([]) }}"
@@ -284,6 +285,8 @@
       - proxmox_lxc_contract.identity is mapping
       - proxmox_lxc_contract.api_spec is mapping
       - proxmox_lxc_contract.host_config is mapping
+      - proxmox_lxc_contract.host_config.host_directories is sequence
+      - proxmox_lxc_contract.host_config.host_directories is not string
       - proxmox_lxc_contract.guest_bootstrap is mapping
       - proxmox_lxc_contract.derived_metadata is mapping
       - proxmox_lxc_contract.identity.vmid == _proxmox_lxc_compiled_spec.vmid
@@ -296,3 +299,18 @@
     fail_msg: >-
       Invalid compiled LXC contract for {{ inventory_hostname }}.
       Contract: {{ proxmox_lxc_contract | to_nice_yaml }}
+
+- name: Validate host-directory contract entries
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.path is defined
+      - item.path | string | length > 0
+    fail_msg: >-
+      proxmox_lxc_host_directories entries for {{ inventory_hostname }} must be
+      mappings with a non-empty path.
+      Entry: {{ item | to_nice_yaml }}
+  loop: "{{ proxmox_lxc_contract.host_config.host_directories }}"
+  loop_control:
+    label: "{{ item.path | default('missing path') }}"
+  when: proxmox_lxc_contract.host_config.host_directories | length > 0

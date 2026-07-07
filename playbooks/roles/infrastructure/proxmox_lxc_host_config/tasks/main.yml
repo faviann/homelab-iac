@@ -37,6 +37,9 @@
 - name: Initialize host reconciliation component outcomes
   ansible.builtin.set_fact:
     _proxmox_lxc_host_config_component_results:
+      host_directories:
+        changed: false
+        restart_required: false
       idmap:
         changed: false
         restart_required: false
@@ -70,6 +73,12 @@
   ansible.builtin.set_fact:
     _proxmox_lxc_host_config_file: >-
       {{ proxmox_lxc_host_config_path_root }}/{{ proxmox_lxc_host_config_spec.vmid }}.conf
+
+- name: Ensure host-side LXC directories exist
+  ansible.builtin.include_tasks: host_directories.yml
+  when:
+    - proxmox_lxc_host_config_spec.host_directories | default([]) | length > 0
+    - hostvars['localhost'].proxmox_ssh_ready | default(true)
 
 # proxmox_ssh_ready is false only when check mode could not install the
 # controller key (set by proxmox_host_bootstrap on localhost); the Proxmox

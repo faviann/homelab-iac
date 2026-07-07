@@ -1,0 +1,50 @@
+---
+# Host-specific configuration for the overmind memory substrate
+# Inherits from: tier_small, cap_docker
+
+lxc_hwaddr: "BC:24:11:0B:3D:9D"
+default_domain: admin.faviann.com
+ansible_host: 10.1.2.83
+
+docker_agents_enabled: false
+traefik_kop_enabled: false
+
+lxc_docker_env_host_directories:
+  - path: /data/overmind/postgres/pgdata
+    owner: '999'
+    group: '999'
+    mode: "0700"
+
+proxmox_lxc_host_directories:
+  - path: /tank/overmind
+    owner: '100000'
+    group: '100000'
+    mode: "0755"
+  - path: /tank/backups/overmind
+    owner: root
+    group: root
+    mode: "0700"
+
+lxc_docker_env_path_ownership_overrides:
+  - path: /data/overmind/postgres/pgdata
+    owner: '999'
+    group: '999'
+    recurse: false
+
+lxc_docker_env_stack_vars:
+  postgres:
+    postgres_password: "{{ vault_overmind_postgres_password }}"
+
+proxmox_lxc_bind_mounts_overrides:
+  mp3: "/tank/overmind,mp=/data/overmind"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 307
+  hostname: overmind
+  description: "Overmind memory substrate managed via Ansible"
+  tags:
+    - ansible
+    - overmind
+    - memory
+    - database

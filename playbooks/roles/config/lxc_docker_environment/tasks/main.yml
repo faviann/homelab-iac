@@ -140,11 +140,19 @@
   tags:
     - docker_host_setup
 
+- name: Ensure Docker user primary group exists
+  ansible.builtin.group:
+    name: "{{ lxc_docker_environment_internal.docker_user }}"
+    gid: "{{ lxc_docker_environment_internal.docker_gid }}"
+    state: present
+  tags:
+    - docker_host_setup
+
 - name: Create Docker user
   ansible.builtin.user:
     name: "{{ lxc_docker_environment_internal.docker_user }}"
     uid: "{{ lxc_docker_environment_internal.docker_uid }}"
-    group: "{{ lxc_docker_environment_internal.docker_gid }}"
+    group: "{{ lxc_docker_environment_internal.docker_user }}"
     groups:
       - docker
       - sudo

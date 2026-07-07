@@ -11,8 +11,11 @@
       host_config:
         vmid: 4201
         hostname: contract-host
+        host_directories:
+          - path: "{{ temp_root }}/srv/media"
+            mode: "0750"
         bind_mounts:
-          mp0: /srv/media,mp=/media
+          mp0: "{{ temp_root }}/srv/media,mp=/media"
         idmap:
           - u 0 100000 65536
           - g 0 100000 65536
@@ -99,11 +102,23 @@
         that:
           - "'lxc.idmap: u 0 100000 65536' in (_host_config_file.content | b64decode)"
           - "'lxc.idmap: g 0 100000 65536' in (_host_config_file.content | b64decode)"
-          - "'mp0: /srv/media,mp=/media' in (_host_config_file.content | b64decode)"
+          - "'mp0: ' ~ temp_root ~ '/srv/media,mp=/media' in (_host_config_file.content | b64decode)"
           - "'lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' in (_host_config_file.content | b64decode)"
           - "'lxc.sysctl.net.ipv4.ip_forward = 1' in (_host_config_file.content | b64decode)"
           - "'lxc.apparmor.profile: unconfined' in (_host_config_file.content | b64decode)"
         fail_msg: "Host config file did not receive the expected reconciled lines"
+
+    - name: Inspect host-side source directory
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/srv/media"
+      register: _host_source_dir
+
+    - name: Assert host-side source directory was created
+      ansible.builtin.assert:
+        that:
+          - _host_source_dir.stat.isdir
+          - _host_source_dir.stat.mode == '0750'
+        fail_msg: "Host config did not create bind source directories before applying mounts"
 
     - name: Assert pct feature reconciliation was executed
       ansible.builtin.assert:
@@ -120,6 +135,7 @@
           - proxmox_lxc_host_config_result.overall_changed
           - proxmox_lxc_host_config_result.restart_applied
           - not proxmox_lxc_host_config_result.restart_required
+          - proxmox_lxc_host_config_result.components.host_directories.changed
           - proxmox_lxc_host_config_result.components.idmap.changed
           - proxmox_lxc_host_config_result.components.bind_mounts.changed
           - proxmox_lxc_host_config_result.components.wireguard.changed
@@ -150,6 +166,7 @@
           - not proxmox_lxc_host_config_result.overall_changed
           - not proxmox_lxc_host_config_result.restart_required
           - not proxmox_lxc_host_config_result.restart_applied
+          - not proxmox_lxc_host_config_result.components.host_directories.changed
           - not proxmox_lxc_host_config_result.components.idmap.changed
           - not proxmox_lxc_host_config_result.components.bind_mounts.changed
           - not proxmox_lxc_host_config_result.components.nvidia.changed

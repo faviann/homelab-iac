@@ -14,6 +14,9 @@ def test_lxc_docker_runtime_does_not_manage_docker_user_membership() -> None:
 
     assert "docker_user" not in runtime_tasks
     assert "docker_users:" not in runtime_tasks
+    assert "Ensure Docker user primary group exists" in environment_tasks
+    assert 'gid: "{{ lxc_docker_environment_internal.docker_gid }}"' in environment_tasks
     assert "Create Docker user" in environment_tasks
+    assert 'group: "{{ lxc_docker_environment_internal.docker_user }}"' in environment_tasks
     assert "groups:" in environment_tasks
     assert "- docker" in environment_tasks

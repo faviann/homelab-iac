@@ -1,0 +1,36 @@
+---
+- name: Ensure Proxmox host directories exist for LXC bind sources
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop: "{{ proxmox_lxc_host_config_spec.host_directories }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: infrastructure_proxmox_lxc_host_config_host_directories
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: "{{ proxmox_lxc_host_config_become }}"
+
+- name: Publish host-directory reconciliation result  # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    _proxmox_lxc_host_config_component_results: >-
+      {{
+        _proxmox_lxc_host_config_component_results
+        | combine(
+            {
+              'host_directories': {
+                'changed': (
+                  infrastructure_proxmox_lxc_host_config_host_directories.results
+                  | selectattr('changed', 'defined')
+                  | selectattr('changed')
+                  | list
+                  | length > 0
+                ),
+                'restart_required': false
+              }
+            },
+            recursive=True
+          )
+      }}

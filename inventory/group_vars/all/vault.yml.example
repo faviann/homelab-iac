@@ -25,10 +25,10 @@
 # Required format:
 #   vault_proxmox_api_user: username@realm
 #     Examples: root@pam, ansible@pve
-#   
+#
 #   vault_proxmox_api_token_id: token-name
 #     The name you gave the token when creating it
-#   
+#
 #   vault_proxmox_api_token_secret: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 #     The UUID shown when the token was created
 
@@ -81,3 +81,6 @@ vault_portal_traefik_dashboard_credentials: "REPLACE_WITH_TRAEFIK_DASHBOARD_CRED
 
 # Dockhand Hawser Standard pilot token
 vault_dockhand_hawser_token: "REPLACE_ME"
+
+# Overmind Postgres substrate
+vault_overmind_postgres_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"

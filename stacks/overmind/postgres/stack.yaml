@@ -1,0 +1,22 @@
+---
+schema_version: 1
+kind: stack
+name: postgres
+description: Postgres substrate for overmind memory services
+portability:
+  tier: host-bound-app
+  owner: inventory
+runtime:
+  host_requirements:
+    external_networks: []
+    host_directories:
+      - /data/overmind/postgres/pgdata
+      - /tank/overmind
+      - /tank/backups/overmind
+    ownership_overrides:
+      - /data/overmind/postgres/pgdata
+    bind_mounts:
+      - /tank/overmind,mp=/data/overmind
+exposure:
+  traefik: none
+  homepage_instances: []
