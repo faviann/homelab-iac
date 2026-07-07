@@ -4,7 +4,6 @@
 
 lxc_hwaddr: "BC:24:11:0B:3D:9D"
 default_domain: admin.faviann.com
-ansible_host: 10.1.2.83
 
 docker_agents_enabled: false
 traefik_kop_enabled: false

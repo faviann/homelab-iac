@@ -33,7 +33,7 @@ class OvermindContractTests(unittest.TestCase):
         self.assertEqual(overrides["hostname"], "overmind")
         self.assertEqual(overrides["description"], "Overmind memory substrate managed via Ansible")
         self.assertEqual(overrides["tags"], ["ansible", "overmind", "memory", "database"])
-        self.assertEqual(overmind_vars["ansible_host"], "10.1.2.83")
+        self.assertNotIn("ansible_host", overmind_vars)
         self.assertFalse(overmind_vars["docker_agents_enabled"])
         self.assertFalse(overmind_vars["traefik_kop_enabled"])
 
