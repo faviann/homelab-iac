@@ -47,6 +47,7 @@ class OvermindContractTests(unittest.TestCase):
         bind_mounts = overmind_vars["proxmox_lxc_bind_mounts_overrides"]
 
         self.assertEqual(bind_mounts["mp3"], "/tank/overmind,mp=/data/overmind")
+        self.assertEqual(bind_mounts["mp4"], "/tank/backups/overmind,mp=/backups/overmind")
 
         pgdata_source = host_directories["/tank/overmind"]
         self.assertEqual(pgdata_source["owner"], '100000')
@@ -62,8 +63,8 @@ class OvermindContractTests(unittest.TestCase):
         self.assertFalse(ownership_overrides["/data/overmind/postgres/pgdata"]["recurse"])
 
         backups = host_directories["/tank/backups/overmind"]
-        self.assertEqual(backups["owner"], "root")
-        self.assertEqual(backups["group"], "root")
+        self.assertEqual(backups["owner"], "100000")
+        self.assertEqual(backups["group"], "100000")
         self.assertEqual(backups["mode"], "0700")
 
     def test_overmind_stack_is_postgres_18_without_lan_port(self) -> None:
@@ -114,6 +115,39 @@ class OvermindContractTests(unittest.TestCase):
         )
         self.assertNotIn("memsrv_connection_string", stack_vars["postgres"])
 
+    def test_overmind_postgres_backup_contract(self) -> None:
+        overmind_vars = load_yaml(REPO_ROOT / "inventory/host_vars/overmind.yml")
+        backup = overmind_vars["overmind_postgres_backup"]
+        vault_example = load_yaml(REPO_ROOT / "inventory/group_vars/all/vault.yml.example")
+
+        self.assertTrue(overmind_vars["overmind_postgres_backup_enabled"])
+        self.assertEqual(backup["container_name"], "overmind-postgres")
+        self.assertEqual(backup["admin_user"], "overmind")
+        self.assertEqual(backup["admin_password"], "{{ vault_overmind_postgres_password }}")
+        self.assertEqual(backup["database"], "memory")
+        self.assertEqual(backup["backup_dir"], "/backups/overmind")
+        self.assertGreaterEqual(backup["retention_count"], 7)
+        self.assertGreaterEqual(backup["freshness_max_age_seconds"], 36 * 60 * 60)
+        self.assertEqual(
+            backup["discord_webhook_url"],
+            "{{ vault_overmind_backup_discord_webhook_url }}",
+        )
+        self.assertIn("vault_overmind_backup_discord_webhook_url", vault_example)
+        self.assertNotIn("REPLACE_ME", vault_example["vault_overmind_backup_discord_webhook_url"])
+
+    def test_overmind_backup_role_assets_exist(self) -> None:
+        role = REPO_ROOT / "playbooks/roles/config/lxc_docker_environment"
+
+        for relative_path in [
+            "files/overmind-postgres-backup",
+            "files/overmind-postgres-backup-freshness",
+            "templates/overmind-postgres-backup.env.j2",
+            "templates/overmind-postgres-backup.service.j2",
+            "templates/overmind-postgres-backup.timer.j2",
+            "tasks/overmind_postgres_backup.yml",
+        ]:
+            self.assertTrue((role / relative_path).exists(), relative_path)
+
     def test_overmind_stack_metadata_documents_host_binding(self) -> None:
         metadata = load_yaml(REPO_ROOT / "stacks/overmind/postgres/stack.yaml")
         host_requirements = metadata["runtime"]["host_requirements"]
@@ -126,7 +160,10 @@ class OvermindContractTests(unittest.TestCase):
             ["/data/overmind/postgres/pgdata", "/tank/overmind", "/tank/backups/overmind"],
         )
         self.assertEqual(host_requirements["ownership_overrides"], ["/data/overmind/postgres/pgdata"])
-        self.assertEqual(host_requirements["bind_mounts"], ["/tank/overmind,mp=/data/overmind"])
+        self.assertEqual(
+            host_requirements["bind_mounts"],
+            ["/tank/overmind,mp=/data/overmind", "/tank/backups/overmind,mp=/backups/overmind"],
+        )
 
 
 if __name__ == "__main__":

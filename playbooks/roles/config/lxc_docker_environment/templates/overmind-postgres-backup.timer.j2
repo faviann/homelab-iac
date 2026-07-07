@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly Overmind Postgres verified logical backup
+
+[Timer]
+OnCalendar={{ overmind_postgres_backup.timer_calendar }}
+RandomizedDelaySec={{ overmind_postgres_backup.randomized_delay_seconds }}
+Persistent=true
+Unit=overmind-postgres-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+systemctl_bin="${OVERMIND_SYSTEMCTL_BIN:-systemctl}"
+backup_dir="${OVERMIND_BACKUP_DIR:?OVERMIND_BACKUP_DIR is required}"
+database_name="${OVERMIND_POSTGRES_DATABASE:-memory}"
+max_age_seconds="${OVERMIND_BACKUP_FRESHNESS_MAX_AGE_SECONDS:?OVERMIND_BACKUP_FRESHNESS_MAX_AGE_SECONDS is required}"
+timer_unit="${OVERMIND_BACKUP_TIMER_UNIT:-overmind-postgres-backup.timer}"
+
+fail() {
+  printf 'overmind-postgres-backup-freshness: %s\n' "$*" >&2
+  exit 1
+}
+
+case "$max_age_seconds" in
+  ''|*[!0-9]*) fail "OVERMIND_BACKUP_FRESHNESS_MAX_AGE_SECONDS must be a positive integer" ;;
+esac
+if [ "$max_age_seconds" -lt 1 ]; then
+  fail "OVERMIND_BACKUP_FRESHNESS_MAX_AGE_SECONDS must be at least 1"
+fi
+
+if ! "$systemctl_bin" is-active --quiet "$timer_unit"; then
+  fail "backup timer is not active: $timer_unit"
+fi
+
+latest="$(
+  find "$backup_dir" -maxdepth 1 -type f -name "${database_name}-*.verified.dump" -printf '%T@ %p\n' |
+    LC_ALL=C sort -nr |
+    head -n 1
+)"
+
+if [ -z "$latest" ]; then
+  fail "no verified backups found in $backup_dir"
+fi
+
+latest_mtime="${latest%% *}"
+latest_path="${latest#* }"
+latest_epoch="${latest_mtime%.*}"
+now_epoch="$(date +%s)"
+age_seconds=$((now_epoch - latest_epoch))
+
+if [ "$age_seconds" -gt "$max_age_seconds" ]; then
+  fail "newest verified backup is stale: $latest_path is ${age_seconds}s old, max ${max_age_seconds}s"
+fi
+
+printf 'newest verified backup is fresh: %s (%ss old)\n' "$latest_path" "$age_seconds"

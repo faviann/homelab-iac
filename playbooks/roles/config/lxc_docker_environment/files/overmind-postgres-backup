@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+docker_bin="${OVERMIND_DOCKER_BIN:-docker}"
+curl_bin="${OVERMIND_CURL_BIN:-curl}"
+python_bin="${OVERMIND_PYTHON_BIN:-python3}"
+
+backup_dir="${OVERMIND_BACKUP_DIR:?OVERMIND_BACKUP_DIR is required}"
+retention_count="${OVERMIND_BACKUP_RETAIN:?OVERMIND_BACKUP_RETAIN is required}"
+container_name="${OVERMIND_POSTGRES_CONTAINER:?OVERMIND_POSTGRES_CONTAINER is required}"
+admin_user="${OVERMIND_POSTGRES_ADMIN_USER:?OVERMIND_POSTGRES_ADMIN_USER is required}"
+database_name="${OVERMIND_POSTGRES_DATABASE:?OVERMIND_POSTGRES_DATABASE is required}"
+admin_password="${OVERMIND_POSTGRES_PASSWORD:?OVERMIND_POSTGRES_PASSWORD is required}"
+discord_webhook_url="${OVERMIND_DISCORD_WEBHOOK_URL:-}"
+verify_db_prefix="${OVERMIND_BACKUP_VERIFY_DATABASE_PREFIX:-overmind_backup_verify}"
+timestamp="${OVERMIND_BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+
+tmp_dump=""
+verify_database=""
+
+fail() {
+  printf 'overmind-postgres-backup: %s\n' "$*" >&2
+  exit 1
+}
+
+notify_failure() {
+  local status="$1"
+
+  if [ -z "$discord_webhook_url" ]; then
+    return 0
+  fi
+
+  local message payload
+  message="Overmind Postgres backup failed on $(hostname) with exit status ${status}."
+  payload="$("$python_bin" - "$message" <<'PY'
+import json
+import sys
+
+print(json.dumps({"content": sys.argv[1]}))
+PY
+)"
+
+  "$curl_bin" -fsS \
+    -H "Content-Type: application/json" \
+    --data "$payload" \
+    "$discord_webhook_url" >/dev/null 2>&1 || true
+}
+
+cleanup() {
+  local status="$?"
+
+  set +e
+  if [ -n "$verify_database" ]; then
+    PGPASSWORD="$admin_password" "$docker_bin" exec -e PGPASSWORD "$container_name" \
+      dropdb --if-exists -U "$admin_user" "$verify_database" >/dev/null 2>&1
+  fi
+  if [ -n "$tmp_dump" ]; then
+    rm -f "$tmp_dump"
+  fi
+  if [ "$status" -ne 0 ]; then
+    notify_failure "$status"
+  fi
+
+  exit "$status"
+}
+
+postgres_exec() {
+  PGPASSWORD="$admin_password" "$docker_bin" exec -e PGPASSWORD "$container_name" "$@"
+}
+
+postgres_exec_stdin() {
+  PGPASSWORD="$admin_password" "$docker_bin" exec -i -e PGPASSWORD "$container_name" "$@"
+}
+
+rotate_verified_backups() {
+  local -a dumps
+  local remove_count index
+
+  mapfile -t dumps < <(
+    find "$backup_dir" -maxdepth 1 -type f -name "${database_name}-*.verified.dump" | LC_ALL=C sort
+  )
+  remove_count=$((${#dumps[@]} - retention_count))
+
+  if [ "$remove_count" -le 0 ]; then
+    return 0
+  fi
+
+  for ((index = 0; index < remove_count; index++)); do
+    rm -f -- "${dumps[$index]}"
+  done
+}
+
+case "$retention_count" in
+  ''|*[!0-9]*) fail "OVERMIND_BACKUP_RETAIN must be a positive integer" ;;
+esac
+if [ "$retention_count" -lt 1 ]; then
+  fail "OVERMIND_BACKUP_RETAIN must be at least 1"
+fi
+
+umask 077
+mkdir -p "$backup_dir"
+chmod 0700 "$backup_dir"
+
+tmp_dump="${backup_dir}/.${database_name}-${timestamp}.dump.tmp"
+verified_dump="${backup_dir}/${database_name}-${timestamp}.verified.dump"
+
+if [ -e "$verified_dump" ]; then
+  fail "verified dump already exists: $verified_dump"
+fi
+
+verify_suffix="$(printf '%s' "$timestamp" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_' '_')"
+verify_database="${verify_db_prefix}_${verify_suffix}_$$"
+
+trap cleanup EXIT
+
+postgres_exec pg_isready -U "$admin_user" -d "$database_name" >/dev/null
+postgres_exec pg_dump -U "$admin_user" -d "$database_name" -Fc --no-owner --no-acl > "$tmp_dump"
+
+if [ ! -s "$tmp_dump" ]; then
+  fail "pg_dump produced an empty dump"
+fi
+
+postgres_exec createdb -U "$admin_user" "$verify_database"
+postgres_exec_stdin pg_restore -U "$admin_user" -d "$verify_database" --exit-on-error --no-owner --no-acl < "$tmp_dump"
+postgres_exec psql -v ON_ERROR_STOP=1 -At -U "$admin_user" -d "$verify_database" -c "SELECT 1" | grep -qx '1'
+postgres_exec dropdb --if-exists -U "$admin_user" "$verify_database"
+verify_database=""
+
+mv -f "$tmp_dump" "$verified_dump"
+tmp_dump=""
+rotate_verified_backups

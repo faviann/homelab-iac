@@ -85,3 +85,4 @@ vault_dockhand_hawser_token: "REPLACE_ME"
 # Overmind Postgres substrate
 vault_overmind_postgres_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
 vault_overmind_memsrv_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
+vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"

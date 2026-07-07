@@ -17,6 +17,7 @@ runtime:
       - /data/overmind/postgres/pgdata
     bind_mounts:
       - /tank/overmind,mp=/data/overmind
+      - /tank/backups/overmind,mp=/backups/overmind
 exposure:
   traefik: none
   homepage_instances: []

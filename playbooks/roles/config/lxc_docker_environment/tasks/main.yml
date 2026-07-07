@@ -195,6 +195,10 @@
   ansible.builtin.include_tasks: overmind_postgres_bootstrap.yml
   when: overmind_postgres_bootstrap_enabled | default(false) | bool
 
+- name: Configure overmind verified Postgres backups
+  ansible.builtin.include_tasks: overmind_postgres_backup.yml
+  when: overmind_postgres_backup_enabled | default(false) | bool
+
 - name: Seed Dockhand environments
   ansible.builtin.include_tasks: dockhand_environments.yml
   when: portal_instance | default(false)

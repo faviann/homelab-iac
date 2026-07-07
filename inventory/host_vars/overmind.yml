@@ -20,8 +20,8 @@ proxmox_lxc_host_directories:
     group: '100000'
     mode: "0755"
   - path: /tank/backups/overmind
-    owner: root
-    group: root
+    owner: '100000'
+    group: '100000'
     mode: "0700"
 
 lxc_docker_env_path_ownership_overrides:
@@ -48,8 +48,22 @@ overmind_postgres_bootstrap:
   memsrv_role: memsrv
   memsrv_password: "{{ vault_overmind_memsrv_password }}"
 
+overmind_postgres_backup_enabled: true
+overmind_postgres_backup:
+  container_name: overmind-postgres
+  admin_user: overmind
+  admin_password: "{{ vault_overmind_postgres_password }}"
+  database: memory
+  backup_dir: /backups/overmind
+  retention_count: 14
+  freshness_max_age_seconds: 172800
+  discord_webhook_url: "{{ vault_overmind_backup_discord_webhook_url }}"
+  timer_calendar: "*-*-* 03:25:00"
+  randomized_delay_seconds: "30m"
+
 proxmox_lxc_bind_mounts_overrides:
   mp3: "/tank/overmind,mp=/data/overmind"
+  mp4: "/tank/backups/overmind,mp=/backups/overmind"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:

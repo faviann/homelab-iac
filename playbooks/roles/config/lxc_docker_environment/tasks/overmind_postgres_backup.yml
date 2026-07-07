@@ -1,0 +1,120 @@
+---
+# Host-specific verified logical backups for the overmind memory database.
+
+- name: Assert overmind Postgres backup inputs are present
+  ansible.builtin.assert:
+    that:
+      - overmind_postgres_backup.container_name is defined
+      - overmind_postgres_backup.container_name | string | length > 0
+      - overmind_postgres_backup.admin_user is defined
+      - overmind_postgres_backup.admin_user | string | length > 0
+      - overmind_postgres_backup.admin_password is defined
+      - overmind_postgres_backup.admin_password | string | length > 0
+      - overmind_postgres_backup.database is defined
+      - overmind_postgres_backup.database | string | length > 0
+      - overmind_postgres_backup.database is match('^[a-z_][a-z0-9_]*$')
+      - overmind_postgres_backup.backup_dir is defined
+      - overmind_postgres_backup.backup_dir | string | length > 0
+      - overmind_postgres_backup.retention_count is defined
+      - overmind_postgres_backup.retention_count | int >= 1
+      - overmind_postgres_backup.freshness_max_age_seconds is defined
+      - overmind_postgres_backup.freshness_max_age_seconds | int >= 1
+      - overmind_postgres_backup.discord_webhook_url is defined
+      - overmind_postgres_backup.discord_webhook_url | string | length > 0
+      - overmind_postgres_backup.timer_calendar is defined
+      - overmind_postgres_backup.timer_calendar | string | length > 0
+      - overmind_postgres_backup.randomized_delay_seconds is defined
+      - overmind_postgres_backup.randomized_delay_seconds | string | length > 0
+    fail_msg: >-
+      overmind_postgres_backup_enabled requires container_name, admin_user,
+      admin_password, database, backup_dir, retention_count,
+      freshness_max_age_seconds, discord_webhook_url, timer_calendar, and
+      randomized_delay_seconds.
+  no_log: true
+
+- name: Ensure overmind backup directory exists inside LXC
+  ansible.builtin.file:
+    path: "{{ overmind_postgres_backup.backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install overmind Postgres backup script
+  ansible.builtin.copy:
+    src: overmind-postgres-backup
+    dest: /usr/local/sbin/overmind-postgres-backup
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install overmind Postgres backup freshness script
+  ansible.builtin.copy:
+    src: overmind-postgres-backup-freshness
+    dest: /usr/local/sbin/overmind-postgres-backup-freshness
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install overmind Postgres backup environment
+  ansible.builtin.template:
+    src: overmind-postgres-backup.env.j2
+    dest: /etc/overmind-postgres-backup.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install overmind Postgres backup service
+  ansible.builtin.template:
+    src: overmind-postgres-backup.service.j2
+    dest: /etc/systemd/system/overmind-postgres-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: _overmind_backup_service
+
+- name: Install overmind Postgres backup timer
+  ansible.builtin.template:
+    src: overmind-postgres-backup.timer.j2
+    dest: /etc/systemd/system/overmind-postgres-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  register: _overmind_backup_timer
+
+- name: Reload systemd for overmind backup unit changes
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: _overmind_backup_service.changed or _overmind_backup_timer.changed
+
+- name: Enable and start overmind Postgres backup timer
+  ansible.builtin.systemd_service:
+    name: overmind-postgres-backup.timer
+    enabled: true
+    state: started
+
+- name: Find overmind verified Postgres backups
+  ansible.builtin.find:
+    paths: "{{ overmind_postgres_backup.backup_dir }}"
+    patterns: "{{ overmind_postgres_backup.database }}-*.verified.dump"
+    file_type: file
+  register: _overmind_verified_backups
+
+- name: Create initial overmind verified backup when none exists
+  ansible.builtin.command:
+    cmd: systemctl start overmind-postgres-backup.service
+  when:
+    - not ansible_check_mode
+    - _overmind_verified_backups.matched | int == 0
+
+- name: Assert overmind verified backup freshness
+  ansible.builtin.command:
+    cmd: /usr/local/sbin/overmind-postgres-backup-freshness
+  environment:
+    OVERMIND_BACKUP_DIR: "{{ overmind_postgres_backup.backup_dir }}"
+    OVERMIND_POSTGRES_DATABASE: "{{ overmind_postgres_backup.database }}"
+    OVERMIND_BACKUP_FRESHNESS_MAX_AGE_SECONDS: "{{ overmind_postgres_backup.freshness_max_age_seconds | string }}"
+    OVERMIND_BACKUP_TIMER_UNIT: overmind-postgres-backup.timer
+  changed_when: false
+  when: not ansible_check_mode
