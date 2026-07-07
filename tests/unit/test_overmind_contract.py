@@ -88,7 +88,31 @@ class OvermindContractTests(unittest.TestCase):
         self.assertIn("POSTGRES_DB=overmind", env_template)
         self.assertIn("POSTGRES_USER=overmind", env_template)
         self.assertIn("POSTGRES_PASSWORD={{ stack_vars.postgres_password | compose_env }}", env_template)
+        self.assertNotIn("MEMSRV_CONNECTION_STRING", env_template)
         self.assertNotIn("REPLACE_ME", env_template)
+
+    def test_overmind_memsrv_database_bootstrap_contract(self) -> None:
+        overmind_vars = load_yaml(REPO_ROOT / "inventory/host_vars/overmind.yml")
+        bootstrap = overmind_vars["overmind_postgres_bootstrap"]
+        stack_vars = overmind_vars["lxc_docker_env_stack_vars"]
+
+        self.assertTrue(overmind_vars["overmind_postgres_bootstrap_enabled"])
+        self.assertEqual(bootstrap["container_name"], "overmind-postgres")
+        self.assertEqual(bootstrap["admin_user"], "overmind")
+        self.assertEqual(bootstrap["admin_database"], "overmind")
+        self.assertEqual(bootstrap["admin_password"], "{{ vault_overmind_postgres_password }}")
+        self.assertEqual(bootstrap["memory_database"], "memory")
+        self.assertEqual(bootstrap["memsrv_role"], "memsrv")
+        self.assertEqual(bootstrap["memsrv_password"], "{{ vault_overmind_memsrv_password }}")
+        self.assertEqual(
+            overmind_vars["overmind_memsrv_connection_string"],
+            "postgresql://memsrv:{{ vault_overmind_memsrv_password | urlencode }}@overmind-postgres:5432/memory",
+        )
+        self.assertEqual(
+            stack_vars["memsrv"],
+            {"memsrv_connection_string": "{{ overmind_memsrv_connection_string }}"},
+        )
+        self.assertNotIn("memsrv_connection_string", stack_vars["postgres"])
 
     def test_overmind_stack_metadata_documents_host_binding(self) -> None:
         metadata = load_yaml(REPO_ROOT / "stacks/overmind/postgres/stack.yaml")

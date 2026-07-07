@@ -1,0 +1,106 @@
+---
+- name: Test overmind Postgres bootstrap uses docker exec and is re-runnable
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    overmind_postgres_bootstrap:
+      container_name: overmind-postgres
+      admin_user: overmind
+      admin_database: overmind
+      admin_password: fake-admin-password
+      memory_database: memory
+      memsrv_role: memsrv
+      memsrv_password: "fake-memsrv-password"
+  tasks:
+    - name: Place mock docker script that records bootstrap calls
+      ansible.builtin.copy:
+        content: |
+          #!/bin/sh
+          log="{{ temp_root }}/docker-calls.log"
+          state="{{ temp_root }}/state"
+          mkdir -p "$state"
+          printf 'ARGS:%s\n' "$*" >> "$log"
+          stdin="$(cat)"
+          if [ -n "$stdin" ]; then
+            printf 'STDIN:%s\n' "$stdin" >> "$log"
+          fi
+
+          case "$*" in
+            *"pg_isready"*)
+              exit 0
+              ;;
+            *"SELECT 1 FROM pg_database WHERE datname = 'memory'"*)
+              if [ -f "$state/database-created" ]; then
+                printf '1\n'
+              fi
+              exit 0
+              ;;
+            *"createdb"*" memory"*)
+              touch "$state/database-created"
+              exit 0
+              ;;
+            *"SELECT 1 FROM pg_roles WHERE rolname = 'memsrv'"*)
+              if [ -f "$state/role-created" ]; then
+                printf '1\n'
+              fi
+              exit 0
+              ;;
+            *"-U memsrv -d memory"*"SELECT 1"*)
+              if [ -f "$state/role-created" ]; then
+                printf '1\n'
+                exit 0
+              fi
+              exit 1
+              ;;
+            *"psql"*)
+              if printf '%s' "$stdin" | grep -q 'CREATE ROLE memsrv'; then
+                touch "$state/role-created"
+              fi
+              exit 0
+              ;;
+          esac
+
+          exit 1
+        dest: "{{ temp_root }}/docker"
+        mode: "0755"
+
+    - name: Run bootstrap once
+      block:
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Run bootstrap again
+      block:
+        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+
+    - name: Slurp docker call log
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/docker-calls.log"
+      register: _docker_log
+
+    - name: Count bootstrap creation calls
+      ansible.builtin.set_fact:
+        _docker_log_text: "{{ _docker_log.content | b64decode }}"
+        _createdb_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'ARGS:exec .* createdb .* memory') | list | length }}"
+        _create_role_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'STDIN:CREATE ROLE memsrv') | list | length }}"
+        _alter_role_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'STDIN:ALTER ROLE memsrv') | list | length }}"
+        _password_check_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'ARGS:exec .* -U memsrv -d memory .* SELECT 1') | list | length }}"
+
+    - name: Assert bootstrap is scoped to docker exec and re-runnable
+      ansible.builtin.assert:
+        that:
+          - "'ARGS:exec -e PGPASSWORD overmind-postgres pg_isready' in _docker_log_text"
+          - "'ARGS:exec -e PGPASSWORD overmind-postgres psql' in _docker_log_text"
+          - "'ARGS:exec -i -e PGPASSWORD overmind-postgres psql' in _docker_log_text"
+          - _createdb_calls | int == 1
+          - _create_role_calls | int == 1
+          - _password_check_calls | int == 1
+          - _alter_role_calls | int == 0
+          - "'ports:' not in _docker_log_text"
+          - "'GRANT ' not in _docker_log_text"
+          - "'CREATE SCHEMA' not in _docker_log_text"
+        fail_msg: "Unexpected overmind bootstrap docker log: {{ _docker_log_text }}"

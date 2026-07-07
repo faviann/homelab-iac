@@ -34,6 +34,20 @@ lxc_docker_env_path_ownership_overrides:
 lxc_docker_env_stack_vars:
   postgres:
     postgres_password: "{{ vault_overmind_postgres_password }}"
+  memsrv:
+    memsrv_connection_string: "{{ overmind_memsrv_connection_string }}"
+
+overmind_memsrv_connection_string: "postgresql://memsrv:{{ vault_overmind_memsrv_password | urlencode }}@overmind-postgres:5432/memory"
+
+overmind_postgres_bootstrap_enabled: true
+overmind_postgres_bootstrap:
+  container_name: overmind-postgres
+  admin_user: overmind
+  admin_database: overmind
+  admin_password: "{{ vault_overmind_postgres_password }}"
+  memory_database: memory
+  memsrv_role: memsrv
+  memsrv_password: "{{ vault_overmind_memsrv_password }}"
 
 proxmox_lxc_bind_mounts_overrides:
   mp3: "/tank/overmind,mp=/data/overmind"

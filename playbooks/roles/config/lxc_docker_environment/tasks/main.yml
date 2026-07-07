@@ -191,6 +191,10 @@
   ansible.builtin.include_role:
     name: config/lxc_stack_sync
 
+- name: Bootstrap overmind Postgres application database
+  ansible.builtin.include_tasks: overmind_postgres_bootstrap.yml
+  when: overmind_postgres_bootstrap_enabled | default(false) | bool
+
 - name: Seed Dockhand environments
   ansible.builtin.include_tasks: dockhand_environments.yml
   when: portal_instance | default(false)
