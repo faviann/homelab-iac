@@ -21,6 +21,7 @@
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
+    workstation_autosync_bin_path: "{{ temp_root }}/bin/workstation-autosync"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
     workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
@@ -34,6 +35,11 @@
         type: bind_mount
         path: "{{ workstation_home }}/.codex"
         target: "{{ workstation_persistent_home_root }}/.codex"
+        mode: "0700"
+      - name: agents
+        type: bind_mount
+        path: "{{ workstation_home }}/.agents"
+        target: "{{ workstation_persistent_home_root }}/.agents"
         mode: "0700"
       - name: pi
         type: bind_mount

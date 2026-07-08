@@ -52,6 +52,23 @@ class WorkstationInventoryTests(unittest.TestCase):
         )
         self.assertEqual(overrides["tags"], ["ansible", "workstation", "development"])
 
+    def test_workstation_persistent_home_includes_agent_state(self) -> None:
+        defaults = load_yaml(
+            REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/defaults/main.yml"
+        )
+        links = defaults["workstation_persistent_home_links"]
+
+        self.assertIn(
+            {
+                "name": "agents",
+                "type": "bind_mount",
+                "path": "{{ workstation_home }}/.agents",
+                "target": "{{ workstation_persistent_home_root }}/.agents",
+                "mode": "0700",
+            },
+            links,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

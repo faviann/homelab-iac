@@ -21,6 +21,7 @@
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
+    workstation_autosync_bin_path: "{{ temp_root }}/bin/workstation-autosync"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
     workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
@@ -34,6 +35,11 @@
         type: bind_mount
         path: "{{ workstation_home }}/.codex"
         target: "{{ workstation_persistent_home_root }}/.codex"
+        mode: "0700"
+      - name: agents
+        type: bind_mount
+        path: "{{ workstation_home }}/.agents"
+        target: "{{ workstation_persistent_home_root }}/.agents"
         mode: "0700"
       - name: pi
         type: bind_mount
@@ -136,6 +142,11 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/.codex"
       register: codex_state_dir_stat
 
+    - name: Stat agents persistent home directory
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/ephemeral/workstation/home/.agents"
+      register: agents_state_dir_stat
+
     - name: Stat Pi persistent home directory
       ansible.builtin.stat:
         path: "{{ temp_root }}/ephemeral/workstation/home/.pi"
@@ -170,6 +181,11 @@
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.codex"
       register: codex_home_path_stat
+
+    - name: Stat agents home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.agents"
+      register: agents_home_path_stat
 
     - name: Stat Pi home path
       ansible.builtin.stat:
@@ -215,6 +231,10 @@
           - codex_state_dir_stat.stat.uid == workstation_uid
           - codex_state_dir_stat.stat.gid == workstation_gid
           - codex_state_dir_stat.stat.mode == "0700"
+          - agents_state_dir_stat.stat.isdir
+          - agents_state_dir_stat.stat.uid == workstation_uid
+          - agents_state_dir_stat.stat.gid == workstation_gid
+          - agents_state_dir_stat.stat.mode == "0700"
           - pi_state_dir_stat.stat.isdir
           - pi_state_dir_stat.stat.uid == workstation_uid
           - pi_state_dir_stat.stat.gid == workstation_gid
@@ -239,6 +259,8 @@
           - not (claude_home_path_stat.stat.islnk | default(false))
           - codex_home_path_stat.stat.isdir
           - not (codex_home_path_stat.stat.islnk | default(false))
+          - agents_home_path_stat.stat.isdir
+          - not (agents_home_path_stat.stat.islnk | default(false))
           - pi_home_path_stat.stat.isdir
           - not (pi_home_path_stat.stat.islnk | default(false))
           - aoe_home_path_stat.stat.isdir
