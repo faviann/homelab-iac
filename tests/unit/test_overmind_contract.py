@@ -115,6 +115,57 @@ class OvermindContractTests(unittest.TestCase):
         )
         self.assertNotIn("memsrv_connection_string", stack_vars["postgres"])
 
+    def test_overmind_migrations_run_from_tagged_ghcr_image(self) -> None:
+        overmind_vars = load_yaml(REPO_ROOT / "inventory/host_vars/overmind.yml")
+        main_tasks = (
+            REPO_ROOT / "playbooks/roles/config/lxc_docker_environment/tasks/main.yml"
+        ).read_text(encoding="utf-8")
+        migration_tasks = (
+            REPO_ROOT / "playbooks/roles/config/lxc_docker_environment/tasks/overmind_migrations.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertTrue(overmind_vars["overmind_migrations_enabled"])
+        self.assertEqual(overmind_vars["overmind_image_repository"], "ghcr.io/faviann/overmind")
+        self.assertEqual(overmind_vars["overmind_image_tag"], "0.1.0")
+        self.assertNotEqual(overmind_vars["overmind_image_tag"], "latest")
+        self.assertEqual(overmind_vars["overmind_migration_network"], "postgres_default")
+
+        self.assertLess(
+            main_tasks.index("overmind_postgres_bootstrap.yml"),
+            main_tasks.index("overmind_migrations.yml"),
+        )
+        self.assertIn("{{ overmind_image_repository }}:{{ overmind_image_tag }}", migration_tasks)
+        self.assertIn("MEMSRV_ADMIN_CONNECTION_STRING", migration_tasks)
+        self.assertIn("--entrypoint", migration_tasks)
+        self.assertIn("memctl", migration_tasks)
+        self.assertIn("migrate", migration_tasks)
+        self.assertIn("changed_when: false", migration_tasks)
+        self.assertIn("no_log: true", migration_tasks)
+        self.assertIn("Fail when overmind DbUp migrations fail", migration_tasks)
+        self.assertNotIn("ghcr.io/faviann/overmind:latest", migration_tasks)
+        self.assertNotIn("schemaversions", migration_tasks)
+        self.assertNotIn("CREATE TABLE", migration_tasks)
+        self.assertNotIn("ALTER TABLE", migration_tasks)
+
+    def test_overmind_admin_connection_string_is_not_deployed(self) -> None:
+        searched_files = [
+            *REPO_ROOT.glob("stacks/overmind/postgres/**/*"),
+            *(
+                REPO_ROOT / "playbooks/roles/config/lxc_docker_environment/templates"
+            ).glob("overmind*"),
+            *(
+                REPO_ROOT / "playbooks/roles/config/lxc_docker_environment/files"
+            ).glob("overmind*"),
+        ]
+
+        for path in searched_files:
+            if path.is_file():
+                self.assertNotIn(
+                    "MEMSRV_ADMIN_CONNECTION_STRING",
+                    path.read_text(encoding="utf-8"),
+                    str(path.relative_to(REPO_ROOT)),
+                )
+
     def test_overmind_postgres_backup_contract(self) -> None:
         overmind_vars = load_yaml(REPO_ROOT / "inventory/host_vars/overmind.yml")
         backup = overmind_vars["overmind_postgres_backup"]

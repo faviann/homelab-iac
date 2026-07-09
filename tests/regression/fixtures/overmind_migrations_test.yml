@@ -1,0 +1,159 @@
+---
+- name: Test overmind migrations use tagged GHCR image and ephemeral admin env
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    overmind_image_repository: ghcr.io/faviann/overmind
+    overmind_image_tag: "0.1.0"
+    overmind_migration_network: postgres_default
+    overmind_expected_migration_log_pattern: >-
+      (?m)^ARGS:run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING
+      --entrypoint memctl ghcr[.]io/faviann/overmind:0[.]1[.]0 migrate$
+    overmind_postgres_bootstrap:
+      container_name: overmind-postgres
+      admin_user: overmind
+      admin_database: overmind
+      admin_password: fake-admin-password
+      memory_database: memory
+      memsrv_role: memsrv
+      memsrv_password: "fake-memsrv-password"
+  tasks:
+    - name: Place mock docker script that records bootstrap and migration calls
+      ansible.builtin.copy:
+        content: |
+          #!/bin/sh
+          log="{{ temp_root }}/docker-calls.log"
+          state="{{ temp_root }}/state"
+          expected_run="run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING"
+          expected_run="$expected_run --entrypoint memctl {{ overmind_image_repository }}:{{ overmind_image_tag }} migrate"
+          mkdir -p "$state"
+          printf 'ARGS:%s\n' "$*" >> "$log"
+          if [ -n "${MEMSRV_ADMIN_CONNECTION_STRING:-}" ]; then
+            printf 'ENV:MEMSRV_ADMIN_CONNECTION_STRING_PRESENT\n' >> "$log"
+          fi
+          stdin="$(cat)"
+          if [ -n "$stdin" ]; then
+            printf 'STDIN:%s\n' "$stdin" >> "$log"
+          fi
+
+          case "$*" in
+            *"pg_isready"*)
+              exit 0
+              ;;
+            *"SELECT 1 FROM pg_database WHERE datname = 'memory'"*)
+              if [ -f "$state/database-created" ]; then
+                printf '1\n'
+              fi
+              exit 0
+              ;;
+            *"createdb"*" memory"*)
+              touch "$state/database-created"
+              exit 0
+              ;;
+            *"SELECT 1 FROM pg_roles WHERE rolname = 'memsrv'"*)
+              if [ -f "$state/role-created" ]; then
+                printf '1\n'
+              fi
+              exit 0
+              ;;
+            *"-U memsrv -d memory"*"SELECT 1"*)
+              if [ -f "$state/role-created" ]; then
+                printf '1\n'
+                exit 0
+              fi
+              exit 1
+              ;;
+            "$expected_run")
+              if [ ! -f "$state/database-created" ] || [ ! -f "$state/role-created" ]; then
+                exit 1
+              fi
+              if [ -z "${MEMSRV_ADMIN_CONNECTION_STRING:-}" ]; then
+                exit 1
+              fi
+              touch "$state/migrated"
+              exit 0
+              ;;
+            *"psql"*)
+              if printf '%s' "$stdin" | grep -q 'CREATE ROLE memsrv'; then
+                touch "$state/role-created"
+              fi
+              exit 0
+              ;;
+          esac
+
+          exit 1
+        dest: "{{ temp_root }}/docker"
+        mode: "0755"
+
+    - name: Run bootstrap and migrations once
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include overmind Postgres bootstrap tasks
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
+
+        - name: Include overmind migration tasks
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_migrations.yml"
+
+    - name: Run bootstrap and migrations again
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include overmind Postgres bootstrap tasks again
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
+
+        - name: Include overmind migration tasks again
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_migrations.yml"
+
+    - name: Slurp docker call log
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/docker-calls.log"
+      register: _docker_log
+
+    - name: Count migration and bootstrap calls
+      ansible.builtin.set_fact:
+        _docker_log_text: "{{ _docker_log.content | b64decode }}"
+        _migration_calls: >-
+          {{
+            (_docker_log.content | b64decode)
+            | regex_findall(overmind_expected_migration_log_pattern | trim)
+            | list
+            | length
+          }}
+        _migration_env_calls: >-
+          {{
+            (_docker_log.content | b64decode)
+            | regex_findall('(?m)^ENV:MEMSRV_ADMIN_CONNECTION_STRING_PRESENT$')
+            | list
+            | length
+          }}
+        _createdb_calls: >-
+          {{
+            (_docker_log.content | b64decode).split('\n')
+            | select('search', 'ARGS:exec .* createdb .* memory')
+            | list
+            | length
+          }}
+        _create_role_calls: >-
+          {{
+            (_docker_log.content | b64decode).split('\n')
+            | select('search', 'STDIN:CREATE ROLE memsrv')
+            | list
+            | length
+          }}
+
+    - name: Assert migrations use the immutable image tag and do not persist admin env
+      ansible.builtin.assert:
+        that:
+          - _migration_calls | int == 2
+          - _migration_env_calls | int == 2
+          - _createdb_calls | int == 1
+          - _create_role_calls | int == 1
+          - "'ghcr.io/faviann/overmind:0.1.0' in _docker_log_text"
+          - "'ghcr.io/faviann/overmind:latest' not in _docker_log_text"
+          - "'fake-admin-password' not in _docker_log_text"
+          - "'postgresql://overmind' not in _docker_log_text"
+          - "'CREATE TABLE' not in _docker_log_text"
+          - "'ALTER TABLE schemaversions' not in _docker_log_text"
+        fail_msg: "Unexpected overmind migration docker log: {{ _docker_log_text }}"

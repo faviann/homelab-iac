@@ -38,6 +38,11 @@ lxc_docker_env_stack_vars:
 
 overmind_memsrv_connection_string: "postgresql://memsrv:{{ vault_overmind_memsrv_password | urlencode }}@overmind-postgres:5432/memory"
 
+overmind_migrations_enabled: true
+overmind_image_repository: ghcr.io/faviann/overmind
+overmind_image_tag: "0.1.0"
+overmind_migration_network: postgres_default
+
 overmind_postgres_bootstrap_enabled: true
 overmind_postgres_bootstrap:
   container_name: overmind-postgres

@@ -1,0 +1,68 @@
+---
+# Host-specific DbUp migration invocation for the overmind memory database.
+
+- name: Assert overmind migration inputs are present
+  ansible.builtin.assert:
+    that:
+      - overmind_image_repository is defined
+      - overmind_image_repository | string | length > 0
+      - overmind_image_tag is defined
+      - overmind_image_tag | string | length > 0
+      - overmind_image_tag | string != "latest"
+      - overmind_image_tag is match('^[0-9][0-9A-Za-z._-]*$')
+      - overmind_migration_network is defined
+      - overmind_migration_network | string | length > 0
+      - overmind_postgres_bootstrap.container_name is defined
+      - overmind_postgres_bootstrap.container_name | string | length > 0
+      - overmind_postgres_bootstrap.admin_user is defined
+      - overmind_postgres_bootstrap.admin_user | string | length > 0
+      - overmind_postgres_bootstrap.admin_password is defined
+      - overmind_postgres_bootstrap.admin_password | string | length > 0
+      - overmind_postgres_bootstrap.memory_database is defined
+      - overmind_postgres_bootstrap.memory_database | string | length > 0
+    fail_msg: >-
+      overmind_migrations_enabled requires overmind_image_repository,
+      overmind_image_tag, overmind_migration_network, and
+      overmind_postgres_bootstrap container_name, admin_user, admin_password,
+      and memory_database. overmind_image_tag must be an immutable version tag,
+      not latest.
+
+- name: Run overmind DbUp migrations from tagged application image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --network
+      - "{{ overmind_migration_network }}"
+      - -e
+      - MEMSRV_ADMIN_CONNECTION_STRING
+      - --entrypoint
+      - memctl
+      - "{{ overmind_image_repository }}:{{ overmind_image_tag }}"
+      - migrate
+  environment:
+    MEMSRV_ADMIN_CONNECTION_STRING: >-
+      {{
+        "postgresql://"
+        ~ overmind_postgres_bootstrap.admin_user
+        ~ ":"
+        ~ (overmind_postgres_bootstrap.admin_password | urlencode)
+        ~ "@"
+        ~ overmind_postgres_bootstrap.container_name
+        ~ ":5432/"
+        ~ overmind_postgres_bootstrap.memory_database
+      }}
+  register: _config_overmind_migrations_result
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Fail when overmind DbUp migrations fail
+  ansible.builtin.fail:
+    msg: >-
+      overmind memctl migrate failed for
+      {{ overmind_image_repository }}:{{ overmind_image_tag }}. Confirm the immutable
+      image tag exists, Docker can pull from GHCR, and the memory database and
+      memsrv role bootstrap completed.
+  when: _config_overmind_migrations_result.rc != 0
