@@ -71,6 +71,13 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
                     "mode": "0700",
                 },
                 {
+                    "name": "agents",
+                    "type": "bind_mount",
+                    "path": "{{ workstation_home }}/.agents",
+                    "target": "{{ workstation_persistent_home_root }}/.agents",
+                    "mode": "0700",
+                },
+                {
                     "name": "pi",
                     "type": "bind_mount",
                     "path": "{{ workstation_home }}/.pi",
