@@ -5,11 +5,12 @@
   gather_facts: false
   vars:
     overmind_image_repository: ghcr.io/faviann/overmind
-    overmind_image_tag: "0.1.0"
+    overmind_image_tag: "0.2.1"
     overmind_migration_network: postgres_default
-    overmind_expected_migration_log_pattern: >-
+    overmind_mock_verify_schema_fails: false
+    overmind_expected_production_migration_log_pattern: >-
       (?m)^ARGS:run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING
-      --entrypoint memctl ghcr[.]io/faviann/overmind:0[.]1[.]0 migrate$
+      --entrypoint memctl ghcr[.]io/faviann/overmind:0[.]2[.]1 migrate$
     overmind_postgres_bootstrap:
       container_name: overmind-postgres
       admin_user: overmind
@@ -25,12 +26,14 @@
           #!/bin/sh
           log="{{ temp_root }}/docker-calls.log"
           state="{{ temp_root }}/state"
-          expected_run="run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING"
-          expected_run="$expected_run --entrypoint memctl {{ overmind_image_repository }}:{{ overmind_image_tag }} migrate"
           mkdir -p "$state"
           printf 'ARGS:%s\n' "$*" >> "$log"
           if [ -n "${MEMSRV_ADMIN_CONNECTION_STRING:-}" ]; then
             printf 'ENV:MEMSRV_ADMIN_CONNECTION_STRING_PRESENT\n' >> "$log"
+            db="$(printf '%s' "$MEMSRV_ADMIN_CONNECTION_STRING" | sed -n 's/.*Database=\([^;]*\).*/\1/p')"
+            if [ -n "$db" ]; then
+              printf 'ENVDB:%s\n' "$db" >> "$log"
+            fi
           fi
           stdin="$(cat)"
           if [ -n "$stdin" ]; then
@@ -51,6 +54,22 @@
               touch "$state/database-created"
               exit 0
               ;;
+            *"createdb"*" overmind_verify_"*)
+              verify_db="$(printf '%s' "$*" | awk '{print $NF}')"
+              printf '%s\n' "$verify_db" > "$state/verify-db"
+              touch "$state/verify-db-created"
+              exit 0
+              ;;
+            *"dropdb"*" overmind_verify_"*)
+              verify_db="$(cat "$state/verify-db" 2>/dev/null || true)"
+              case "$*" in
+                *" $verify_db")
+                  touch "$state/verify-db-dropped"
+                  exit 0
+                  ;;
+              esac
+              exit 1
+              ;;
             *"SELECT 1 FROM pg_roles WHERE rolname = 'memsrv'"*)
               if [ -f "$state/role-created" ]; then
                 printf '1\n'
@@ -64,14 +83,46 @@
               fi
               exit 1
               ;;
-            "$expected_run")
-              if [ ! -f "$state/database-created" ] || [ ! -f "$state/role-created" ]; then
+            *"run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING --entrypoint memctl {{ overmind_image_repository }}:{{ overmind_image_tag }} migrate")
+              if [ ! -f "$state/role-created" ]; then
                 exit 1
               fi
               if [ -z "${MEMSRV_ADMIN_CONNECTION_STRING:-}" ]; then
                 exit 1
               fi
-              touch "$state/migrated"
+              db="$(printf '%s' "$MEMSRV_ADMIN_CONNECTION_STRING" | sed -n 's/.*Database=\([^;]*\).*/\1/p')"
+              case "$db" in
+                memory)
+                  if [ ! -f "$state/database-created" ]; then
+                    exit 1
+                  fi
+                  touch "$state/production-migrated"
+                  exit 0
+                  ;;
+                overmind_verify_*)
+                  if [ ! -f "$state/verify-db-created" ]; then
+                    exit 1
+                  fi
+                  touch "$state/verify-db-migrated"
+                  exit 0
+                  ;;
+              esac
+              exit 1
+              ;;
+            *"run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING --entrypoint memctl {{ overmind_image_repository }}:{{ overmind_image_tag }} verify-schema")
+              if [ ! -f "$state/verify-db-migrated" ]; then
+                exit 1
+              fi
+              db="$(printf '%s' "$MEMSRV_ADMIN_CONNECTION_STRING" | sed -n 's/.*Database=\([^;]*\).*/\1/p')"
+              case "$db" in
+                overmind_verify_*)
+                  touch "$state/verify-db-verified"
+                  {% if overmind_mock_verify_schema_fails | bool %}
+                  exit 1
+                  {% endif %}
+                  exit 0
+                  ;;
+              esac
               exit 0
               ;;
             *"psql"*)
@@ -87,6 +138,7 @@
         mode: "0755"
 
     - name: Run bootstrap and migrations once
+      when: not overmind_mock_verify_schema_fails | bool
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
       block:
@@ -97,6 +149,7 @@
           ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_migrations.yml"
 
     - name: Run bootstrap and migrations again
+      when: not overmind_mock_verify_schema_fails | bool
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
       block:
@@ -105,6 +158,21 @@
 
         - name: Include overmind migration tasks again
           ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_migrations.yml"
+
+    - name: Run migrations with expected disposable verifier failure
+      when: overmind_mock_verify_schema_fails | bool
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include overmind Postgres bootstrap tasks before expected failure
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
+
+        - name: Include overmind migration tasks with expected failure
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_migrations.yml"
+      rescue:
+        - name: Mark expected disposable verification failure
+          ansible.builtin.set_fact:
+            _expected_verify_failure_seen: true
 
     - name: Slurp docker call log
       ansible.builtin.slurp:
@@ -117,7 +185,14 @@
         _migration_calls: >-
           {{
             (_docker_log.content | b64decode)
-            | regex_findall(overmind_expected_migration_log_pattern | trim)
+            | regex_findall(overmind_expected_production_migration_log_pattern | trim)
+            | list
+            | length
+          }}
+        _verify_schema_calls: >-
+          {{
+            (_docker_log.content | b64decode)
+            | regex_findall('(?m)^ARGS:.*verify-schema$')
             | list
             | length
           }}
@@ -125,6 +200,34 @@
           {{
             (_docker_log.content | b64decode)
             | regex_findall('(?m)^ENV:MEMSRV_ADMIN_CONNECTION_STRING_PRESENT$')
+            | list
+            | length
+          }}
+        _verify_db_createdb_calls: >-
+          {{
+            (_docker_log.content | b64decode)
+            | regex_findall('(?m)^ARGS:exec .* createdb .* overmind_verify_.*$')
+            | list
+            | length
+          }}
+        _verify_db_dropdb_calls: >-
+          {{
+            (_docker_log.content | b64decode)
+            | regex_findall('(?m)^ARGS:exec .* dropdb .* overmind_verify_.*$')
+            | list
+            | length
+          }}
+        _verify_db_env_calls: >-
+          {{
+            (_docker_log.content | b64decode)
+            | regex_findall('(?m)^ENVDB:overmind_verify_.*$')
+            | list
+            | length
+          }}
+        _production_db_env_calls: >-
+          {{
+            (_docker_log.content | b64decode)
+            | regex_findall('(?m)^ENVDB:memory$')
             | list
             | length
           }}
@@ -144,16 +247,38 @@
           }}
 
     - name: Assert migrations use the immutable image tag and do not persist admin env
+      when: not overmind_mock_verify_schema_fails | bool
       ansible.builtin.assert:
         that:
-          - _migration_calls | int == 2
-          - _migration_env_calls | int == 2
+          - _migration_calls | int == 4
+          - _verify_schema_calls | int == 2
+          - _migration_env_calls | int == 6
+          - _verify_db_createdb_calls | int == 2
+          - _verify_db_dropdb_calls | int == 2
+          - _verify_db_env_calls | int == 4
+          - _production_db_env_calls | int == 2
           - _createdb_calls | int == 1
           - _create_role_calls | int == 1
-          - "'ghcr.io/faviann/overmind:0.1.0' in _docker_log_text"
+          - "'ghcr.io/faviann/overmind:0.2.1' in _docker_log_text"
           - "'ghcr.io/faviann/overmind:latest' not in _docker_log_text"
           - "'fake-admin-password' not in _docker_log_text"
           - "'postgresql://overmind' not in _docker_log_text"
           - "'CREATE TABLE' not in _docker_log_text"
           - "'ALTER TABLE schemaversions' not in _docker_log_text"
         fail_msg: "Unexpected overmind migration docker log: {{ _docker_log_text }}"
+
+    - name: Assert disposable verification failure cleans up and skips production
+      when: overmind_mock_verify_schema_fails | bool
+      ansible.builtin.assert:
+        that:
+          - _expected_verify_failure_seen | default(false) | bool
+          - _migration_calls | int == 1
+          - _verify_schema_calls | int == 1
+          - _migration_env_calls | int == 2
+          - _verify_db_createdb_calls | int == 1
+          - _verify_db_dropdb_calls | int == 1
+          - _verify_db_env_calls | int == 2
+          - _production_db_env_calls | int == 0
+          - "'ghcr.io/faviann/overmind:0.2.1' in _docker_log_text"
+          - "'fake-admin-password' not in _docker_log_text"
+        fail_msg: "Unexpected overmind verifier failure docker log: {{ _docker_log_text }}"

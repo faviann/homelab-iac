@@ -126,7 +126,7 @@ class OvermindContractTests(unittest.TestCase):
 
         self.assertTrue(overmind_vars["overmind_migrations_enabled"])
         self.assertEqual(overmind_vars["overmind_image_repository"], "ghcr.io/faviann/overmind")
-        self.assertEqual(overmind_vars["overmind_image_tag"], "0.1.0")
+        self.assertEqual(overmind_vars["overmind_image_tag"], "0.2.1")
         self.assertNotEqual(overmind_vars["overmind_image_tag"], "latest")
         self.assertEqual(overmind_vars["overmind_migration_network"], "postgres_default")
 
@@ -142,6 +142,9 @@ class OvermindContractTests(unittest.TestCase):
         self.assertIn("--entrypoint", migration_tasks)
         self.assertIn("memctl", migration_tasks)
         self.assertIn("migrate", migration_tasks)
+        self.assertIn("verify-schema", migration_tasks)
+        self.assertIn("overmind_verify_", migration_tasks)
+        self.assertIn("dropdb", migration_tasks)
         self.assertIn("changed_when: false", migration_tasks)
         self.assertIn("no_log: true", migration_tasks)
         self.assertIn("Fail when overmind DbUp migrations fail", migration_tasks)
