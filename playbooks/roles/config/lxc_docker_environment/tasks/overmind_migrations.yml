@@ -44,14 +44,11 @@
   environment:
     MEMSRV_ADMIN_CONNECTION_STRING: >-
       {{
-        "postgresql://"
-        ~ overmind_postgres_bootstrap.admin_user
-        ~ ":"
-        ~ (overmind_postgres_bootstrap.admin_password | urlencode)
-        ~ "@"
-        ~ overmind_postgres_bootstrap.container_name
-        ~ ":5432/"
-        ~ overmind_postgres_bootstrap.memory_database
+        "Host=" ~ overmind_postgres_bootstrap.container_name
+        ~ ";Port=5432"
+        ~ ";Database=" ~ overmind_postgres_bootstrap.memory_database
+        ~ ";Username=" ~ overmind_postgres_bootstrap.admin_user
+        ~ ";Password=" ~ overmind_postgres_bootstrap.admin_password
       }}
   register: _config_overmind_migrations_result
   changed_when: false
