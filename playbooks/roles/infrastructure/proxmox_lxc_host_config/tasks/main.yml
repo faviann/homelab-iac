@@ -24,19 +24,19 @@
 
 - name: Resolve host-config LXC contract slice
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_spec: "{{ proxmox_lxc_contract.host_config }}"
+    infrastructure_proxmox_lxc_host_config_spec: "{{ proxmox_lxc_contract.host_config }}"
 
 - name: Validate required context
   ansible.builtin.assert:
     that:
-      - proxmox_lxc_host_config_spec is defined
-      - proxmox_lxc_host_config_spec.hostname is defined
-      - proxmox_lxc_host_config_spec.vmid is defined
+      - infrastructure_proxmox_lxc_host_config_spec is defined
+      - infrastructure_proxmox_lxc_host_config_spec.hostname is defined
+      - infrastructure_proxmox_lxc_host_config_spec.vmid is defined
     fail_msg: "proxmox_lxc_host_config_spec with hostname and vmid is required"
 
 - name: Initialize host reconciliation component outcomes
   ansible.builtin.set_fact:
-    _proxmox_lxc_host_config_component_results:
+    infrastructure_proxmox_lxc_host_config_component_results:
       host_directories:
         changed: false
         restart_required: false
@@ -61,23 +61,24 @@
 
 - name: Initialize host reconciliation result
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_result:
-      vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
-      hostname: "{{ proxmox_lxc_host_config_spec.hostname }}"
-      components: "{{ _proxmox_lxc_host_config_component_results }}"
+    # Public lifecycle output consumed by callers after this role completes.
+    proxmox_lxc_host_config_result:  # noqa: var-naming[no-role-prefix]
+      vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
+      hostname: "{{ infrastructure_proxmox_lxc_host_config_spec.hostname }}"
+      components: "{{ infrastructure_proxmox_lxc_host_config_component_results }}"
       overall_changed: false
       restart_required: false
       restart_applied: false
 
 - name: Determine host-config LXC configuration file path
   ansible.builtin.set_fact:
-    _proxmox_lxc_host_config_file: >-
-      {{ proxmox_lxc_host_config_path_root }}/{{ proxmox_lxc_host_config_spec.vmid }}.conf
+    infrastructure_proxmox_lxc_host_config_file: >-
+      {{ proxmox_lxc_host_config_path_root }}/{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}.conf
 
 - name: Ensure host-side LXC directories exist
   ansible.builtin.include_tasks: host_directories.yml
   when:
-    - proxmox_lxc_host_config_spec.host_directories | default([]) | length > 0
+    - infrastructure_proxmox_lxc_host_config_spec.host_directories | default([]) | length > 0
     - hostvars['localhost'].proxmox_ssh_ready | default(true)
 
 # proxmox_ssh_ready is false only when check mode could not install the
@@ -85,8 +86,8 @@
 # host is then unreachable, so skip everything that delegates to it.
 - name: Check if host-config LXC configuration file exists
   ansible.builtin.stat:
-    path: "{{ _proxmox_lxc_host_config_file }}"
-  register: _proxmox_lxc_host_config_file_stat
+    path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
+  register: infrastructure_proxmox_lxc_host_config_file_stat
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   when: hostvars['localhost'].proxmox_ssh_ready | default(true)
@@ -95,7 +96,8 @@
   ansible.builtin.debug:
     msg: >-
       Check mode skips host-config reconciliation for container
-      {{ proxmox_lxc_host_config_spec.vmid }} ({{ proxmox_lxc_host_config_spec.hostname }})
+      {{ infrastructure_proxmox_lxc_host_config_spec.vmid }}
+      ({{ infrastructure_proxmox_lxc_host_config_spec.hostname }})
       because SSH key authentication to the Proxmox host is not configured.
   when: not (hostvars['localhost'].proxmox_ssh_ready | default(true))
 
@@ -103,16 +105,21 @@
   ansible.builtin.debug:
     msg: >-
       Check mode skips host-config reconciliation for container
-      {{ proxmox_lxc_host_config_spec.vmid }} ({{ proxmox_lxc_host_config_spec.hostname }})
-      because {{ _proxmox_lxc_host_config_file }} does not exist yet.
+      {{ infrastructure_proxmox_lxc_host_config_spec.vmid }}
+      ({{ infrastructure_proxmox_lxc_host_config_spec.hostname }})
+      because {{ infrastructure_proxmox_lxc_host_config_file }} does not exist yet.
   when:
     - ansible_check_mode | bool
     - hostvars['localhost'].proxmox_ssh_ready | default(true)
-    - not _proxmox_lxc_host_config_file_stat.stat.exists
+    - not infrastructure_proxmox_lxc_host_config_file_stat.stat.exists
 
 - name: Apply LXC config file modifications
   ansible.builtin.include_tasks: config_file.yml
-  when: not (ansible_check_mode | bool and not (_proxmox_lxc_host_config_file_stat.stat.exists | default(false)))
+  when: >-
+    not (
+      ansible_check_mode | bool
+      and not (infrastructure_proxmox_lxc_host_config_file_stat.stat.exists | default(false))
+    )
   tags:
     - config_file
     - idmap
@@ -122,19 +129,24 @@
 - name: Apply LXC feature flags via pct
   ansible.builtin.include_tasks: features.yml
   when:
-    - not (ansible_check_mode | bool and not (_proxmox_lxc_host_config_file_stat.stat.exists | default(false)))
+    - >-
+      not (
+        ansible_check_mode | bool
+        and not (infrastructure_proxmox_lxc_host_config_file_stat.stat.exists | default(false))
+      )
   tags:
     - features
 
 - name: Finalize host reconciliation result
   ansible.builtin.set_fact:
-    proxmox_lxc_host_config_result:
-      vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
-      hostname: "{{ proxmox_lxc_host_config_spec.hostname }}"
-      components: "{{ _proxmox_lxc_host_config_component_results }}"
+    # Public lifecycle output consumed by callers after this role completes.
+    proxmox_lxc_host_config_result:  # noqa: var-naming[no-role-prefix]
+      vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
+      hostname: "{{ infrastructure_proxmox_lxc_host_config_spec.hostname }}"
+      components: "{{ infrastructure_proxmox_lxc_host_config_component_results }}"
       overall_changed: >-
         {{
-          _proxmox_lxc_host_config_component_results
+          infrastructure_proxmox_lxc_host_config_component_results
           | dict2items
           | selectattr('value.changed')
           | list
@@ -142,7 +154,7 @@
         }}
       restart_required: >-
         {{
-          _proxmox_lxc_host_config_component_results
+          infrastructure_proxmox_lxc_host_config_component_results
           | dict2items
           | selectattr('value.restart_required')
           | list
@@ -152,9 +164,9 @@
 
 - name: Check container runtime status for config-file-driven restart
   proxmox_pct:
-    vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
+    vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
     command: status
-  register: _config_container_status
+  register: infrastructure_proxmox_lxc_host_config_container_status
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   when:
@@ -163,29 +175,33 @@
 
 - name: Restart container to apply config file changes
   proxmox_pct:
-    vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
+    vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
     command: reboot
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   when:
     - proxmox_lxc_host_config_result.restart_required
     - not ansible_check_mode
-    - _config_container_status is defined
-    - _config_container_status.status | default('') == 'running'
-  register: _config_container_restart
+    - infrastructure_proxmox_lxc_host_config_container_status is defined
+    - infrastructure_proxmox_lxc_host_config_container_status.status | default('') == 'running'
+  register: infrastructure_proxmox_lxc_host_config_container_restart
 
-- name: Wait for container to complete reboot
+# This must remain synchronous so the published result describes the completed reboot.
+- name: Wait for container to complete reboot  # noqa: no-handler
   ansible.builtin.pause:
     seconds: 15
-    prompt: "Waiting for container {{ proxmox_lxc_host_config_spec.vmid }} to complete reboot and start SSH service"
-  when: _config_container_restart is changed
+    prompt: >-
+      Waiting for container {{ infrastructure_proxmox_lxc_host_config_spec.vmid }}
+      to complete reboot and start SSH service
+  when: infrastructure_proxmox_lxc_host_config_container_restart is changed
   delegate_to: "{{ proxmox_host_config_delegate }}"
 
-- name: Update result after config-file-driven restart
+# This must remain synchronous so callers receive the final restart outcome.
+- name: Update result after config-file-driven restart  # noqa: no-handler var-naming[no-role-prefix]
   ansible.builtin.set_fact:
     proxmox_lxc_host_config_result: >-
       {{
         proxmox_lxc_host_config_result
         | combine({'restart_applied': true, 'restart_required': false}, recursive=True)
       }}
-  when: _config_container_restart is changed
+  when: infrastructure_proxmox_lxc_host_config_container_restart is changed

@@ -5,33 +5,36 @@
 
 - name: Determine LXC configuration file path
   ansible.builtin.set_fact:
-    _lxc_config_file: "{{ proxmox_lxc_host_config_path_root }}/{{ proxmox_lxc_host_config_spec.vmid }}.conf"
+    infrastructure_proxmox_lxc_host_config_file: >-
+      {{ proxmox_lxc_host_config_path_root }}/{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}.conf
 
 - name: Check if LXC configuration file exists
   ansible.builtin.stat:
-    path: "{{ _lxc_config_file }}"
+    path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  register: _lxc_config_stat
+  register: infrastructure_proxmox_lxc_host_config_file_stat
 
 - name: Fail if container config file does not exist
   ansible.builtin.fail:
-    msg: "LXC configuration file {{ _lxc_config_file }} not found. Ensure container is created first."
-  when: not _lxc_config_stat.stat.exists
+    msg: >-
+      LXC configuration file {{ infrastructure_proxmox_lxc_host_config_file }} not found.
+      Ensure container is created first.
+  when: not infrastructure_proxmox_lxc_host_config_file_stat.stat.exists
 
 - name: Validate host-config data types
   ansible.builtin.assert:
     that:
-      - proxmox_lxc_host_config_spec.bind_mounts | default({}) is mapping
-      - proxmox_lxc_host_config_spec.idmap | default([]) is sequence
-      - proxmox_lxc_host_config_spec.idmap | default([]) is not string
-      - proxmox_lxc_host_config_spec.features | default([]) is sequence
-      - proxmox_lxc_host_config_spec.features | default([]) is not string
-      - proxmox_lxc_host_config_spec.configure_nvidia_runtime is boolean
-      - proxmox_lxc_host_config_spec.wireguard_kernel_module_access is boolean
-      - proxmox_lxc_host_config_spec.lxc_custom_sysctls is sequence
-      - proxmox_lxc_host_config_spec.lxc_custom_sysctls is not string
-      - proxmox_lxc_host_config_spec.lxc_disable_apparmor is boolean
+      - infrastructure_proxmox_lxc_host_config_spec.bind_mounts | default({}) is mapping
+      - infrastructure_proxmox_lxc_host_config_spec.idmap | default([]) is sequence
+      - infrastructure_proxmox_lxc_host_config_spec.idmap | default([]) is not string
+      - infrastructure_proxmox_lxc_host_config_spec.features | default([]) is sequence
+      - infrastructure_proxmox_lxc_host_config_spec.features | default([]) is not string
+      - infrastructure_proxmox_lxc_host_config_spec.configure_nvidia_runtime is boolean
+      - infrastructure_proxmox_lxc_host_config_spec.wireguard_kernel_module_access is boolean
+      - infrastructure_proxmox_lxc_host_config_spec.lxc_custom_sysctls is sequence
+      - infrastructure_proxmox_lxc_host_config_spec.lxc_custom_sysctls is not string
+      - infrastructure_proxmox_lxc_host_config_spec.lxc_disable_apparmor is boolean
     fail_msg: "Host config spec contains invalid managed host-side desired state"
 
 - name: Apply UID/GID ID mappings

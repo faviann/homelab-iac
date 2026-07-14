@@ -12,31 +12,34 @@
         gsub(/[[:space:]]+/, " ", value)
         print value
       }
-    ' {{ _lxc_config_file | quote }} | sort -u
+    ' {{ infrastructure_proxmox_lxc_host_config_file | quote }} | sort -u
   args:
     executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  register: _current_idmap
+  register: infrastructure_proxmox_lxc_host_config_current_idmap
   check_mode: false
   changed_when: false
 
 - name: Normalize desired ID mappings
   ansible.builtin.set_fact:
-    _desired_idmap_list: >-
-      {{ proxmox_lxc_host_config_spec.idmap | map('trim')
+    infrastructure_proxmox_lxc_host_config_desired_idmap_list: >-
+      {{ infrastructure_proxmox_lxc_host_config_spec.idmap | map('trim')
          | map('regex_replace', '\\s+', ' ') | unique | sort | list }}
 
 - name: Determine desired ID mappings (sorted)
   ansible.builtin.set_fact:
-    _desired_idmap: "{{ _desired_idmap_list | join('\n') }}"
+    infrastructure_proxmox_lxc_host_config_desired_idmap: "{{
+      infrastructure_proxmox_lxc_host_config_desired_idmap_list | join('\n') }}"
 
 - name: Update ID mappings only if different
-  when: _current_idmap.stdout != _desired_idmap
+  when: >-
+    infrastructure_proxmox_lxc_host_config_current_idmap.stdout
+    != infrastructure_proxmox_lxc_host_config_desired_idmap
   block:
     - name: Remove all existing UID/GID ID mappings
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         regexp: '^lxc\.idmap:'
         state: absent
       delegate_to: "{{ proxmox_host_config_delegate }}"
@@ -44,24 +47,30 @@
 
     - name: Apply UID/GID ID mappings
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         line: "lxc.idmap: {{ item }}"
         insertafter: '^unprivileged:'
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
       become: "{{ proxmox_lxc_host_config_become }}"
-      loop: "{{ proxmox_lxc_host_config_spec.idmap | sort }}"
+      loop: "{{ infrastructure_proxmox_lxc_host_config_spec.idmap | sort }}"
 
 - name: Publish idmap reconciliation result
   ansible.builtin.set_fact:
-    _proxmox_lxc_host_config_component_results: >-
+    infrastructure_proxmox_lxc_host_config_component_results: >-
       {{
-        _proxmox_lxc_host_config_component_results
+        infrastructure_proxmox_lxc_host_config_component_results
         | combine(
             {
               'idmap': {
-                'changed': (_current_idmap.stdout != _desired_idmap),
-                'restart_required': (_current_idmap.stdout != _desired_idmap)
+                'changed': (
+                  infrastructure_proxmox_lxc_host_config_current_idmap.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_idmap
+                ),
+                'restart_required': (
+                  infrastructure_proxmox_lxc_host_config_current_idmap.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_idmap
+                )
               }
             },
             recursive=True

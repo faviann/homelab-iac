@@ -5,7 +5,7 @@
 - name: Get current bind mounts
   ansible.builtin.shell: |
     set -o pipefail
-    { grep '^mp[0-9]\+:' {{ _lxc_config_file | quote }} || [ "$?" -eq 1 ]; } |
+    { grep '^mp[0-9]\+:' {{ infrastructure_proxmox_lxc_host_config_file | quote }} || [ "$?" -eq 1 ]; } |
     while IFS=: read -r mount_key mount_value; do
       normalized_value=$(
         printf '%s\n' "$mount_value" |
@@ -20,38 +20,42 @@
     executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  register: _current_mounts
+  register: infrastructure_proxmox_lxc_host_config_current_mounts
   check_mode: false
   changed_when: false
 
 - name: Initialize normalized desired bind mounts
   ansible.builtin.set_fact:
-    _desired_mounts_list: []
+    infrastructure_proxmox_lxc_host_config_desired_mounts_list: []
 
 - name: Normalize desired bind mounts
   ansible.builtin.set_fact:
-    _desired_mounts_list: >-
+    infrastructure_proxmox_lxc_host_config_desired_mounts_list: >-
       {{
-        _desired_mounts_list
+        infrastructure_proxmox_lxc_host_config_desired_mounts_list
         + [
             item.key ~ ': '
             ~ (item.value.split(',') | map('trim') | sort | join(','))
           ]
       }}
-  loop: "{{ proxmox_lxc_host_config_spec.bind_mounts | dict2items }}"
+  loop: "{{ infrastructure_proxmox_lxc_host_config_spec.bind_mounts | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
 
 - name: Determine desired bind mounts (sorted)
   ansible.builtin.set_fact:
-    _desired_mounts: "{{ _desired_mounts_list | sort | join('\n') }}"
+    infrastructure_proxmox_lxc_host_config_desired_mounts: "{{
+      infrastructure_proxmox_lxc_host_config_desired_mounts_list
+      | sort | join('\n') }}"
 
 - name: Update bind mounts only if different
-  when: _current_mounts.stdout != _desired_mounts
+  when: >-
+    infrastructure_proxmox_lxc_host_config_current_mounts.stdout
+    != infrastructure_proxmox_lxc_host_config_desired_mounts
   block:
     - name: Remove all existing bind mount points
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         regexp: '^mp\d+:'
         state: absent
       delegate_to: "{{ proxmox_host_config_delegate }}"
@@ -59,24 +63,32 @@
 
     - name: Apply bind mount points
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         line: "{{ item.key }}: {{ item.value }}"
         insertafter: '^rootfs:'
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
       become: "{{ proxmox_lxc_host_config_become }}"
-      loop: "{{ proxmox_lxc_host_config_spec.bind_mounts | dict2items | sort(attribute='key') }}"
+      loop: >-
+        {{ infrastructure_proxmox_lxc_host_config_spec.bind_mounts
+           | dict2items | sort(attribute='key') }}
 
 - name: Publish bind-mount reconciliation result
   ansible.builtin.set_fact:
-    _proxmox_lxc_host_config_component_results: >-
+    infrastructure_proxmox_lxc_host_config_component_results: >-
       {{
-        _proxmox_lxc_host_config_component_results
+        infrastructure_proxmox_lxc_host_config_component_results
         | combine(
             {
               'bind_mounts': {
-                'changed': (_current_mounts.stdout != _desired_mounts),
-                'restart_required': (_current_mounts.stdout != _desired_mounts)
+                'changed': (
+                  infrastructure_proxmox_lxc_host_config_current_mounts.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_mounts
+                ),
+                'restart_required': (
+                  infrastructure_proxmox_lxc_host_config_current_mounts.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_mounts
+                )
               }
             },
             recursive=True
