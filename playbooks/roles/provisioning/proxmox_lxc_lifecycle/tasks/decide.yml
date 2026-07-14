@@ -143,5 +143,4 @@
       {{
         proxmox_lxc_lifecycle_plan.container_transition != 'none'
         or (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
-        or (proxmox_lxc_lifecycle_plan.restore_guest_access | bool)
       }}

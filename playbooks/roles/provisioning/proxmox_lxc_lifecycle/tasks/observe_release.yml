@@ -1,0 +1,54 @@
+---
+# Role-owned release-observation boundary. Both initial inspection and
+# post-host-work refresh use this task file; the shared probe implementation is
+# injected so the role does not depend on repository-directory traversal.
+
+- name: Reset release observation for a refreshed runtime state
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_actual_release: ""
+    proxmox_lifecycle_release_probe_state: unavailable
+  when: proxmox_lifecycle_release_observation_refresh | default(false) | bool
+
+- name: Mark release observation as not applicable for absent desired state
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_actual_release: ""
+    proxmox_lifecycle_release_probe_state: not_applicable
+  when:
+    - not (proxmox_lifecycle_release_observation_refresh | default(false) | bool)
+    - proxmox_lxc_contract.api_spec.state | default('present') != 'present'
+
+- name: Mark stopped containers as skipped for release probing
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_actual_release: ""
+    proxmox_lifecycle_release_probe_state: skipped_stopped
+  when:
+    - proxmox_lifecycle_release_probe_state == 'unavailable'
+    - proxmox_lifecycle_runtime_state == 'stopped'
+    - proxmox_lifecycle_policy_effective.skip_stopped_release_checks | bool
+
+- name: Mark absent containers as skipped for release probing
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_actual_release: ""
+    proxmox_lifecycle_release_probe_state: absent
+  when:
+    - proxmox_lifecycle_release_probe_state == 'unavailable'
+    - proxmox_lifecycle_runtime_state == 'absent'
+
+- name: Probe the current running guest release
+  ansible.builtin.include_tasks:
+    file: "{{ proxmox_lifecycle_release_probe_tasks_file }}"
+  vars:
+    lxc_release_probe_vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
+    lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"
+    lxc_release_probe_delegate_user: "{{ proxmox_host_delegate_user | default('root') }}"
+  when:
+    - proxmox_lifecycle_release_probe_state == 'unavailable'
+    - proxmox_lifecycle_runtime_state == 'running'
+
+- name: Adopt the current running guest release observation
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_actual_release: "{{ lxc_release_probe_actual_release | default('') }}"
+    proxmox_lifecycle_release_probe_state: "{{ lxc_release_probe_state | default('probe_failed') }}"
+  when:
+    - proxmox_lifecycle_release_probe_state == 'unavailable'
+    - proxmox_lifecycle_runtime_state == 'running'

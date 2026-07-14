@@ -32,9 +32,9 @@
       vmid: 9999
       hostname: ambient-host
   tasks:
-    - name: Execute normal lifecycle host actions
+    - name: Execute normal lifecycle guest-access restoration
       ansible.builtin.include_tasks: >-
-        ../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/provision.yml
+        ../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/restore_guest_access.yml
 
     - name: Assert lifecycle passed the compiled guest-bootstrap slice
       ansible.builtin.assert:

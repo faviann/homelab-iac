@@ -49,6 +49,13 @@
         content: "{{ lifecycle_seed_release }}"
         mode: "0600"
       delegate_to: localhost
+
+    - name: Reset the lifecycle execution-order record
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ lifecycle_vmid }}.events"
+        content: ""
+        mode: "0600"
+      delegate_to: localhost
   roles:
     - role: provisioning/proxmox_lxc_lifecycle
   post_tasks:
@@ -57,11 +64,27 @@
         that:
           - lxc_lifecycle_result.plan.container_transition == lifecycle_expected_transition
           - lxc_lifecycle_result.plan.destructive == lifecycle_expected_destructive
+          - lxc_lifecycle_result.plan.reconcile_host_config == lifecycle_expected_reconcile_host_config
+          - lxc_lifecycle_result.plan.restore_guest_access == lifecycle_expected_restore_guest_access
           - lxc_lifecycle_result.plan.configure_guest == lifecycle_expected_configure_guest
           - lxc_lifecycle_result.outcome.status == lifecycle_expected_outcome
           - lxc_lifecycle_result.observations.before.runtime_state == lifecycle_expected_before_runtime
           - lxc_lifecycle_result.observations.after.runtime_state == lifecycle_expected_after_runtime
           - lxc_lifecycle_result.plan.reason | length > 15
+          - lxc_lifecycle_result.keys() | list | sort == ['intent', 'observations', 'outcome', 'plan'] | sort
+          - >-
+            lxc_lifecycle_result.plan.keys() | list | sort == [
+              'configure_guest',
+              'container_transition',
+              'destructive',
+              'reason',
+              'reconcile_host_config',
+              'restore_guest_access'
+            ] | sort
+          - lxc_lifecycle_result.outcome.keys() | list | sort == ['reason', 'rebuilt', 'status'] | sort
+          - lxc_lifecycle_result.observations.keys() | list | sort == ['after', 'before'] | sort
+          - lxc_lifecycle_result.observations.before.keys() | list | sort == ['release', 'release_probe_state', 'runtime_state'] | sort
+          - lxc_lifecycle_result.observations.after.keys() | list | sort == ['release', 'release_probe_state', 'runtime_state'] | sort
           - "'host_actions' not in lxc_lifecycle_result"
           - "'guest_actions' not in lxc_lifecycle_result"
           - "'cache_actions' not in lxc_lifecycle_result"
@@ -89,6 +112,29 @@
         that:
           - lxc_lifecycle_result.plan.reason is not search('will be removed')
       when: lifecycle_expected_transition == 'none'
+
+    - name: Read the lifecycle execution-order record
+      ansible.builtin.slurp:
+        src: "{{ lifecycle_test_state_dir }}/{{ lifecycle_vmid }}.events"
+      register: lifecycle_execution_order_record
+      delegate_to: localhost
+
+    - name: Assert access restoration ran after re-observation
+      ansible.builtin.assert:
+        that:
+          - "'reobserve_runtime' in lifecycle_execution_events"
+          - "'restore_guest_access' in lifecycle_execution_events"
+          - lifecycle_execution_events.index('reobserve_runtime') < lifecycle_execution_events.index('restore_guest_access')
+      vars:
+        lifecycle_execution_events: >-
+          {{ (lifecycle_execution_order_record.content | b64decode).splitlines() }}
+      when: lifecycle_expected_restore_guest_access | bool
+
+    - name: Assert skipped access restoration recorded no execution
+      ansible.builtin.assert:
+        that:
+          - "'restore_guest_access' not in (lifecycle_execution_order_record.content | b64decode).splitlines()"
+      when: not (lifecycle_expected_restore_guest_access | bool)
 
     - name: Persist a cache-control fact for the cross-command ephemerality check
       ansible.builtin.set_fact:

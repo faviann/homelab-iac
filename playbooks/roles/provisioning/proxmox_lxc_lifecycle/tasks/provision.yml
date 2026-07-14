@@ -52,13 +52,6 @@
     ansible_user: root
   when: proxmox_lxc_lifecycle_plan.reconcile_host_config | bool
 
-- name: Ensure controller SSH key is installed in the guest
-  ansible.builtin.include_role:
-    name: infrastructure/lxc_ssh_key_injector
-  vars:
-    lxc_ssh_key_injector_guest_bootstrap: "{{ proxmox_lxc_contract.guest_bootstrap }}"
-  when: proxmox_lxc_lifecycle_plan.restore_guest_access | bool
-
 - name: Find cached facts for rebuilt host
   ansible.builtin.find:
     paths: "{{ [playbook_dir | dirname, '.ansible', 'cache'] | path_join }}"

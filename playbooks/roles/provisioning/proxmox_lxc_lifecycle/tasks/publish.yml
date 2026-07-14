@@ -30,6 +30,7 @@
     lxc_lifecycle_skip_host: >-
       {{
         not (proxmox_lifecycle_has_host_work | bool)
+        and not (proxmox_lxc_lifecycle_plan.restore_guest_access | bool)
         and not (proxmox_lxc_lifecycle_plan.configure_guest | bool)
       }}
 

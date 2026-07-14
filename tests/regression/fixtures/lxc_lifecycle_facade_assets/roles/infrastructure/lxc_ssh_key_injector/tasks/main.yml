@@ -1,4 +1,18 @@
 ---
-- name: Model successful guest-access restoration
-  ansible.builtin.debug:
-    msg: Guest access restored by facade test double
+- name: Read lifecycle events before restoring guest access
+  ansible.builtin.slurp:
+    src: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events"
+  register: lifecycle_access_precondition_events
+  delegate_to: localhost
+
+- name: Require re-observation before guest-access restoration
+  ansible.builtin.assert:
+    that:
+      - "'reobserve_runtime' in (lifecycle_access_precondition_events.content | b64decode).splitlines()"
+
+- name: Record guest-access restoration
+  ansible.builtin.lineinfile:
+    path: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events"
+    line: restore_guest_access
+    insertafter: EOF
+  delegate_to: localhost

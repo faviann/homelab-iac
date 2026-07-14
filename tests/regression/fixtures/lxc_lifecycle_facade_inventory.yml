@@ -13,6 +13,11 @@ all:
         proxmox_default_bind_mounts: {}
         proxmox_default_idmap: []
         proxmox_lxc_disable_root_password: true
+        proxmox_lifecycle_release_probe_tasks_file: >-
+          {{
+            [inventory_dir, '..', '..', '..', 'playbooks', 'tasks', 'probe_lxc_release.yml']
+            | path_join
+          }}
         proxmox_lifecycle_policy:
           strict_validation: false
           rebuild_on_release_mismatch: true
@@ -29,6 +34,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: provision
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: absent
@@ -45,6 +52,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
           lifecycle_expected_configure_guest: false
           lifecycle_expected_outcome: skipped
           lifecycle_expected_before_runtime: absent
@@ -59,6 +68,8 @@ all:
           lifecycle_seed_release: "11"
           lifecycle_expected_transition: rebuild
           lifecycle_expected_destructive: true
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: running
@@ -75,6 +86,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: provision
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: false
           lifecycle_expected_outcome: ensured
           lifecycle_expected_before_runtime: running
@@ -91,6 +104,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: remove
           lifecycle_expected_destructive: true
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
           lifecycle_expected_configure_guest: false
           lifecycle_expected_outcome: removed
           lifecycle_expected_before_runtime: running
@@ -107,6 +122,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
           lifecycle_expected_configure_guest: false
           lifecycle_expected_outcome: absent
           lifecycle_expected_before_runtime: absent
@@ -121,6 +138,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
           lifecycle_expected_configure_guest: false
           lifecycle_expected_outcome: validated
           lifecycle_expected_before_runtime: running
@@ -135,6 +154,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: running
@@ -151,6 +172,8 @@ all:
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
           lifecycle_expected_configure_guest: false
           lifecycle_expected_outcome: validated
           lifecycle_expected_before_runtime: running
@@ -167,6 +190,8 @@ all:
           lifecycle_validation_message: Invalid DNS configuration detected
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
           lifecycle_expected_configure_guest: false
           lifecycle_expected_outcome: validation_failed
           lifecycle_expected_before_runtime: running

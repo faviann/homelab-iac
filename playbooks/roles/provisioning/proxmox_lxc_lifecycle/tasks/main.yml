@@ -41,6 +41,10 @@
 - name: Re-observe current state after provisioning and host reconciliation
   ansible.builtin.include_tasks: reobserve.yml
 
+- name: Restore guest access after re-observation
+  ansible.builtin.include_tasks: restore_guest_access.yml
+  when: proxmox_lxc_lifecycle_plan.restore_guest_access | bool
+
 - name: Execute guest configuration actions
   ansible.builtin.include_tasks: configure.yml
   when: proxmox_lxc_lifecycle_plan.configure_guest | bool

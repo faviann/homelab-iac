@@ -20,38 +20,11 @@
     proxmox_lifecycle_runtime_state: "{{ proxmox_lifecycle_observed_runtime_state }}"
   when: proxmox_lifecycle_reobserve_active | bool
 
-- name: Reset release observation for the current container state
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: ""
-    proxmox_lifecycle_release_probe_state: >-
-      {%- if proxmox_lifecycle_runtime_state == 'absent' -%}absent
-      {%- elif proxmox_lifecycle_runtime_state == 'stopped' -%}skipped_stopped
-      {%- else -%}unavailable
-      {%- endif -%}
-  when: proxmox_lifecycle_reobserve_active | bool
-
-- name: Probe the current running guest release
-  ansible.builtin.include_tasks:
-    file: >-
-      {{
-        [role_path | dirname | dirname | dirname, 'tasks', 'probe_lxc_release.yml']
-        | path_join
-      }}
+- name: Refresh the current guest release observation
+  ansible.builtin.include_tasks: observe_release.yml
   vars:
-    lxc_release_probe_vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"
-    lxc_release_probe_delegate_user: "{{ proxmox_host_delegate_user | default('root') }}"
-  when:
-    - proxmox_lifecycle_reobserve_active | bool
-    - proxmox_lifecycle_runtime_state == 'running'
-
-- name: Adopt the current running guest release observation
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: "{{ lxc_release_probe_actual_release | default('') }}"
-    proxmox_lifecycle_release_probe_state: "{{ lxc_release_probe_state | default('probe_failed') }}"
-  when:
-    - proxmox_lifecycle_reobserve_active | bool
-    - proxmox_lifecycle_runtime_state == 'running'
+    proxmox_lifecycle_release_observation_refresh: true
+  when: proxmox_lifecycle_reobserve_active | bool
 
 - name: Build post-action lifecycle observation
   ansible.builtin.set_fact:

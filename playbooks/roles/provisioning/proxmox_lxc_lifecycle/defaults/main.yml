@@ -11,4 +11,7 @@ proxmox_lifecycle_policy: {}
 
 proxmox_lifecycle_desired_release: ""
 
+proxmox_lifecycle_release_probe_tasks_file: >-
+  {{ [playbook_dir, 'tasks', 'probe_lxc_release.yml'] | path_join }}
+
 proxmox_skip_self: true

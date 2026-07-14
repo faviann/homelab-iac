@@ -5,11 +5,13 @@ vmid=$2
 
 case "$1" in
   status)
+    echo reobserve_runtime >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
     state=$(cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.state")
     [ "$state" = absent ] && exit 2
     echo "status: $state"
     ;;
   exec)
+    echo reobserve_release >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
     cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.release"
     ;;
   *)
