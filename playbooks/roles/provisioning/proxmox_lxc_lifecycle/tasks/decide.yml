@@ -46,32 +46,32 @@
     - proxmox_lifecycle_validation_failed | bool
 
 - name: Require desired state present for configure-only lifecycle
-  ansible.builtin.fail:
-    msg: >-
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
+    fail_msg: >-
       Configure-only lifecycle requires desired state present;
       desired state is absent.
-  when:
-    - proxmox_lifecycle_intent == 'configure_only'
-    - proxmox_lxc_contract.api_spec.state | default('present') != 'present'
+  when: proxmox_lifecycle_intent == 'configure_only'
 
 - name: Require an existing running container for configure-only lifecycle
-  ansible.builtin.fail:
-    msg: >-
+  ansible.builtin.assert:
+    that:
+      - proxmox_lifecycle_runtime_state == 'running'
+    fail_msg: >-
       Configure-only lifecycle requires an existing running container;
       observed state is {{ proxmox_lifecycle_runtime_state }}.
-  when:
-    - proxmox_lifecycle_intent == 'configure_only'
-    - proxmox_lifecycle_runtime_state != 'running'
+  when: proxmox_lifecycle_intent == 'configure_only'
 
 - name: Reject a required rebuild during configure-only lifecycle
-  ansible.builtin.fail:
-    msg: >-
+  ansible.builtin.assert:
+    that:
+      - not (proxmox_lifecycle_rebuild_required | bool)
+    fail_msg: >-
       Configure-only lifecycle cannot perform the required rebuild;
       guest release {{ proxmox_lifecycle_actual_release }} differs from desired
       release {{ proxmox_lifecycle_desired_release }}.
-  when:
-    - proxmox_lifecycle_intent == 'configure_only'
-    - proxmox_lifecycle_rebuild_required | bool
+  when: proxmox_lifecycle_intent == 'configure_only'
 
 - name: Derive lifecycle scratch flags
   ansible.builtin.set_fact:
@@ -173,6 +173,14 @@
             proxmox_lifecycle_intent == 'provision_only'
             and proxmox_lifecycle_runtime_state == 'stopped'
             and not (proxmox_lifecycle_rebuild_required | bool)
+          )
+        }}
+      start_container: >-
+        {{
+          proxmox_lifecycle_container_transition in ['rebuild', 'start']
+          or (
+            proxmox_lifecycle_container_transition == 'provision'
+            and proxmox_lifecycle_runtime_state == 'absent'
           )
         }}
       configure_guest: "{{ not (proxmox_lifecycle_skip_configure | bool) }}"

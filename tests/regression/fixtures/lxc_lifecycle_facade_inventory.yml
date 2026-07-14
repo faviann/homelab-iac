@@ -23,6 +23,7 @@ all:
           rebuild_on_release_mismatch: true
           cleanup_rebuilt_state: false
           skip_stopped_release_checks: true
+        lifecycle_expected_start_container: false
       hosts:
         full_create:
           lifecycle_vmid: 4401
@@ -37,6 +38,7 @@ all:
           lifecycle_expected_reconcile_host_config: true
           lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
+          lifecycle_expected_start_container: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: absent
           lifecycle_expected_after_runtime: running
@@ -143,6 +145,7 @@ all:
           lifecycle_expected_reconcile_host_config: true
           lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
+          lifecycle_expected_start_container: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
@@ -174,6 +177,7 @@ all:
           lifecycle_expected_reconcile_host_config: true
           lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
+          lifecycle_expected_start_container: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: stopped
           lifecycle_expected_after_runtime: running
@@ -251,6 +255,7 @@ all:
           lifecycle_expected_reconcile_host_config: true
           lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: false
+          lifecycle_expected_start_container: true
           lifecycle_expected_outcome: ensured
           lifecycle_expected_before_runtime: absent
           lifecycle_expected_after_runtime: running
@@ -276,6 +281,7 @@ all:
           lifecycle_expected_reconcile_host_config: true
           lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: false
+          lifecycle_expected_start_container: true
           lifecycle_expected_outcome: ensured
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running

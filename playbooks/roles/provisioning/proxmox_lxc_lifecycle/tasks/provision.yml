@@ -51,12 +51,7 @@
   delegate_to: "{{ proxmox_api_delegate_host }}"
   become: false
   no_log: true
-  when: >-
-    proxmox_lxc_lifecycle_plan.container_transition in ['rebuild', 'start']
-    or (
-      proxmox_lxc_lifecycle_plan.container_transition == 'provision'
-      and proxmox_lifecycle_runtime_state == 'absent'
-    )
+  when: proxmox_lxc_lifecycle_plan.start_container | bool
 
 - name: Reconcile Proxmox host-side LXC configuration
   ansible.builtin.include_role:

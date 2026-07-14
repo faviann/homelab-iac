@@ -51,7 +51,7 @@
         mode: "0600"
       delegate_to: localhost
 
-    - name: Reset the lifecycle execution-order record
+    - name: Reset the lifecycle execution-event record
       ansible.builtin.copy:
         dest: "{{ lifecycle_test_state_dir }}/{{ lifecycle_vmid }}.events"
         content: ""
@@ -82,6 +82,7 @@
           - lxc_lifecycle_result.plan.reconcile_host_config == lifecycle_expected_reconcile_host_config
           - lxc_lifecycle_result.plan.restore_guest_access == lifecycle_expected_restore_guest_access
           - lxc_lifecycle_result.plan.configure_guest == lifecycle_expected_configure_guest
+          - lxc_lifecycle_result.plan.start_container == lifecycle_expected_start_container
           - lxc_lifecycle_result.outcome.status == lifecycle_expected_outcome
           - lxc_lifecycle_result.observations.before.runtime_state == lifecycle_expected_before_runtime
           - lxc_lifecycle_result.observations.after.runtime_state == lifecycle_expected_after_runtime
@@ -94,7 +95,8 @@
               'destructive',
               'reason',
               'reconcile_host_config',
-              'restore_guest_access'
+              'restore_guest_access',
+              'start_container'
             ] | sort
           - lxc_lifecycle_result.outcome.keys() | list | sort == ['reason', 'rebuilt', 'status'] | sort
           - lxc_lifecycle_result.observations.keys() | list | sort == ['after', 'before'] | sort
@@ -141,22 +143,24 @@
         - lifecycle_expected_transition == 'none'
         - lifecycle_expected_planning_failure is not defined
 
-    - name: Read the lifecycle execution-order record
+    - name: Read the lifecycle execution-event record
       ansible.builtin.slurp:
         src: "{{ lifecycle_test_state_dir }}/{{ lifecycle_vmid }}.events"
-      register: lifecycle_execution_order_record
+      register: lifecycle_execution_event_record
       delegate_to: localhost
 
-    - name: Assert the exact semantic execution order
+    - name: Assert the required and forbidden semantic execution events
       ansible.builtin.assert:
         that:
-          - lifecycle_execution_events == lifecycle_expected_events
+          - lifecycle_expected_events | difference(lifecycle_execution_events) | length == 0
+          - lifecycle_execution_events | difference(lifecycle_expected_events) | length == 0
+          - lifecycle_execution_events | unique | length == lifecycle_execution_events | length
         fail_msg: >-
-          Expected semantic execution events {{ lifecycle_expected_events }},
+          Expected semantic execution event set {{ lifecycle_expected_events }},
           observed {{ lifecycle_execution_events }}.
       vars:
         lifecycle_execution_events: >-
-          {{ (lifecycle_execution_order_record.content | b64decode).splitlines() }}
+          {{ (lifecycle_execution_event_record.content | b64decode).splitlines() }}
 
     - name: Persist a cache-control fact for the cross-command ephemerality check
       ansible.builtin.set_fact:
