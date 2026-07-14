@@ -187,6 +187,17 @@
       destructive: "{{ proxmox_lifecycle_container_transition in ['rebuild', 'remove'] }}"
       reason: "{{ proxmox_lifecycle_reason }}"
 
+- name: Require persistent policy authorization for destructive transitions
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (proxmox_lxc_lifecycle_plan.destructive | bool)
+        or (proxmox_lifecycle_policy_effective.allow_destructive_transitions | bool)
+    fail_msg: >-
+      Lifecycle plan requires destructive transition
+      '{{ proxmox_lxc_lifecycle_plan.container_transition }}', but persistent
+      lifecycle policy does not authorize destructive transitions.
+
 - name: Record whether host-side lifecycle work is planned
   ansible.builtin.set_fact:
     proxmox_lifecycle_has_host_work: >-
