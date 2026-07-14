@@ -14,6 +14,7 @@ FIXTURES = REPO_ROOT / "tests" / "regression" / "fixtures"
 INVENTORY = FIXTURES / "lxc_fleet_preflight_inventory.yml"
 PLAYBOOK = FIXTURES / "lxc_fleet_preflight_test.yml"
 STANDALONE_PLAYBOOK = FIXTURES / "lxc_standalone_validation_test.yml"
+MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
@@ -40,6 +41,57 @@ def run_case(limit: str) -> bool:
 def main() -> int:
     cases = ("target_a,target_b", "target_conflict", "access_target")
     if not all(run_case(case) for case in cases):
+        return 1
+
+    missing_hostname = subprocess.run(
+        [
+            *ANSIBLE_PLAYBOOK,
+            "-i",
+            str(INVENTORY),
+            str(MISSING_HOSTNAME_PLAYBOOK),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    if missing_hostname.returncode != 0:
+        print("incomplete hostname reservations were not aggregated", file=sys.stderr)
+        print(f"{missing_hostname.stdout}\n{missing_hostname.stderr}", file=sys.stderr)
+        return 1
+
+    validation_tasks = subprocess.run(
+        [
+            *ANSIBLE_PLAYBOOK,
+            "-i",
+            str(INVENTORY),
+            "site.yml",
+            "--list-tasks",
+            "--tags",
+            "validation",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    normal_tasks = subprocess.run(
+        [*ANSIBLE_PLAYBOOK, "-i", str(INVENTORY), "site.yml", "--list-tasks"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    if (
+        validation_tasks.returncode != 0
+        or "Run aggregate standalone lifecycle validation" not in validation_tasks.stdout
+        or normal_tasks.returncode != 0
+        or "Run aggregate standalone lifecycle validation" in normal_tasks.stdout
+        or "Compile desired LXC specification" not in normal_tasks.stdout
+    ):
+        print("site.yml validation tag routing is incorrect", file=sys.stderr)
+        print(f"validation route:\n{validation_tasks.stdout}\n{validation_tasks.stderr}", file=sys.stderr)
+        print(f"normal route:\n{normal_tasks.stdout}\n{normal_tasks.stderr}", file=sys.stderr)
         return 1
 
     env = os.environ.copy()

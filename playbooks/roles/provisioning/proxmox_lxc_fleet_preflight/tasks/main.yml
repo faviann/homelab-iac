@@ -40,6 +40,9 @@
       {%-   if identity.vmid is none or identity.vmid | string | length == 0 -%}
       {%-     set _ = problems.append("Managed LXC '" ~ host ~ "' has no VMID identity reservation.") -%}
       {%-   endif -%}
+      {%-   if identity.hostname is none or identity.hostname | string | trim | length == 0 -%}
+      {%-     set _ = problems.append("Managed LXC '" ~ host ~ "' has no hostname identity reservation.") -%}
+      {%-   endif -%}
       {%- endfor -%}
       {%- for left_host, left_identity in proxmox_fleet_identity_reservations.items() -%}
       {%-   for right_host, right_identity in proxmox_fleet_identity_reservations.items() -%}

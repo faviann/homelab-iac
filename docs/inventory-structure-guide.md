@@ -145,32 +145,29 @@ the global defaults, so it only affects the selected host.
 
 ## Validation and Safety
 
-The provisioning playbook includes automated validation to prevent accidental overwrites:
+Fleet preflight validates identities before per-LXC lifecycle planning to prevent accidental overwrites:
 
 **Pre-provisioning checks:**
-1. Duplicate VMID detection — blocks run if multiple hosts claim the same VMID
-2. Proxmox state comparison — compares inventory against actual Proxmox containers
+1. VMID and hostname reservations — compares every targeted compiled identity with all managed
+   inventory LXCs, including untargeted and currently absent reservations
+2. Proxmox state comparison — derives every targeted LXC observation from one common Proxmox query
 3. Strict name matching — container names must match exactly
 
 **Conflict types detected:**
+- Inventory reservation conflict: a targeted VMID or hostname is also reserved by another managed LXC
 - ID match, name mismatch: VMID exists with different container name
 - Name match, ID mismatch: Container name exists with different VMID
 - Cross-mismatch: Both exist but point to different containers
 
-**Behavior modes** (`inventory/group_vars/all/proxmox.yml`):
+An inventory reservation conflict involving a target blocks that targeted lifecycle run even when the
+other reservation is untargeted or currently absent. Standalone validation reports all detected
+preflight and target-planning problems before exiting nonzero.
+
+For mismatches between a reservation and the common Proxmox observation,
+`proxmox_validation_strict` controls whether planning fails immediately or publishes a semantic
+validation-failed result without lifecycle actions:
 
 ```yaml
-proxmox_validation_strict: false  # Default: skip conflicting hosts, continue with others
-proxmox_validation_strict: true   # Abort entire playbook on any conflict
-```
-
-**Error messages include remediation options:**
-```
-Host 'portal': Inventory expects [vmid=300, name=portal],
-but Proxmox shows [vmid=300, name=oldserver] - ID match, name mismatch
-
-Remediation options:
-  - Fix inventory name in inventory/host_vars/portal.yml to match Proxmox: oldserver
-  - OR rename container in Proxmox: pct set 300 -hostname portal
-  - OR destroy conflicting container: pct destroy 300
+proxmox_validation_strict: false  # Default: report the target as validation_failed
+proxmox_validation_strict: true   # Fail target planning immediately
 ```

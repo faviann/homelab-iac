@@ -79,3 +79,13 @@ all:
           proxmox_lxc:
             vmid: 5199
             hostname: absent-reserved
+    invalid_identity_reservations:
+      hosts:
+        null_hostname_reservation:
+          proxmox_lxc:
+            vmid: 5201
+            hostname: null
+        empty_hostname_reservation:
+          proxmox_lxc:
+            vmid: 5202
+            hostname: ""
