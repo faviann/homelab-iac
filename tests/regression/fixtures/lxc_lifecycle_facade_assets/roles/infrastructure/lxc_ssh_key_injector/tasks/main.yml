@@ -1,0 +1,21 @@
+---
+- name: Read lifecycle events before restoring guest access
+  ansible.builtin.slurp:
+    src: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events"
+  register: lifecycle_access_precondition_events
+  delegate_to: localhost
+
+- name: Require re-observation before guest-access restoration
+  ansible.builtin.assert:
+    that:
+      - "'runtime_refresh' in (lifecycle_access_precondition_events.content | b64decode).splitlines()"
+
+- name: Record guest-access restoration
+  ansible.builtin.copy:
+    dest: "{{ lifecycle_event_record_path }}"
+    content: "{{ lookup('ansible.builtin.file', lifecycle_event_record_path, rstrip=false) }}access_restoration\n"
+    mode: "0600"
+  delegate_to: localhost
+  vars:
+    lifecycle_event_record_path: >-
+      {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events

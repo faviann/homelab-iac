@@ -36,11 +36,18 @@
 
 - name: Execute host-side actions
   ansible.builtin.include_tasks: provision.yml
-  when: proxmox_lifecycle_host_actions | default([]) | length > 0
+  when: proxmox_lifecycle_has_host_work | bool
+
+- name: Re-observe current state after provisioning and host reconciliation
+  ansible.builtin.include_tasks: reobserve.yml
+
+- name: Restore guest access after re-observation
+  ansible.builtin.include_tasks: restore_guest_access.yml
+  when: proxmox_lxc_lifecycle_plan.restore_guest_access | bool
 
 - name: Execute guest configuration actions
   ansible.builtin.include_tasks: configure.yml
-  when: proxmox_lifecycle_guest_actions | default([]) | length > 0
+  when: proxmox_lxc_lifecycle_plan.configure_guest | bool
 
 - name: Publish lifecycle results
   ansible.builtin.include_tasks: publish.yml

@@ -13,8 +13,13 @@
         vmid: 4205
         hostname: contract-host
         pubkey: ssh-ed25519 AAAACONTRACT contract@test
-    proxmox_lifecycle_host_actions:
-      - ensure_ssh_key
+    proxmox_lxc_lifecycle_plan:
+      container_transition: none
+      reconcile_host_config: false
+      restore_guest_access: true
+      configure_guest: false
+      destructive: false
+      reason: test
     proxmox_lifecycle_rebuilt: false
     proxmox_lifecycle_policy_effective:
       cleanup_rebuilt_state: false
@@ -27,9 +32,9 @@
       vmid: 9999
       hostname: ambient-host
   tasks:
-    - name: Execute normal lifecycle host actions
+    - name: Execute normal lifecycle guest-access restoration
       ansible.builtin.include_tasks: >-
-        ../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/provision.yml
+        ../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/restore_guest_access.yml
 
     - name: Assert lifecycle passed the compiled guest-bootstrap slice
       ansible.builtin.assert:

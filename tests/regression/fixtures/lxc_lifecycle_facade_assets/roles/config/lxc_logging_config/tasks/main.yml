@@ -1,0 +1,4 @@
+---
+- name: Model successful logging configuration
+  ansible.builtin.debug:
+    msg: Logging configured by facade test double

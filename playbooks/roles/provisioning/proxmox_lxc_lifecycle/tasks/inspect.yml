@@ -44,30 +44,14 @@
         )
       }}
 
-- name: Query current container runtime state when validation data is unavailable
-  proxmox_pct:
-    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    command: status
-  register: proxmox_lifecycle_pct_status_result
-  ignore_errors: true
-  delegate_to: "{{ proxmox_pct_delegate_host }}"
-  vars:
-    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
+- name: Observe current container runtime state when validation data is unavailable
+  ansible.builtin.include_tasks: observe_runtime_state.yml
+  when: proxmox_lifecycle_release_probe_state == 'unavailable'
 
-- name: Derive runtime state from pct status when validation data is unavailable
+- name: Adopt observed runtime state when validation data is unavailable
   ansible.builtin.set_fact:
-    proxmox_lifecycle_runtime_state: >-
-      {{
-        'absent'
-        if proxmox_lifecycle_pct_status_result.rc != 0
-        else (proxmox_lifecycle_pct_status_result.status | default('unknown', true))
-      }}
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
+    proxmox_lifecycle_runtime_state: "{{ proxmox_lifecycle_observed_runtime_state }}"
+  when: proxmox_lifecycle_release_probe_state == 'unavailable'
 
 - name: Build local validation snapshot when no validation play data is present
   ansible.builtin.set_fact:
@@ -76,59 +60,18 @@
       type: "{{ 'absent_ok' if proxmox_lifecycle_runtime_state == 'absent' else 'match_ok' }}"
       message: >-
         {{
-          'Container does not exist in Proxmox (will be created)'
+          'Container does not exist in Proxmox'
           if proxmox_lifecycle_runtime_state == 'absent'
           else 'Lifecycle inspection derived from live container state'
         }}
       remediation: []
   when:
     - proxmox_lifecycle_validation_snapshot | length == 0
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
 
-- name: Mark absent desired-state containers as not applicable for release probing
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_runtime_state: not_applicable
-    proxmox_lifecycle_release_probe_state: not_applicable
-    proxmox_lifecycle_actual_release: ""
-  when: proxmox_lxc_contract.api_spec.state | default('present') != 'present'
-
-- name: Mark stopped containers as skipped for release probing
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_release_probe_state: skipped_stopped
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
-    - proxmox_lifecycle_runtime_state == 'stopped'
-    - proxmox_lifecycle_policy_effective.skip_stopped_release_checks | bool
-
-- name: Mark absent containers as skipped for release probing
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_release_probe_state: absent
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
-    - proxmox_lifecycle_runtime_state == 'absent'
-
-- name: Probe guest Debian release from running container
-  ansible.builtin.include_tasks:
-    file: "{{ [playbook_dir, 'tasks', 'probe_lxc_release.yml'] | path_join }}"
+- name: Observe the current guest release when required
+  ansible.builtin.include_tasks: observe_release.yml
   vars:
-    lxc_release_probe_vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"
-    lxc_release_probe_delegate_user: "{{ proxmox_host_delegate_user | default('root') }}"
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
-    - proxmox_lifecycle_runtime_state == 'running'
-
-- name: Finalize release state from local probe
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: "{{ lxc_release_probe_actual_release | default('') }}"
-    proxmox_lifecycle_release_probe_state: "{{ lxc_release_probe_state | default('probe_failed') }}"
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
-    - proxmox_lifecycle_runtime_state == 'running'
+    proxmox_lifecycle_release_observation_refresh: false
 
 - name: Compute lifecycle release mismatch
   ansible.builtin.set_fact:
@@ -140,3 +83,10 @@
         and proxmox_lifecycle_actual_release | length > 0
         and proxmox_lifecycle_actual_release != proxmox_lifecycle_desired_release
       }}
+
+- name: Record pre-action lifecycle observation
+  ansible.builtin.set_fact:
+    proxmox_lxc_lifecycle_observation_before:
+      runtime_state: "{{ proxmox_lifecycle_runtime_state }}"
+      release: "{{ proxmox_lifecycle_actual_release }}"
+      release_probe_state: "{{ proxmox_lifecycle_release_probe_state }}"

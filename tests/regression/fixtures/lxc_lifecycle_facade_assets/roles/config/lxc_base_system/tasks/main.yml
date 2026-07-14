@@ -1,0 +1,14 @@
+---
+- name: Record entry into guest configuration
+  ansible.builtin.copy:
+    dest: "{{ lifecycle_event_record_path }}"
+    content: "{{ lookup('ansible.builtin.file', lifecycle_event_record_path, rstrip=false) }}guest_configuration\n"
+    mode: "0600"
+  delegate_to: localhost
+  vars:
+    lifecycle_event_record_path: >-
+      {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events
+
+- name: Model successful base-system configuration
+  ansible.builtin.debug:
+    msg: Base system configured by facade test double

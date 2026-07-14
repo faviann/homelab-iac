@@ -1,0 +1,15 @@
+---
+- name: Prove lifecycle plans do not survive into a second command
+  hosts: lifecycle_scenarios
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Assert configured fact caching is active but lifecycle plans are absent
+      ansible.builtin.assert:
+        that:
+          - lifecycle_cache_control == 'persisted'
+          - proxmox_lxc_lifecycle_plan is undefined
+          - lxc_lifecycle_result is undefined
+        fail_msg: >-
+          The cache control did not survive, or an ephemeral lifecycle plan/result
+          leaked across ansible-playbook commands.

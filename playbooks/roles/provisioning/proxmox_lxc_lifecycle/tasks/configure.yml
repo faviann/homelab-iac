@@ -5,13 +5,13 @@
       {{ proxmox_lxc_contract.api_spec.vmid | default(inventory_hostname) }}
       because runtime state is absent.
   when:
-    - proxmox_lifecycle_guest_actions | length > 0
+    - proxmox_lxc_lifecycle_plan.configure_guest | bool
     - ansible_check_mode | bool
     - proxmox_lifecycle_runtime_state == 'absent'
 
 - name: Run guest configuration actions
   when:
-    - proxmox_lifecycle_guest_actions | length > 0
+    - proxmox_lxc_lifecycle_plan.configure_guest | bool
     - not (ansible_check_mode | bool and proxmox_lifecycle_runtime_state == 'absent')
   block:
     - name: Ensure container is accessible via SSH

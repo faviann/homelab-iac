@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+vmid=$2
+
+case "$1" in
+  status)
+    echo runtime_refresh >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
+    state=$(cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.state")
+    [ "$state" = absent ] && exit 2
+    echo "status: $state"
+    ;;
+  exec)
+    echo release_refresh >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
+    cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.release"
+    ;;
+  *)
+    exit 99
+    ;;
+esac
