@@ -11,13 +11,8 @@
         vmid: 4300
         hostname: reobserve-host
         node: pve-a
-    proxmox_lxc_lifecycle_plan:
-      container_transition: provision
-      reconcile_host_config: true
-      restore_guest_access: true
-      configure_guest: true
-      destructive: false
-      reason: test
+    # Host-side work was planned, so re-observation must run after provisioning.
+    proxmox_lifecycle_has_host_work: true
     # Pre-action observation saw the container as absent; after provisioning the
     # live container is running, so re-observation must refresh runtime state.
     proxmox_lifecycle_runtime_state: absent

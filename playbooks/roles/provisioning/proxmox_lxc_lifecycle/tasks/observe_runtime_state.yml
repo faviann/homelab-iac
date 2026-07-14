@@ -1,0 +1,23 @@
+---
+# Shared runtime-state observation. Queries the live container via `pct status`
+# and derives a normalized runtime state, mapping a non-zero return code (container
+# absent or query error) to 'absent'. Output fact:
+# proxmox_lifecycle_observed_runtime_state.
+- name: Query current container runtime state
+  proxmox_pct:
+    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
+    command: status
+  register: proxmox_lifecycle_observe_status_result
+  ignore_errors: true
+  delegate_to: "{{ proxmox_pct_delegate_host }}"
+  vars:
+    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+
+- name: Derive runtime state from pct status
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_observed_runtime_state: >-
+      {{
+        'absent'
+        if proxmox_lifecycle_observe_status_result.rc != 0
+        else (proxmox_lifecycle_observe_status_result.status | default('unknown', true))
+      }}

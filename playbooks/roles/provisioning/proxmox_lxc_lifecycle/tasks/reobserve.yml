@@ -8,34 +8,18 @@
   ansible.builtin.set_fact:
     proxmox_lifecycle_reobserve_active: >-
       {{
-        (not ansible_check_mode)
+        (proxmox_lifecycle_has_host_work | bool)
+        and (not ansible_check_mode)
         and (proxmox_lxc_contract.api_spec.state | default('present') == 'present')
-        and (
-          proxmox_lxc_lifecycle_plan.container_transition != 'none'
-          or (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
-          or (proxmox_lxc_lifecycle_plan.restore_guest_access | bool)
-        )
       }}
 
-- name: Re-query current container runtime state
-  proxmox_pct:
-    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    command: status
-  register: proxmox_lifecycle_reobserve_status_result
-  ignore_errors: true
-  delegate_to: "{{ proxmox_pct_delegate_host }}"
-  vars:
-    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+- name: Re-observe current container runtime state
+  ansible.builtin.include_tasks: observe_runtime_state.yml
   when: proxmox_lifecycle_reobserve_active | bool
 
 - name: Refresh runtime state from re-observation
   ansible.builtin.set_fact:
-    proxmox_lifecycle_runtime_state: >-
-      {{
-        'absent'
-        if proxmox_lifecycle_reobserve_status_result.rc != 0
-        else (proxmox_lifecycle_reobserve_status_result.status | default('unknown', true))
-      }}
+    proxmox_lifecycle_runtime_state: "{{ proxmox_lifecycle_observed_runtime_state }}"
   when: proxmox_lifecycle_reobserve_active | bool
 
 - name: Build post-action lifecycle observation

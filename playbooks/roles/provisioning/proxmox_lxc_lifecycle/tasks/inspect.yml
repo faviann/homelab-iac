@@ -44,27 +44,15 @@
         )
       }}
 
-- name: Query current container runtime state when validation data is unavailable
-  proxmox_pct:
-    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    command: status
-  register: proxmox_lifecycle_pct_status_result
-  ignore_errors: true
-  delegate_to: "{{ proxmox_pct_delegate_host }}"
-  vars:
-    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+- name: Observe current container runtime state when validation data is unavailable
+  ansible.builtin.include_tasks: observe_runtime_state.yml
   when:
     - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
     - proxmox_lifecycle_release_probe_state == 'unavailable'
 
-- name: Derive runtime state from pct status when validation data is unavailable
+- name: Adopt observed runtime state when validation data is unavailable
   ansible.builtin.set_fact:
-    proxmox_lifecycle_runtime_state: >-
-      {{
-        'absent'
-        if proxmox_lifecycle_pct_status_result.rc != 0
-        else (proxmox_lifecycle_pct_status_result.status | default('unknown', true))
-      }}
+    proxmox_lifecycle_runtime_state: "{{ proxmox_lifecycle_observed_runtime_state }}"
   when:
     - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
     - proxmox_lifecycle_release_probe_state == 'unavailable'

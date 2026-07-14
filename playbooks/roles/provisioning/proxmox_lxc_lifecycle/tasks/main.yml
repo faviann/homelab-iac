@@ -36,10 +36,7 @@
 
 - name: Execute host-side actions
   ansible.builtin.include_tasks: provision.yml
-  when: >-
-    proxmox_lxc_lifecycle_plan.container_transition != 'none'
-    or (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
-    or (proxmox_lxc_lifecycle_plan.restore_guest_access | bool)
+  when: proxmox_lifecycle_has_host_work | bool
 
 - name: Re-observe current state after provisioning and host reconciliation
   ansible.builtin.include_tasks: reobserve.yml

@@ -114,3 +114,12 @@
           )
         }}
       reason: "{{ proxmox_lifecycle_reason }}"
+
+- name: Record whether host-side lifecycle work is planned
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_has_host_work: >-
+      {{
+        proxmox_lxc_lifecycle_plan.container_transition != 'none'
+        or (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
+        or (proxmox_lxc_lifecycle_plan.restore_guest_access | bool)
+      }}
