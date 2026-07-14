@@ -122,7 +122,6 @@
 - name: Apply LXC feature flags via pct
   ansible.builtin.include_tasks: features.yml
   when:
-    - proxmox_lxc_host_config_spec.features | default([]) | length > 0
     - not (ansible_check_mode | bool and not (_proxmox_lxc_host_config_file_stat.stat.exists | default(false)))
   tags:
     - features
@@ -158,7 +157,9 @@
   register: _config_container_status
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  when: proxmox_lxc_host_config_result.restart_required
+  when:
+    - proxmox_lxc_host_config_result.restart_required
+    - not ansible_check_mode
 
 - name: Restart container to apply config file changes
   proxmox_pct:
@@ -168,6 +169,7 @@
   become: "{{ proxmox_lxc_host_config_become }}"
   when:
     - proxmox_lxc_host_config_result.restart_required
+    - not ansible_check_mode
     - _config_container_status is defined
     - _config_container_status.status | default('') == 'running'
   register: _config_container_restart

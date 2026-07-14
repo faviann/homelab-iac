@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test for proxmox_lxc_host_config dry runs with absent container config."""
+"""Regression test for proxmox_lxc_host_config dry-run semantic decisions."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def main() -> int:
         print(output, file=sys.stderr)
         return 1
 
-    print("ok: proxmox_lxc_host_config skips runtime-sensitive work in check mode when config is absent")
+    print("ok: proxmox_lxc_host_config makes semantic decisions without check-mode mutation")
     return 0
 
 

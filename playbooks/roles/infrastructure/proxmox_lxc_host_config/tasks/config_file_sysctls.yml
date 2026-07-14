@@ -1,36 +1,81 @@
 ---
-# Apply custom sysctl configurations to LXC config file
-# Required for containers running Docker images that need specific kernel parameters
+# Treat sysctls and AppArmor lines as authoritative managed desired sets.
 
-- name: Apply custom sysctls to LXC configuration
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    regexp: "^lxc\\.sysctl\\.{{ item.key | regex_escape() }}\\s*="
-    line: "lxc.sysctl.{{ item.key }} = {{ item.value }}"
-    state: present
-    create: false
-    backup: true
+- name: Get current sysctl and AppArmor configuration
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -E '^lxc\.(sysctl|apparmor)\.' {{ _lxc_config_file | quote }} |
+    sed -E 's/[[:space:]]*[:=][[:space:]]*/=/' |
+    sort
+  args:
+    executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
+  register: _current_sysctls_apparmor
+  check_mode: false
+  changed_when: false
+  failed_when: false
+
+- name: Initialize desired sysctl and AppArmor configuration
+  ansible.builtin.set_fact:
+    _desired_sysctls_apparmor_list: []
+
+- name: Normalize desired sysctl configuration
+  ansible.builtin.set_fact:
+    _desired_sysctls_apparmor_list: >-
+      {{
+        _desired_sysctls_apparmor_list
+        + ['lxc.sysctl.' ~ item.key ~ '=' ~ (item.value | string)]
+      }}
   loop: "{{ proxmox_lxc_host_config_spec.lxc_custom_sysctls }}"
-  when: proxmox_lxc_host_config_spec.lxc_custom_sysctls | length > 0
-  register: _sysctl_results
+  loop_control:
+    label: "{{ item.key }}"
 
-- name: Disable AppArmor for Docker compatibility
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    regexp: "^lxc\\.apparmor\\.profile\\s*="
-    line: "lxc.apparmor.profile: unconfined"
-    state: present
-    create: false
-    backup: true
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: "{{ proxmox_lxc_host_config_become }}"
-  when:
-    - proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
-  register: _apparmor_result
+- name: Add desired AppArmor configuration
+  ansible.builtin.set_fact:
+    _desired_sysctls_apparmor_list: >-
+      {{ _desired_sysctls_apparmor_list + ['lxc.apparmor.profile=unconfined'] }}
+  when: proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
 
-- name: Publish sysctl reconciliation result
+- name: Determine desired sysctl and AppArmor configuration
+  ansible.builtin.set_fact:
+    _desired_sysctls_apparmor: "{{ _desired_sysctls_apparmor_list | unique | sort | join('\n') }}"
+
+- name: Reconcile authoritative sysctl and AppArmor configuration
+  when: _current_sysctls_apparmor.stdout != _desired_sysctls_apparmor
+  block:
+    - name: Remove existing sysctl and AppArmor configuration
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        regexp: '^lxc\.(sysctl|apparmor)\.'
+        state: absent
+        create: false
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: "{{ proxmox_lxc_host_config_become }}"
+
+    - name: Apply desired custom sysctls
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        line: "lxc.sysctl.{{ item.key }} = {{ item.value }}"
+        state: present
+        create: false
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: "{{ proxmox_lxc_host_config_become }}"
+      loop: "{{ proxmox_lxc_host_config_spec.lxc_custom_sysctls }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Apply desired AppArmor configuration
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        line: "lxc.apparmor.profile: unconfined"
+        state: present
+        create: false
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: "{{ proxmox_lxc_host_config_become }}"
+      when: proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
+
+- name: Publish sysctl and AppArmor reconciliation result
   ansible.builtin.set_fact:
     _proxmox_lxc_host_config_component_results: >-
       {{
@@ -38,26 +83,8 @@
         | combine(
             {
               'sysctls': {
-                'changed': (
-                  (
-                    _sysctl_results.results | default([])
-                    | selectattr('changed', 'defined')
-                    | selectattr('changed')
-                    | list
-                    | length > 0
-                  )
-                  or (_apparmor_result.changed | default(false))
-                ),
-                'restart_required': (
-                  (
-                    _sysctl_results.results | default([])
-                    | selectattr('changed', 'defined')
-                    | selectattr('changed')
-                    | list
-                    | length > 0
-                  )
-                  or (_apparmor_result.changed | default(false))
-                )
+                'changed': (_current_sysctls_apparmor.stdout != _desired_sysctls_apparmor),
+                'restart_required': (_current_sysctls_apparmor.stdout != _desired_sysctls_apparmor)
               }
             },
             recursive=True

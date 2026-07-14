@@ -4,16 +4,33 @@
 
 - name: Get current UID/GID ID mappings
   ansible.builtin.shell: |
-    grep '^lxc\.idmap:' {{ _lxc_config_file }} | sed 's/^lxc\.idmap:\s*//' | sort
+    set -o pipefail
+    awk '
+      /^lxc\.idmap:/ {
+        value = substr($0, index($0, ":") + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        gsub(/[[:space:]]+/, " ", value)
+        print value
+      }
+    ' {{ _lxc_config_file | quote }} | sort -u
+  args:
+    executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   register: _current_idmap
+  check_mode: false
   changed_when: false
   failed_when: false
 
+- name: Normalize desired ID mappings
+  ansible.builtin.set_fact:
+    _desired_idmap_list: >-
+      {{ proxmox_lxc_host_config_spec.idmap | map('trim')
+         | map('regex_replace', '\\s+', ' ') | unique | sort | list }}
+
 - name: Determine desired ID mappings (sorted)
   ansible.builtin.set_fact:
-    _desired_idmap: "{{ proxmox_lxc_host_config_spec.idmap | sort | join('\n') }}"
+    _desired_idmap: "{{ _desired_idmap_list | join('\n') }}"
 
 - name: Update ID mappings only if different
   when: _current_idmap.stdout != _desired_idmap

@@ -31,6 +31,7 @@
         path: "{{ proxmox_lxc_host_config_path_root }}"
         state: directory
         mode: "0755"
+      check_mode: false
 
     - name: Place mock pct script on PATH
       ansible.builtin.copy:
@@ -43,10 +44,11 @@
           exit 99
 
     - name: Include host config tasks with mock pct on PATH
-      block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/main.yml"
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration tasks for missing config
+          ansible.builtin.include_tasks: "../../../playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/main.yml"
 
     - name: Check pct call log presence
       ansible.builtin.stat:
@@ -67,3 +69,84 @@
           - not proxmox_lxc_host_config_result.components.features.changed
           - not _pct_call_log.stat.exists
         fail_msg: "Check mode should skip host-config reconciliation cleanly when the container config file is absent"
+
+    - name: Seed existing divergent container config for check-mode comparison
+      ansible.builtin.copy:
+        dest: "{{ proxmox_lxc_host_config_path_root }}/4202.conf"
+        mode: "0644"
+        content: |
+          arch: amd64
+          hostname: missing-config-host
+          memory: 2048
+          unprivileged: 1
+          lxc.idmap: u 0 200000 65536
+          rootfs: local-lvm:vm-4202-disk-0,size=16G
+          mp0: /srv/old-media,mp=/media
+          lxc.environment: NVIDIA_VISIBLE_DEVICES=all
+          lxc.sysctl.net.ipv4.conf.all.forwarding = 1
+          lxc.apparmor.profile: generated
+      check_mode: false
+
+    - name: Place working mock pct script on PATH for existing config
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "$*" >> "{{ temp_root }}/pct-calls.log"
+          case "$1" in
+            config)
+              cat <<EOF
+          arch: amd64
+          features: fuse=1
+          EOF
+              ;;
+            *)
+              echo "check mode must not execute mutating pct command: $*" >&2
+              exit 99
+              ;;
+          esac
+          exit 0
+      check_mode: false
+
+    - name: Reconcile existing divergent config in check mode
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role for existing config check
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+
+    - name: Read existing container config after dry run
+      ansible.builtin.slurp:
+        src: "{{ proxmox_lxc_host_config_path_root }}/4202.conf"
+      register: _existing_config_after_check
+
+    - name: Read pct calls after existing-config dry run
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_after_check
+
+    - name: Assert check mode reports semantic change without mutation
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_host_config_result.overall_changed
+          - proxmox_lxc_host_config_result.restart_required
+          - not proxmox_lxc_host_config_result.restart_applied
+          - proxmox_lxc_host_config_result.components.idmap.changed
+          - proxmox_lxc_host_config_result.components.bind_mounts.changed
+          - proxmox_lxc_host_config_result.components.nvidia.changed
+          - proxmox_lxc_host_config_result.components.wireguard.changed
+          - proxmox_lxc_host_config_result.components.sysctls.changed
+          - proxmox_lxc_host_config_result.components.features.changed
+          - "'memory: 2048' in (_existing_config_after_check.content | b64decode)"
+          - "'lxc.idmap: u 0 200000 65536' in (_existing_config_after_check.content | b64decode)"
+          - "'mp0: /srv/old-media,mp=/media' in (_existing_config_after_check.content | b64decode)"
+          - "'NVIDIA_VISIBLE_DEVICES=all' in (_existing_config_after_check.content | b64decode)"
+          - "'lxc.sysctl.net.ipv4.conf.all.forwarding = 1' in (_existing_config_after_check.content | b64decode)"
+          - "'lxc.apparmor.profile: generated' in (_existing_config_after_check.content | b64decode)"
+          - "'config 4202' in (_pct_calls_after_check.content | b64decode)"
+          - "'set 4202' not in (_pct_calls_after_check.content | b64decode)"
+          - "'status 4202' not in (_pct_calls_after_check.content | b64decode)"
+          - "'reboot 4202' not in (_pct_calls_after_check.content | b64decode)"
+        fail_msg: "Check mode did not make the live semantic decision without mutation"

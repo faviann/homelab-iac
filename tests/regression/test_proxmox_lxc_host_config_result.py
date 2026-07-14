@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test for proxmox_lxc_host_config boundary results."""
+"""Regression test for authoritative Proxmox LXC host configuration."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def main() -> int:
         print(output, file=sys.stderr)
         return 1
 
-    print("ok: proxmox_lxc_host_config reports component changes and restart state")
+    print("ok: proxmox_lxc_host_config is authoritative and reorder-safe")
     return 0
 
 

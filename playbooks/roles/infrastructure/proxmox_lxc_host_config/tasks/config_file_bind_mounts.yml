@@ -4,16 +4,48 @@
 
 - name: Get current bind mounts
   ansible.builtin.shell: |
-    grep '^mp[0-9]\+:' {{ _lxc_config_file }} | sort
+    set -o pipefail
+    grep '^mp[0-9]\+:' {{ _lxc_config_file | quote }} |
+    while IFS=: read -r mount_key mount_value; do
+      normalized_value=$(
+        printf '%s\n' "$mount_value" |
+        tr ',' '\n' |
+        sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
+        sort |
+        paste -sd, -
+      )
+      printf '%s: %s\n' "$mount_key" "$normalized_value"
+    done | sort
+  args:
+    executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   register: _current_mounts
+  check_mode: false
   changed_when: false
   failed_when: false
 
+- name: Initialize normalized desired bind mounts
+  ansible.builtin.set_fact:
+    _desired_mounts_list: []
+
+- name: Normalize desired bind mounts
+  ansible.builtin.set_fact:
+    _desired_mounts_list: >-
+      {{
+        _desired_mounts_list
+        + [
+            item.key ~ ': '
+            ~ (item.value.split(',') | map('trim') | sort | join(','))
+          ]
+      }}
+  loop: "{{ proxmox_lxc_host_config_spec.bind_mounts | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
 - name: Determine desired bind mounts (sorted)
   ansible.builtin.set_fact:
-    _desired_mounts: "{{ proxmox_lxc_host_config_spec.bind_mounts | dict2items | map(attribute='key') | zip(proxmox_lxc_host_config_spec.bind_mounts | dict2items | map(attribute='value')) | map('join', ': ') | list | sort | join('\n') }}"
+    _desired_mounts: "{{ _desired_mounts_list | sort | join('\n') }}"
 
 - name: Update bind mounts only if different
   when: _current_mounts.stdout != _desired_mounts
