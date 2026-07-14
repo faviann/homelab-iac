@@ -4,13 +4,14 @@
   connection: local
   gather_facts: false
   vars:
-    overmind_image_repository: ghcr.io/faviann/overmind
-    overmind_image_tag: "0.2.1"
+    _overmind_host_vars: "{{ lookup('file', playbook_dir + '/../../../inventory/host_vars/overmind.yml') | from_yaml }}"
+    overmind_image_repository: "{{ _overmind_host_vars.overmind_image_repository }}"
+    overmind_image_tag: "{{ _overmind_host_vars.overmind_image_tag }}"
     overmind_migration_network: postgres_default
     overmind_mock_verify_schema_fails: false
     overmind_expected_production_migration_log_pattern: >-
       (?m)^ARGS:run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING
-      --entrypoint memctl ghcr[.]io/faviann/overmind:0[.]2[.]1 migrate$
+      --entrypoint memctl {{ overmind_image_repository | regex_escape }}:{{ overmind_image_tag | regex_escape }} migrate$
     overmind_postgres_bootstrap:
       container_name: overmind-postgres
       admin_user: overmind
@@ -259,7 +260,7 @@
           - _production_db_env_calls | int == 2
           - _createdb_calls | int == 1
           - _create_role_calls | int == 1
-          - "'ghcr.io/faviann/overmind:0.2.1' in _docker_log_text"
+          - "(overmind_image_repository ~ ':' ~ overmind_image_tag) in _docker_log_text"
           - "'ghcr.io/faviann/overmind:latest' not in _docker_log_text"
           - "'fake-admin-password' not in _docker_log_text"
           - "'postgresql://overmind' not in _docker_log_text"
@@ -279,6 +280,6 @@
           - _verify_db_dropdb_calls | int == 1
           - _verify_db_env_calls | int == 2
           - _production_db_env_calls | int == 0
-          - "'ghcr.io/faviann/overmind:0.2.1' in _docker_log_text"
+          - "(overmind_image_repository ~ ':' ~ overmind_image_tag) in _docker_log_text"
           - "'fake-admin-password' not in _docker_log_text"
         fail_msg: "Unexpected overmind verifier failure docker log: {{ _docker_log_text }}"

@@ -126,8 +126,13 @@ class OvermindContractTests(unittest.TestCase):
 
         self.assertTrue(overmind_vars["overmind_migrations_enabled"])
         self.assertEqual(overmind_vars["overmind_image_repository"], "ghcr.io/faviann/overmind")
-        self.assertEqual(overmind_vars["overmind_image_tag"], "0.2.1")
-        self.assertNotEqual(overmind_vars["overmind_image_tag"], "latest")
+
+        image_tag = overmind_vars.get("overmind_image_tag")
+        self.assertIsInstance(image_tag, str)
+        self.assertNotEqual(image_tag, "")
+        self.assertNotEqual(image_tag, "latest")
+        self.assertRegex(image_tag, r"^\d+\.\d+\.\d+$")
+
         self.assertEqual(overmind_vars["overmind_migration_network"], "postgres_default")
 
         self.assertLess(
