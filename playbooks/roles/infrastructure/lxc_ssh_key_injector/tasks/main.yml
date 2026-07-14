@@ -44,6 +44,30 @@
         )
       }}
 
+- name: Observe existing container identity
+  proxmox_pct:
+    vmid: "{{ lxc_ssh_key_injector_guest_bootstrap.vmid }}"
+    command: config
+  register: _lxc_ssh_key_injector_container_config
+  delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
+  vars:
+    ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
+  when: _lxc_ssh_key_injector_container_state == 'running'
+
+- name: Validate existing container identity
+  ansible.builtin.assert:
+    that:
+      - _lxc_ssh_key_injector_container_config.config.hostname is defined
+      - >-
+        _lxc_ssh_key_injector_container_config.config.hostname | string
+        == lxc_ssh_key_injector_guest_bootstrap.hostname | string
+    fail_msg: >-
+      Container VMID {{ lxc_ssh_key_injector_guest_bootstrap.vmid }} has hostname
+      '{{ _lxc_ssh_key_injector_container_config.config.hostname | default('unknown') }}',
+      which does not match expected hostname
+      '{{ lxc_ssh_key_injector_guest_bootstrap.hostname }}'. Refusing SSH key injection.
+  when: _lxc_ssh_key_injector_container_state == 'running'
+
 - name: Skip runtime-sensitive SSH key injection in check mode
   ansible.builtin.debug:
     msg: >-

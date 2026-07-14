@@ -30,6 +30,7 @@ def main() -> int:
             f"printf '%s %s\\n' \"$1\" \"$2\" >> '{pct_log}'\n"
             "case \"$1\" in\n"
             "  status) echo 'status: running' ;;\n"
+            "  config) echo 'hostname: recovery-host' ;;\n"
             "  exec)\n"
             f"    if [ ! -f '{pct_exec_count}' ]; then\n"
             f"      : > '{pct_exec_count}'\n"
@@ -86,7 +87,7 @@ def main() -> int:
             return 1
 
         calls = pct_log.read_text().splitlines()
-        if calls != ["status 4201", "exec 4201", "exec 4201"]:
+        if calls != ["status 4201", "config 4201", "exec 4201", "exec 4201"]:
             print(f"unexpected pct calls: {calls}", file=sys.stderr)
             return 1
 
