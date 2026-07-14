@@ -6,7 +6,6 @@ proxmox_lifecycle_policy_default:
   rebuild_on_release_mismatch: "{{ proxmox_lxc_rebuild_on_release_mismatch | default(false) | bool }}"
   allow_destructive_transitions: "{{ proxmox_lifecycle_allow_destructive_transitions | default(false) | bool }}"
   cleanup_rebuilt_state: true
-  skip_stopped_release_checks: true
 
 proxmox_lifecycle_policy: {}
 

@@ -23,7 +23,6 @@ all:
           rebuild_on_release_mismatch: true
           allow_destructive_transitions: true
           cleanup_rebuilt_state: false
-          skip_stopped_release_checks: true
         lifecycle_expected_start_container: false
       hosts:
         full_create:
@@ -84,7 +83,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: false
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
@@ -150,7 +148,6 @@ all:
             rebuild_on_release_mismatch: true
             allow_destructive_transitions: true
             cleanup_rebuilt_state: true
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "11"
           lifecycle_expected_transition: rebuild
           lifecycle_expected_destructive: true
@@ -183,9 +180,7 @@ all:
           proxmox_lifecycle_policy:
             strict_validation: false
             rebuild_on_release_mismatch: false
-            allow_destructive_transitions: true
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: start
           lifecycle_expected_destructive: false
@@ -241,7 +236,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: false
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: provision
           lifecycle_expected_destructive: false
@@ -436,7 +430,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: false
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
           lifecycle_expected_reconcile_host_config: false
@@ -476,7 +469,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: true
             cleanup_rebuilt_state: true
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "11"
           lifecycle_expected_transition: rebuild
           lifecycle_expected_destructive: true
@@ -523,7 +515,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: true
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: provision
           lifecycle_expected_destructive: false
@@ -552,7 +543,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: true
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
@@ -578,7 +568,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: true
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: remove
           lifecycle_expected_destructive: true
