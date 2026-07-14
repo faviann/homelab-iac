@@ -1,69 +1,16 @@
 ---
-# Validate Proxmox infrastructure
-# Can be run standalone for pre-flight checks or as part of full orchestration
-#
-# Usage:
-#   uv run --locked ansible-playbook playbooks/validate-infrastructure.yml
+# Standalone lifecycle validation. It performs the same target compilation,
+# fleet preflight, common observation, and semantic planning as a lifecycle run,
+# but reports every detected problem before returning nonzero.
 
-- name: Verify control node has been bootstrapped
-  hosts: localhost
-  connection: local
+- name: Validate lifecycle prerequisites
+  ansible.builtin.import_playbook: lifecycle-prerequisites.yml
+
+- name: Validate targeted LXC lifecycle plans
+  hosts: lxcs
   gather_facts: false
   become: false
-  vars:
-    control_node_project_root: "{{ playbook_dir | dirname }}"
-    control_node_uv_virtualenv: "{{ [playbook_dir | dirname, '.venv'] | path_join }}"
-    control_node_collection_install_path: "{{ [playbook_dir | dirname, 'collections'] | path_join }}"
-    control_node_required_collections:
-      - community.proxmox
   tasks:
-    - name: Check for uv-managed control node virtual environment
-      ansible.builtin.stat:
-        path: "{{ control_node_uv_virtualenv }}"
-      register: control_node_virtualenv_stat
-      run_once: true
-
-    - name: Check for required Ansible collections
-      ansible.builtin.stat:
-        path: "{{ [control_node_collection_install_path, 'ansible_collections', item | replace('.', '/')] | path_join }}"
-      loop: "{{ control_node_required_collections }}"
-      register: control_node_collection_stats
-      run_once: true
-
-    - name: Detect missing bootstrap artifacts
-      ansible.builtin.set_fact:
-        control_node_missing_collections: "{{ control_node_collection_stats.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
-      run_once: true
-
-    - name: Assert bootstrap prerequisites are present
-      ansible.builtin.assert:
-        that:
-          - control_node_virtualenv_stat.stat.exists
-          - control_node_missing_collections | length == 0
-        fail_msg: >-
-          Bootstrap prerequisites are missing. Run `uv run --locked ansible-playbook bootstrap.yml`
-          after `uv sync --locked`. Missing collections: {{ control_node_missing_collections }}.
-        success_msg: Bootstrap prerequisites detected.
-      run_once: true
-
-- name: Bootstrap Proxmox host SSH access
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  become: false
-  roles:
-    - infrastructure/proxmox_host_bootstrap
-
-- name: Validate Proxmox API connectivity
-  hosts: proxmox_api
-  gather_facts: false
-  become: false
-  collections:
-    - community.proxmox
-  tasks:
-    - name: Include Proxmox validation tasks
+    - name: Run aggregate standalone lifecycle validation
       ansible.builtin.include_tasks:
-        file: "{{ [playbook_dir, 'tasks', 'proxmox_validation.yml'] | path_join }}"
-      tags:
-        - validation
-        - proxmox
+        file: "{{ [playbook_dir, 'tasks', 'standalone_lifecycle_validation.yml'] | path_join }}"

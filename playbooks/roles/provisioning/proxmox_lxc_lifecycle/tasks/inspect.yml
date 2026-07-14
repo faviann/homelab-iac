@@ -44,14 +44,37 @@
         )
       }}
 
-- name: Observe current container runtime state when validation data is unavailable
-  ansible.builtin.include_tasks: observe_runtime_state.yml
-  when: proxmox_lifecycle_release_probe_state == 'unavailable'
+- name: Reject fleet preflight problems before per-LXC planning
+  ansible.builtin.assert:
+    that:
+      - proxmox_fleet_preflight_problems | default([]) | length == 0
+    fail_msg: >-
+      Fleet preflight failed: {{ proxmox_fleet_preflight_problems | default([]) | join(' ') }}
+  when:
+    - proxmox_fleet_preflight_enabled | bool
+    - proxmox_lifecycle_intent != 'validate_only'
 
-- name: Adopt observed runtime state when validation data is unavailable
+- name: Require an observation from fleet preflight
+  ansible.builtin.assert:
+    that:
+      - proxmox_lifecycle_validation_snapshot | length > 0
+      - proxmox_lifecycle_validation_snapshot.common_observation | default(false) | bool
+    fail_msg: >-
+      Fleet preflight did not provide a common Proxmox observation for {{ inventory_hostname }}.
+  when: proxmox_fleet_preflight_enabled | bool
+
+- name: Observe current container runtime state for legacy direct-role callers
+  ansible.builtin.include_tasks: observe_runtime_state.yml
+  when:
+    - not (proxmox_fleet_preflight_enabled | bool)
+    - proxmox_lifecycle_release_probe_state == 'unavailable'
+
+- name: Adopt observed runtime state for legacy direct-role callers
   ansible.builtin.set_fact:
     proxmox_lifecycle_runtime_state: "{{ proxmox_lifecycle_observed_runtime_state }}"
-  when: proxmox_lifecycle_release_probe_state == 'unavailable'
+  when:
+    - not (proxmox_fleet_preflight_enabled | bool)
+    - proxmox_lifecycle_release_probe_state == 'unavailable'
 
 - name: Build local validation snapshot when no validation play data is present
   ansible.builtin.set_fact:
@@ -66,6 +89,7 @@
         }}
       remediation: []
   when:
+    - not (proxmox_fleet_preflight_enabled | bool)
     - proxmox_lifecycle_validation_snapshot | length == 0
 
 - name: Observe the current guest release when required

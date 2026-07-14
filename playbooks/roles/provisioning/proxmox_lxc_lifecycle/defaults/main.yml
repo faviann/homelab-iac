@@ -15,3 +15,5 @@ proxmox_lifecycle_release_probe_tasks_file: >-
   {{ [playbook_dir, 'tasks', 'probe_lxc_release.yml'] | path_join }}
 
 proxmox_skip_self: true
+
+proxmox_fleet_preflight_enabled: true

@@ -23,6 +23,7 @@ all:
           rebuild_on_release_mismatch: true
           allow_destructive_transitions: true
           cleanup_rebuilt_state: false
+        proxmox_fleet_preflight_enabled: false
         lifecycle_expected_start_container: false
       hosts:
         full_create:

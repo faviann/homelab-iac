@@ -1,0 +1,55 @@
+---
+- name: Plan this target through the lifecycle facade
+  block:
+    - name: Run validate-only lifecycle planning
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+      vars:
+        proxmox_lifecycle_intent: validate_only
+  rescue:
+    - name: Record this target's planning problem
+      ansible.builtin.set_fact:
+        lxc_standalone_planning_problem: >-
+          {{
+            (ansible_failed_result | default({})).msg
+            | default('Lifecycle planning failed for ' ~ inventory_hostname)
+          }}
+
+- name: Collect this target's standalone validation problems
+  ansible.builtin.set_fact:
+    lxc_standalone_validation_problems: >-
+      {%- set problems = [] -%}
+      {%- for problem in proxmox_fleet_preflight_problems | default([]) -%}
+      {%-   set _ = problems.append(problem) -%}
+      {%- endfor -%}
+      {%- if lxc_standalone_planning_problem is defined -%}
+      {%-   set _ = problems.append("Target '" ~ inventory_hostname ~ "': " ~ lxc_standalone_planning_problem) -%}
+      {%- elif lxc_lifecycle_result is defined
+             and lxc_lifecycle_result.outcome.status == 'validation_failed' -%}
+      {%-   set _ = problems.append("Target '" ~ inventory_hostname ~ "': " ~ lxc_lifecycle_result.outcome.reason) -%}
+      {%- endif -%}
+      {{ problems }}
+
+- name: Aggregate all standalone validation problems
+  ansible.builtin.set_fact:
+    lxc_standalone_validation_all_problems: >-
+      {%- set problems = [] -%}
+      {%- for host in ansible_play_hosts_all -%}
+      {%-   for problem in hostvars[host].lxc_standalone_validation_problems | default([]) -%}
+      {%-     if problem not in problems -%}
+      {%-       set _ = problems.append(problem) -%}
+      {%-     endif -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ problems }}
+  run_once: true
+
+- name: Fail standalone validation after reporting every detected problem
+  ansible.builtin.fail:
+    msg: |
+      Standalone lifecycle validation found {{ lxc_standalone_validation_all_problems | length }} problem(s):
+      {% for problem in lxc_standalone_validation_all_problems %}
+      - {{ problem }}
+      {% endfor %}
+  when: lxc_standalone_validation_all_problems | length > 0
+  run_once: true

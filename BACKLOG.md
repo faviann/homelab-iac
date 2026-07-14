@@ -12,8 +12,8 @@
 - **Context**: 2026-07-05 architecture review — adding one secret means editing three files in lockstep (`vault_*` key, hand-written `lxc_docker_env_stack_vars` binding, `stack_vars.*` reference); `host_vars/auth.yml` alone hand-maps ~25 vault vars. A naming-convention resolution inside `lxc_stack_sync` would delete the mapping blocks but trades explicitness for magic and is in tension with the stack_sync README's ban on injecting stack metadata into host var scope. Needs a design discussion before any code; see `docs/plans/2026-07-05-architecture-cleanup.md` (Not in scope).
 - **Added**: 2026-07-05
 
-## [TEST-001] Largest logic surfaces are untested: proxmox_validation.yml and vault shell scripts
+## [TEST-001] Vault and setup shell scripts lack focused tests
 - **Category**: missing-test
-- **Location**: `playbooks/tasks/proxmox_validation.yml`, `rotate-vault-passphrase.sh`, `configure-vault.sh`, `setup.sh`
-- **Context**: 2026-07-05 architecture review — `proxmox_validation.yml` (536 lines: duplicate-VMID detection, release-mismatch remediation, `lxc_validation_results` shape) has no fixture test, and the vault/setup shell scripts (~800+ lines combined) have no tests at all; they are the least-covered high-risk code in the repo.
+- **Location**: `rotate-vault-passphrase.sh`, `configure-vault.sh`, `setup.sh`
+- **Context**: 2026-07-05 architecture review — the vault/setup shell scripts (~800+ lines combined) have no focused tests and remain a high-risk untested surface.
 - **Added**: 2026-07-05
