@@ -7,7 +7,7 @@
     path: "{{ _lxc_config_file }}"
     regexp: '^lxc\.mount\.entry:.*dev/net/tun'
     line: "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
-    state: "{{ 'present' if (wireguard_kernel_module_access | default(false) | bool) else 'absent' }}"
+    state: "{{ 'present' if (proxmox_lxc_host_config_spec.wireguard_kernel_module_access | bool) else 'absent' }}"
     create: false
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"

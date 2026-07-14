@@ -18,12 +18,12 @@
       lxc.environment: NVIDIA_VISIBLE_DEVICES=all
       lxc.hook.mount: /usr/share/lxc/hooks/nvidia
       lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'
-  when: configure_nvidia_runtime | default(false) | bool
+  when: proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool
 
 - name: Determine desired NVIDIA configuration (empty)
   ansible.builtin.set_fact:
     _desired_nvidia_config: ""
-  when: not (configure_nvidia_runtime | default(false) | bool)
+  when: not (proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool)
 
 - name: Update NVIDIA GPU configuration only if different
   when: _current_nvidia_config.stdout != _desired_nvidia_config
@@ -54,7 +54,7 @@
         - "lxc.environment: NVIDIA_VISIBLE_DEVICES=all"
         - "lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
         - "lxc.hook.mount: /usr/share/lxc/hooks/nvidia"
-      when: configure_nvidia_runtime | default(false) | bool
+      when: proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool
 
 - name: Publish NVIDIA reconciliation result
   ansible.builtin.set_fact:

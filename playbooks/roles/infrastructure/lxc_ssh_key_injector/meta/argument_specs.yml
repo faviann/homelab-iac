@@ -1,0 +1,9 @@
+---
+argument_specs:
+  main:
+    short_description: Restore guest SSH access from an explicit minimal input
+    options:
+      lxc_ssh_key_injector_guest_bootstrap:
+        type: dict
+        required: true
+        description: Minimal guest-bootstrap input containing vmid, hostname, and public key.

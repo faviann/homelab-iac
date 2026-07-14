@@ -1,0 +1,40 @@
+---
+- name: Test proxmox_lxc_provision contract boundary
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_api_host: api.invalid
+    proxmox_api_user: <REPLACE_ME>
+    proxmox_api_token_id: <REPLACE_ME>
+    proxmox_api_token_secret: <REPLACE_ME>
+    proxmox_api_delegate_host: localhost
+    proxmox_lxc_contract:
+      api_spec:
+        vmid: 4204
+        hostname: contract-host
+        node: contract-node
+        ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+        cores: 2
+        memory: 1024
+        disk: local-lvm:16
+        netif:
+          net0: name=eth0,bridge=vmbr1,ip=dhcp,type=veth
+        state: present
+        update: false
+        start_on_create: false
+    # Conflicting ambient desired state must neither recompile nor override the contract.
+    proxmox_default_storage: ""
+    proxmox_lxc_start_on_create: true
+    proxmox_lxc_overrides:
+      vmid: 9999
+      hostname: ambient-host
+    proxmox_lxc_group_defaults:
+      cores: 0
+      memory: 1
+      disk: ""
+      netif: {}
+  tasks:
+    - name: Reconcile API-managed LXC state from the compiled contract
+      ansible.builtin.include_role:
+        name: infrastructure/proxmox_lxc_provision

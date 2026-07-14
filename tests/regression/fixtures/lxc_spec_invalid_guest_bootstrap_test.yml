@@ -1,0 +1,24 @@
+---
+- name: Reject a compiled LXC contract without a guest-bootstrap public key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_default_storage: local-lvm
+    proxmox_lxc_global_defaults:
+      node: pve-a
+      ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+    proxmox_lxc_group_defaults:
+      cores: 2
+      memory: 1024
+      disk: "16"
+      netif:
+        net0: name=eth0,bridge=vmbr1,ip=dhcp,type=veth
+    proxmox_lxc_overrides:
+      vmid: 4203
+      hostname: missing-bootstrap-key
+    proxmox_lxc_controller_pubkey_enabled: false
+  tasks:
+    - name: Compile desired LXC contract
+      ansible.builtin.include_role:
+        name: provisioning/lxc_spec_builder

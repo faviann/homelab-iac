@@ -1,7 +1,3 @@
 ---
-# Dependencies for proxmox_lxc_host_config role
-# This role requires the LXC spec to be built first to access:
-#   - proxmox_lxc_contract.host_config (VMID, hostname, bind mounts, idmap, features)
-# Compatibility aliases remain available during the contract migration.
-dependencies:
-  - role: provisioning/lxc_spec_builder
+# The lifecycle compiles the contract once and passes it into this role.
+dependencies: []

@@ -240,6 +240,10 @@
         bind_mounts: "{{ _proxmox_lxc_bind_mounts | default({}) }}"
         idmap: "{{ _proxmox_lxc_idmap | default([]) }}"
         features: "{{ _proxmox_lxc_compiled_spec.features | default([]) }}"
+        configure_nvidia_runtime: "{{ configure_nvidia_runtime | default(false) | bool }}"
+        wireguard_kernel_module_access: "{{ wireguard_kernel_module_access | default(false) | bool }}"
+        lxc_custom_sysctls: "{{ lxc_custom_sysctls | default([]) }}"
+        lxc_disable_apparmor: "{{ lxc_disable_apparmor | default(false) | bool }}"
       guest_bootstrap:
         vmid: "{{ _proxmox_lxc_contract_identity.vmid }}"
         hostname: "{{ _proxmox_lxc_contract_identity.hostname }}"
@@ -287,7 +291,25 @@
       - proxmox_lxc_contract.host_config is mapping
       - proxmox_lxc_contract.host_config.host_directories is sequence
       - proxmox_lxc_contract.host_config.host_directories is not string
+      - proxmox_lxc_contract.host_config.bind_mounts is mapping
+      - proxmox_lxc_contract.host_config.idmap is sequence
+      - proxmox_lxc_contract.host_config.idmap is not string
+      - proxmox_lxc_contract.host_config.features is sequence
+      - proxmox_lxc_contract.host_config.features is not string
+      - proxmox_lxc_contract.host_config.configure_nvidia_runtime is boolean
+      - proxmox_lxc_contract.host_config.wireguard_kernel_module_access is boolean
+      - proxmox_lxc_contract.host_config.lxc_custom_sysctls is sequence
+      - proxmox_lxc_contract.host_config.lxc_custom_sysctls is not string
+      - proxmox_lxc_contract.host_config.lxc_disable_apparmor is boolean
       - proxmox_lxc_contract.guest_bootstrap is mapping
+      - proxmox_lxc_contract.guest_bootstrap.vmid is defined
+      - proxmox_lxc_contract.guest_bootstrap.vmid | int > 0
+      - proxmox_lxc_contract.guest_bootstrap.hostname is defined
+      - proxmox_lxc_contract.guest_bootstrap.hostname is string
+      - proxmox_lxc_contract.guest_bootstrap.hostname | trim | length > 0
+      - proxmox_lxc_contract.guest_bootstrap.pubkey is defined
+      - proxmox_lxc_contract.guest_bootstrap.pubkey is string
+      - proxmox_lxc_contract.guest_bootstrap.pubkey | trim | length > 0
       - proxmox_lxc_contract.derived_metadata is mapping
       - proxmox_lxc_contract.identity.vmid == _proxmox_lxc_compiled_spec.vmid
       - proxmox_lxc_contract.identity.hostname == _proxmox_lxc_compiled_spec.hostname
@@ -296,6 +318,7 @@
       - proxmox_lxc_contract.host_config.vmid == proxmox_lxc_contract.identity.vmid
       - proxmox_lxc_contract.host_config.hostname == proxmox_lxc_contract.identity.hostname
       - proxmox_lxc_contract.guest_bootstrap.vmid == proxmox_lxc_contract.identity.vmid
+      - proxmox_lxc_contract.guest_bootstrap.hostname == proxmox_lxc_contract.identity.hostname
     fail_msg: >-
       Invalid compiled LXC contract for {{ inventory_hostname }}.
       Contract: {{ proxmox_lxc_contract | to_nice_yaml }}
@@ -314,3 +337,18 @@
   loop_control:
     label: "{{ item.path | default('missing path') }}"
   when: proxmox_lxc_contract.host_config.host_directories | length > 0
+
+- name: Validate custom-sysctl contract entries
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.key is defined
+      - item.key | string | length > 0
+      - item.value is defined
+    fail_msg: >-
+      lxc_custom_sysctls entries for {{ inventory_hostname }} must be mappings
+      with a non-empty key and a value.
+  loop: "{{ proxmox_lxc_contract.host_config.lxc_custom_sysctls }}"
+  loop_control:
+    label: "{{ item.key | default('missing key') }}"
+  when: proxmox_lxc_contract.host_config.lxc_custom_sysctls | length > 0

@@ -1,0 +1,15 @@
+---
+- name: Reject guest bootstrap when VMID belongs to another hostname
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    lxc_ssh_key_injector_guest_bootstrap:
+      vmid: 4206
+      hostname: expected-host
+      pubkey: ssh-ed25519 AAAAEXPECTED expected@test
+    lxc_ssh_key_injector_delegate_host: localhost
+  tasks:
+    - name: Invoke the shared guest-access bootstrap boundary
+      ansible.builtin.include_role:
+        name: infrastructure/lxc_ssh_key_injector

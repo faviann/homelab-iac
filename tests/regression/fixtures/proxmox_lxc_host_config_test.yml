@@ -22,11 +22,18 @@
         features:
           - nesting=1
           - keyctl=1
-    wireguard_kernel_module_access: true
+        configure_nvidia_runtime: true
+        wireguard_kernel_module_access: true
+        lxc_custom_sysctls:
+          - key: net.ipv4.ip_forward
+            value: 1
+        lxc_disable_apparmor: true
+    # Conflicting legacy values prove the compiled contract is authoritative.
+    wireguard_kernel_module_access: false
     lxc_custom_sysctls:
-      - key: net.ipv4.ip_forward
-        value: 1
-    lxc_disable_apparmor: true
+      - key: net.ipv4.conf.all.forwarding
+        value: 0
+    lxc_disable_apparmor: false
     configure_nvidia_runtime: false
   tasks:
     - name: Create temp Proxmox config root
@@ -81,9 +88,10 @@
           esac
           exit 0
 
-    - name: Include host config tasks with mock pct on PATH
+    - name: Include host config role with mock pct on PATH
       block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/main.yml"
+        - ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
 
@@ -105,7 +113,9 @@
           - "'mp0: ' ~ temp_root ~ '/srv/media,mp=/media' in (_host_config_file.content | b64decode)"
           - "'lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' in (_host_config_file.content | b64decode)"
           - "'lxc.sysctl.net.ipv4.ip_forward = 1' in (_host_config_file.content | b64decode)"
+          - "'lxc.sysctl.net.ipv4.conf.all.forwarding = 0' not in (_host_config_file.content | b64decode)"
           - "'lxc.apparmor.profile: unconfined' in (_host_config_file.content | b64decode)"
+          - "'lxc.environment: NVIDIA_VISIBLE_DEVICES=all' in (_host_config_file.content | b64decode)"
         fail_msg: "Host config file did not receive the expected reconciled lines"
 
     - name: Inspect host-side source directory
@@ -151,7 +161,8 @@
 
     - name: Re-run host config tasks with the same desired contract
       block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/main.yml"
+        - ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
 

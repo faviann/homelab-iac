@@ -12,10 +12,8 @@
     backup: true
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  loop: "{{ lxc_custom_sysctls | default([]) }}"
-  when:
-    - lxc_custom_sysctls is defined
-    - lxc_custom_sysctls | length > 0
+  loop: "{{ proxmox_lxc_host_config_spec.lxc_custom_sysctls }}"
+  when: proxmox_lxc_host_config_spec.lxc_custom_sysctls | length > 0
   register: _sysctl_results
 
 - name: Disable AppArmor for Docker compatibility
@@ -29,7 +27,7 @@
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   when:
-    - lxc_disable_apparmor | default(false) | bool
+    - proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
   register: _apparmor_result
 
 - name: Publish sysctl reconciliation result
