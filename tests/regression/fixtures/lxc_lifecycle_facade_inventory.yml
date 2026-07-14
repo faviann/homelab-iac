@@ -42,6 +42,13 @@ all:
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
           lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - container_transition
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+            - guest_configuration
         configure_absent:
           lifecycle_vmid: 4402
           proxmox_lifecycle_intent: configure_only
@@ -58,6 +65,7 @@ all:
           lifecycle_expected_outcome: skipped
           lifecycle_expected_before_runtime: absent
           lifecycle_expected_after_runtime: absent
+          lifecycle_expected_events: []
         full_rebuild:
           lifecycle_vmid: 4403
           proxmox_lifecycle_intent: full
@@ -76,6 +84,13 @@ all:
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
           lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - container_transition
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+            - guest_configuration
         provision_existing:
           lifecycle_vmid: 4404
           proxmox_lifecycle_intent: provision_only
@@ -94,6 +109,12 @@ all:
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
           lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - container_transition
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
         full_remove:
           lifecycle_vmid: 4405
           proxmox_lifecycle_intent: full
@@ -112,6 +133,9 @@ all:
           lifecycle_expected_after_runtime: absent
           lifecycle_expected_after_release: ""
           lifecycle_expected_after_probe_state: absent
+          lifecycle_expected_events:
+            - container_transition
+            - runtime_refresh
         full_already_absent:
           lifecycle_vmid: 4409
           proxmox_lifecycle_intent: full
@@ -128,6 +152,7 @@ all:
           lifecycle_expected_outcome: absent
           lifecycle_expected_before_runtime: absent
           lifecycle_expected_after_runtime: absent
+          lifecycle_expected_events: []
         validate_absent_running:
           lifecycle_vmid: 4410
           proxmox_lifecycle_intent: validate_only
@@ -144,6 +169,7 @@ all:
           lifecycle_expected_outcome: validated
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []
         configure_running:
           lifecycle_vmid: 4406
           proxmox_lifecycle_intent: configure_only
@@ -162,6 +188,12 @@ all:
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
           lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+            - guest_configuration
         validate_running:
           lifecycle_vmid: 4407
           proxmox_lifecycle_intent: validate_only
@@ -178,6 +210,7 @@ all:
           lifecycle_expected_outcome: validated
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []
         validation_failed:
           lifecycle_vmid: 4408
           proxmox_lifecycle_intent: full
@@ -196,3 +229,4 @@ all:
           lifecycle_expected_outcome: validation_failed
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []

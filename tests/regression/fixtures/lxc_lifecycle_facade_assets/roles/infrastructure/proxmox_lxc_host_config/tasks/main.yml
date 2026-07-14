@@ -1,4 +1,14 @@
 ---
+- name: Record host-configuration reconciliation
+  ansible.builtin.copy:
+    dest: "{{ lifecycle_event_record_path }}"
+    content: "{{ lookup('ansible.builtin.file', lifecycle_event_record_path, rstrip=false) }}host_reconciliation\n"
+    mode: "0600"
+  delegate_to: localhost
+  vars:
+    lifecycle_event_record_path: >-
+      {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events
+
 - name: Model successful host configuration reconciliation
   ansible.builtin.debug:
     msg: Host configuration reconciled by facade test double
