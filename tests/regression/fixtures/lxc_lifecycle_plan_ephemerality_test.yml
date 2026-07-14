@@ -1,6 +1,6 @@
 ---
 - name: Prove lifecycle plans do not survive into a second command
-  hosts: lifecycle_scenarios
+  hosts: lifecycle_scenarios:!lifecycle_plan_failures
   connection: local
   gather_facts: false
   tasks:

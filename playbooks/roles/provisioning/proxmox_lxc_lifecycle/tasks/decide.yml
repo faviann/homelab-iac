@@ -12,14 +12,16 @@
 # ----------------|---------------|---------------|----------------------|-----------|---------|----------------
 # validate_only   | *             | *             | none                 | no        | no      | no
 # provision_only  | present       | absent        | provision            | yes       | yes     | no
-# provision_only  | present       | running       | provision (rebuild if mismatch) | yes | yes | no
+# provision_only  | present       | stopped       | provision            | yes       | no      | no
+# provision_only  | present       | running       | provision/rebuild    | yes       | yes     | no
 # provision_only  | absent        | running/stopped | remove             | no        | no      | no
 # provision_only  | absent        | absent        | none                 | no        | no      | no
-# configure_only  | present       | running       | none                 | yes       | yes     | yes
-# configure_only  | present       | absent        | none                 | no        | no      | no
-# configure_only  | absent        | *             | none                 | no        | no      | no
+# configure_only  | present       | running       | none/fail rebuild    | yes       | yes     | yes
+# configure_only  | present       | absent/stopped | planning failure    | -         | -       | -
+# configure_only  | absent        | *             | planning failure    | -         | -       | -
 # full            | present       | absent        | provision            | yes       | yes     | yes
-# full            | present       | running       | provision (rebuild if mismatch) | yes | yes | yes
+# full            | present       | stopped       | start                | yes       | yes     | yes
+# full            | present       | running       | provision/rebuild    | yes       | yes     | yes
 # full            | absent        | running/stopped | remove             | no        | no      | no
 # full            | absent        | absent        | none                 | no        | no      | no
 # ==============================================================================
@@ -31,8 +33,7 @@
     proxmox_lifecycle_should_configure: "{{ proxmox_lifecycle_intent in ['configure_only', 'full'] }}"
     proxmox_lifecycle_rebuild_required: >-
       {{
-        proxmox_lifecycle_intent in ['provision_only', 'full']
-        and proxmox_lxc_contract.api_spec.state | default('present') == 'present'
+        proxmox_lxc_contract.api_spec.state | default('present') == 'present'
         and proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
         and proxmox_lifecycle_release_mismatch | bool
       }}
@@ -43,6 +44,34 @@
   when:
     - proxmox_lifecycle_policy_effective.strict_validation | bool
     - proxmox_lifecycle_validation_failed | bool
+
+- name: Require desired state present for configure-only lifecycle
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
+    fail_msg: >-
+      Configure-only lifecycle requires desired state present;
+      desired state is absent.
+  when: proxmox_lifecycle_intent == 'configure_only'
+
+- name: Require an existing running container for configure-only lifecycle
+  ansible.builtin.assert:
+    that:
+      - proxmox_lifecycle_runtime_state == 'running'
+    fail_msg: >-
+      Configure-only lifecycle requires an existing running container;
+      observed state is {{ proxmox_lifecycle_runtime_state }}.
+  when: proxmox_lifecycle_intent == 'configure_only'
+
+- name: Reject a required rebuild during configure-only lifecycle
+  ansible.builtin.assert:
+    that:
+      - not (proxmox_lifecycle_rebuild_required | bool)
+    fail_msg: >-
+      Configure-only lifecycle cannot perform the required rebuild;
+      guest release {{ proxmox_lifecycle_actual_release }} differs from desired
+      release {{ proxmox_lifecycle_desired_release }}.
+  when: proxmox_lifecycle_intent == 'configure_only'
 
 - name: Derive lifecycle scratch flags
   ansible.builtin.set_fact:
@@ -83,7 +112,10 @@
           )
         )
         else ('rebuild' if (proxmox_lifecycle_rebuild_required | bool)
-        else ('provision' if (proxmox_lifecycle_desired_present | bool) else 'remove'))
+        else ('start' if (
+          proxmox_lifecycle_intent == 'full'
+          and proxmox_lifecycle_runtime_state == 'stopped'
+        ) else ('provision' if (proxmox_lifecycle_desired_present | bool) else 'remove')))
       }}
 
 - name: Explain the transition and record desired-present host preparation
@@ -106,6 +138,8 @@
       {%- elif proxmox_lifecycle_container_transition == 'rebuild' -%}
       Guest release {{ proxmox_lifecycle_actual_release }} differs from desired
       release {{ proxmox_lifecycle_desired_release }}, so the container will be rebuilt.
+      {%- elif proxmox_lifecycle_container_transition == 'start' -%}
+      Existing stopped container will be started because guest configuration requires it.
       {%- elif proxmox_lifecycle_container_transition == 'provision' and proxmox_lifecycle_runtime_state == 'absent' -%}
       Container is absent from Proxmox, so it will be provisioned.
       {%- elif proxmox_lifecycle_intent == 'validate_only' -%}
@@ -132,7 +166,23 @@
           (proxmox_lifecycle_prepare_guest | bool)
           and (proxmox_lxc_host_config_enabled | default(true) | bool)
         }}
-      restore_guest_access: "{{ proxmox_lifecycle_prepare_guest | bool }}"
+      restore_guest_access: >-
+        {{
+          (proxmox_lifecycle_prepare_guest | bool)
+          and not (
+            proxmox_lifecycle_intent == 'provision_only'
+            and proxmox_lifecycle_runtime_state == 'stopped'
+            and not (proxmox_lifecycle_rebuild_required | bool)
+          )
+        }}
+      start_container: >-
+        {{
+          proxmox_lifecycle_container_transition in ['rebuild', 'start']
+          or (
+            proxmox_lifecycle_container_transition == 'provision'
+            and proxmox_lifecycle_runtime_state == 'absent'
+          )
+        }}
       configure_guest: "{{ not (proxmox_lifecycle_skip_configure | bool) }}"
       destructive: "{{ proxmox_lifecycle_container_transition in ['rebuild', 'remove'] }}"
       reason: "{{ proxmox_lifecycle_reason }}"

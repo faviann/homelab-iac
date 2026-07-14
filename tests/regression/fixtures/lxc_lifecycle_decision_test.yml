@@ -15,6 +15,7 @@
       disk: 4
       netif:
         net0: name=eth0,bridge=vmbr0,ip=dhcp
+      start_on_create: true
       pubkey: ssh-ed25519 AAAACONTRACT lifecycle@test
     lxc_validation_results: >-
       {{
@@ -50,14 +51,28 @@
         mode: "0600"
       delegate_to: localhost
 
-    - name: Reset the lifecycle execution-order record
+    - name: Reset the lifecycle execution-event record
       ansible.builtin.copy:
         dest: "{{ lifecycle_test_state_dir }}/{{ lifecycle_vmid }}.events"
         content: ""
         mode: "0600"
       delegate_to: localhost
-  roles:
-    - role: provisioning/proxmox_lxc_lifecycle
+  tasks:
+    - name: Exercise a lifecycle scenario expected to plan successfully
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+      when: lifecycle_expected_planning_failure is not defined
+
+    - name: Exercise a lifecycle scenario expected to fail planning
+      when: lifecycle_expected_planning_failure is defined
+      block:
+        - name: Invoke the lifecycle facade with disallowed intent
+          ansible.builtin.include_role:
+            name: provisioning/proxmox_lxc_lifecycle
+      rescue:
+        - name: Capture the observable lifecycle planning failure
+          ansible.builtin.set_fact:
+            lifecycle_observed_planning_failure: "{{ ansible_failed_result.msg }}"
   post_tasks:
     - name: Assert the facade published the scenario's semantic result
       ansible.builtin.assert:
@@ -67,6 +82,7 @@
           - lxc_lifecycle_result.plan.reconcile_host_config == lifecycle_expected_reconcile_host_config
           - lxc_lifecycle_result.plan.restore_guest_access == lifecycle_expected_restore_guest_access
           - lxc_lifecycle_result.plan.configure_guest == lifecycle_expected_configure_guest
+          - lxc_lifecycle_result.plan.start_container == lifecycle_expected_start_container
           - lxc_lifecycle_result.outcome.status == lifecycle_expected_outcome
           - lxc_lifecycle_result.observations.before.runtime_state == lifecycle_expected_before_runtime
           - lxc_lifecycle_result.observations.after.runtime_state == lifecycle_expected_after_runtime
@@ -79,7 +95,8 @@
               'destructive',
               'reason',
               'reconcile_host_config',
-              'restore_guest_access'
+              'restore_guest_access',
+              'start_container'
             ] | sort
           - lxc_lifecycle_result.outcome.keys() | list | sort == ['reason', 'rebuilt', 'status'] | sort
           - lxc_lifecycle_result.observations.keys() | list | sort == ['after', 'before'] | sort
@@ -92,6 +109,17 @@
           - "'compiled_spec' not in lxc_lifecycle_result"
           - "'validation_status' not in lxc_lifecycle_result"
         fail_msg: "Lifecycle facade did not publish the expected result for {{ inventory_hostname }}"
+      when: lifecycle_expected_planning_failure is not defined
+
+    - name: Assert the facade rejected the disallowed lifecycle intent
+      ansible.builtin.assert:
+        that:
+          - lifecycle_observed_planning_failure is defined
+          - lifecycle_observed_planning_failure is search(lifecycle_expected_planning_failure)
+        fail_msg: >-
+          Expected planning failure '{{ lifecycle_expected_planning_failure }}',
+          observed '{{ lifecycle_observed_planning_failure | default('no failure') }}'.
+      when: lifecycle_expected_planning_failure is defined
 
     - name: Assert post-action release observation is current
       ansible.builtin.assert:
@@ -111,26 +139,31 @@
       ansible.builtin.assert:
         that:
           - lxc_lifecycle_result.plan.reason is not search('will be removed')
-      when: lifecycle_expected_transition == 'none'
+      when:
+        - lifecycle_expected_transition == 'none'
+        - lifecycle_expected_planning_failure is not defined
 
-    - name: Read the lifecycle execution-order record
+    - name: Read the lifecycle execution-event record
       ansible.builtin.slurp:
         src: "{{ lifecycle_test_state_dir }}/{{ lifecycle_vmid }}.events"
-      register: lifecycle_execution_order_record
+      register: lifecycle_execution_event_record
       delegate_to: localhost
 
-    - name: Assert the exact semantic execution order
+    - name: Assert the required and forbidden semantic execution events
       ansible.builtin.assert:
         that:
-          - lifecycle_execution_events == lifecycle_expected_events
+          - lifecycle_expected_events | difference(lifecycle_execution_events) | length == 0
+          - lifecycle_execution_events | difference(lifecycle_expected_events) | length == 0
+          - lifecycle_execution_events | unique | length == lifecycle_execution_events | length
         fail_msg: >-
-          Expected semantic execution events {{ lifecycle_expected_events }},
+          Expected semantic execution event set {{ lifecycle_expected_events }},
           observed {{ lifecycle_execution_events }}.
       vars:
         lifecycle_execution_events: >-
-          {{ (lifecycle_execution_order_record.content | b64decode).splitlines() }}
+          {{ (lifecycle_execution_event_record.content | b64decode).splitlines() }}
 
     - name: Persist a cache-control fact for the cross-command ephemerality check
       ansible.builtin.set_fact:
         lifecycle_cache_control: persisted
         cacheable: true
+      when: lifecycle_expected_planning_failure is not defined

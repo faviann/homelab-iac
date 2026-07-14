@@ -23,6 +23,7 @@ all:
           rebuild_on_release_mismatch: true
           cleanup_rebuilt_state: false
           skip_stopped_release_checks: true
+        lifecycle_expected_start_container: false
       hosts:
         full_create:
           lifecycle_vmid: 4401
@@ -37,12 +38,14 @@ all:
           lifecycle_expected_reconcile_host_config: true
           lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
+          lifecycle_expected_start_container: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: absent
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
           lifecycle_expected_after_probe_state: probed
           lifecycle_expected_events:
+            - api_reconciliation
             - container_transition
             - host_reconciliation
             - runtime_refresh
@@ -66,6 +69,69 @@ all:
           lifecycle_expected_before_runtime: absent
           lifecycle_expected_after_runtime: absent
           lifecycle_expected_events: []
+          lifecycle_expected_planning_failure: >-
+            Configure-only lifecycle requires an existing running container;
+            observed state is absent.
+        configure_stopped:
+          lifecycle_vmid: 4411
+          proxmox_lifecycle_intent: configure_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: stopped
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: skipped_stopped
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: none
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: skipped
+          lifecycle_expected_before_runtime: stopped
+          lifecycle_expected_after_runtime: stopped
+          lifecycle_expected_events: []
+          lifecycle_expected_planning_failure: >-
+            Configure-only lifecycle requires an existing running container;
+            observed state is stopped.
+        configure_desired_absent:
+          lifecycle_vmid: 4412
+          proxmox_lifecycle_intent: configure_only
+          lifecycle_desired_state: absent
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: not_applicable
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: none
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: skipped
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []
+          lifecycle_expected_planning_failure: >-
+            Configure-only lifecycle requires desired state present;
+            desired state is absent.
+        configure_rebuild_required:
+          lifecycle_vmid: 4413
+          proxmox_lifecycle_intent: configure_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: "11"
+          lifecycle_release_probe_state: probed
+          lifecycle_seed_release: "11"
+          lifecycle_expected_transition: none
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: skipped
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []
+          lifecycle_expected_planning_failure: >-
+            Configure-only lifecycle cannot perform the required rebuild;
+            guest release 11 differs from desired release 12.
         full_rebuild:
           lifecycle_vmid: 4403
           proxmox_lifecycle_intent: full
@@ -79,12 +145,46 @@ all:
           lifecycle_expected_reconcile_host_config: true
           lifecycle_expected_restore_guest_access: true
           lifecycle_expected_configure_guest: true
+          lifecycle_expected_start_container: true
           lifecycle_expected_outcome: configured
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
           lifecycle_expected_after_probe_state: probed
           lifecycle_expected_events:
+            - api_reconciliation
+            - container_transition
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+            - guest_configuration
+        full_stopped:
+          lifecycle_vmid: 4415
+          proxmox_lifecycle_intent: full
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: stopped
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: skipped_stopped
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: false
+            cleanup_rebuilt_state: false
+            skip_stopped_release_checks: true
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: start
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
+          lifecycle_expected_configure_guest: true
+          lifecycle_expected_start_container: true
+          lifecycle_expected_outcome: configured
+          lifecycle_expected_before_runtime: stopped
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_after_release: "12"
+          lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - api_reconciliation
             - container_transition
             - host_reconciliation
             - runtime_refresh
@@ -110,6 +210,85 @@ all:
           lifecycle_expected_after_release: "12"
           lifecycle_expected_after_probe_state: probed
           lifecycle_expected_events:
+            - api_reconciliation
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+        provision_stopped:
+          lifecycle_vmid: 4414
+          proxmox_lifecycle_intent: provision_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: stopped
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: skipped_stopped
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: false
+            cleanup_rebuilt_state: false
+            skip_stopped_release_checks: true
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: provision
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: ensured
+          lifecycle_expected_before_runtime: stopped
+          lifecycle_expected_after_runtime: stopped
+          lifecycle_expected_after_release: ""
+          lifecycle_expected_after_probe_state: skipped_stopped
+          lifecycle_expected_events:
+            - api_reconciliation
+            - host_reconciliation
+            - runtime_refresh
+        provision_absent:
+          lifecycle_vmid: 4416
+          proxmox_lifecycle_intent: provision_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: absent
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: absent
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: provision
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_start_container: true
+          lifecycle_expected_outcome: ensured
+          lifecycle_expected_before_runtime: absent
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_after_release: "12"
+          lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - api_reconciliation
+            - container_transition
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+        provision_rebuild:
+          lifecycle_vmid: 4417
+          proxmox_lifecycle_intent: provision_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: "11"
+          lifecycle_release_probe_state: probed
+          lifecycle_seed_release: "11"
+          lifecycle_expected_transition: rebuild
+          lifecycle_expected_destructive: true
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_start_container: true
+          lifecycle_expected_outcome: ensured
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_after_release: "12"
+          lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - api_reconciliation
             - container_transition
             - host_reconciliation
             - runtime_refresh
@@ -134,6 +313,7 @@ all:
           lifecycle_expected_after_release: ""
           lifecycle_expected_after_probe_state: absent
           lifecycle_expected_events:
+            - api_reconciliation
             - container_transition
             - runtime_refresh
         full_already_absent:
@@ -211,6 +391,45 @@ all:
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
           lifecycle_expected_events: []
+        validate_absent:
+          lifecycle_vmid: 4418
+          proxmox_lifecycle_intent: validate_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: absent
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: absent
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: none
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: validated
+          lifecycle_expected_before_runtime: absent
+          lifecycle_expected_after_runtime: absent
+          lifecycle_expected_events: []
+        validate_stopped:
+          lifecycle_vmid: 4419
+          proxmox_lifecycle_intent: validate_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: stopped
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: skipped_stopped
+          lifecycle_seed_release: "12"
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: false
+            cleanup_rebuilt_state: false
+            skip_stopped_release_checks: true
+          lifecycle_expected_transition: none
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: validated
+          lifecycle_expected_before_runtime: stopped
+          lifecycle_expected_after_runtime: stopped
+          lifecycle_expected_events: []
         validation_failed:
           lifecycle_vmid: 4408
           proxmox_lifecycle_intent: full
@@ -230,3 +449,9 @@ all:
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
           lifecycle_expected_events: []
+    lifecycle_plan_failures:
+      hosts:
+        configure_absent:
+        configure_stopped:
+        configure_desired_absent:
+        configure_rebuild_required:
