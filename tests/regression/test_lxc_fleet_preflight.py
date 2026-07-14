@@ -12,6 +12,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "tests" / "regression" / "fixtures"
 INVENTORY = FIXTURES / "lxc_fleet_preflight_inventory.yml"
+VALIDATION_PREREQUISITE_INVENTORY = (
+    FIXTURES / "lxc_validation_prerequisite_inventory.yml"
+)
 PLAYBOOK = FIXTURES / "lxc_fleet_preflight_test.yml"
 STANDALONE_PLAYBOOK = FIXTURES / "lxc_standalone_validation_test.yml"
 MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
@@ -109,6 +112,30 @@ def main() -> int:
         print("site.yml validation tag routing is incorrect", file=sys.stderr)
         print(f"validation route:\n{validation_tasks.stdout}\n{validation_tasks.stderr}", file=sys.stderr)
         print(f"normal route:\n{normal_tasks.stdout}\n{normal_tasks.stderr}", file=sys.stderr)
+        return 1
+
+    missing_domain = subprocess.run(
+        [
+            *ANSIBLE_PLAYBOOK,
+            "-i",
+            str(VALIDATION_PREREQUISITE_INVENTORY),
+            "site.yml",
+            "--tags",
+            "validation",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    missing_domain_output = f"{missing_domain.stdout}\n{missing_domain.stderr}"
+    if (
+        missing_domain.returncode == 0
+        or "missing `default_domain`" not in missing_domain_output
+        or "missing_domain" not in missing_domain_output
+    ):
+        print("site validation did not reject missing default_domain", file=sys.stderr)
+        print(missing_domain_output, file=sys.stderr)
         return 1
 
     env = os.environ.copy()

@@ -1,0 +1,45 @@
+---
+all:
+  vars:
+    proxmox_api_host: 127.0.0.1
+    proxmox_host: 127.0.0.1
+    proxmox_ssh_port: 1
+    proxmox_ssh_connect_timeout: 1
+  children:
+    lxcs:
+      vars:
+        ansible_connection: local
+        proxmox_skip_self: false
+        proxmox_lxc_controller_pubkey_enabled: false
+        proxmox_lxc_host_config_enabled: false
+        proxmox_default_storage: local-lvm
+        proxmox_default_bind_mounts: {}
+        proxmox_default_idmap: []
+        proxmox_lxc_disable_root_password: true
+        proxmox_lifecycle_policy:
+          strict_validation: false
+          rebuild_on_release_mismatch: false
+          allow_destructive_transitions: false
+        proxmox_fleet_observation_override:
+          containers: []
+        proxmox_lxc_global_defaults:
+          state: present
+          node: pve-a
+          ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+          cores: 1
+          memory: 128
+          disk: 4
+          netif:
+            net0: name=eth0,bridge=vmbr0,ip=dhcp
+          pubkey: ssh-ed25519 AAAAVALIDATIONPREREQUISITE lifecycle@test
+      hosts:
+        missing_domain:
+          docker_enabled: false
+          docker_agents_enabled: true
+          traefik_kop_enabled: true
+          proxmox_lxc:
+            vmid: 5301
+            hostname: missing-domain
+    cap_docker:
+      hosts:
+        missing_domain:
