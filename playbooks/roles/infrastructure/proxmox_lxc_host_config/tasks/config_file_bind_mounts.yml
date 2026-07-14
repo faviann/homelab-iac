@@ -5,7 +5,7 @@
 - name: Get current bind mounts
   ansible.builtin.shell: |
     set -o pipefail
-    grep '^mp[0-9]\+:' {{ _lxc_config_file | quote }} |
+    { grep '^mp[0-9]\+:' {{ _lxc_config_file | quote }} || [ "$?" -eq 1 ]; } |
     while IFS=: read -r mount_key mount_value; do
       normalized_value=$(
         printf '%s\n' "$mount_value" |
@@ -23,7 +23,6 @@
   register: _current_mounts
   check_mode: false
   changed_when: false
-  failed_when: false
 
 - name: Initialize normalized desired bind mounts
   ansible.builtin.set_fact:

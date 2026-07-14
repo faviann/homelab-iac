@@ -5,7 +5,8 @@
 - name: Get current NVIDIA GPU configuration lines
   ansible.builtin.shell: |
     set -o pipefail
-    grep -iE '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file | quote }} |
+    { grep -iE '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file | quote }} ||
+      [ "$?" -eq 1 ]; } |
     while IFS= read -r config_line; do
       case "$config_line" in
         *NVIDIA_DRIVER_CAPABILITIES=*)
@@ -32,7 +33,6 @@
   register: _current_nvidia_config
   check_mode: false
   changed_when: false
-  failed_when: false
 
 - name: Determine desired NVIDIA configuration (sorted)
   ansible.builtin.set_fact:

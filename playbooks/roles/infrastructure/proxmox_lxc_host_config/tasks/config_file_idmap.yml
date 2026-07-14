@@ -20,7 +20,6 @@
   register: _current_idmap
   check_mode: false
   changed_when: false
-  failed_when: false
 
 - name: Normalize desired ID mappings
   ansible.builtin.set_fact:

@@ -4,7 +4,7 @@
 - name: Get current sysctl and AppArmor configuration
   ansible.builtin.shell: |
     set -o pipefail
-    grep -E '^lxc\.(sysctl|apparmor)\.' {{ _lxc_config_file | quote }} |
+    { grep -E '^lxc\.(sysctl|apparmor)\.' {{ _lxc_config_file | quote }} || [ "$?" -eq 1 ]; } |
     sed -E 's/[[:space:]]*[:=][[:space:]]*/=/' |
     sort
   args:
@@ -14,7 +14,6 @@
   register: _current_sysctls_apparmor
   check_mode: false
   changed_when: false
-  failed_when: false
 
 - name: Initialize desired sysctl and AppArmor configuration
   ansible.builtin.set_fact:

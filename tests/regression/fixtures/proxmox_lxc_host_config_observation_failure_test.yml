@@ -1,0 +1,107 @@
+---
+- name: Test host-config observation failures stop reconciliation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_host_config_delegate: localhost
+    proxmox_lxc_host_config_become: false
+    proxmox_lxc_host_config_path_root: "{{ temp_root }}/etc/pve/lxc"
+    proxmox_lxc_contract:
+      host_config:
+        vmid: 4203
+        hostname: observation-failure-host
+        host_directories: []
+        bind_mounts: {}
+        idmap:
+          - u 0 100000 65536
+          - g 0 100000 65536
+        features: []
+        configure_nvidia_runtime: false
+        wireguard_kernel_module_access: false
+        lxc_custom_sysctls: []
+        lxc_disable_apparmor: false
+  tasks:
+    - name: Create temp Proxmox config root
+      ansible.builtin.file:
+        path: "{{ proxmox_lxc_host_config_path_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Seed divergent container config file
+      ansible.builtin.copy:
+        dest: "{{ proxmox_lxc_host_config_path_root }}/4203.conf"
+        mode: "0644"
+        content: |
+          arch: amd64
+          hostname: observation-failure-host
+          memory: 2048
+          unprivileged: 1
+          lxc.idmap: u 0 200000 65536
+          rootfs: local-lvm:vm-4203-disk-0,size=16G
+
+    - name: Place failing observation tool on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/awk"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "simulated observation parser failure" >&2
+          exit 42
+
+    - name: Place mock pct script on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "$*" >> "{{ temp_root }}/pct-calls.log"
+          case "$1" in
+            config)
+              echo "arch: amd64"
+              ;;
+            status)
+              echo "status: stopped"
+              ;;
+            *)
+              echo "unexpected pct args after observation failure: $*" >&2
+              exit 99
+              ;;
+          esac
+          exit 0
+
+    - name: Initialize observation failure result
+      ansible.builtin.set_fact:
+        _observation_failed: false
+
+    - name: Reconcile with a failing observation parser
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+      rescue:
+        - name: Record expected observation failure
+          ansible.builtin.set_fact:
+            _observation_failed: true
+
+    - name: Read config after failed observation
+      ansible.builtin.slurp:
+        src: "{{ proxmox_lxc_host_config_path_root }}/4203.conf"
+      register: _config_after_observation_failure
+
+    - name: Inspect pct call log after failed observation
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_after_observation_failure
+
+    - name: Assert observation failure stopped before reconciliation
+      ansible.builtin.assert:
+        that:
+          - _observation_failed
+          - "'lxc.idmap: u 0 200000 65536' in (_config_after_observation_failure.content | b64decode)"
+          - "'lxc.idmap: u 0 100000 65536' not in (_config_after_observation_failure.content | b64decode)"
+          - "'lxc.idmap: g 0 100000 65536' not in (_config_after_observation_failure.content | b64decode)"
+          - not _pct_calls_after_observation_failure.stat.exists
+        fail_msg: "Unexpected observation failure did not stop host-config reconciliation"

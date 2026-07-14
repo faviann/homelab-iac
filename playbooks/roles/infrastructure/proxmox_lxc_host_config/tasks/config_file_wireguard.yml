@@ -4,7 +4,7 @@
 - name: Get current WireGuard tun device access
   ansible.builtin.shell: |
     set -o pipefail
-    grep '^lxc\.mount\.entry:.*dev/net/tun' {{ _lxc_config_file | quote }} |
+    { grep '^lxc\.mount\.entry:.*dev/net/tun' {{ _lxc_config_file | quote }} || [ "$?" -eq 1 ]; } |
     while IFS= read -r config_line; do
       prefix="${config_line% *}"
       options="${config_line##* }"
@@ -24,7 +24,6 @@
   register: _current_wireguard_config
   check_mode: false
   changed_when: false
-  failed_when: false
 
 - name: Determine desired WireGuard tun device access
   ansible.builtin.set_fact:
