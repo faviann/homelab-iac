@@ -15,6 +15,7 @@
       disk: 4
       netif:
         net0: name=eth0,bridge=vmbr0,ip=dhcp
+      start_on_create: true
       pubkey: ssh-ed25519 AAAACONTRACT lifecycle@test
     lxc_validation_results: >-
       {{
@@ -56,8 +57,22 @@
         content: ""
         mode: "0600"
       delegate_to: localhost
-  roles:
-    - role: provisioning/proxmox_lxc_lifecycle
+  tasks:
+    - name: Exercise a lifecycle scenario expected to plan successfully
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+      when: lifecycle_expected_planning_failure is not defined
+
+    - name: Exercise a lifecycle scenario expected to fail planning
+      when: lifecycle_expected_planning_failure is defined
+      block:
+        - name: Invoke the lifecycle facade with disallowed intent
+          ansible.builtin.include_role:
+            name: provisioning/proxmox_lxc_lifecycle
+      rescue:
+        - name: Capture the observable lifecycle planning failure
+          ansible.builtin.set_fact:
+            lifecycle_observed_planning_failure: "{{ ansible_failed_result.msg }}"
   post_tasks:
     - name: Assert the facade published the scenario's semantic result
       ansible.builtin.assert:
@@ -92,6 +107,17 @@
           - "'compiled_spec' not in lxc_lifecycle_result"
           - "'validation_status' not in lxc_lifecycle_result"
         fail_msg: "Lifecycle facade did not publish the expected result for {{ inventory_hostname }}"
+      when: lifecycle_expected_planning_failure is not defined
+
+    - name: Assert the facade rejected the disallowed lifecycle intent
+      ansible.builtin.assert:
+        that:
+          - lifecycle_observed_planning_failure is defined
+          - lifecycle_observed_planning_failure is search(lifecycle_expected_planning_failure)
+        fail_msg: >-
+          Expected planning failure '{{ lifecycle_expected_planning_failure }}',
+          observed '{{ lifecycle_observed_planning_failure | default('no failure') }}'.
+      when: lifecycle_expected_planning_failure is defined
 
     - name: Assert post-action release observation is current
       ansible.builtin.assert:
@@ -111,7 +137,9 @@
       ansible.builtin.assert:
         that:
           - lxc_lifecycle_result.plan.reason is not search('will be removed')
-      when: lifecycle_expected_transition == 'none'
+      when:
+        - lifecycle_expected_transition == 'none'
+        - lifecycle_expected_planning_failure is not defined
 
     - name: Read the lifecycle execution-order record
       ansible.builtin.slurp:
@@ -134,3 +162,4 @@
       ansible.builtin.set_fact:
         lifecycle_cache_control: persisted
         cacheable: true
+      when: lifecycle_expected_planning_failure is not defined

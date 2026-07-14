@@ -1,5 +1,15 @@
 ---
-- name: Record the planned container transition
+- name: Record API-managed infrastructure reconciliation
+  ansible.builtin.copy:
+    dest: "{{ lifecycle_event_record_path }}"
+    content: "{{ lookup('ansible.builtin.file', lifecycle_event_record_path, rstrip=false) }}api_reconciliation\n"
+    mode: "0600"
+  delegate_to: localhost
+  vars:
+    lifecycle_event_record_path: >-
+      {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events
+
+- name: Record container removal transition
   ansible.builtin.copy:
     dest: "{{ lifecycle_event_record_path }}"
     content: "{{ lookup('ansible.builtin.file', lifecycle_event_record_path, rstrip=false) }}container_transition\n"
@@ -8,13 +18,36 @@
   vars:
     lifecycle_event_record_path: >-
       {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events
+  when: proxmox_lxc_contract.api_spec.state == 'absent'
 
 - name: Model the observable state established by provisioning
   ansible.builtin.copy:
     dest: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.state"
-    content: "{{ 'absent' if proxmox_lxc_contract.api_spec.state == 'absent' else 'running' }}"
+    content: >-
+      {{
+        'absent'
+        if proxmox_lxc_contract.api_spec.state == 'absent'
+        else (
+          (
+            'running'
+            if (
+              proxmox_lxc_provision_start_allowed | default(true) | bool
+              and proxmox_lxc_contract.api_spec.start_on_create | bool
+            )
+            else 'stopped'
+          )
+          if (
+            proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
+            or proxmox_lifecycle_runtime_state == 'absent'
+          )
+          else lookup('ansible.builtin.file', lifecycle_observed_state_path) | trim
+        )
+      }}
     mode: "0600"
   delegate_to: localhost
+  vars:
+    lifecycle_observed_state_path: >-
+      {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.state
 
 - name: Model the release established by provisioning
   ansible.builtin.copy:

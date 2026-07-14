@@ -72,7 +72,9 @@
   no_log: true
 
 - name: Start LXC when requested
-  when: proxmox_lxc_api_spec.start_on_create | default(false) | bool
+  when:
+    - proxmox_lxc_provision_start_allowed | bool
+    - proxmox_lxc_api_spec.start_on_create | default(false) | bool
   community.proxmox.proxmox:
     node: "{{ proxmox_lxc_api_spec.node }}"
     vmid: "{{ proxmox_lxc_api_spec.vmid }}"
