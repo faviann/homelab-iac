@@ -1,0 +1,38 @@
+---
+- name: Test normal lifecycle guest-bootstrap contract wiring
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_lxc_contract:
+      api_spec:
+        vmid: 4205
+        hostname: contract-host
+        node: contract-node
+      guest_bootstrap:
+        vmid: 4205
+        hostname: contract-host
+        pubkey: ssh-ed25519 AAAACONTRACT contract@test
+    proxmox_lifecycle_host_actions:
+      - ensure_ssh_key
+    proxmox_lifecycle_rebuilt: false
+    proxmox_lifecycle_policy_effective:
+      cleanup_rebuilt_state: false
+    # A caller-local value must not replace the lifecycle's compiled slice.
+    lxc_ssh_key_injector_guest_bootstrap:
+      vmid: 9999
+      hostname: ambient-host
+      pubkey: ssh-ed25519 AAAAAMBIENT ambient@test
+    proxmox_lxc_overrides:
+      vmid: 9999
+      hostname: ambient-host
+  tasks:
+    - name: Execute normal lifecycle host actions
+      ansible.builtin.include_tasks: >-
+        ../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/provision.yml
+
+    - name: Assert lifecycle passed the compiled guest-bootstrap slice
+      ansible.builtin.assert:
+        that:
+          - _captured_guest_bootstrap == proxmox_lxc_contract.guest_bootstrap
+        fail_msg: "Normal lifecycle did not pass the compiled guest-bootstrap slice"

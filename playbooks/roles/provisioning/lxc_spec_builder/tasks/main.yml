@@ -302,6 +302,14 @@
       - proxmox_lxc_contract.host_config.lxc_custom_sysctls is not string
       - proxmox_lxc_contract.host_config.lxc_disable_apparmor is boolean
       - proxmox_lxc_contract.guest_bootstrap is mapping
+      - proxmox_lxc_contract.guest_bootstrap.vmid is defined
+      - proxmox_lxc_contract.guest_bootstrap.vmid | int > 0
+      - proxmox_lxc_contract.guest_bootstrap.hostname is defined
+      - proxmox_lxc_contract.guest_bootstrap.hostname is string
+      - proxmox_lxc_contract.guest_bootstrap.hostname | trim | length > 0
+      - proxmox_lxc_contract.guest_bootstrap.pubkey is defined
+      - proxmox_lxc_contract.guest_bootstrap.pubkey is string
+      - proxmox_lxc_contract.guest_bootstrap.pubkey | trim | length > 0
       - proxmox_lxc_contract.derived_metadata is mapping
       - proxmox_lxc_contract.identity.vmid == _proxmox_lxc_compiled_spec.vmid
       - proxmox_lxc_contract.identity.hostname == _proxmox_lxc_compiled_spec.hostname
@@ -310,6 +318,7 @@
       - proxmox_lxc_contract.host_config.vmid == proxmox_lxc_contract.identity.vmid
       - proxmox_lxc_contract.host_config.hostname == proxmox_lxc_contract.identity.hostname
       - proxmox_lxc_contract.guest_bootstrap.vmid == proxmox_lxc_contract.identity.vmid
+      - proxmox_lxc_contract.guest_bootstrap.hostname == proxmox_lxc_contract.identity.hostname
     fail_msg: >-
       Invalid compiled LXC contract for {{ inventory_hostname }}.
       Contract: {{ proxmox_lxc_contract | to_nice_yaml }}
