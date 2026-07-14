@@ -83,6 +83,7 @@
         status_code: 200
       register: proxmox_fleet_observation_response
       changed_when: false
+      check_mode: false
       no_log: true
       delegate_to: "{{ proxmox_api_delegate_host | default('localhost') }}"
 

@@ -54,6 +54,14 @@ all:
             - Target identity conflict
             - VMID 5199
             - absent_reservation
+        hostname_conflict:
+          proxmox_lxc:
+            vmid: 5203
+            hostname: absent-reserved
+          fleet_expected_failure_fragments:
+            - Target identity conflict
+            - hostname 'absent-reserved'
+            - absent_reservation
         access_target:
           proxmox_lxc:
             vmid: 5103

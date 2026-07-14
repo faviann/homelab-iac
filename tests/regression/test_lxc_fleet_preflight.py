@@ -18,13 +18,23 @@ MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
-def run_case(limit: str) -> bool:
+def run_case(limit: str, *, check_mode: bool = False) -> bool:
     env = os.environ.copy()
     env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(
         Path.home() / ".ansible" / "vault-pass"
     )
+    command = [
+        *ANSIBLE_PLAYBOOK,
+        "-i",
+        str(INVENTORY),
+        str(PLAYBOOK),
+        "--limit",
+        limit,
+    ]
+    if check_mode:
+        command.append("--check")
     proc = subprocess.run(
-        [*ANSIBLE_PLAYBOOK, "-i", str(INVENTORY), str(PLAYBOOK), "--limit", limit],
+        command,
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -39,8 +49,15 @@ def run_case(limit: str) -> bool:
 
 
 def main() -> int:
-    cases = ("target_a,target_b", "target_conflict", "access_target")
+    cases = (
+        "target_a,target_b",
+        "target_conflict",
+        "hostname_conflict",
+        "access_target",
+    )
     if not all(run_case(case) for case in cases):
+        return 1
+    if not run_case("target_a,target_b", check_mode=True):
         return 1
 
     missing_hostname = subprocess.run(
