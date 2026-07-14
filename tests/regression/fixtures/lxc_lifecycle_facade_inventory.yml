@@ -21,8 +21,8 @@ all:
         proxmox_lifecycle_policy:
           strict_validation: false
           rebuild_on_release_mismatch: true
+          allow_destructive_transitions: true
           cleanup_rebuilt_state: false
-          skip_stopped_release_checks: true
         lifecycle_expected_start_container: false
       hosts:
         full_create:
@@ -79,6 +79,10 @@ all:
           lifecycle_runtime_state: stopped
           lifecycle_actual_release: ""
           lifecycle_release_probe_state: skipped_stopped
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: false
+            cleanup_rebuilt_state: false
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
@@ -139,6 +143,11 @@ all:
           lifecycle_runtime_state: running
           lifecycle_actual_release: "11"
           lifecycle_release_probe_state: probed
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: true
+            allow_destructive_transitions: true
+            cleanup_rebuilt_state: true
           lifecycle_seed_release: "11"
           lifecycle_expected_transition: rebuild
           lifecycle_expected_destructive: true
@@ -147,6 +156,8 @@ all:
           lifecycle_expected_configure_guest: true
           lifecycle_expected_start_container: true
           lifecycle_expected_outcome: configured
+          lifecycle_expected_rebuilt: true
+          lifecycle_expected_known_host_cleanup: true
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
@@ -170,7 +181,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: false
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: start
           lifecycle_expected_destructive: false
@@ -226,7 +236,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: false
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_seed_release: "12"
           lifecycle_expected_transition: provision
           lifecycle_expected_destructive: false
@@ -283,6 +292,7 @@ all:
           lifecycle_expected_configure_guest: false
           lifecycle_expected_start_container: true
           lifecycle_expected_outcome: ensured
+          lifecycle_expected_rebuilt: true
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
           lifecycle_expected_after_release: "12"
@@ -420,7 +430,6 @@ all:
             strict_validation: false
             rebuild_on_release_mismatch: false
             cleanup_rebuilt_state: false
-            skip_stopped_release_checks: true
           lifecycle_expected_transition: none
           lifecycle_expected_destructive: false
           lifecycle_expected_reconcile_host_config: false
@@ -449,9 +458,136 @@ all:
           lifecycle_expected_before_runtime: running
           lifecycle_expected_after_runtime: running
           lifecycle_expected_events: []
+        rebuild_unauthorized:
+          lifecycle_vmid: 4420
+          proxmox_lifecycle_intent: full
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: "11"
+          lifecycle_release_probe_state: probed
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: true
+            cleanup_rebuilt_state: true
+          lifecycle_seed_release: "11"
+          lifecycle_expected_transition: rebuild
+          lifecycle_expected_destructive: true
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
+          lifecycle_expected_configure_guest: true
+          lifecycle_expected_outcome: skipped
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []
+          lifecycle_expected_known_host_cleanup: false
+          lifecycle_expected_planning_failure: >-
+            Lifecycle plan requires destructive transition 'rebuild', but
+            persistent lifecycle policy does not authorize destructive transitions.
+        release_unavailable_authorized:
+          lifecycle_vmid: 4421
+          proxmox_lifecycle_intent: full
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: stopped
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: skipped_stopped
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: none
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: skipped
+          lifecycle_expected_before_runtime: stopped
+          lifecycle_expected_after_runtime: stopped
+          lifecycle_expected_events: []
+          lifecycle_expected_planning_failure: >-
+            Guest release observation is required when release-based rebuild
+            policy is enabled for a desired-present container; observed release
+            state is skipped_stopped.
+        release_matching_unauthorized:
+          lifecycle_vmid: 4422
+          proxmox_lifecycle_intent: provision_only
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: "12"
+          lifecycle_release_probe_state: probed
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: true
+            cleanup_rebuilt_state: false
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: provision
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: ensured
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_after_release: "12"
+          lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - api_reconciliation
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+        release_unavailable_unauthorized:
+          lifecycle_vmid: 4423
+          proxmox_lifecycle_intent: full
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: probe_failed
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: true
+            cleanup_rebuilt_state: false
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: none
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: skipped
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []
+          lifecycle_expected_planning_failure: >-
+            Guest release observation is required when release-based rebuild
+            policy is enabled for a desired-present container; observed release
+            state is probe_failed.
+        remove_unauthorized:
+          lifecycle_vmid: 4424
+          proxmox_lifecycle_intent: full
+          lifecycle_desired_state: absent
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: "12"
+          lifecycle_release_probe_state: probed
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: true
+            cleanup_rebuilt_state: false
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: remove
+          lifecycle_expected_destructive: true
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: skipped
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_events: []
+          lifecycle_expected_planning_failure: >-
+            Lifecycle plan requires destructive transition 'remove', but
+            persistent lifecycle policy does not authorize destructive transitions.
     lifecycle_plan_failures:
       hosts:
         configure_absent:
         configure_stopped:
         configure_desired_absent:
         configure_rebuild_required:
+        rebuild_unauthorized:
+        release_unavailable_authorized:
+        release_unavailable_unauthorized:
+        remove_unauthorized:

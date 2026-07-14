@@ -27,3 +27,21 @@
   when:
     - proxmox_lifecycle_desired_release | length == 0
     - proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
+
+- name: Require guest release evidence for release-based rebuild planning
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (
+          proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
+          and proxmox_lxc_contract.api_spec.state | default('present') == 'present'
+          and proxmox_lifecycle_runtime_state != 'absent'
+        )
+        or (
+          proxmox_lifecycle_release_probe_state == 'probed'
+          and proxmox_lifecycle_actual_release | length > 0
+        )
+    fail_msg: >-
+      Guest release observation is required when release-based rebuild policy
+      is enabled for a desired-present container; observed release state is
+      {{ proxmox_lifecycle_release_probe_state }}.

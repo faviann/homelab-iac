@@ -80,10 +80,16 @@ proxmox_host_delegate_user: root
 # Name matching is strict and exact (no FQDN normalization).
 proxmox_validation_strict: false
 
-# Rebuild running containers when the guest Debian major release does not match
-# the desired release derived from the ostemplate. Stopped containers are only
-# reported, never auto-destroyed.
+# Detect when an existing guest's Debian major release differs from the release
+# derived from the desired ostemplate. Existing guests whose release cannot be
+# observed, including stopped containers, fail lifecycle planning. A detected
+# mismatch still requires separate destructive-transition authorization below.
 proxmox_lxc_rebuild_on_release_mismatch: false
+
+# Destructive lifecycle transitions (release rebuilds and removals) require
+# persistent inventory authorization. No interactive or per-run confirmation is
+# used after an authorized plan passes validation.
+proxmox_lifecycle_allow_destructive_transitions: false
 
 # ==============================================================================
 # SSH Connection Settings for Proxmox Host

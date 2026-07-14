@@ -26,8 +26,10 @@ def main() -> int:
         temp_root = Path(temp_dir)
         state_dir = temp_root / "state"
         cache_dir = temp_root / "cache"
+        home_dir = temp_root / "home"
         state_dir.mkdir()
         cache_dir.mkdir()
+        (home_dir / ".ssh").mkdir(parents=True)
 
         env = os.environ.copy()
         env["PATH"] = f"{ASSETS / 'bin'}:{env['PATH']}"
@@ -39,6 +41,10 @@ def main() -> int:
             [str(ASSETS / "collections"), str(REPO_ROOT / "collections")]
         )
         env["ANSIBLE_CACHE_PLUGIN_CONNECTION"] = str(cache_dir)
+        env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(
+            Path.home() / ".ansible" / "vault-pass"
+        )
+        env["HOME"] = str(home_dir)
 
         for playbook in PLAYBOOKS:
             proc = subprocess.run(

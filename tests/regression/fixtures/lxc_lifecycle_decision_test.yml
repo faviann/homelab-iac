@@ -57,6 +57,18 @@
         content: ""
         mode: "0600"
       delegate_to: localhost
+
+    - name: Seed observable known-host state for rebuild cleanup scenarios
+      ansible.builtin.lineinfile:
+        path: "{{ lookup('env', 'HOME') }}/.ssh/known_hosts"
+        line: >-
+          {{ inventory_hostname }} ssh-ed25519
+          AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        create: true
+        mode: "0600"
+      throttle: 1
+      delegate_to: localhost
+      when: lifecycle_expected_known_host_cleanup is defined
   tasks:
     - name: Exercise a lifecycle scenario expected to plan successfully
       ansible.builtin.include_role:
@@ -84,6 +96,7 @@
           - lxc_lifecycle_result.plan.configure_guest == lifecycle_expected_configure_guest
           - lxc_lifecycle_result.plan.start_container == lifecycle_expected_start_container
           - lxc_lifecycle_result.outcome.status == lifecycle_expected_outcome
+          - lxc_lifecycle_result.outcome.rebuilt == lifecycle_expected_rebuilt | default(false)
           - lxc_lifecycle_result.observations.before.runtime_state == lifecycle_expected_before_runtime
           - lxc_lifecycle_result.observations.after.runtime_state == lifecycle_expected_after_runtime
           - lxc_lifecycle_result.plan.reason | length > 15
@@ -133,7 +146,9 @@
         that:
           - lxc_lifecycle_result.plan.reason is search('remove')
           - lxc_lifecycle_result.plan.reason is search('absent')
-      when: lifecycle_expected_transition == 'remove'
+      when:
+        - lifecycle_expected_transition == 'remove'
+        - lifecycle_expected_planning_failure is not defined
 
     - name: Assert no-transition plans never promise removal
       ansible.builtin.assert:
@@ -161,6 +176,24 @@
       vars:
         lifecycle_execution_events: >-
           {{ (lifecycle_execution_event_record.content | b64decode).splitlines() }}
+
+    - name: Read observable known-host state after lifecycle execution
+      ansible.builtin.slurp:
+        src: "{{ lookup('env', 'HOME') }}/.ssh/known_hosts"
+      register: lifecycle_known_hosts_record
+      delegate_to: localhost
+      when: lifecycle_expected_known_host_cleanup is defined
+
+    - name: Assert rebuild cleanup follows the executed rebuild outcome
+      ansible.builtin.assert:
+        that:
+          - >-
+            (inventory_hostname not in (lifecycle_known_hosts_record.content | b64decode))
+            == (lifecycle_expected_known_host_cleanup | bool)
+        fail_msg: >-
+          Known-host cleanup for {{ inventory_hostname }} did not match the
+          executed rebuild outcome.
+      when: lifecycle_expected_known_host_cleanup is defined
 
     - name: Persist a cache-control fact for the cross-command ephemerality check
       ansible.builtin.set_fact:

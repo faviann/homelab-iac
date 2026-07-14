@@ -24,7 +24,6 @@
   when:
     - proxmox_lifecycle_release_probe_state == 'unavailable'
     - proxmox_lifecycle_runtime_state == 'stopped'
-    - proxmox_lifecycle_policy_effective.skip_stopped_release_checks | bool
 
 - name: Mark absent containers as skipped for release probing
   ansible.builtin.set_fact:
