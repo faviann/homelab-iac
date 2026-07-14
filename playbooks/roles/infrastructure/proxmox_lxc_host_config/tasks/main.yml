@@ -32,7 +32,8 @@
       - infrastructure_proxmox_lxc_host_config_spec is defined
       - infrastructure_proxmox_lxc_host_config_spec.hostname is defined
       - infrastructure_proxmox_lxc_host_config_spec.vmid is defined
-    fail_msg: "proxmox_lxc_host_config_spec with hostname and vmid is required"
+    fail_msg: >-
+      infrastructure_proxmox_lxc_host_config_spec with hostname and vmid is required
 
 - name: Initialize host reconciliation component outcomes
   ansible.builtin.set_fact:
