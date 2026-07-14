@@ -105,3 +105,83 @@
           - "'lxc.idmap: g 0 100000 65536' not in (_config_after_observation_failure.content | b64decode)"
           - not _pct_calls_after_observation_failure.stat.exists
         fail_msg: "Unexpected observation failure did not stop host-config reconciliation"
+
+    - name: Remove failing outer observation tool
+      ansible.builtin.file:
+        path: "{{ temp_root }}/awk"
+        state: absent
+
+    - name: Place failing nested normalization tool on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/tr"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "simulated nested normalization failure" >&2
+          exit 42
+
+    - name: Set matching bind-mount desired state
+      ansible.builtin.set_fact:
+        proxmox_lxc_contract: >-
+          {{
+            proxmox_lxc_contract
+            | combine(
+                {
+                  'host_config': proxmox_lxc_contract.host_config
+                  | combine({'bind_mounts': {'mp0': '/srv/media,mp=/media,ro=1'}})
+                }
+              )
+          }}
+
+    - name: Seed semantically matching managed config
+      ansible.builtin.copy:
+        dest: "{{ proxmox_lxc_host_config_path_root }}/4203.conf"
+        mode: "0644"
+        content: |
+          arch: amd64
+          hostname: observation-failure-host
+          memory: 2048
+          unprivileged: 1
+          lxc.idmap: g 0 100000 65536
+          lxc.idmap: u 0 100000 65536
+          rootfs: local-lvm:vm-4203-disk-0,size=16G
+          mp0: /srv/media,mp=/media,ro=1
+
+    - name: Reset pct call log before nested failure
+      ansible.builtin.file:
+        path: "{{ temp_root }}/pct-calls.log"
+        state: absent
+
+    - name: Initialize nested observation failure result
+      ansible.builtin.set_fact:
+        _nested_observation_failed: false
+
+    - name: Reconcile with a failing nested normalizer
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role for nested failure
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+      rescue:
+        - name: Record expected nested observation failure
+          ansible.builtin.set_fact:
+            _nested_observation_failed: true
+
+    - name: Read config after nested observation failure
+      ansible.builtin.slurp:
+        src: "{{ proxmox_lxc_host_config_path_root }}/4203.conf"
+      register: _config_after_nested_observation_failure
+
+    - name: Inspect pct call log after nested observation failure
+      ansible.builtin.stat:
+        path: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_after_nested_observation_failure
+
+    - name: Assert nested observation failure stopped before reconciliation
+      ansible.builtin.assert:
+        that:
+          - _nested_observation_failed
+          - "'mp0: /srv/media,mp=/media,ro=1' in (_config_after_nested_observation_failure.content | b64decode)"
+          - not _pct_calls_after_nested_observation_failure.stat.exists
+        fail_msg: "Nested observation failure did not stop host-config reconciliation"

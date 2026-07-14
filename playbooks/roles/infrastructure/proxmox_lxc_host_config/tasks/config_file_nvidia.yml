@@ -18,7 +18,7 @@
             sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
             sort |
             paste -sd, -
-          )
+          ) || exit $?
           printf '%s%s\n' "$prefix" "$normalized_capabilities"
           ;;
         *)

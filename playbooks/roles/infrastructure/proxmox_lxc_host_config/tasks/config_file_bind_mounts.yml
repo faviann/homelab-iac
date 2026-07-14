@@ -13,7 +13,7 @@
         sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
         sort |
         paste -sd, -
-      )
+      ) || exit $?
       printf '%s: %s\n' "$mount_key" "$normalized_value"
     done | sort
   args:
