@@ -89,6 +89,9 @@ all:
             hostname: absent-reserved
     invalid_identity_reservations:
       hosts:
+        a_missing_vmid_hostname_owner:
+          proxmox_lxc:
+            hostname: target-a
         null_hostname_reservation:
           proxmox_lxc:
             vmid: 5201

@@ -46,18 +46,28 @@
       {%- endfor -%}
       {%- for left_host, left_identity in proxmox_fleet_identity_reservations.items() -%}
       {%-   for right_host, right_identity in proxmox_fleet_identity_reservations.items() -%}
+      {%-     set vmid_matches = (
+                left_identity.vmid is not none
+                and right_identity.vmid is not none
+                and left_identity.vmid | string | length > 0
+                and right_identity.vmid | string | length > 0
+                and left_identity.vmid | string == right_identity.vmid | string
+              ) -%}
+      {%-     set hostname_matches = (
+                left_identity.hostname is not none
+                and right_identity.hostname is not none
+                and left_identity.hostname | string | trim | length > 0
+                and right_identity.hostname | string | trim | length > 0
+                and left_identity.hostname | string == right_identity.hostname | string
+              ) -%}
       {%-     if left_host < right_host
                 and (left_host in target_names or right_host in target_names)
-                and left_identity.vmid is not none
-                and (
-                  left_identity.vmid | string == right_identity.vmid | string
-                  or left_identity.hostname | string == right_identity.hostname | string
-                ) -%}
+                and (vmid_matches or hostname_matches) -%}
       {%-       set fields = [] -%}
-      {%-       if left_identity.vmid | string == right_identity.vmid | string -%}
+      {%-       if vmid_matches -%}
       {%-         set _ = fields.append('VMID ' ~ left_identity.vmid | string) -%}
       {%-       endif -%}
-      {%-       if left_identity.hostname | string == right_identity.hostname | string -%}
+      {%-       if hostname_matches -%}
       {%-         set _ = fields.append("hostname '" ~ left_identity.hostname ~ "'") -%}
       {%-       endif -%}
       {%-       set _ = problems.append(
