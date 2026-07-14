@@ -1,0 +1,4 @@
+---
+- name: Model completed reboot decision
+  ansible.builtin.debug:
+    msg: Reboot decision completed by facade test double

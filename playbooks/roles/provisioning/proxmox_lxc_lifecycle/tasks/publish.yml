@@ -2,16 +2,16 @@
 - name: Derive lifecycle outcome status
   ansible.builtin.set_fact:
     proxmox_lifecycle_status: >-
-      {%- if proxmox_lifecycle_validation_failed | bool -%}
-      validation_failed
-      {%- elif proxmox_lifecycle_intent == 'validate_only' -%}
-      validated
-      {%- elif proxmox_lifecycle_skip_provision | bool and proxmox_lifecycle_skip_configure | bool -%}
-      skipped
-      {%- elif proxmox_lifecycle_intent == 'provision_only' -%}
-      ensured
-      {%- else -%}
-      configured
+      {%- if proxmox_lifecycle_validation_failed | bool -%}validation_failed
+      {%- elif proxmox_lifecycle_intent == 'validate_only' -%}validated
+      {%- elif proxmox_lxc_lifecycle_plan.container_transition == 'remove' -%}removed
+      {%- elif (
+        not (proxmox_lifecycle_desired_present | bool)
+        and proxmox_lxc_lifecycle_observation_after.runtime_state == 'absent'
+      ) -%}absent
+      {%- elif proxmox_lifecycle_skip_provision | bool and proxmox_lifecycle_skip_configure | bool -%}skipped
+      {%- elif proxmox_lifecycle_intent == 'provision_only' -%}ensured
+      {%- else -%}configured
       {%- endif -%}
 
 - name: Build lifecycle result payload
@@ -29,9 +29,7 @@
     proxmox_lxc_rebuilt: "{{ proxmox_lifecycle_rebuilt | bool }}"
     lxc_lifecycle_skip_host: >-
       {{
-        proxmox_lxc_lifecycle_plan.container_transition == 'none'
-        and not (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
-        and not (proxmox_lxc_lifecycle_plan.restore_guest_access | bool)
+        not (proxmox_lifecycle_has_host_work | bool)
         and not (proxmox_lxc_lifecycle_plan.configure_guest | bool)
       }}
 

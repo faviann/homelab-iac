@@ -1,0 +1,4 @@
+---
+- name: Model successful GitHub-key configuration
+  ansible.builtin.debug:
+    msg: GitHub keys configured by facade test double

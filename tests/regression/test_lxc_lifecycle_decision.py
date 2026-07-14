@@ -1,36 +1,66 @@
 #!/usr/bin/env python3
-"""Regression test for lifecycle decision and publish boundary scenarios."""
+"""Thin runner for the Ansible-native semantic lifecycle facade fixture."""
 
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "lxc_lifecycle_decision_test.yml"
+FIXTURES = REPO_ROOT / "tests" / "regression" / "fixtures"
+ASSETS = FIXTURES / "lxc_lifecycle_facade_assets"
+INVENTORY = FIXTURES / "lxc_lifecycle_facade_inventory.yml"
+PLAYBOOKS = (
+    FIXTURES / "lxc_lifecycle_decision_test.yml",
+    FIXTURES / "lxc_lifecycle_plan_ephemerality_test.yml",
+)
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def main() -> int:
-    proc = subprocess.run(
-        [*ANSIBLE_PLAYBOOK, str(PLAYBOOK)],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-    )
+    with tempfile.TemporaryDirectory(prefix="lxc-lifecycle-facade-") as temp_dir:
+        temp_root = Path(temp_dir)
+        state_dir = temp_root / "state"
+        cache_dir = temp_root / "cache"
+        state_dir.mkdir()
+        cache_dir.mkdir()
 
-    output = f"{proc.stdout}\n{proc.stderr}"
+        env = os.environ.copy()
+        env["PATH"] = f"{ASSETS / 'bin'}:{env['PATH']}"
+        env["LIFECYCLE_TEST_STATE_DIR"] = str(state_dir)
+        env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
+            [str(ASSETS / "roles"), str(REPO_ROOT / "playbooks" / "roles")]
+        )
+        env["ANSIBLE_COLLECTIONS_PATH"] = os.pathsep.join(
+            [str(ASSETS / "collections"), str(REPO_ROOT / "collections")]
+        )
+        env["ANSIBLE_CACHE_PLUGIN_CONNECTION"] = str(cache_dir)
 
-    if proc.returncode != 0:
-      print("playbook failed unexpectedly", file=sys.stderr)
-      print(output, file=sys.stderr)
-      return 1
+        for playbook in PLAYBOOKS:
+            proc = subprocess.run(
+                [
+                    *ANSIBLE_PLAYBOOK,
+                    "-i",
+                    str(INVENTORY),
+                    str(playbook),
+                    "-e",
+                    f"lifecycle_test_state_dir={state_dir}",
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            if proc.returncode != 0:
+                print(f"{playbook.name} failed unexpectedly", file=sys.stderr)
+                print(f"{proc.stdout}\n{proc.stderr}", file=sys.stderr)
+                return 1
 
-    print("ok: lifecycle decision and publish boundary scenarios passed")
+    print("ok: lifecycle facade publishes semantic results and plans remain command-local")
     return 0
 
 

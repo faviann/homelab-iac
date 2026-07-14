@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+vmid=$2
+
+case "$1" in
+  status)
+    state=$(cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.state")
+    [ "$state" = absent ] && exit 2
+    echo "status: $state"
+    ;;
+  exec)
+    cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.release"
+    ;;
+  *)
+    exit 99
+    ;;
+esac

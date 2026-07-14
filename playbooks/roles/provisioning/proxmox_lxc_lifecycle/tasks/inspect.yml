@@ -46,16 +46,12 @@
 
 - name: Observe current container runtime state when validation data is unavailable
   ansible.builtin.include_tasks: observe_runtime_state.yml
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
+  when: proxmox_lifecycle_release_probe_state == 'unavailable'
 
 - name: Adopt observed runtime state when validation data is unavailable
   ansible.builtin.set_fact:
     proxmox_lifecycle_runtime_state: "{{ proxmox_lifecycle_observed_runtime_state }}"
-  when:
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
+  when: proxmox_lifecycle_release_probe_state == 'unavailable'
 
 - name: Build local validation snapshot when no validation play data is present
   ansible.builtin.set_fact:
@@ -64,18 +60,16 @@
       type: "{{ 'absent_ok' if proxmox_lifecycle_runtime_state == 'absent' else 'match_ok' }}"
       message: >-
         {{
-          'Container does not exist in Proxmox (will be created)'
+          'Container does not exist in Proxmox'
           if proxmox_lifecycle_runtime_state == 'absent'
           else 'Lifecycle inspection derived from live container state'
         }}
       remediation: []
   when:
     - proxmox_lifecycle_validation_snapshot | length == 0
-    - proxmox_lxc_contract.api_spec.state | default('present') == 'present'
 
-- name: Mark absent desired-state containers as not applicable for release probing
+- name: Mark release probing as not applicable for absent desired state
   ansible.builtin.set_fact:
-    proxmox_lifecycle_runtime_state: not_applicable
     proxmox_lifecycle_release_probe_state: not_applicable
     proxmox_lifecycle_actual_release: ""
   when: proxmox_lxc_contract.api_spec.state | default('present') != 'present'
@@ -99,7 +93,11 @@
 
 - name: Probe guest Debian release from running container
   ansible.builtin.include_tasks:
-    file: "{{ [playbook_dir, 'tasks', 'probe_lxc_release.yml'] | path_join }}"
+    file: >-
+      {{
+        [role_path | dirname | dirname | dirname, 'tasks', 'probe_lxc_release.yml']
+        | path_join
+      }}
   vars:
     lxc_release_probe_vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
     lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"

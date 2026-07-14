@@ -13,13 +13,15 @@
 # validate_only   | *             | *             | none                 | no        | no      | no
 # provision_only  | present       | absent        | provision            | yes       | yes     | no
 # provision_only  | present       | running       | provision (rebuild if mismatch) | yes | yes | no
-# provision_only  | absent        | *             | remove               | no        | no      | no
+# provision_only  | absent        | running/stopped | remove             | no        | no      | no
+# provision_only  | absent        | absent        | none                 | no        | no      | no
 # configure_only  | present       | running       | none                 | yes       | yes     | yes
 # configure_only  | present       | absent        | none                 | no        | no      | no
 # configure_only  | absent        | *             | none                 | no        | no      | no
 # full            | present       | absent        | provision            | yes       | yes     | yes
 # full            | present       | running       | provision (rebuild if mismatch) | yes | yes | yes
-# full            | absent        | *             | remove               | no        | no      | no
+# full            | absent        | running/stopped | remove             | no        | no      | no
+# full            | absent        | absent        | none                 | no        | no      | no
 # ==============================================================================
 
 - name: Derive lifecycle intent flags
@@ -42,7 +44,7 @@
     - proxmox_lifecycle_policy_effective.strict_validation | bool
     - proxmox_lifecycle_validation_failed | bool
 
-- name: Derive lifecycle scratch flags and reason
+- name: Derive lifecycle scratch flags
   ansible.builtin.set_fact:
     proxmox_lifecycle_skip_provision: >-
       {{
@@ -67,52 +69,72 @@
         and (proxmox_lxc_contract.api_spec.state | default('present') == 'present')
         and proxmox_lifecycle_runtime_state != 'absent'
       }}
+
+- name: Record the planned container transition
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_container_transition: >-
+      {{
+        'none'
+        if (
+          (proxmox_lifecycle_skip_provision | bool)
+          or (
+            not (proxmox_lifecycle_desired_present | bool)
+            and proxmox_lifecycle_runtime_state == 'absent'
+          )
+        )
+        else ('rebuild' if (proxmox_lifecycle_rebuild_required | bool)
+        else ('provision' if (proxmox_lifecycle_desired_present | bool) else 'remove'))
+      }}
+
+- name: Explain the transition and record desired-present host preparation
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_prepare_guest: >-
+      {{
+        (proxmox_lifecycle_desired_present | bool)
+        and (
+          (not (proxmox_lifecycle_skip_provision | bool))
+          or (proxmox_lifecycle_configure_existing | bool)
+        )
+      }}
     proxmox_lifecycle_reason: >-
       {%- if proxmox_lifecycle_validation_failed | bool -%}
       {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}
       {%- elif proxmox_lifecycle_intent == 'configure_only' and proxmox_lifecycle_runtime_state == 'absent' -%}
       Container does not exist in Proxmox, so configure-only was skipped.
-      {%- elif proxmox_lxc_contract.api_spec.state | default('present') != 'present' -%}
-      Desired state is absent, so guest configuration was skipped.
+      {%- elif proxmox_lifecycle_container_transition == 'remove' -%}
+      Desired state is absent, so the existing container will be removed.
+      {%- elif proxmox_lifecycle_container_transition == 'rebuild' -%}
+      Guest release {{ proxmox_lifecycle_actual_release }} differs from desired
+      release {{ proxmox_lifecycle_desired_release }}, so the container will be rebuilt.
+      {%- elif proxmox_lifecycle_container_transition == 'provision' and proxmox_lifecycle_runtime_state == 'absent' -%}
+      Container is absent from Proxmox, so it will be provisioned.
+      {%- elif proxmox_lifecycle_intent == 'validate_only' -%}
+      Desired and observed lifecycle state was validated without executing changes.
+      {%- elif not (proxmox_lifecycle_desired_present | bool) and proxmox_lifecycle_runtime_state == 'absent' -%}
+      Desired state is already absent, so no container transition is planned.
+      {%- elif not (proxmox_lifecycle_desired_present | bool) -%}
+      Desired state is absent, but {{ proxmox_lifecycle_intent }} plans no container transition.
+      {%- elif proxmox_lifecycle_intent == 'configure_only' -%}
+      Existing running container will have host and guest configuration reconciled.
+      {%- elif proxmox_lifecycle_intent == 'provision_only' -%}
+      Existing container infrastructure will be reconciled without guest configuration.
       {%- else -%}
-      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle actions completed') }}
+      Existing container infrastructure and guest configuration will be reconciled.
       {%- endif -%}
 
 - name: Compose semantic lifecycle plan
   ansible.builtin.set_fact:
     proxmox_lxc_lifecycle_plan:
       container_transition: >-
-        {{
-          'none' if (proxmox_lifecycle_skip_provision | bool)
-          else ('rebuild' if (proxmox_lifecycle_rebuild_required | bool)
-          else ('provision' if (proxmox_lifecycle_desired_present | bool) else 'remove'))
-        }}
+        {{ proxmox_lifecycle_container_transition }}
       reconcile_host_config: >-
         {{
-          (proxmox_lifecycle_desired_present | bool)
-          and (
-            (not (proxmox_lifecycle_skip_provision | bool))
-            or (proxmox_lifecycle_configure_existing | bool)
-          )
+          (proxmox_lifecycle_prepare_guest | bool)
           and (proxmox_lxc_host_config_enabled | default(true) | bool)
         }}
-      restore_guest_access: >-
-        {{
-          (proxmox_lifecycle_desired_present | bool)
-          and (
-            (not (proxmox_lifecycle_skip_provision | bool))
-            or (proxmox_lifecycle_configure_existing | bool)
-          )
-        }}
+      restore_guest_access: "{{ proxmox_lifecycle_prepare_guest | bool }}"
       configure_guest: "{{ not (proxmox_lifecycle_skip_configure | bool) }}"
-      destructive: >-
-        {{
-          (not (proxmox_lifecycle_skip_provision | bool))
-          and (
-            (proxmox_lifecycle_rebuild_required | bool)
-            or (not (proxmox_lifecycle_desired_present | bool))
-          )
-        }}
+      destructive: "{{ proxmox_lifecycle_container_transition in ['rebuild', 'remove'] }}"
       reason: "{{ proxmox_lifecycle_reason }}"
 
 - name: Record whether host-side lifecycle work is planned

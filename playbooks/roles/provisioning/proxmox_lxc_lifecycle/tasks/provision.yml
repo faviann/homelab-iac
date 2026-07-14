@@ -8,37 +8,33 @@
     - ansible_check_mode
     - proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
 
-- name: Stop mismatched running container before rebuild
-  community.proxmox.proxmox:
-    node: "{{ proxmox_lxc_contract.api_spec.node }}"
-    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    state: stopped
-  delegate_to: "{{ proxmox_api_delegate_host }}"
-  become: false
-  no_log: true
+- name: Execute release-based rebuild preparation
   when:
     - not ansible_check_mode
     - proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
+  block:
+    - name: Stop mismatched running container before rebuild
+      community.proxmox.proxmox:
+        node: "{{ proxmox_lxc_contract.api_spec.node }}"
+        vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
+        state: stopped
+      delegate_to: "{{ proxmox_api_delegate_host }}"
+      become: false
+      no_log: true
 
-- name: Destroy mismatched container before recreate
-  community.proxmox.proxmox:
-    node: "{{ proxmox_lxc_contract.api_spec.node }}"
-    vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
-    state: absent
-  delegate_to: "{{ proxmox_api_delegate_host }}"
-  become: false
-  no_log: true
-  when:
-    - not ansible_check_mode
-    - proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
+    - name: Destroy mismatched container before recreate
+      community.proxmox.proxmox:
+        node: "{{ proxmox_lxc_contract.api_spec.node }}"
+        vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
+        state: absent
+      delegate_to: "{{ proxmox_api_delegate_host }}"
+      become: false
+      no_log: true
 
-- name: Mark host as rebuilt after destroy/recreate path
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_rebuilt: true
-    ansible_python_interpreter: auto_silent
-  when:
-    - not ansible_check_mode
-    - proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
+    - name: Mark host as rebuilt after destroy/recreate path
+      ansible.builtin.set_fact:
+        proxmox_lifecycle_rebuilt: true
+        ansible_python_interpreter: auto_silent
 
 - name: Ensure desired Proxmox LXC state
   ansible.builtin.include_role:

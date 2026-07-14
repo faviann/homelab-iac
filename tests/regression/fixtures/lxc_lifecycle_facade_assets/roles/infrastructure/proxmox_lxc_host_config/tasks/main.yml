@@ -1,0 +1,4 @@
+---
+- name: Model successful host configuration reconciliation
+  ansible.builtin.debug:
+    msg: Host configuration reconciled by facade test double

@@ -1,0 +1,4 @@
+---
+- name: Model successful base-system configuration
+  ansible.builtin.debug:
+    msg: Base system configured by facade test double

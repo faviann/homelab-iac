@@ -1,0 +1,15 @@
+---
+- name: Model the observable state established by provisioning
+  ansible.builtin.copy:
+    dest: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.state"
+    content: "{{ 'absent' if proxmox_lxc_contract.api_spec.state == 'absent' else 'running' }}"
+    mode: "0600"
+  delegate_to: localhost
+
+- name: Model the release established by provisioning
+  ansible.builtin.copy:
+    dest: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.release"
+    content: "{{ proxmox_lifecycle_desired_release }}"
+    mode: "0600"
+  delegate_to: localhost
+  when: proxmox_lxc_contract.api_spec.state == 'present'

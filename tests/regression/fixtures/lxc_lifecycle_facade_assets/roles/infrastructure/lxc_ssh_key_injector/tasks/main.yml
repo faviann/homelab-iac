@@ -1,0 +1,4 @@
+---
+- name: Model successful guest-access restoration
+  ansible.builtin.debug:
+    msg: Guest access restored by facade test double
