@@ -4,12 +4,35 @@
 
 - name: Get current NVIDIA GPU configuration lines
   ansible.builtin.shell: |
-    grep -iE '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file }} | sort || true
+    set -o pipefail
+    { grep -iE '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file | quote }} ||
+      [ "$?" -eq 1 ]; } |
+    while IFS= read -r config_line; do
+      case "$config_line" in
+        *NVIDIA_DRIVER_CAPABILITIES=*)
+          prefix="${config_line%%NVIDIA_DRIVER_CAPABILITIES=*}NVIDIA_DRIVER_CAPABILITIES="
+          capabilities="${config_line#*NVIDIA_DRIVER_CAPABILITIES=}"
+          normalized_capabilities=$(
+            printf '%s\n' "$capabilities" |
+            tr ',' '\n' |
+            sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
+            sort |
+            paste -sd, -
+          ) || exit $?
+          printf '%s%s\n' "$prefix" "$normalized_capabilities"
+          ;;
+        *)
+          printf '%s\n' "$config_line"
+          ;;
+      esac
+    done | sort
+  args:
+    executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   register: _current_nvidia_config
+  check_mode: false
   changed_when: false
-  failed_when: false
 
 - name: Determine desired NVIDIA configuration (sorted)
   ansible.builtin.set_fact:
@@ -31,15 +54,10 @@
     - name: Remove existing NVIDIA GPU runtime configuration
       ansible.builtin.lineinfile:
         path: "{{ _lxc_config_file }}"
-        regexp: "{{ item }}"
+        regexp: '(?i)^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia'
         state: absent
       delegate_to: "{{ proxmox_host_config_delegate }}"
       become: "{{ proxmox_lxc_host_config_become }}"
-      loop:
-        - '^lxc\.hook\.pre-start:.*nvidia-modprobe'
-        - '^lxc\.environment:.*NVIDIA_VISIBLE_DEVICES'
-        - '^lxc\.environment:.*NVIDIA_DRIVER_CAPABILITIES'
-        - '^lxc\.hook\.mount:.*nvidia'
 
     - name: Apply NVIDIA GPU runtime configuration
       ansible.builtin.lineinfile:

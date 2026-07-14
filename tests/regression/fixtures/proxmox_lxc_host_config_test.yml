@@ -1,5 +1,5 @@
 ---
-- name: Test proxmox_lxc_host_config boundary result
+- name: Test authoritative and reorder-safe Proxmox LXC host configuration
   hosts: localhost
   connection: local
   gather_facts: false
@@ -15,7 +15,7 @@
           - path: "{{ temp_root }}/srv/media"
             mode: "0750"
         bind_mounts:
-          mp0: "{{ temp_root }}/srv/media,mp=/media"
+          mp0: "{{ temp_root }}/srv/media,mp=/media,ro=1,backup=0"
         idmap:
           - u 0 100000 65536
           - g 0 100000 65536
@@ -26,6 +26,8 @@
         wireguard_kernel_module_access: true
         lxc_custom_sysctls:
           - key: net.ipv4.ip_forward
+            value: 1
+          - key: net.ipv6.conf.all.forwarding
             value: 1
         lxc_disable_apparmor: true
     # Conflicting legacy values prove the compiled contract is authoritative.
@@ -42,15 +44,29 @@
         state: directory
         mode: "0755"
 
-    - name: Seed container config file
+    - name: Seed container config file with managed divergence
       ansible.builtin.copy:
         dest: "{{ proxmox_lxc_host_config_path_root }}/4201.conf"
         mode: "0644"
         content: |
           arch: amd64
           hostname: contract-host
+          memory: 2048
           unprivileged: 1
+          lxc.idmap: u 0 200000 65536
+          lxc.idmap: g 0 100000 65536
+          lxc.idmap: u 0 100000 65536
           rootfs: local-lvm:vm-4201-disk-0,size=16G
+          mp0: {{ temp_root }}/srv/old-media,mp=/media
+          mp1: {{ temp_root }}/srv/legacy,mp=/legacy
+          lxc.mount.entry: /dev/net/tun dev/net/tun none create=file,bind,optional
+          lxc.mount.entry: /dev/net/tun dev/net/tun none bind
+          lxc.sysctl.net.ipv4.ip_forward = 0
+          lxc.sysctl.net.ipv4.conf.all.forwarding = 1
+          lxc.apparmor.profile: generated
+          lxc.environment: NVIDIA_VISIBLE_DEVICES=none
+          lxc.environment: NVIDIA_DRIVER_CAPABILITIES=utility
+          lxc.environment: NVIDIA_REQUIRE_CUDA=cuda>=12.0
 
     - name: Place mock pct script on PATH
       ansible.builtin.copy:
@@ -62,7 +78,7 @@
           case "$1" in
             config)
               FEATURES_FILE="{{ temp_root }}/pct-features.txt"
-              CURRENT_FEATURES="nesting=1"
+              CURRENT_FEATURES="fuse=1,nesting=1"
               if [ -f "$FEATURES_FILE" ]; then
                 CURRENT_FEATURES=$(cat "$FEATURES_FILE")
               fi
@@ -75,7 +91,9 @@
               echo "status: running"
               ;;
             set)
-              if [ "$3" = "--features" ] && [ -n "$4" ]; then
+              if [ "$3" = "--delete" ] && [ "$4" = "features" ]; then
+                : > "{{ temp_root }}/pct-features.txt"
+              elif [ "$3" = "--features" ]; then
                 printf '%s\n' "$4" > "{{ temp_root }}/pct-features.txt"
               fi
               ;;
@@ -88,104 +106,249 @@
           esac
           exit 0
 
-    - name: Include host config role with mock pct on PATH
-      block:
-        - ansible.builtin.include_role:
-            name: infrastructure/proxmox_lxc_host_config
+    - name: Apply initial authoritative host configuration
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role for initial reconciliation
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
 
-    - name: Read updated container config file
+    - name: Read initially reconciled container config file
       ansible.builtin.slurp:
         src: "{{ proxmox_lxc_host_config_path_root }}/4201.conf"
-      register: _host_config_file
+      register: _host_config_file_initial
 
-    - name: Read mock pct call log
+    - name: Read initial mock pct call log
       ansible.builtin.slurp:
         src: "{{ temp_root }}/pct-calls.log"
-      register: _pct_calls
+      register: _pct_calls_initial
 
-    - name: Assert config-file reconciliations were applied
+    - name: Assert initial reconciliation replaces every managed desired set
       ansible.builtin.assert:
         that:
-          - "'lxc.idmap: u 0 100000 65536' in (_host_config_file.content | b64decode)"
-          - "'lxc.idmap: g 0 100000 65536' in (_host_config_file.content | b64decode)"
-          - "'mp0: ' ~ temp_root ~ '/srv/media,mp=/media' in (_host_config_file.content | b64decode)"
-          - "'lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' in (_host_config_file.content | b64decode)"
-          - "'lxc.sysctl.net.ipv4.ip_forward = 1' in (_host_config_file.content | b64decode)"
-          - "'lxc.sysctl.net.ipv4.conf.all.forwarding = 0' not in (_host_config_file.content | b64decode)"
-          - "'lxc.apparmor.profile: unconfined' in (_host_config_file.content | b64decode)"
-          - "'lxc.environment: NVIDIA_VISIBLE_DEVICES=all' in (_host_config_file.content | b64decode)"
-        fail_msg: "Host config file did not receive the expected reconciled lines"
-
-    - name: Inspect host-side source directory
-      ansible.builtin.stat:
-        path: "{{ temp_root }}/srv/media"
-      register: _host_source_dir
-
-    - name: Assert host-side source directory was created
-      ansible.builtin.assert:
-        that:
-          - _host_source_dir.stat.isdir
-          - _host_source_dir.stat.mode == '0750'
-        fail_msg: "Host config did not create bind source directories before applying mounts"
-
-    - name: Assert pct feature reconciliation was executed
-      ansible.builtin.assert:
-        that:
-          - "'config 4201' in (_pct_calls.content | b64decode)"
-          - "'set 4201 --features keyctl=1,nesting=1' in (_pct_calls.content | b64decode)"
-          - "'status 4201' in (_pct_calls.content | b64decode)"
-          - "'reboot 4201' in (_pct_calls.content | b64decode)"
-        fail_msg: "Feature reconciliation did not invoke the expected pct commands"
-
-    - name: Assert boundary result reports component changes and restart outcome
-      ansible.builtin.assert:
-        that:
+          - "'memory: 2048' in (_host_config_file_initial.content | b64decode)"
+          - "'lxc.idmap: u 0 100000 65536' in (_host_config_file_initial.content | b64decode)"
+          - "'lxc.idmap: g 0 100000 65536' in (_host_config_file_initial.content | b64decode)"
+          - "'lxc.idmap: u 0 200000 65536' not in (_host_config_file_initial.content | b64decode)"
+          - "'mp0: ' ~ temp_root ~ '/srv/media,mp=/media,ro=1,backup=0' in (_host_config_file_initial.content | b64decode)"
+          - "'mp1:' not in (_host_config_file_initial.content | b64decode)"
+          - "'optional' not in (_host_config_file_initial.content | b64decode)"
+          - "((_host_config_file_initial.content | b64decode).split('lxc.mount.entry: /dev/net/tun') | length) == 2"
+          - "'lxc.sysctl.net.ipv4.ip_forward = 1' in (_host_config_file_initial.content | b64decode)"
+          - "'lxc.sysctl.net.ipv6.conf.all.forwarding = 1' in (_host_config_file_initial.content | b64decode)"
+          - "'lxc.sysctl.net.ipv4.conf.all.forwarding' not in (_host_config_file_initial.content | b64decode)"
+          - "'lxc.apparmor.profile: unconfined' in (_host_config_file_initial.content | b64decode)"
+          - "'lxc.apparmor.profile: generated' not in (_host_config_file_initial.content | b64decode)"
+          - "'NVIDIA_VISIBLE_DEVICES=all' in (_host_config_file_initial.content | b64decode)"
+          - "'NVIDIA_REQUIRE_CUDA' not in (_host_config_file_initial.content | b64decode)"
           - proxmox_lxc_host_config_result.overall_changed
           - proxmox_lxc_host_config_result.restart_applied
           - not proxmox_lxc_host_config_result.restart_required
-          - proxmox_lxc_host_config_result.components.host_directories.changed
           - proxmox_lxc_host_config_result.components.idmap.changed
           - proxmox_lxc_host_config_result.components.bind_mounts.changed
+          - proxmox_lxc_host_config_result.components.nvidia.changed
           - proxmox_lxc_host_config_result.components.wireguard.changed
           - proxmox_lxc_host_config_result.components.sysctls.changed
           - proxmox_lxc_host_config_result.components.features.changed
-        fail_msg: "Host config boundary result did not capture component changes and restart semantics"
+          - "'set 4201 --features keyctl=1,nesting=1' in (_pct_calls_initial.content | b64decode)"
+          - "'status 4201' in (_pct_calls_initial.content | b64decode)"
+          - "'reboot 4201' in (_pct_calls_initial.content | b64decode)"
+        fail_msg: "Initial host reconciliation did not converge authoritative managed sets"
 
-    - name: Reset mock pct call log before no-op reconciliation pass
+    - name: Reset mock pct call log before unchanged reconciliation
       ansible.builtin.copy:
         dest: "{{ temp_root }}/pct-calls.log"
         mode: "0644"
         content: ""
 
-    - name: Re-run host config tasks with the same desired contract
-      block:
-        - ansible.builtin.include_role:
-            name: infrastructure/proxmox_lxc_host_config
+    - name: Re-run unchanged host configuration
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role for unchanged reconciliation
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
 
-    - name: Read mock pct call log after no-op reconciliation pass
+    - name: Read mock pct call log after unchanged reconciliation
       ansible.builtin.slurp:
         src: "{{ temp_root }}/pct-calls.log"
-      register: _pct_calls_noop
+      register: _pct_calls_unchanged
 
-    - name: Assert no-op reconciliation does not request restart or pct updates
+    - name: Assert unchanged reconciliation is quiet
       ansible.builtin.assert:
         that:
           - not proxmox_lxc_host_config_result.overall_changed
           - not proxmox_lxc_host_config_result.restart_required
           - not proxmox_lxc_host_config_result.restart_applied
-          - not proxmox_lxc_host_config_result.components.host_directories.changed
+          - "'set 4201 --features' not in (_pct_calls_unchanged.content | b64decode)"
+          - "'status 4201' not in (_pct_calls_unchanged.content | b64decode)"
+          - "'reboot 4201' not in (_pct_calls_unchanged.content | b64decode)"
+        fail_msg: "An unchanged authoritative reconciliation was not idempotent"
+
+    - name: Externally reorder equivalent managed configuration
+      ansible.builtin.copy:
+        dest: "{{ proxmox_lxc_host_config_path_root }}/4201.conf"
+        mode: "0644"
+        content: |
+          lxc.hook.mount: /usr/share/lxc/hooks/nvidia
+          lxc.environment: NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
+          memory: 2048
+          lxc.sysctl.net.ipv6.conf.all.forwarding = 1
+          lxc.mount.entry: /dev/net/tun dev/net/tun none create=file,bind
+          mp0: {{ temp_root }}/srv/media,backup=0,ro=1,mp=/media
+          rootfs: local-lvm:vm-4201-disk-0,size=16G
+          lxc.idmap: u 0 100000 65536
+          lxc.apparmor.profile: unconfined
+          hostname: contract-host
+          lxc.environment: NVIDIA_VISIBLE_DEVICES=all
+          arch: amd64
+          lxc.idmap: g 0 100000 65536
+          lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'
+          unprivileged: 1
+          lxc.sysctl.net.ipv4.ip_forward = 1
+
+    - name: Externally reorder equivalent Proxmox features
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-features.txt"
+        mode: "0644"
+        content: "nesting=1,keyctl=1\n"
+
+    - name: Reset mock pct call log before reordered reconciliation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-calls.log"
+        mode: "0644"
+        content: ""
+
+    - name: Re-run semantically equivalent reordered host configuration
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role for reordered reconciliation
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+
+    - name: Read mock pct call log after reordered reconciliation
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_reordered
+
+    - name: Assert semantic reordering is unchanged and does not restart
+      ansible.builtin.assert:
+        that:
+          - not proxmox_lxc_host_config_result.overall_changed
+          - not proxmox_lxc_host_config_result.restart_required
+          - not proxmox_lxc_host_config_result.restart_applied
           - not proxmox_lxc_host_config_result.components.idmap.changed
           - not proxmox_lxc_host_config_result.components.bind_mounts.changed
           - not proxmox_lxc_host_config_result.components.nvidia.changed
           - not proxmox_lxc_host_config_result.components.wireguard.changed
           - not proxmox_lxc_host_config_result.components.sysctls.changed
           - not proxmox_lxc_host_config_result.components.features.changed
-          - "'config 4201' in (_pct_calls_noop.content | b64decode)"
-          - "'set 4201 --features' not in (_pct_calls_noop.content | b64decode)"
-          - "'status 4201' not in (_pct_calls_noop.content | b64decode)"
-          - "'reboot 4201' not in (_pct_calls_noop.content | b64decode)"
-        fail_msg: "No-op host reconciliation still reported changes or unnecessary pct operations"
+          - "'set 4201 --features' not in (_pct_calls_reordered.content | b64decode)"
+          - "'status 4201' not in (_pct_calls_reordered.content | b64decode)"
+          - "'reboot 4201' not in (_pct_calls_reordered.content | b64decode)"
+        fail_msg: "Equivalent managed ordering caused a false change or restart"
+
+    - name: Reduce every managed category to an empty desired set
+      ansible.builtin.set_fact:
+        proxmox_lxc_contract: >-
+          {{
+            proxmox_lxc_contract
+            | combine(
+                {
+                  'host_config': proxmox_lxc_contract.host_config
+                  | combine(
+                      {
+                        'bind_mounts': {},
+                        'idmap': [],
+                        'features': [],
+                        'configure_nvidia_runtime': false,
+                        'wireguard_kernel_module_access': false,
+                        'lxc_custom_sysctls': [],
+                        'lxc_disable_apparmor': false
+                      }
+                    )
+                }
+              )
+          }}
+
+    - name: Reset mock pct call log before semantic reduction
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-calls.log"
+        mode: "0644"
+        content: ""
+
+    - name: Apply semantic managed-state reduction
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role for semantic reduction
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+
+    - name: Read reduced container config file
+      ansible.builtin.slurp:
+        src: "{{ proxmox_lxc_host_config_path_root }}/4201.conf"
+      register: _host_config_file_reduced
+
+    - name: Read mock pct call log after semantic reduction
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_reduced
+
+    - name: Assert empty desired sets remove only managed configuration
+      ansible.builtin.assert:
+        that:
+          - "'memory: 2048' in (_host_config_file_reduced.content | b64decode)"
+          - "'rootfs: local-lvm:vm-4201-disk-0,size=16G' in (_host_config_file_reduced.content | b64decode)"
+          - "'lxc.idmap:' not in (_host_config_file_reduced.content | b64decode)"
+          - "'mp0:' not in (_host_config_file_reduced.content | b64decode)"
+          - "'NVIDIA' not in (_host_config_file_reduced.content | b64decode)"
+          - "'lxc.hook.mount: /usr/share/lxc/hooks/nvidia' not in (_host_config_file_reduced.content | b64decode)"
+          - "'lxc.mount.entry: /dev/net/tun' not in (_host_config_file_reduced.content | b64decode)"
+          - "'lxc.sysctl.' not in (_host_config_file_reduced.content | b64decode)"
+          - "'lxc.apparmor.' not in (_host_config_file_reduced.content | b64decode)"
+          - proxmox_lxc_host_config_result.overall_changed
+          - proxmox_lxc_host_config_result.restart_applied
+          - not proxmox_lxc_host_config_result.restart_required
+          - proxmox_lxc_host_config_result.components.idmap.changed
+          - proxmox_lxc_host_config_result.components.bind_mounts.changed
+          - proxmox_lxc_host_config_result.components.nvidia.changed
+          - proxmox_lxc_host_config_result.components.wireguard.changed
+          - proxmox_lxc_host_config_result.components.sysctls.changed
+          - proxmox_lxc_host_config_result.components.features.changed
+          - "'set 4201 --delete features' in (_pct_calls_reduced.content | b64decode)"
+          - "'status 4201' in (_pct_calls_reduced.content | b64decode)"
+          - "'reboot 4201' in (_pct_calls_reduced.content | b64decode)"
+        fail_msg: "Empty desired sets did not remove all managed configuration"
+
+    - name: Reset mock pct call log before final unchanged reconciliation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-calls.log"
+        mode: "0644"
+        content: ""
+
+    - name: Re-run reduced host configuration
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include host configuration role for final reconciliation
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+
+    - name: Read mock pct call log after final reconciliation
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_final
+
+    - name: Assert final reconciliation is unchanged
+      ansible.builtin.assert:
+        that:
+          - not proxmox_lxc_host_config_result.overall_changed
+          - not proxmox_lxc_host_config_result.restart_required
+          - not proxmox_lxc_host_config_result.restart_applied
+          - "'set 4201 --features' not in (_pct_calls_final.content | b64decode)"
+          - "'status 4201' not in (_pct_calls_final.content | b64decode)"
+          - "'reboot 4201' not in (_pct_calls_final.content | b64decode)"
+        fail_msg: "The final reconciliation repeated a semantic managed change"

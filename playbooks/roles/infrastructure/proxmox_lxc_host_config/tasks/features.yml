@@ -59,10 +59,26 @@
     command: set
     config_options:
       features: "{{ _target_features_string }}"
-  register: _pct_set_result
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  when: _target_features_string != (_current_features_list | join(','))
+  when:
+    - _target_features_list != _current_features_list
+    - _target_features_list | length > 0
+
+- name: Remove feature flags via pct set
+  ansible.builtin.command:
+    argv:
+      - pct
+      - set
+      - "{{ proxmox_lxc_host_config_spec.vmid }}"
+      - --delete
+      - features
+  changed_when: true
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: "{{ proxmox_lxc_host_config_become }}"
+  when:
+    - _target_features_list != _current_features_list
+    - _target_features_list | length == 0
 
 - name: Feature changes applied
   ansible.builtin.debug:
@@ -70,12 +86,12 @@
       Applied features to container {{ proxmox_lxc_host_config_spec.vmid }}:
       {{ _target_features_string }}. Host reconciliation will restart the
       container if runtime state requires it.
-  when: _pct_set_result is changed
+  when: _target_features_list != _current_features_list
 
 - name: Features already in sync
   ansible.builtin.debug:
     msg: "Container {{ proxmox_lxc_host_config_spec.vmid }} features already configured correctly"
-  when: _pct_set_result is not changed
+  when: _target_features_list == _current_features_list
 
 - name: Publish feature reconciliation result
   ansible.builtin.set_fact:
@@ -85,8 +101,8 @@
         | combine(
             {
               'features': {
-                'changed': (_pct_set_result is changed),
-                'restart_required': (_pct_set_result is changed)
+                'changed': (_target_features_list != _current_features_list),
+                'restart_required': (_target_features_list != _current_features_list)
               }
             },
             recursive=True

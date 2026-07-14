@@ -36,17 +36,11 @@
 
 - name: Apply UID/GID ID mappings
   ansible.builtin.include_tasks: config_file_idmap.yml
-  when:
-    - proxmox_lxc_host_config_spec.idmap is defined
-    - proxmox_lxc_host_config_spec.idmap | length > 0
   tags:
     - idmap
 
 - name: Apply bind mount points
   ansible.builtin.include_tasks: config_file_bind_mounts.yml
-  when:
-    - proxmox_lxc_host_config_spec.bind_mounts is defined
-    - proxmox_lxc_host_config_spec.bind_mounts | length > 0
   tags:
     - bind_mounts
     - mounts

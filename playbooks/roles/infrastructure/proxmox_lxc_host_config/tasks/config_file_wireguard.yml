@@ -1,17 +1,60 @@
 ---
-# Apply WireGuard tun device access configuration
-# Already idempotent via state: present/absent with regexp matching
+# Treat WireGuard tun access as one authoritative managed desired set.
 
-- name: Apply WireGuard tun device access
-  ansible.builtin.lineinfile:
-    path: "{{ _lxc_config_file }}"
-    regexp: '^lxc\.mount\.entry:.*dev/net/tun'
-    line: "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
-    state: "{{ 'present' if (proxmox_lxc_host_config_spec.wireguard_kernel_module_access | bool) else 'absent' }}"
-    create: false
+- name: Get current WireGuard tun device access
+  ansible.builtin.shell: |
+    set -o pipefail
+    { grep '^lxc\.mount\.entry:.*dev/net/tun' {{ _lxc_config_file | quote }} || [ "$?" -eq 1 ]; } |
+    while IFS= read -r config_line; do
+      prefix="${config_line% *}"
+      options="${config_line##* }"
+      normalized_options=$(
+        printf '%s\n' "$options" |
+        tr ',' '\n' |
+        sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
+        sort |
+        paste -sd, -
+      ) || exit $?
+      printf '%s %s\n' "$prefix" "$normalized_options"
+    done | sort
+  args:
+    executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  register: _wireguard_result
+  register: _current_wireguard_config
+  check_mode: false
+  changed_when: false
+
+- name: Determine desired WireGuard tun device access
+  ansible.builtin.set_fact:
+    _desired_wireguard_config: >-
+      {{
+        'lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file'
+        if (proxmox_lxc_host_config_spec.wireguard_kernel_module_access | bool)
+        else ''
+      }}
+
+- name: Reconcile authoritative WireGuard tun device access
+  when: _current_wireguard_config.stdout != _desired_wireguard_config
+  block:
+    - name: Remove existing WireGuard tun device access
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        regexp: '^lxc\.mount\.entry:.*dev/net/tun'
+        state: absent
+        create: false
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: "{{ proxmox_lxc_host_config_become }}"
+
+    - name: Apply desired WireGuard tun device access
+      ansible.builtin.lineinfile:
+        path: "{{ _lxc_config_file }}"
+        line: "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file"
+        state: present
+        create: false
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: "{{ proxmox_lxc_host_config_become }}"
+      when: proxmox_lxc_host_config_spec.wireguard_kernel_module_access | bool
 
 - name: Publish WireGuard reconciliation result
   ansible.builtin.set_fact:
@@ -21,8 +64,8 @@
         | combine(
             {
               'wireguard': {
-                'changed': (_wireguard_result.changed | default(false)),
-                'restart_required': (_wireguard_result.changed | default(false))
+                'changed': (_current_wireguard_config.stdout != _desired_wireguard_config),
+                'restart_required': (_current_wireguard_config.stdout != _desired_wireguard_config)
               }
             },
             recursive=True
