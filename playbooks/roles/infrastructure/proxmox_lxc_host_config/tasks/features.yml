@@ -6,24 +6,28 @@
 
 - name: Get current container features configuration
   proxmox_pct:
-    vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
+    vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
     command: config
-  register: _pct_config
+  register: infrastructure_proxmox_lxc_host_config_pct_config
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
 
 - name: Normalize current features string
   ansible.builtin.set_fact:
-    _current_features_string: >-
+    infrastructure_proxmox_lxc_host_config_current_features_string: >-
       {{
-        _pct_config.config.features | default('') | trim
+        infrastructure_proxmox_lxc_host_config_pct_config.config.features | default('') | trim
       }}
 
 - name: Parse current features into list
   ansible.builtin.set_fact:
-    _current_features_list: >-
+    infrastructure_proxmox_lxc_host_config_current_features_list: >-
       {{
-        (_current_features_string.split(',') if _current_features_string else [])
+        (
+          infrastructure_proxmox_lxc_host_config_current_features_string.split(',')
+          if infrastructure_proxmox_lxc_host_config_current_features_string
+          else []
+        )
         | map('trim')
         | select()
         | unique
@@ -33,9 +37,9 @@
 
 - name: Build target features list
   ansible.builtin.set_fact:
-    _target_features_list: >-
+    infrastructure_proxmox_lxc_host_config_target_features_list: >-
       {{
-        (proxmox_lxc_host_config_spec.features | default([]))
+        (infrastructure_proxmox_lxc_host_config_spec.features | default([]))
         | select()
         | unique
         | sort
@@ -44,65 +48,87 @@
 
 - name: Build features string for pct command
   ansible.builtin.set_fact:
-    _target_features_string: "{{ _target_features_list | join(',') }}"
+    infrastructure_proxmox_lxc_host_config_target_features_string: >-
+      {{ infrastructure_proxmox_lxc_host_config_target_features_list | join(',') }}
 
 - name: Display features operation
   ansible.builtin.debug:
     msg:
-      - "Container VMID: {{ proxmox_lxc_host_config_spec.vmid }}"
-      - "Current features: {{ _current_features_list | join(',') if _current_features_list | length > 0 else '(none)' }}"
-      - "Target features: {{ _target_features_string }}"
+      - "Container VMID: {{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
+      - >-
+        Current features:
+        {{ infrastructure_proxmox_lxc_host_config_current_features_list | join(',')
+           if infrastructure_proxmox_lxc_host_config_current_features_list | length > 0
+           else '(none)' }}
+      - "Target features: {{ infrastructure_proxmox_lxc_host_config_target_features_string }}"
 
 - name: Apply feature flags via pct set
   proxmox_pct:
-    vmid: "{{ proxmox_lxc_host_config_spec.vmid }}"
+    vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
     command: set
     config_options:
-      features: "{{ _target_features_string }}"
+      features: "{{ infrastructure_proxmox_lxc_host_config_target_features_string }}"
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   when:
-    - _target_features_list != _current_features_list
-    - _target_features_list | length > 0
+    - >-
+      infrastructure_proxmox_lxc_host_config_target_features_list
+      != infrastructure_proxmox_lxc_host_config_current_features_list
+    - infrastructure_proxmox_lxc_host_config_target_features_list | length > 0
 
 - name: Remove feature flags via pct set
   ansible.builtin.command:
     argv:
       - pct
       - set
-      - "{{ proxmox_lxc_host_config_spec.vmid }}"
+      - "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
       - --delete
       - features
   changed_when: true
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   when:
-    - _target_features_list != _current_features_list
-    - _target_features_list | length == 0
+    - >-
+      infrastructure_proxmox_lxc_host_config_target_features_list
+      != infrastructure_proxmox_lxc_host_config_current_features_list
+    - infrastructure_proxmox_lxc_host_config_target_features_list | length == 0
 
 - name: Feature changes applied
   ansible.builtin.debug:
     msg: >-
-      Applied features to container {{ proxmox_lxc_host_config_spec.vmid }}:
-      {{ _target_features_string }}. Host reconciliation will restart the
+      Applied features to container {{ infrastructure_proxmox_lxc_host_config_spec.vmid }}:
+      {{ infrastructure_proxmox_lxc_host_config_target_features_string }}.
+      Host reconciliation will restart the
       container if runtime state requires it.
-  when: _target_features_list != _current_features_list
+  when: >-
+    infrastructure_proxmox_lxc_host_config_target_features_list
+    != infrastructure_proxmox_lxc_host_config_current_features_list
 
 - name: Features already in sync
   ansible.builtin.debug:
-    msg: "Container {{ proxmox_lxc_host_config_spec.vmid }} features already configured correctly"
-  when: _target_features_list == _current_features_list
+    msg: >-
+      Container {{ infrastructure_proxmox_lxc_host_config_spec.vmid }}
+      features already configured correctly
+  when: >-
+    infrastructure_proxmox_lxc_host_config_target_features_list
+    == infrastructure_proxmox_lxc_host_config_current_features_list
 
 - name: Publish feature reconciliation result
   ansible.builtin.set_fact:
-    _proxmox_lxc_host_config_component_results: >-
+    infrastructure_proxmox_lxc_host_config_component_results: >-
       {{
-        _proxmox_lxc_host_config_component_results
+        infrastructure_proxmox_lxc_host_config_component_results
         | combine(
             {
               'features': {
-                'changed': (_target_features_list != _current_features_list),
-                'restart_required': (_target_features_list != _current_features_list)
+                'changed': (
+                  infrastructure_proxmox_lxc_host_config_target_features_list
+                  != infrastructure_proxmox_lxc_host_config_current_features_list
+                ),
+                'restart_required': (
+                  infrastructure_proxmox_lxc_host_config_target_features_list
+                  != infrastructure_proxmox_lxc_host_config_current_features_list
+                )
               }
             },
             recursive=True

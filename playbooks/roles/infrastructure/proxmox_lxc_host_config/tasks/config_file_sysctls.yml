@@ -4,48 +4,53 @@
 - name: Get current sysctl and AppArmor configuration
   ansible.builtin.shell: |
     set -o pipefail
-    { grep -E '^lxc\.(sysctl|apparmor)\.' {{ _lxc_config_file | quote }} || [ "$?" -eq 1 ]; } |
+    { grep -E '^lxc\.(sysctl|apparmor)\.' {{ infrastructure_proxmox_lxc_host_config_file | quote }} || [ "$?" -eq 1 ]; } |
     sed -E 's/[[:space:]]*[:=][[:space:]]*/=/' |
     sort
   args:
     executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  register: _current_sysctls_apparmor
+  register: infrastructure_proxmox_lxc_host_config_current_sysctls_apparmor
   check_mode: false
   changed_when: false
 
 - name: Initialize desired sysctl and AppArmor configuration
   ansible.builtin.set_fact:
-    _desired_sysctls_apparmor_list: []
+    infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor_list: []
 
 - name: Normalize desired sysctl configuration
   ansible.builtin.set_fact:
-    _desired_sysctls_apparmor_list: >-
+    infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor_list: >-
       {{
-        _desired_sysctls_apparmor_list
+        infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor_list
         + ['lxc.sysctl.' ~ item.key ~ '=' ~ (item.value | string)]
       }}
-  loop: "{{ proxmox_lxc_host_config_spec.lxc_custom_sysctls }}"
+  loop: "{{ infrastructure_proxmox_lxc_host_config_spec.lxc_custom_sysctls }}"
   loop_control:
     label: "{{ item.key }}"
 
 - name: Add desired AppArmor configuration
   ansible.builtin.set_fact:
-    _desired_sysctls_apparmor_list: >-
-      {{ _desired_sysctls_apparmor_list + ['lxc.apparmor.profile=unconfined'] }}
-  when: proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
+    infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor_list: >-
+      {{ infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor_list
+         + ['lxc.apparmor.profile=unconfined'] }}
+  when: infrastructure_proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
 
 - name: Determine desired sysctl and AppArmor configuration
   ansible.builtin.set_fact:
-    _desired_sysctls_apparmor: "{{ _desired_sysctls_apparmor_list | unique | sort | join('\n') }}"
+    infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor: "{{
+      infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor_list
+      | unique | sort | join('\n') }}"
 
 - name: Reconcile authoritative sysctl and AppArmor configuration
-  when: _current_sysctls_apparmor.stdout != _desired_sysctls_apparmor
+  when: >-
+    infrastructure_proxmox_lxc_host_config_current_sysctls_apparmor.stdout
+    != infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor
   block:
     - name: Remove existing sysctl and AppArmor configuration
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         regexp: '^lxc\.(sysctl|apparmor)\.'
         state: absent
         create: false
@@ -54,36 +59,42 @@
 
     - name: Apply desired custom sysctls
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         line: "lxc.sysctl.{{ item.key }} = {{ item.value }}"
         state: present
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
       become: "{{ proxmox_lxc_host_config_become }}"
-      loop: "{{ proxmox_lxc_host_config_spec.lxc_custom_sysctls }}"
+      loop: "{{ infrastructure_proxmox_lxc_host_config_spec.lxc_custom_sysctls }}"
       loop_control:
         label: "{{ item.key }}"
 
     - name: Apply desired AppArmor configuration
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         line: "lxc.apparmor.profile: unconfined"
         state: present
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"
       become: "{{ proxmox_lxc_host_config_become }}"
-      when: proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
+      when: infrastructure_proxmox_lxc_host_config_spec.lxc_disable_apparmor | bool
 
 - name: Publish sysctl and AppArmor reconciliation result
   ansible.builtin.set_fact:
-    _proxmox_lxc_host_config_component_results: >-
+    infrastructure_proxmox_lxc_host_config_component_results: >-
       {{
-        _proxmox_lxc_host_config_component_results
+        infrastructure_proxmox_lxc_host_config_component_results
         | combine(
             {
               'sysctls': {
-                'changed': (_current_sysctls_apparmor.stdout != _desired_sysctls_apparmor),
-                'restart_required': (_current_sysctls_apparmor.stdout != _desired_sysctls_apparmor)
+                'changed': (
+                  infrastructure_proxmox_lxc_host_config_current_sysctls_apparmor.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor
+                ),
+                'restart_required': (
+                  infrastructure_proxmox_lxc_host_config_current_sysctls_apparmor.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor
+                )
               }
             },
             recursive=True

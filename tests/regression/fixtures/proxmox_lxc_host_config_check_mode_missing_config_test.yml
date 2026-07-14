@@ -113,7 +113,8 @@
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
       block:
-        - name: Include host configuration role for existing config check
+        # The role's nested concern path is intentional and part of this production-hierarchy fixture.
+        - name: Include host configuration role for existing config check  # noqa: role-name[path]
           ansible.builtin.include_role:
             name: infrastructure/proxmox_lxc_host_config
 

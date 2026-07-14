@@ -5,7 +5,7 @@
 - name: Get current NVIDIA GPU configuration lines
   ansible.builtin.shell: |
     set -o pipefail
-    { grep -iE '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ _lxc_config_file | quote }} ||
+    { grep -iE '^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia' {{ infrastructure_proxmox_lxc_host_config_file | quote }} ||
       [ "$?" -eq 1 ]; } |
     while IFS= read -r config_line; do
       case "$config_line" in
@@ -30,30 +30,32 @@
     executable: /bin/bash
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
-  register: _current_nvidia_config
+  register: infrastructure_proxmox_lxc_host_config_current_nvidia_config
   check_mode: false
   changed_when: false
 
 - name: Determine desired NVIDIA configuration (sorted)
   ansible.builtin.set_fact:
-    _desired_nvidia_config: |-
+    infrastructure_proxmox_lxc_host_config_desired_nvidia_config: |-
       lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
       lxc.environment: NVIDIA_VISIBLE_DEVICES=all
       lxc.hook.mount: /usr/share/lxc/hooks/nvidia
       lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'
-  when: proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool
+  when: infrastructure_proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool
 
 - name: Determine desired NVIDIA configuration (empty)
   ansible.builtin.set_fact:
-    _desired_nvidia_config: ""
-  when: not (proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool)
+    infrastructure_proxmox_lxc_host_config_desired_nvidia_config: ""
+  when: not (infrastructure_proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool)
 
 - name: Update NVIDIA GPU configuration only if different
-  when: _current_nvidia_config.stdout != _desired_nvidia_config
+  when: >-
+    infrastructure_proxmox_lxc_host_config_current_nvidia_config.stdout
+    != infrastructure_proxmox_lxc_host_config_desired_nvidia_config
   block:
     - name: Remove existing NVIDIA GPU runtime configuration
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         regexp: '(?i)^lxc\.(hook\.pre-start|environment|hook\.mount):.*nvidia'
         state: absent
       delegate_to: "{{ proxmox_host_config_delegate }}"
@@ -61,7 +63,7 @@
 
     - name: Apply NVIDIA GPU runtime configuration
       ansible.builtin.lineinfile:
-        path: "{{ _lxc_config_file }}"
+        path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
         line: "{{ item }}"
         insertafter: EOF
         create: false
@@ -72,18 +74,24 @@
         - "lxc.environment: NVIDIA_VISIBLE_DEVICES=all"
         - "lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
         - "lxc.hook.mount: /usr/share/lxc/hooks/nvidia"
-      when: proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool
+      when: infrastructure_proxmox_lxc_host_config_spec.configure_nvidia_runtime | bool
 
 - name: Publish NVIDIA reconciliation result
   ansible.builtin.set_fact:
-    _proxmox_lxc_host_config_component_results: >-
+    infrastructure_proxmox_lxc_host_config_component_results: >-
       {{
-        _proxmox_lxc_host_config_component_results
+        infrastructure_proxmox_lxc_host_config_component_results
         | combine(
             {
               'nvidia': {
-                'changed': (_current_nvidia_config.stdout != _desired_nvidia_config),
-                'restart_required': (_current_nvidia_config.stdout != _desired_nvidia_config)
+                'changed': (
+                  infrastructure_proxmox_lxc_host_config_current_nvidia_config.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_nvidia_config
+                ),
+                'restart_required': (
+                  infrastructure_proxmox_lxc_host_config_current_nvidia_config.stdout
+                  != infrastructure_proxmox_lxc_host_config_desired_nvidia_config
+                )
               }
             },
             recursive=True
