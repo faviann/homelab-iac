@@ -1,44 +1,28 @@
 ---
 # Main tasks file for lxc_ssh_key_injector role
-# Injects control node SSH public key into LXC container via Proxmox pct commands
+# Injects one explicit guest-bootstrap input via Proxmox pct commands.
 
-- name: Use compiled guest-bootstrap pubkey when available
-  ansible.builtin.set_fact:
-    lxc_ssh_key_injector_pubkey_content: "{{ proxmox_lxc_contract.guest_bootstrap.pubkey }}"
-  delegate_to: localhost
-  no_log: true
-  when:
-    - proxmox_lxc_contract is defined
-    - proxmox_lxc_contract.guest_bootstrap.pubkey | default('') | length > 0
-
-- name: Resolve control-node SSH public key when contract pubkey is unavailable
-  ansible.builtin.include_role:
-    name: infrastructure/ssh_key_shared
-    tasks_from: resolve_pubkey
-  vars:
-    ssh_key_shared_explicit_path: "{{ lxc_ssh_key_injector_pubkey_path | default('') }}"
-  when: lxc_ssh_key_injector_pubkey_content is not defined
-
-- name: Load resolved SSH public key into injector
-  ansible.builtin.set_fact:
-    lxc_ssh_key_injector_pubkey_content: "{{ ssh_key_shared_public_key_content }}"
-  delegate_to: localhost
-  no_log: true
-  when: lxc_ssh_key_injector_pubkey_content is not defined
-
-- name: Ensure container VMID is defined
+- name: Validate explicit guest-bootstrap input
   ansible.builtin.assert:
     that:
-      - proxmox_lxc_overrides is defined
-      - proxmox_lxc_overrides.vmid is defined
-    fail_msg: "VMID not defined for {{ inventory_hostname }}"
+      - lxc_ssh_key_injector_guest_bootstrap is defined
+      - lxc_ssh_key_injector_guest_bootstrap is mapping
+      - lxc_ssh_key_injector_guest_bootstrap.vmid is defined
+      - lxc_ssh_key_injector_guest_bootstrap.vmid | int > 0
+      - lxc_ssh_key_injector_guest_bootstrap.hostname is defined
+      - lxc_ssh_key_injector_guest_bootstrap.hostname | string | length > 0
+      - lxc_ssh_key_injector_guest_bootstrap.pubkey is defined
+      - lxc_ssh_key_injector_guest_bootstrap.pubkey | string | length > 0
+    fail_msg: >-
+      infrastructure/lxc_ssh_key_injector requires an explicit guest-bootstrap
+      mapping containing vmid, hostname, and pubkey.
 
 # In check mode the derived state below ignores pct status anyway, and when
 # the controller key could not be installed (proxmox_ssh_ready false) the
 # Proxmox host is unreachable — skip the probe instead of failing the host.
 - name: Check if container exists on Proxmox
   proxmox_pct:
-    vmid: "{{ proxmox_lxc_overrides.vmid }}"
+    vmid: "{{ lxc_ssh_key_injector_guest_bootstrap.vmid }}"
     command: status
   register: _container_status
   delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
@@ -64,33 +48,43 @@
   ansible.builtin.debug:
     msg: >-
       Check mode skips pct runtime inspection and in-guest SSH key injection for
-      container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}).
+      container {{ lxc_ssh_key_injector_guest_bootstrap.vmid }}
+      ({{ lxc_ssh_key_injector_guest_bootstrap.hostname }}).
   when: _lxc_ssh_key_injector_container_state == 'check_mode'
 
 - name: Skip non-existent containers
   ansible.builtin.debug:
-    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist - skipping"
+    msg: >-
+      Container {{ lxc_ssh_key_injector_guest_bootstrap.vmid }}
+      ({{ lxc_ssh_key_injector_guest_bootstrap.hostname }}) does not exist - skipping
   when:
     - _lxc_ssh_key_injector_container_state == 'absent'
     - lxc_ssh_key_injector_skip_missing | bool
 
 - name: Fail on non-existent containers when skip_missing is false
   ansible.builtin.fail:
-    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) does not exist"
+    msg: >-
+      Container {{ lxc_ssh_key_injector_guest_bootstrap.vmid }}
+      ({{ lxc_ssh_key_injector_guest_bootstrap.hostname }}) does not exist
   when:
     - _lxc_ssh_key_injector_container_state == 'absent'
     - not (lxc_ssh_key_injector_skip_missing | bool)
 
 - name: Skip stopped containers
   ansible.builtin.debug:
-    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) is {{ _lxc_ssh_key_injector_container_state }} - skipping SSH key injection"
+    msg: >-
+      Container {{ lxc_ssh_key_injector_guest_bootstrap.vmid }}
+      ({{ lxc_ssh_key_injector_guest_bootstrap.hostname }}) is
+      {{ _lxc_ssh_key_injector_container_state }} - skipping SSH key injection
   when:
     - _lxc_ssh_key_injector_container_state == 'stopped'
     - lxc_ssh_key_injector_skip_stopped | bool
 
 - name: Fail on stopped containers when skip_stopped is false
   ansible.builtin.fail:
-    msg: "Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) is stopped"
+    msg: >-
+      Container {{ lxc_ssh_key_injector_guest_bootstrap.vmid }}
+      ({{ lxc_ssh_key_injector_guest_bootstrap.hostname }}) is stopped
   when:
     - _lxc_ssh_key_injector_container_state == 'stopped'
     - not (lxc_ssh_key_injector_skip_stopped | bool)
@@ -98,7 +92,8 @@
 - name: Fail when pct status returned an unknown runtime state
   ansible.builtin.fail:
     msg: >-
-      Container {{ proxmox_lxc_overrides.vmid }} ({{ inventory_hostname }}) returned an unknown pct status:
+      Container {{ lxc_ssh_key_injector_guest_bootstrap.vmid }}
+      ({{ lxc_ssh_key_injector_guest_bootstrap.hostname }}) returned an unknown pct status:
       {{ _container_status.stdout | default('') | trim }}
   when:
     - _lxc_ssh_key_injector_container_state not in ['absent', 'stopped', 'running', 'check_mode']
@@ -108,7 +103,7 @@
     argv:
       - pct
       - exec
-      - "{{ proxmox_lxc_overrides.vmid | string }}"
+      - "{{ lxc_ssh_key_injector_guest_bootstrap.vmid | string }}"
       - --
       - sh
       - -eu
@@ -160,7 +155,7 @@
 
         printf 'CHANGED=%s\n' "$changed"
       - sh
-      - "{{ lxc_ssh_key_injector_pubkey_content | b64encode }}"
+      - "{{ lxc_ssh_key_injector_guest_bootstrap.pubkey | b64encode }}"
   delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
   vars:
     ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
@@ -177,7 +172,7 @@
     argv:
       - pct
       - exec
-      - "{{ proxmox_lxc_overrides.vmid | string }}"
+      - "{{ lxc_ssh_key_injector_guest_bootstrap.vmid | string }}"
       - --
       - sh
       - -eu
@@ -186,7 +181,7 @@
         pubkey="$(printf '%s' "$1" | base64 -d)" || exit 1
         grep -cxF -- "$pubkey" /root/.ssh/authorized_keys
       - sh
-      - "{{ lxc_ssh_key_injector_pubkey_content | b64encode }}"
+      - "{{ lxc_ssh_key_injector_guest_bootstrap.pubkey | b64encode }}"
   delegate_to: "{{ lxc_ssh_key_injector_delegate_host }}"
   vars:
     ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
@@ -199,7 +194,8 @@
 - name: Warn when duplicate SSH keys are present
   ansible.builtin.debug:
     msg: >-
-      SSH key for {{ inventory_hostname }} appears {{ _key_count.stdout | trim }} times in authorized_keys.
+      SSH key for {{ lxc_ssh_key_injector_guest_bootstrap.hostname }} appears
+      {{ _key_count.stdout | trim }} times in authorized_keys.
       The injector preserved existing contents but duplicates should be cleaned up separately.
   when:
     - _lxc_ssh_key_injector_container_state == 'running'
@@ -207,7 +203,9 @@
 
 - name: Report SSH key injection result
   ansible.builtin.debug:
-    msg: "SSH key verified in container {{ inventory_hostname }} ({{ _key_count.stdout | default('0') }} occurrence(s))"
+    msg: >-
+      SSH key verified in container {{ lxc_ssh_key_injector_guest_bootstrap.hostname }}
+      ({{ _key_count.stdout | default('0') }} occurrence(s))
   when:
     - _container_status.rc | default(1) == 0
     - _key_count.stdout is defined

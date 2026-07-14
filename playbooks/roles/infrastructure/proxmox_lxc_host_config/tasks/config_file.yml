@@ -27,7 +27,12 @@
       - proxmox_lxc_host_config_spec.idmap | default([]) is not string
       - proxmox_lxc_host_config_spec.features | default([]) is sequence
       - proxmox_lxc_host_config_spec.features | default([]) is not string
-    fail_msg: "Host config spec must provide bind_mounts as a mapping and idmap/features as lists"
+      - proxmox_lxc_host_config_spec.configure_nvidia_runtime is boolean
+      - proxmox_lxc_host_config_spec.wireguard_kernel_module_access is boolean
+      - proxmox_lxc_host_config_spec.lxc_custom_sysctls is sequence
+      - proxmox_lxc_host_config_spec.lxc_custom_sysctls is not string
+      - proxmox_lxc_host_config_spec.lxc_disable_apparmor is boolean
+    fail_msg: "Host config spec contains invalid managed host-side desired state"
 
 - name: Apply UID/GID ID mappings
   ansible.builtin.include_tasks: config_file_idmap.yml

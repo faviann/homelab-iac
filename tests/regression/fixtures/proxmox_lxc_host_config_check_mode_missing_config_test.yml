@@ -19,12 +19,12 @@
         features:
           - nesting=1
           - keyctl=1
-    wireguard_kernel_module_access: true
-    lxc_custom_sysctls:
-      - key: net.ipv4.ip_forward
-        value: 1
-    lxc_disable_apparmor: true
-    configure_nvidia_runtime: false
+        wireguard_kernel_module_access: true
+        lxc_custom_sysctls:
+          - key: net.ipv4.ip_forward
+            value: 1
+        lxc_disable_apparmor: true
+        configure_nvidia_runtime: false
   tasks:
     - name: Create temp Proxmox config root without container config
       ansible.builtin.file:

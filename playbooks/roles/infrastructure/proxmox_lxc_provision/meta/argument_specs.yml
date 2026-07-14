@@ -1,0 +1,9 @@
+---
+argument_specs:
+  main:
+    short_description: Reconcile the API-managed LXC contract slice
+    options:
+      proxmox_lxc_contract:
+        type: dict
+        required: true
+        description: Authoritative compiled LXC contract containing the api_spec slice.

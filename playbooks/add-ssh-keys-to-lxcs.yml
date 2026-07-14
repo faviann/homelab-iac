@@ -15,11 +15,33 @@
       ansible.builtin.include_role:
         name: infrastructure/ssh_key_shared
         tasks_from: resolve_pubkey
+      vars:
+        ssh_key_shared_explicit_path: "{{ proxmox_lxc_controller_pubkey_path | default('') }}"
+
+    - name: Validate minimal manual SSH recovery identity
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_overrides is defined
+          - proxmox_lxc_overrides.vmid is defined
+          - proxmox_lxc_overrides.vmid | int > 0
+          - proxmox_lxc_overrides.hostname is defined
+          - proxmox_lxc_overrides.hostname | string | length > 0
+        fail_msg: >-
+          Manual SSH recovery requires vmid and hostname in proxmox_lxc_overrides
+          for {{ inventory_hostname }}.
+
+    - name: Build minimal manual SSH recovery input
+      ansible.builtin.set_fact:
+        proxmox_lxc_manual_guest_bootstrap:
+          vmid: "{{ proxmox_lxc_overrides.vmid }}"
+          hostname: "{{ proxmox_lxc_overrides.hostname }}"
+          pubkey: "{{ ssh_key_shared_public_key_content }}"
+      no_log: true
 
   roles:
     - role: infrastructure/lxc_ssh_key_injector
       vars:
-        lxc_ssh_key_injector_pubkey_path: "{{ ssh_key_shared_resolved_public_key_path }}"
+        lxc_ssh_key_injector_guest_bootstrap: "{{ proxmox_lxc_manual_guest_bootstrap }}"
 
 - name: Test SSH connectivity to updated containers
   hosts: lxcs

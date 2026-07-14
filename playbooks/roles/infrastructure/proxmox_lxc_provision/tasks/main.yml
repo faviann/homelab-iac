@@ -4,14 +4,17 @@
 # Lifecycle decisions such as rebuilds, inspection, and cleanup are owned by
 # provisioning/proxmox_lxc_lifecycle.
 
+- name: Validate API-facing LXC contract slice
+  ansible.builtin.assert:
+    that:
+      - proxmox_lxc_contract is defined
+      - proxmox_lxc_contract.api_spec is defined
+      - proxmox_lxc_contract.api_spec is mapping
+    fail_msg: "infrastructure/proxmox_lxc_provision requires proxmox_lxc_contract.api_spec"
+
 - name: Resolve API-facing LXC contract slice
   ansible.builtin.set_fact:
     proxmox_lxc_api_spec: "{{ proxmox_lxc_contract.api_spec }}"
-
-- name: Allow explicit start override per host
-  when: proxmox_lxc_start_on_create is defined
-  ansible.builtin.set_fact:
-    proxmox_lxc_api_spec: "{{ proxmox_lxc_api_spec | combine({'start_on_create': proxmox_lxc_start_on_create | bool}) }}"
 
 - name: Validate required Proxmox details
   ansible.builtin.assert:

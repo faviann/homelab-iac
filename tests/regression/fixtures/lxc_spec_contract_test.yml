@@ -45,6 +45,12 @@
     proxmox_default_idmap:
       - u 0 100000 65536
       - g 0 100000 65536
+    configure_nvidia_runtime: true
+    wireguard_kernel_module_access: true
+    lxc_custom_sysctls:
+      - key: net.ipv4.ip_forward
+        value: 1
+    lxc_disable_apparmor: true
     lxc_hwaddr: 'AA:BB:CC:DD:EE:FF'
     proxmox_lxc_controller_pubkey_enabled: false
     proxmox_lxc_disable_root_password: true
@@ -91,7 +97,7 @@
           - proxmox_lxc_contract.api_spec.features is not defined
         fail_msg: "API slice did not preserve precedence, tier defaults, or host-only field stripping"
 
-    - name: Assert host-config slice owns bind mounts, idmap, and features
+    - name: Assert host-config slice owns all managed host-side desired state
       ansible.builtin.assert:
         that:
           - proxmox_lxc_contract.host_config.vmid == 4201
@@ -101,7 +107,11 @@
           - proxmox_lxc_contract.host_config.host_directories == proxmox_lxc_host_directories
           - proxmox_lxc_contract.host_config.idmap == proxmox_default_idmap
           - proxmox_lxc_contract.host_config.features | sort == proxmox_lxc_capability_defaults.features | sort
-        fail_msg: "Host-config slice did not capture bind mounts, idmap, or features"
+          - proxmox_lxc_contract.host_config.configure_nvidia_runtime
+          - proxmox_lxc_contract.host_config.wireguard_kernel_module_access
+          - proxmox_lxc_contract.host_config.lxc_custom_sysctls == lxc_custom_sysctls
+          - proxmox_lxc_contract.host_config.lxc_disable_apparmor
+        fail_msg: "Host-config slice did not capture all managed host-side desired state"
 
     - name: Assert guest-bootstrap slice owns pubkey injection details
       ansible.builtin.assert:

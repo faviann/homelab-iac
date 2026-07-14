@@ -3,6 +3,10 @@ argument_specs:
   main:
     short_description: Apply host-side LXC configuration on the Proxmox node
     options:
+      proxmox_lxc_contract:
+        type: dict
+        required: true
+        description: Authoritative compiled LXC contract containing the host_config slice.
       proxmox_host_config_delegate:
         type: str
         required: false
