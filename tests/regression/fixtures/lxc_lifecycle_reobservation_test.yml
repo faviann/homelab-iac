@@ -1,0 +1,40 @@
+---
+- name: Test post-action lifecycle re-observation refreshes runtime state
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_pct_delegate_host: localhost
+    proxmox_lxc_contract:
+      api_spec:
+        state: present
+        vmid: 4300
+        hostname: reobserve-host
+        node: pve-a
+    proxmox_lxc_lifecycle_plan:
+      container_transition: provision
+      reconcile_host_config: true
+      restore_guest_access: true
+      configure_guest: true
+      destructive: false
+      reason: test
+    # Pre-action observation saw the container as absent; after provisioning the
+    # live container is running, so re-observation must refresh runtime state.
+    proxmox_lifecycle_runtime_state: absent
+    proxmox_lxc_lifecycle_observation_before:
+      runtime_state: absent
+      release: ""
+      release_probe_state: absent
+  tasks:
+    - name: Run post-action re-observation tasks
+      ansible.builtin.include_tasks:
+        file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/reobserve.yml"
+
+    - name: Assert runtime state was refreshed from the live container
+      ansible.builtin.assert:
+        that:
+          - proxmox_lifecycle_runtime_state == 'running'
+          - proxmox_lxc_lifecycle_observation_after.runtime_state == 'running'
+          - proxmox_lxc_lifecycle_observation_after.release == ''
+          - proxmox_lxc_lifecycle_observation_after.release_probe_state == 'absent'
+        fail_msg: "Post-action re-observation did not refresh runtime state from the live container"

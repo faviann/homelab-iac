@@ -26,6 +26,12 @@
         vmid: "{{ _base_spec.vmid }}"
         hostname: "{{ _base_spec.hostname }}"
         pubkey: ""
+    # Seeded so publish.yml (which normally consumes inspect's observation) runs
+    # outside the full role. The before/after observations are asserted to exist.
+    proxmox_lxc_lifecycle_observation_before:
+      runtime_state: unknown
+      release: ""
+      release_probe_state: unavailable
   tasks:
     - name: Scenario 1 - full lifecycle on absent container plans create and configure
       block:
@@ -51,13 +57,25 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_host_actions == ['ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
-              - proxmox_lifecycle_guest_actions == ['wait_for_connection', 'gather_facts', 'configure_guest', 'reboot_if_required']
-              - proxmox_lifecycle_cache_actions == []
-              - lxc_lifecycle_result.status == 'configured'
-              - not lxc_lifecycle_result.skip_provision
-              - not lxc_lifecycle_result.skip_configure
-            fail_msg: "Full absent-container lifecycle scenario did not publish the expected action plan or result"
+              - proxmox_lxc_lifecycle_plan.container_transition == 'provision'
+              - proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - proxmox_lxc_lifecycle_plan.restore_guest_access
+              - proxmox_lxc_lifecycle_plan.configure_guest
+              - not proxmox_lxc_lifecycle_plan.destructive
+              - lxc_lifecycle_result.outcome.status == 'configured'
+              - not lxc_lifecycle_skip_host
+              - lxc_lifecycle_result.plan is mapping
+              - "'container_transition' in lxc_lifecycle_result.plan"
+              - lxc_lifecycle_result.observations.before is defined
+              - lxc_lifecycle_result.observations.after is defined
+              - "'host_actions' not in lxc_lifecycle_result"
+              - "'guest_actions' not in lxc_lifecycle_result"
+              - "'cache_actions' not in lxc_lifecycle_result"
+              - "'internal_snapshot' not in lxc_lifecycle_result"
+              - "'compiled_spec' not in lxc_lifecycle_result"
+              - "'validation_status' not in lxc_lifecycle_result"
+              - "'container_transition' not in lxc_lifecycle_result"
+            fail_msg: "Full absent-container lifecycle scenario did not publish the expected semantic plan or result"
 
     - name: Scenario 2 - configure-only on absent container skips cleanly
       block:
@@ -83,14 +101,19 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_host_actions == []
-              - proxmox_lifecycle_guest_actions == []
-              - lxc_lifecycle_result.status == 'skipped'
+              - proxmox_lxc_lifecycle_plan.container_transition == 'none'
+              - not proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - not proxmox_lxc_lifecycle_plan.restore_guest_access
+              - not proxmox_lxc_lifecycle_plan.configure_guest
+              - not proxmox_lxc_lifecycle_plan.destructive
+              - lxc_lifecycle_result.outcome.status == 'skipped'
               - lxc_lifecycle_skip_host
-              - lxc_lifecycle_result.reason is search('configure-only was skipped')
+              - lxc_lifecycle_result.outcome.reason is search('configure-only was skipped')
+              - "'host_actions' not in lxc_lifecycle_result"
+              - "'internal_snapshot' not in lxc_lifecycle_result"
             fail_msg: "Configure-only absent-container lifecycle scenario did not skip as expected"
 
-    - name: Scenario 3 - release mismatch plans rebuild and cleanup
+    - name: Scenario 3 - release mismatch plans rebuild and is destructive
       block:
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: full
@@ -114,15 +137,17 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_rebuild_required
-              - proxmox_lifecycle_host_actions == ['stop_container', 'destroy_container', 'ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
-              - proxmox_lifecycle_cache_actions == ['clear_fact_cache', 'remove_known_hosts']
-              - lxc_lifecycle_result.rebuild_required
-              - lxc_lifecycle_result.cache_actions == ['clear_fact_cache', 'remove_known_hosts']
-              - lxc_lifecycle_result.internal_snapshot.action_decisions.host == proxmox_lifecycle_host_actions
-            fail_msg: "Release mismatch lifecycle scenario did not publish rebuild and cleanup decisions as expected"
+              - proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
+              - proxmox_lxc_lifecycle_plan.destructive
+              - proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - proxmox_lxc_lifecycle_plan.restore_guest_access
+              - proxmox_lxc_lifecycle_plan.configure_guest
+              - lxc_lifecycle_result.outcome.status == 'configured'
+              - "'cache_actions' not in lxc_lifecycle_result"
+              - "'internal_snapshot' not in lxc_lifecycle_result"
+            fail_msg: "Release mismatch lifecycle scenario did not publish a destructive rebuild plan"
 
-    - name: Scenario 4 - provision-only on running container plans ensure and host reconciliation
+    - name: Scenario 4 - provision-only on running container plans provision, no guest
       block:
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: provision_only
@@ -146,12 +171,15 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_host_actions == ['ensure_container', 'reconcile_host_config', 'ensure_ssh_key']
-              - proxmox_lifecycle_guest_actions == []
-              - lxc_lifecycle_result.status == 'ensured'
-            fail_msg: "Provision-only running-container scenario did not produce the expected action plan"
+              - proxmox_lxc_lifecycle_plan.container_transition == 'provision'
+              - proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - proxmox_lxc_lifecycle_plan.restore_guest_access
+              - not proxmox_lxc_lifecycle_plan.configure_guest
+              - not proxmox_lxc_lifecycle_plan.destructive
+              - lxc_lifecycle_result.outcome.status == 'ensured'
+            fail_msg: "Provision-only running-container scenario did not produce the expected semantic plan"
 
-    - name: Scenario 5 - provision-only with absent desired state plans destruction
+    - name: Scenario 5 - provision-only with absent desired state plans removal
       block:
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: provision_only
@@ -175,12 +203,15 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_host_actions == ['ensure_absent']
-              - proxmox_lifecycle_guest_actions == []
-              - lxc_lifecycle_result.status == 'ensured'
-            fail_msg: "Provision-only absent-state scenario did not plan destruction"
+              - proxmox_lxc_lifecycle_plan.container_transition == 'remove'
+              - proxmox_lxc_lifecycle_plan.destructive
+              - not proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - not proxmox_lxc_lifecycle_plan.restore_guest_access
+              - not proxmox_lxc_lifecycle_plan.configure_guest
+              - lxc_lifecycle_result.outcome.status == 'ensured'
+            fail_msg: "Provision-only absent-state scenario did not plan removal"
 
-    - name: Scenario 6 - configure-only on running container refreshes host config and guest setup
+    - name: Scenario 6 - configure-only on running container reconciles host config and guest setup
       block:
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: configure_only
@@ -204,12 +235,15 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_host_actions == ['reconcile_host_config', 'ensure_ssh_key']
-              - proxmox_lifecycle_guest_actions == ['wait_for_connection', 'gather_facts', 'configure_guest', 'reboot_if_required']
-              - lxc_lifecycle_result.status == 'configured'
-            fail_msg: "Configure-only running-container scenario did not produce the expected action plan"
+              - proxmox_lxc_lifecycle_plan.container_transition == 'none'
+              - proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - proxmox_lxc_lifecycle_plan.restore_guest_access
+              - proxmox_lxc_lifecycle_plan.configure_guest
+              - not proxmox_lxc_lifecycle_plan.destructive
+              - lxc_lifecycle_result.outcome.status == 'configured'
+            fail_msg: "Configure-only running-container scenario did not produce the expected semantic plan"
 
-    - name: Scenario 7 - validate-only produces no actions
+    - name: Scenario 7 - validate-only produces no lifecycle work
       block:
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: validate_only
@@ -233,12 +267,15 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_host_actions == []
-              - proxmox_lifecycle_guest_actions == []
-              - lxc_lifecycle_result.status == 'validated'
-            fail_msg: "Validate-only scenario did not produce empty action lists"
+              - proxmox_lxc_lifecycle_plan.container_transition == 'none'
+              - not proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - not proxmox_lxc_lifecycle_plan.restore_guest_access
+              - not proxmox_lxc_lifecycle_plan.configure_guest
+              - not proxmox_lxc_lifecycle_plan.destructive
+              - lxc_lifecycle_result.outcome.status == 'validated'
+            fail_msg: "Validate-only scenario did not produce an empty plan"
 
-    - name: Scenario 8 - validation failure suppresses all actions
+    - name: Scenario 8 - validation failure suppresses all lifecycle work
       block:
         - ansible.builtin.set_fact:
             proxmox_lifecycle_intent: full
@@ -262,8 +299,12 @@
 
         - ansible.builtin.assert:
             that:
-              - proxmox_lifecycle_host_actions == []
-              - proxmox_lifecycle_guest_actions == []
-              - lxc_lifecycle_result.status == 'validation_failed'
-              - lxc_lifecycle_result.validation_status == 'mismatch'
-            fail_msg: "Validation-failed scenario did not suppress lifecycle actions"
+              - proxmox_lxc_lifecycle_plan.container_transition == 'none'
+              - not proxmox_lxc_lifecycle_plan.reconcile_host_config
+              - not proxmox_lxc_lifecycle_plan.restore_guest_access
+              - not proxmox_lxc_lifecycle_plan.configure_guest
+              - not proxmox_lxc_lifecycle_plan.destructive
+              - lxc_lifecycle_result.outcome.status == 'validation_failed'
+              - lxc_lifecycle_result.outcome.reason is search('Invalid DNS configuration')
+              - "'validation_status' not in lxc_lifecycle_result"
+            fail_msg: "Validation-failed scenario did not suppress lifecycle work"

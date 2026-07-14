@@ -2,18 +2,24 @@
 # ==============================================================================
 # LIFECYCLE DECISION MATRIX
 #
-# intent          | desired_state | runtime_state | host_actions                         | guest_actions
-# ----------------|---------------|---------------|--------------------------------------|-------------------------------------------
-# validate_only   | *             | *             | []                                   | []
-# provision_only  | present       | absent        | [ensure_container, ...]              | []
-# provision_only  | present       | running       | [ensure_container, ...]              | [] (rebuild if mismatch)
-# provision_only  | absent        | *             | [ensure_absent]                      | []
-# configure_only  | present       | running       | [reconcile_host_config, ensure_ssh_key] | [wait, gather, configure, reboot]
-# configure_only  | present       | absent        | []                                   | [] (skip: not running)
-# configure_only  | absent        | *             | []                                   | []
-# full            | present       | absent        | [ensure_container, ...]              | [wait, gather, configure, reboot]
-# full            | present       | running       | [ensure_container, ...]              | [wait, gather, configure, reboot]
-# full            | absent        | *             | [ensure_absent]                      | []
+# Produces the semantic plan `proxmox_lxc_lifecycle_plan`. The plan names
+# outcomes (container transition, host reconciliation, guest-access restoration,
+# guest configuration, destructive intent, reason) rather than ordered task
+# arrays. Downstream tasks consume the plan; they do not re-derive the
+# transition.
+#
+# intent          | desired_state | runtime_state | container_transition | reconcile | restore | configure_guest
+# ----------------|---------------|---------------|----------------------|-----------|---------|----------------
+# validate_only   | *             | *             | none                 | no        | no      | no
+# provision_only  | present       | absent        | provision            | yes       | yes     | no
+# provision_only  | present       | running       | provision (rebuild if mismatch) | yes | yes | no
+# provision_only  | absent        | *             | remove               | no        | no      | no
+# configure_only  | present       | running       | none                 | yes       | yes     | yes
+# configure_only  | present       | absent        | none                 | no        | no      | no
+# configure_only  | absent        | *             | none                 | no        | no      | no
+# full            | present       | absent        | provision            | yes       | yes     | yes
+# full            | present       | running       | provision (rebuild if mismatch) | yes | yes | yes
+# full            | absent        | *             | remove               | no        | no      | no
 # ==============================================================================
 
 - name: Derive lifecycle intent flags
@@ -36,7 +42,7 @@
     - proxmox_lifecycle_policy_effective.strict_validation | bool
     - proxmox_lifecycle_validation_failed | bool
 
-- name: Build lifecycle action lists
+- name: Derive lifecycle scratch flags and reason
   ansible.builtin.set_fact:
     proxmox_lifecycle_skip_provision: >-
       {{
@@ -53,53 +59,58 @@
           and proxmox_lifecycle_runtime_state == 'absent'
         )
       }}
-    proxmox_lifecycle_host_actions: >-
-      {%- set actions = [] -%}
-      {%- set _desired_present = proxmox_lxc_contract.api_spec.state | default('present') == 'present' -%}
-      {%- set _skip_provision = (not proxmox_lifecycle_should_provision) or (proxmox_lifecycle_validation_failed | bool) -%}
-      {%- set _configure_existing = proxmox_lifecycle_intent == 'configure_only'
+    proxmox_lifecycle_desired_present: "{{ proxmox_lxc_contract.api_spec.state | default('present') == 'present' }}"
+    proxmox_lifecycle_configure_existing: >-
+      {{
+        proxmox_lifecycle_intent == 'configure_only'
         and not (proxmox_lifecycle_validation_failed | bool)
-        and _desired_present
-        and proxmox_lifecycle_runtime_state != 'absent' -%}
-      {%- if not _skip_provision -%}
-      {%-   if proxmox_lifecycle_rebuild_required | bool -%}
-      {%-     set _ = actions.extend(['stop_container', 'destroy_container']) -%}
-      {%-   endif -%}
-      {%-   if _desired_present -%}
-      {%-     set _ = actions.append('ensure_container') -%}
-      {%-   else -%}
-      {%-     set _ = actions.append('ensure_absent') -%}
-      {%-   endif -%}
+        and (proxmox_lxc_contract.api_spec.state | default('present') == 'present')
+        and proxmox_lifecycle_runtime_state != 'absent'
+      }}
+    proxmox_lifecycle_reason: >-
+      {%- if proxmox_lifecycle_validation_failed | bool -%}
+      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}
+      {%- elif proxmox_lifecycle_intent == 'configure_only' and proxmox_lifecycle_runtime_state == 'absent' -%}
+      Container does not exist in Proxmox, so configure-only was skipped.
+      {%- elif proxmox_lxc_contract.api_spec.state | default('present') != 'present' -%}
+      Desired state is absent, so guest configuration was skipped.
+      {%- else -%}
+      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle actions completed') }}
       {%- endif -%}
-      {%- if _desired_present and ((not _skip_provision) or _configure_existing) -%}
-      {%-   if proxmox_lxc_host_config_enabled | default(true) -%}
-      {%-     set _ = actions.append('reconcile_host_config') -%}
-      {%-   endif -%}
-      {%-   set _ = actions.append('ensure_ssh_key') -%}
-      {%- endif -%}
-      {{ actions }}
-    proxmox_lifecycle_guest_actions: >-
-      {%- set actions = [] -%}
-      {%- set _skip_configure =
-            (not proxmox_lifecycle_should_configure)
-            or (proxmox_lifecycle_validation_failed | bool)
-            or (proxmox_lxc_contract.api_spec.state | default('present') != 'present')
-            or (
-              proxmox_lifecycle_intent == 'configure_only'
-              and proxmox_lifecycle_runtime_state == 'absent'
-            ) -%}
-      {%- if not _skip_configure -%}
-      {%-   set _ = actions.extend([
-              'wait_for_connection',
-              'gather_facts',
-              'configure_guest',
-              'reboot_if_required'
-            ]) -%}
-      {%- endif -%}
-      {{ actions }}
-    proxmox_lifecycle_cache_actions: >-
-      {%- set actions = [] -%}
-      {%- if proxmox_lifecycle_rebuild_required | bool and proxmox_lifecycle_policy_effective.cleanup_rebuilt_state | bool -%}
-      {%-   set _ = actions.extend(['clear_fact_cache', 'remove_known_hosts']) -%}
-      {%- endif -%}
-      {{ actions }}
+
+- name: Compose semantic lifecycle plan
+  ansible.builtin.set_fact:
+    proxmox_lxc_lifecycle_plan:
+      container_transition: >-
+        {{
+          'none' if (proxmox_lifecycle_skip_provision | bool)
+          else ('rebuild' if (proxmox_lifecycle_rebuild_required | bool)
+          else ('provision' if (proxmox_lifecycle_desired_present | bool) else 'remove'))
+        }}
+      reconcile_host_config: >-
+        {{
+          (proxmox_lifecycle_desired_present | bool)
+          and (
+            (not (proxmox_lifecycle_skip_provision | bool))
+            or (proxmox_lifecycle_configure_existing | bool)
+          )
+          and (proxmox_lxc_host_config_enabled | default(true) | bool)
+        }}
+      restore_guest_access: >-
+        {{
+          (proxmox_lifecycle_desired_present | bool)
+          and (
+            (not (proxmox_lifecycle_skip_provision | bool))
+            or (proxmox_lifecycle_configure_existing | bool)
+          )
+        }}
+      configure_guest: "{{ not (proxmox_lifecycle_skip_configure | bool) }}"
+      destructive: >-
+        {{
+          (not (proxmox_lifecycle_skip_provision | bool))
+          and (
+            (proxmox_lifecycle_rebuild_required | bool)
+            or (not (proxmox_lifecycle_desired_present | bool))
+          )
+        }}
+      reason: "{{ proxmox_lifecycle_reason }}"

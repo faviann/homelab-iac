@@ -140,3 +140,10 @@
         and proxmox_lifecycle_actual_release | length > 0
         and proxmox_lifecycle_actual_release != proxmox_lifecycle_desired_release
       }}
+
+- name: Record pre-action lifecycle observation
+  ansible.builtin.set_fact:
+    proxmox_lxc_lifecycle_observation_before:
+      runtime_state: "{{ proxmox_lifecycle_runtime_state }}"
+      release: "{{ proxmox_lifecycle_actual_release }}"
+      release_probe_state: "{{ proxmox_lifecycle_release_probe_state }}"

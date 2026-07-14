@@ -1,5 +1,5 @@
 ---
-- name: Derive lifecycle outcome values
+- name: Derive lifecycle outcome status
   ansible.builtin.set_fact:
     proxmox_lifecycle_status: >-
       {%- if proxmox_lifecycle_validation_failed | bool -%}
@@ -13,44 +13,28 @@
       {%- else -%}
       configured
       {%- endif -%}
-    proxmox_lifecycle_reason: >-
-      {%- if proxmox_lifecycle_validation_failed | bool -%}
-      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}
-      {%- elif proxmox_lifecycle_intent == 'configure_only' and proxmox_lifecycle_runtime_state == 'absent' -%}
-      Container does not exist in Proxmox, so configure-only was skipped.
-      {%- elif proxmox_lxc_contract.api_spec.state | default('present') != 'present' -%}
-      Desired state is absent, so guest configuration was skipped.
-      {%- else -%}
-      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle actions completed') }}
-      {%- endif -%}
 
 - name: Build lifecycle result payload
   ansible.builtin.set_fact:
     lxc_lifecycle_result:
-      status: "{{ proxmox_lifecycle_status }}"
-      reason: "{{ proxmox_lifecycle_reason }}"
       intent: "{{ proxmox_lifecycle_intent }}"
-      compiled_spec: "{{ proxmox_lxc_contract.api_spec }}"
-      validation_status: "{{ proxmox_lifecycle_validation_snapshot.status | default('ok') }}"
-      runtime_state: "{{ proxmox_lifecycle_runtime_state | default('unknown') }}"
-      release_probe_state: "{{ proxmox_lifecycle_release_probe_state | default('unavailable') }}"
-      release_mismatch: "{{ proxmox_lifecycle_release_mismatch | default(false) | bool }}"
-      rebuild_required: "{{ proxmox_lifecycle_rebuild_required | default(false) | bool }}"
-      skip_provision: "{{ proxmox_lifecycle_skip_provision | default(false) | bool }}"
-      skip_configure: "{{ proxmox_lifecycle_skip_configure | default(false) | bool }}"
-      host_actions: "{{ proxmox_lifecycle_host_actions | default([]) }}"
-      guest_actions: "{{ proxmox_lifecycle_guest_actions | default([]) }}"
-      cache_actions: "{{ proxmox_lifecycle_cache_actions | default([]) }}"
-      internal_snapshot:
-        validation_snapshot: "{{ proxmox_lifecycle_validation_snapshot | default({}) }}"
-        policy_effective: "{{ proxmox_lifecycle_policy_effective }}"
-        action_decisions:
-          host: "{{ proxmox_lifecycle_host_actions | default([]) }}"
-          guest: "{{ proxmox_lifecycle_guest_actions | default([]) }}"
-          cache: "{{ proxmox_lifecycle_cache_actions | default([]) }}"
+      plan: "{{ proxmox_lxc_lifecycle_plan }}"
+      outcome:
+        status: "{{ proxmox_lifecycle_status }}"
+        reason: "{{ proxmox_lifecycle_reason }}"
+        rebuilt: "{{ proxmox_lifecycle_rebuilt | bool }}"
+      observations:
+        before: "{{ proxmox_lxc_lifecycle_observation_before }}"
+        after: "{{ proxmox_lxc_lifecycle_observation_after | default(proxmox_lxc_lifecycle_observation_before) }}"
     proxmox_lxc_rebuilt: "{{ proxmox_lifecycle_rebuilt | bool }}"
-    lxc_lifecycle_skip_host: "{{ proxmox_lifecycle_skip_provision | default(false) | bool and proxmox_lifecycle_skip_configure | default(false) | bool }}"
+    lxc_lifecycle_skip_host: >-
+      {{
+        proxmox_lxc_lifecycle_plan.container_transition == 'none'
+        and not (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
+        and not (proxmox_lxc_lifecycle_plan.restore_guest_access | bool)
+        and not (proxmox_lxc_lifecycle_plan.configure_guest | bool)
+      }}
 
 - name: Report lifecycle outcome
   ansible.builtin.debug:
-    msg: "Lifecycle {{ lxc_lifecycle_result.status }} for {{ inventory_hostname }}"
+    msg: "Lifecycle {{ lxc_lifecycle_result.outcome.status }} for {{ inventory_hostname }}"

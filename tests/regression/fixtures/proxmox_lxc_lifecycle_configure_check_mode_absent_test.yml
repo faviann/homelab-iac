@@ -19,11 +19,13 @@
   vars:
     proxmox_lifecycle_runtime_state: absent
     proxmox_lifecycle_rebuilt: false
-    proxmox_lifecycle_guest_actions:
-      - wait_for_connection
-      - gather_facts
-      - configure_guest
-      - reboot_if_required
+    proxmox_lxc_lifecycle_plan:
+      container_transition: none
+      reconcile_host_config: false
+      restore_guest_access: false
+      configure_guest: true
+      destructive: false
+      reason: test
     docker_enabled: true
     workstation_enabled: true
     gpu_enabled: true
