@@ -57,3 +57,4 @@
             | list
             | length == 0
       when: fleet_expected_shared_problem | default(false) | bool
+      run_once: true

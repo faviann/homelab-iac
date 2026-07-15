@@ -222,7 +222,6 @@
   ansible.builtin.add_host:
     name: "{{ item }}"
     proxmox_fleet_preflight_complete: true
-    proxmox_fleet_preflight_problem_records: "{{ proxmox_fleet_preflight_problem_records }}"
     proxmox_fleet_preflight_problems: "{{ proxmox_fleet_preflight_problems }}"
     proxmox_fleet_common_observation: "{{ proxmox_fleet_common_observation }}"
     proxmox_fleet_target_observations: "{{ proxmox_fleet_target_observations }}"
