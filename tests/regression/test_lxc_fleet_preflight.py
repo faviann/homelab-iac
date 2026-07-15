@@ -30,6 +30,8 @@ VALIDATION_PREREQUISITE_INVENTORY = (
     FIXTURES / "lxc_validation_prerequisite_inventory.yml"
 )
 PLAYBOOK = FIXTURES / "lxc_fleet_preflight_test.yml"
+ROLE_INTERFACE_INVENTORY = FIXTURES / "lxc_fleet_preflight_interface_inventory.yml"
+ROLE_INTERFACE_PLAYBOOK = FIXTURES / "lxc_fleet_preflight_interface_test.yml"
 STANDALONE_PLAYBOOK = FIXTURES / "lxc_standalone_validation_test.yml"
 MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
@@ -230,6 +232,23 @@ def main() -> int:
         "hostname_conflict",
     )
     if not all(run_case(case) for case in cases):
+        return 1
+
+    role_interface = subprocess.run(
+        [
+            *ANSIBLE_PLAYBOOK,
+            "-i",
+            str(ROLE_INTERFACE_INVENTORY),
+            str(ROLE_INTERFACE_PLAYBOOK),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    if role_interface.returncode != 0:
+        print("fleet preflight role interface seam failed", file=sys.stderr)
+        print(f"{role_interface.stdout}\n{role_interface.stderr}", file=sys.stderr)
         return 1
 
     with tempfile.TemporaryDirectory(prefix="lxc-fleet-https-") as temp_dir:

@@ -1,0 +1,38 @@
+---
+- name: Exercise the fleet preflight role interface directly
+  hosts: fleet_preflight_interface_targets
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_fleet_target_hosts:
+      - compiled_identity_target
+    proxmox_fleet_managed_hosts:
+      - compiled_identity_target
+    proxmox_fleet_observation_override:
+      containers:
+        - vmid: 6902
+          name: compiled-identity
+          status: running
+  tasks:
+    - name: Invoke fleet preflight without the lifecycle facade
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_fleet_preflight
+
+    - name: Assert preflight honors the compiled identity without planning
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc.vmid | int == 6901
+          - proxmox_lxc.hostname == 'raw-identity'
+          - proxmox_fleet_identity_reservations[inventory_hostname].vmid | int == 6902
+          - proxmox_fleet_identity_reservations[inventory_hostname].hostname == 'compiled-identity'
+          - proxmox_fleet_target_observations[inventory_hostname].status == 'ok'
+          - proxmox_fleet_target_observations[inventory_hostname].type == 'match_ok'
+          - proxmox_fleet_target_observations[inventory_hostname].runtime_state == 'running'
+          - proxmox_fleet_target_observations[inventory_hostname].common_observation | bool
+          - proxmox_fleet_target_observations[inventory_hostname].preflight_problems | length == 0
+          - "'release_mismatch' not in proxmox_fleet_target_observations[inventory_hostname]"
+          - "'container_transition' not in proxmox_fleet_target_observations[inventory_hostname]"
+          - proxmox_lxc_lifecycle_plan is not defined
+          - lxc_lifecycle_result is not defined
+          - proxmox_lifecycle_release_mismatch is not defined
+          - proxmox_lifecycle_container_transition is not defined
