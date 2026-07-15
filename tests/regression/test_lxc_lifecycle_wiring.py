@@ -67,9 +67,9 @@ def main() -> int:
             "access_restoration",
         }
         wiring_tasks = (
-            "Compile desired LXC specification",
+            "Compile and normalize the layered LXC specification",
             "Run fleet preflight after every target contract was compiled",
-            "Decide lifecycle actions",
+            "Compose semantic lifecycle plan",
             "Execute host-side actions",
             "Re-observe current state after provisioning and host reconciliation",
             "Restore guest access after re-observation",

@@ -1,0 +1,36 @@
+---
+# Observe, validate, and build one target's semantic LXC lifecycle plan. Fleet
+# preflight coordination must already have published any common observations.
+
+- name: Observe and plan this target without lifecycle actions
+  when: proxmox_lifecycle_planning_problem | length == 0
+  block:
+    - name: Inspect current lifecycle state
+      ansible.builtin.import_tasks: inspect.yml
+
+    - name: Validate inspection state is complete and well-typed
+      ansible.builtin.import_tasks: validate_state.yml
+
+    - name: Decide lifecycle actions
+      ansible.builtin.import_tasks: decide.yml
+  rescue:
+    - name: Record the target's semantic planning failure
+      ansible.builtin.set_fact:
+        proxmox_lxc_lifecycle_plan: {}
+        proxmox_lifecycle_planning_problem: >-
+          {{
+            (ansible_failed_result | default({})).msg
+            | default('LXC lifecycle planning failed for ' ~ inventory_hostname)
+          }}
+
+- name: Record fleet preflight after collecting independent target problems
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_planning_problem: >-
+      Fleet preflight failed: {{ proxmox_fleet_preflight_problems | join(' ') }}
+  when:
+    - proxmox_lifecycle_collect_all_planning_problems | default(false) | bool
+    - proxmox_lifecycle_planning_problem | length == 0
+    - proxmox_fleet_preflight_problems | default([]) | length > 0
+    - >-
+      proxmox_lifecycle_observation.type | default('')
+      == 'preflight_failed'

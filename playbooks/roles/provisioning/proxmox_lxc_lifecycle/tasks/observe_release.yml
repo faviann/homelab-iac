@@ -3,35 +3,37 @@
 # post-host-work refresh use this task file; the shared probe implementation is
 # injected so the role does not depend on repository-directory traversal.
 
-- name: Reset release observation for a refreshed runtime state
+- name: Normalize release observation for desired and runtime state
   ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: ""
-    proxmox_lifecycle_release_probe_state: unavailable
-  when: proxmox_lifecycle_release_observation_refresh | default(false) | bool
-
-- name: Mark release observation as not applicable for absent desired state
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: ""
-    proxmox_lifecycle_release_probe_state: not_applicable
-  when:
-    - not (proxmox_lifecycle_release_observation_refresh | default(false) | bool)
-    - proxmox_lxc_contract.api_spec.state | default('present') != 'present'
-
-- name: Mark stopped containers as skipped for release probing
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: ""
-    proxmox_lifecycle_release_probe_state: skipped_stopped
-  when:
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
-    - proxmox_lifecycle_runtime_state == 'stopped'
-
-- name: Mark absent containers as skipped for release probing
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_actual_release: ""
-    proxmox_lifecycle_release_probe_state: absent
-  when:
-    - proxmox_lifecycle_release_probe_state == 'unavailable'
-    - proxmox_lifecycle_runtime_state == 'absent'
+    proxmox_lifecycle_actual_release: >-
+      {{
+        ''
+        if (
+          (not (proxmox_lifecycle_release_observation_refresh | default(false) | bool)
+           and proxmox_lxc_contract.api_spec.state | default('present') != 'present')
+          or (
+            (proxmox_lifecycle_release_observation_refresh | default(false) | bool
+             or proxmox_lifecycle_release_probe_state == 'unavailable')
+            and proxmox_lifecycle_runtime_state in ['stopped', 'absent', 'running']
+          )
+        )
+        else proxmox_lifecycle_actual_release
+      }}
+    proxmox_lifecycle_release_probe_state: >-
+      {%- set refresh = proxmox_lifecycle_release_observation_refresh | default(false) | bool -%}
+      {%- if not refresh and proxmox_lxc_contract.api_spec.state | default('present') != 'present' -%}
+      not_applicable
+      {%- elif (refresh or proxmox_lifecycle_release_probe_state == 'unavailable')
+                and proxmox_lifecycle_runtime_state == 'stopped' -%}
+      skipped_stopped
+      {%- elif (refresh or proxmox_lifecycle_release_probe_state == 'unavailable')
+                and proxmox_lifecycle_runtime_state == 'absent' -%}
+      absent
+      {%- elif refresh -%}
+      unavailable
+      {%- else -%}
+      {{ proxmox_lifecycle_release_probe_state }}
+      {%- endif -%}
 
 - name: Probe the current running guest release
   ansible.builtin.include_tasks:

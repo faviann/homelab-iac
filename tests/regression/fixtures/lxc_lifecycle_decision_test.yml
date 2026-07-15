@@ -1,9 +1,9 @@
 ---
-# Speed note: seeding, execution, and assertion plays use the free strategy —
-# each scenario host only touches its own per-vmid observable state, so hosts
-# need not stay in lockstep. Both PLAN plays stay on the linear strategy: the
-# lifecycle planning barrier aggregates every target's planning outcome with
-# run_once tasks, which requires all targets to reach the barrier together.
+# Speed note: target-local compilation and semantic planning use the free
+# strategy because every scenario owns isolated observable state. Targeted-set
+# planning-barrier behavior is covered separately by the planning-barrier
+# fixture, so this matrix can exercise the same internal planning modules with
+# an explicitly open barrier.
 - name: Exercise semantic lifecycle scenarios through the single-target facade
   hosts: lifecycle_scenarios
   connection: local
@@ -75,27 +75,54 @@
       throttle: 1
       delegate_to: localhost
       when: lifecycle_expected_known_host_cleanup is defined
-- name: Plan every successful semantic lifecycle scenario
-  hosts: lifecycle_scenarios:!lifecycle_plan_failures
+- name: Initialize semantic lifecycle scenario planning
+  hosts: lifecycle_scenarios
   connection: local
   gather_facts: false
   vars: *lifecycle_scenario_vars
   tasks:
-    - name: Plan through the split lifecycle facade
-      ansible.builtin.include_role:
+    - name: Initialize the target-local planning contract
+      ansible.builtin.import_role:
         name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: plan
+        tasks_from: initialize_planning
 
-- name: Plan every scenario expected to fail before execution
-  hosts: lifecycle_plan_failures
+- name: Compile every semantic lifecycle scenario independently
+  hosts: lifecycle_scenarios
   connection: local
   gather_facts: false
+  strategy: ansible.builtin.free
   vars: *lifecycle_scenario_vars
   tasks:
-    - name: Plan through the split lifecycle facade
-      ansible.builtin.include_role:
+    - name: Compile the target-local LXC contract
+      ansible.builtin.import_role:
         name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: plan
+        tasks_from: compile_target
+
+- name: Build every semantic lifecycle plan independently
+  hosts: lifecycle_scenarios
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  vars: *lifecycle_scenario_vars
+  tasks:
+    - name: Build the target-local semantic lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan_target
+
+- name: Publish semantic lifecycle scenario planning results
+  hosts: lifecycle_scenarios
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  vars: *lifecycle_scenario_vars
+  tasks:
+    - name: Publish the semantic plan through the stable result interface
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: publish_planning_result
+      vars:
+        proxmox_lifecycle_barrier_blocked: false
 
 # Scenario isolation note: every scenario observes and mutates only its own
 # per-vmid state files, so this fixture executes scenarios in parallel for

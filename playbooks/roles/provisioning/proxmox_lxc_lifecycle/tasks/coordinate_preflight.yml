@@ -1,0 +1,24 @@
+---
+# Targeted-set coordination. A preceding play must have completed every target's
+# compile_target attempt before this entry is reached.
+
+- name: Collect targets with successfully compiled LXC contracts
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_compiled_target_hosts: >-
+      {%- set compiled = [] -%}
+      {%- for host in hostvars.localhost.proxmox_lifecycle_target_hosts -%}
+      {%-   if hostvars[host].proxmox_lifecycle_planning_problem | default('') | length == 0
+              and hostvars[host].proxmox_lxc_contract is defined -%}
+      {%-     set _ = compiled.append(host) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ compiled }}
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Run fleet preflight after every target contract was compiled
+  ansible.builtin.include_role:
+    name: provisioning/proxmox_lxc_fleet_preflight
+  vars:
+    proxmox_fleet_target_hosts: "{{ hostvars.localhost.proxmox_lifecycle_compiled_target_hosts }}"
+  when: proxmox_fleet_preflight_enabled | bool

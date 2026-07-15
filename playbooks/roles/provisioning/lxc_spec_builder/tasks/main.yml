@@ -16,31 +16,58 @@
       proxmox_lxc or proxmox_lxc_overrides. See docs/inventory-structure-guide.md for
       the expected shape.
 
-# ==============================================================================
-# PHASE 1: Static Configuration Layering
-# Merges base configuration from least to most specific precedence
-# ==============================================================================
+- name: Assert storage backend is configured
+  ansible.builtin.assert:
+    that:
+      - proxmox_default_storage is defined
+      - proxmox_default_storage | length > 0
+    fail_msg: >-
+      proxmox_default_storage must be set in group_vars/all/proxmox.yml.
+      Current value: {{ proxmox_default_storage | default('UNDEFINED') }}
 
-- name: Assemble LXC spec layers (lowest to highest precedence)
+- name: Compile and normalize the layered LXC specification
   ansible.builtin.set_fact:
-    _proxmox_lxc_spec_layers: >-
-      {{
-        [
-          proxmox_lxc_defaults | default({}),
-          proxmox_lxc_global_defaults | default({}),
-          proxmox_lxc_group_defaults | default({}),
-          proxmox_lxc_capability_defaults | default({}),
-          proxmox_lxc_overrides | default({}),
-          proxmox_lxc | default({})
-        ]
-      }}
+    _proxmox_lxc_compiled_spec: >-
+      {%- set layers = [
+        proxmox_lxc_defaults | default({}),
+        proxmox_lxc_global_defaults | default({}),
+        proxmox_lxc_group_defaults | default({}),
+        proxmox_lxc_capability_defaults | default({}),
+        proxmox_lxc_overrides | default({}),
+        proxmox_lxc | default({})
+      ] -%}
+      {%- set compiled = namespace(value={}) -%}
+      {%- for layer in layers -%}
+      {%-   set compiled.value = compiled.value | combine(layer, recursive=True) -%}
+      {%- endfor -%}
+      {%- if compiled.value.disk is defined and compiled.value.disk | string is not search(':') -%}
+      {%-   set compiled.value = compiled.value | combine({'disk': proxmox_default_storage ~ ':' ~ (compiled.value.disk | string)}, recursive=True) -%}
+      {%- endif -%}
+      {%- if lxc_hwaddr is defined
+             and compiled.value.netif is defined
+             and compiled.value.netif.net0 is defined
+             and compiled.value.netif.net0 is not search(',hwaddr=') -%}
+      {%-   set compiled.value = compiled.value | combine({
+              'netif': {
+                'net0': compiled.value.netif.net0
+                  | regex_replace(',ip=dhcp', ',hwaddr=' ~ lxc_hwaddr ~ ',ip=dhcp')
+              }
+            }, recursive=True) -%}
+      {%- endif -%}
+      {%- if proxmox_lxc_disable_root_password | bool -%}
+      {%-   set compiled.value = compiled.value | dict2items | rejectattr('key', 'equalto', 'password') | list | items2dict -%}
+      {%- endif -%}
+      {%- if proxmox_lxc_controller_pubkey_enabled | bool
+             and compiled.value.pubkey is not defined
+             and proxmox_lxc_controller_pubkey_path | default('') | length > 0 -%}
+      {%-   set controller_pubkey = lookup('ansible.builtin.file', proxmox_lxc_controller_pubkey_path, errors='ignore') | default('', true) -%}
+      {%-   if controller_pubkey | length > 0 -%}
+      {%-     set compiled.value = compiled.value | combine({'pubkey': controller_pubkey}, recursive=True) -%}
+      {%-   endif -%}
+      {%- endif -%}
+      {{ compiled.value }}
 
-- name: Merge LXC spec layers into single base definition
-  ansible.builtin.set_fact:
-    _proxmox_lxc_compiled_spec: "{{ _proxmox_lxc_compiled_spec | default({}) | combine(item, recursive=True) }}"
-  loop: "{{ _proxmox_lxc_spec_layers }}"
-
-- name: Show spec layer contributions (run with -t spec_debug to enable)
+- name: Show spec layer contributions
   ansible.builtin.debug:
     msg: |
       === LXC spec layer contributions for {{ inventory_hostname }} ===
@@ -66,195 +93,56 @@
       proxmox_lxc_capability_defaults.features explicitly.
   when: docker_enabled | default(false)
 
-# ==============================================================================
-# PHASE 2: Spec Normalization
-# Normalizes layered values that still need storage or host-specific expansion
-# ==============================================================================
-
-- name: Assert storage backend is configured
-  ansible.builtin.assert:
-    that:
-      - proxmox_default_storage is defined
-      - proxmox_default_storage | length > 0
-    fail_msg: >-
-      proxmox_default_storage must be set in group_vars/all/proxmox.yml.
-      Current value: {{ proxmox_default_storage | default('UNDEFINED') }}
-
-- name: Normalize size-only disk values into Proxmox storage syntax
+- name: Build the explicit compiled LXC contract
   ansible.builtin.set_fact:
-    _proxmox_lxc_compiled_spec: >-
-      {{
+    proxmox_lxc_contract: >-
+      {%- set identity = {
+        'vmid': _proxmox_lxc_compiled_spec.vmid,
+        'hostname': _proxmox_lxc_compiled_spec.hostname
+      } -%}
+      {%- set api_keys = [
+        'node', 'ostemplate', 'pool', 'password', 'pubkey', 'description',
+        'storage', 'disk', 'mount_volumes', 'cores', 'cpus', 'cpuunits',
+        'memory', 'swap', 'netif', 'unprivileged', 'onboot', 'timezone',
+        'nameserver', 'searchdomain', 'mounts', 'startup', 'tags', 'timeout',
+        'ostype', 'state', 'update', 'start_on_create'
+      ] -%}
+      {%- set api_spec = identity | combine(
         _proxmox_lxc_compiled_spec
-        | combine(
-            {
-              'disk': proxmox_default_storage + ':' + (_proxmox_lxc_compiled_spec.disk | string)
-            },
-            recursive=True
-          )
-      }}
-  when:
-    - _proxmox_lxc_compiled_spec.disk is defined
-    - _proxmox_lxc_compiled_spec.disk | string is not search(':')
-
-- name: Inject host-specific hardware address into primary network interface
-  ansible.builtin.set_fact:
-    _proxmox_lxc_compiled_spec: >-
+        | dict2items
+        | selectattr('key', 'in', api_keys)
+        | list
+        | items2dict,
+        recursive=True
+      ) -%}
+      {%- set release_candidates = (_proxmox_lxc_compiled_spec.ostemplate | default('')) | regex_findall('debian-([0-9]+)-') -%}
       {{
-        _proxmox_lxc_compiled_spec
-        | combine(
-            {
-              'netif': {
-                'net0': (
-                  _proxmox_lxc_compiled_spec.netif.net0
-                  | regex_replace(',ip=dhcp', ',hwaddr=' + lxc_hwaddr + ',ip=dhcp')
-                )
-              }
-            },
-            recursive=True
-          )
+        {
+          'identity': identity,
+          'api_spec': api_spec,
+          'host_config': {
+            'vmid': identity.vmid,
+            'hostname': identity.hostname,
+            'host_directories': proxmox_lxc_host_directories | default([]),
+            'bind_mounts': proxmox_default_bind_mounts | default({}) | combine(proxmox_lxc_bind_mounts_overrides | default({}), recursive=True),
+            'idmap': proxmox_lxc_idmap_overrides | default(proxmox_default_idmap, true),
+            'features': _proxmox_lxc_compiled_spec.features | default([]),
+            'configure_nvidia_runtime': configure_nvidia_runtime | default(false) | bool,
+            'wireguard_kernel_module_access': wireguard_kernel_module_access | default(false) | bool,
+            'lxc_custom_sysctls': lxc_custom_sysctls | default([]),
+            'lxc_disable_apparmor': lxc_disable_apparmor | default(false) | bool
+          },
+          'guest_bootstrap': {
+            'vmid': identity.vmid,
+            'hostname': identity.hostname,
+            'pubkey': _proxmox_lxc_compiled_spec.pubkey | default('')
+          },
+          'derived_metadata': {
+            'desired_debian_release_candidates': release_candidates,
+            'desired_debian_release': release_candidates | first | default('')
+          }
+        }
       }}
-  when:
-    - lxc_hwaddr is defined
-    - _proxmox_lxc_compiled_spec.netif is defined
-    - _proxmox_lxc_compiled_spec.netif.net0 is defined
-    - _proxmox_lxc_compiled_spec.netif.net0 is not search(',hwaddr=')
-
-# ==============================================================================
-# PHASE 3: Mount Point Configuration
-# All mounts are bind mounts (config file) - no mount_volumes via API
-# ==============================================================================
-
-- name: Determine effective bind mount configuration (host path mounts requiring config file)
-  ansible.builtin.set_fact:
-    _proxmox_lxc_bind_mounts: "{{ proxmox_default_bind_mounts | default({}) | combine(proxmox_lxc_bind_mounts_overrides | default({}), recursive=True) }}"
-
-# ==============================================================================
-# PHASE 4: ID Mapping Configuration
-# Sets up UID/GID mappings for unprivileged containers
-# ==============================================================================
-
-- name: Determine effective idmap entries
-  ansible.builtin.set_fact:
-    _proxmox_lxc_idmap: "{{ proxmox_lxc_idmap_overrides | default(proxmox_default_idmap, true) }}"
-
-# ==============================================================================
-# PHASE 5: Security and SSH Configuration
-# Applies security hardening and injects SSH keys
-# ==============================================================================
-
-- name: Enforce key-only root authentication when requested
-  ansible.builtin.set_fact:
-    _proxmox_lxc_compiled_spec: "{{ (_proxmox_lxc_compiled_spec | dict2items | rejectattr('key', 'equalto', 'password') | list) | items2dict }}"
-  when: proxmox_lxc_disable_root_password | bool
-
-- name: Load control node SSH public key when requested
-  ansible.builtin.set_fact:
-    _proxmox_lxc_controller_pubkey_content: "{{ lookup('ansible.builtin.file', proxmox_lxc_controller_pubkey_path, errors='ignore') | default('', true) }}"
-  when:
-    - proxmox_lxc_controller_pubkey_enabled | bool
-    - _proxmox_lxc_compiled_spec.pubkey is not defined
-    - proxmox_lxc_controller_pubkey_path | default('') | length > 0
-
-- name: Inject control node SSH public key into LXC spec
-  ansible.builtin.set_fact:
-    _proxmox_lxc_compiled_spec: "{{ _proxmox_lxc_compiled_spec | combine({'pubkey': _proxmox_lxc_controller_pubkey_content}, recursive=True) }}"
-  when:
-    - proxmox_lxc_controller_pubkey_enabled | bool
-    - _proxmox_lxc_compiled_spec.pubkey is not defined
-    - _proxmox_lxc_controller_pubkey_content is defined
-    - _proxmox_lxc_controller_pubkey_content | default('', true) | length > 0
-
-- name: Derive lifecycle metadata from compiled LXC spec
-  ansible.builtin.set_fact:
-    _proxmox_lxc_derived_metadata:
-      desired_debian_release_candidates: >-
-        {{ (_proxmox_lxc_compiled_spec.ostemplate | default('')) | regex_findall('debian-([0-9]+)-') }}
-      desired_debian_release: >-
-        {{ (((_proxmox_lxc_compiled_spec.ostemplate | default('')) | regex_findall('debian-([0-9]+)-')) | first | default('')) }}
-
-- name: Build explicit contract identity view
-  ansible.builtin.set_fact:
-    _proxmox_lxc_contract_identity:
-      vmid: "{{ _proxmox_lxc_compiled_spec.vmid }}"
-      hostname: "{{ _proxmox_lxc_compiled_spec.hostname }}"
-
-- name: Build explicit API-managed contract view
-  ansible.builtin.set_fact:
-    _proxmox_lxc_contract_api_spec: >-
-      {{
-        _proxmox_lxc_contract_identity
-        | combine(
-            (
-              _proxmox_lxc_compiled_spec
-              | dict2items
-              | selectattr(
-                  'key',
-                  'in',
-                  [
-                    'node',
-                    'ostemplate',
-                    'pool',
-                    'password',
-                    'pubkey',
-                    'description',
-                    'storage',
-                    'disk',
-                    'mount_volumes',
-                    'cores',
-                    'cpus',
-                    'cpuunits',
-                    'memory',
-                    'swap',
-                    'netif',
-                    'unprivileged',
-                    'onboot',
-                    'timezone',
-                    'nameserver',
-                    'searchdomain',
-                    'mounts',
-                    'startup',
-                    'tags',
-                    'timeout',
-                    'ostype',
-                    'state',
-                    'update',
-                    'start_on_create'
-                  ]
-                )
-              | list
-              | items2dict
-            ),
-            recursive=True
-          )
-      }}
-
-- name: Compile explicit LXC deployment contract
-  ansible.builtin.set_fact:
-    proxmox_lxc_contract:
-      identity: "{{ _proxmox_lxc_contract_identity }}"
-      api_spec: "{{ _proxmox_lxc_contract_api_spec }}"
-      host_config:
-        vmid: "{{ _proxmox_lxc_contract_identity.vmid }}"
-        hostname: "{{ _proxmox_lxc_contract_identity.hostname }}"
-        host_directories: "{{ proxmox_lxc_host_directories | default([]) }}"
-        bind_mounts: "{{ _proxmox_lxc_bind_mounts | default({}) }}"
-        idmap: "{{ _proxmox_lxc_idmap | default([]) }}"
-        features: "{{ _proxmox_lxc_compiled_spec.features | default([]) }}"
-        configure_nvidia_runtime: "{{ configure_nvidia_runtime | default(false) | bool }}"
-        wireguard_kernel_module_access: "{{ wireguard_kernel_module_access | default(false) | bool }}"
-        lxc_custom_sysctls: "{{ lxc_custom_sysctls | default([]) }}"
-        lxc_disable_apparmor: "{{ lxc_disable_apparmor | default(false) | bool }}"
-      guest_bootstrap:
-        vmid: "{{ _proxmox_lxc_contract_identity.vmid }}"
-        hostname: "{{ _proxmox_lxc_contract_identity.hostname }}"
-        pubkey: "{{ _proxmox_lxc_compiled_spec.pubkey | default('') }}"
-      derived_metadata: "{{ _proxmox_lxc_derived_metadata }}"
-
-# ==============================================================================
-# PHASE 6: Spec Validation
-# Asserts all required fields are present before handing off to downstream roles.
-# Fails fast here rather than inside provisioning with a cryptic API error.
-# ==============================================================================
 
 - name: Validate assembled LXC spec
   ansible.builtin.assert:

@@ -41,10 +41,80 @@
             lifecycle_default_entry_refusal: "{{ ansible_failed_result.msg }}"
 
     - name: Run the planning half of the lifecycle facade
-      ansible.builtin.include_role:
+      ansible.builtin.import_role:
         name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: plan
+        tasks_from: initialize_planning
       when: lifecycle_test_case != 'unsafe_default'
+
+- name: Compile every targeted LXC contract independently before Fleet preflight
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  tasks:
+    - name: Compile the target-local LXC contract
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: compile_target
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+
+- name: Coordinate Fleet preflight for successfully compiled target identities
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Run Fleet preflight after every compilation attempt completed
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_preflight
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+      run_once: true
+
+- name: Build every targeted semantic lifecycle plan independently
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  tasks:
+    - name: Build the target-local semantic lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan_target
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+
+- name: Coordinate the all-target lifecycle planning barrier
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Collect every target-local planning outcome
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_barrier
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+      run_once: true
+
+- name: Publish the semantic result for every targeted LXC
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  tasks:
+    - name: Publish the target's stable semantic planning result
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: publish_planning_result
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
 
 - name: Traverse the normal execution half after the barrier
   hosts: lxcs

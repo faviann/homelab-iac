@@ -1,0 +1,28 @@
+---
+# Target selection and target-local state initialization. Keep this entry on the
+# linear strategy: it establishes the targeted-set coordination facts consumed
+# by the independently scheduled compilation phase.
+
+- name: Mark this host outside the targeted LXC set until selected
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_selected: false
+
+- name: Skip if this host is the Ansible controller
+  ansible.builtin.meta: end_host
+  when:
+    - proxmox_skip_self | default(true) | bool
+    - inventory_hostname == lookup('pipe', 'hostname')
+
+- name: Record the command-targeted LXC set
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_target_hosts: "{{ ansible_play_hosts }}"
+    proxmox_lifecycle_execution_failure: {}
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Reset target-local lifecycle planning state
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_selected: true
+    proxmox_lifecycle_planning_problem: ""
+    proxmox_lifecycle_rebuilt: false

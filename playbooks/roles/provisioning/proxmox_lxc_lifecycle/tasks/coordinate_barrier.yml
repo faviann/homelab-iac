@@ -1,0 +1,16 @@
+---
+# Collect target-local planning outcomes only after every plan_target attempt has
+# completed. The resulting localhost fact is the lifecycle planning barrier.
+
+- name: Collect planning failures across the targeted LXC set
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_failed_target_hosts: >-
+      {%- set failed = [] -%}
+      {%- for host in hostvars.localhost.proxmox_lifecycle_target_hosts -%}
+      {%-   if hostvars[host].proxmox_lifecycle_planning_problem | default('') | length > 0 -%}
+      {%-     set _ = failed.append(host) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ failed }}
+  delegate_to: localhost
+  delegate_facts: true

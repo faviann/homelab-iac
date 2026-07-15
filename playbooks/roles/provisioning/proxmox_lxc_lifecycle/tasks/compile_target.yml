@@ -1,0 +1,32 @@
+---
+# Compile one target's layered inventory into its authoritative LXC contract.
+# Callers may schedule this entry independently for every selected target.
+
+- name: Compile the target's desired LXC contract
+  block:
+    - name: Validate lifecycle intent
+      ansible.builtin.assert:
+        that:
+          - proxmox_lifecycle_intent in ['validate_only', 'provision_only', 'configure_only', 'full']
+        fail_msg: >-
+          Invalid proxmox_lifecycle_intent '{{ proxmox_lifecycle_intent }}'.
+          Expected one of: validate_only, provision_only, configure_only, full.
+
+    - name: Merge lifecycle policy defaults
+      ansible.builtin.set_fact:
+        proxmox_lifecycle_policy_effective: >-
+          {{
+            proxmox_lifecycle_policy_default
+            | combine(proxmox_lifecycle_policy | default({}), recursive=True)
+          }}
+
+    - name: Compile desired LXC specification
+      ansible.builtin.import_tasks: compile.yml
+  rescue:
+    - name: Record the target's contract-compilation failure
+      ansible.builtin.set_fact:
+        proxmox_lifecycle_planning_problem: >-
+          {{
+            (ansible_failed_result | default({})).msg
+            | default('LXC contract compilation failed for ' ~ inventory_hostname)
+          }}
