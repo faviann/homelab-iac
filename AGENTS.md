@@ -78,6 +78,8 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `uv run --locked ansible-playbook site.yml --limit <host> -e stack_filter=<stack>` | Deploy one stack on a host (skips all others) |
 | `uv run --locked ansible-playbook site.yml --check` | Dry run |
 | `uv run --locked ansible-playbook bootstrap.yml` | Recreate bootstrap artifacts after clean install |
+| `uv run --locked python tests/regression/run_lxc_lifecycle_regressions.py` | Fast lifecycle feedback (~1.5 min) — semantic lifecycle facade matrix + targeted planning barrier, controlled observations only. Run while iterating on LXC lifecycle changes |
+| `uv run --locked python tests/regression/run_lxc_lifecycle_regressions.py --full` | Full lifecycle regression set (~6 min) — fast path plus host-config idempotence, real role-composition wiring, fleet preflight, and contract seams. Run before handing off lifecycle work |
 | `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
 | `ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 

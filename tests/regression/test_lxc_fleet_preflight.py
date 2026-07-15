@@ -254,9 +254,6 @@ def generate_localhost_certificate(certificate: Path, private_key: Path) -> None
 
 def run_case(limit: str) -> bool:
     env = os.environ.copy()
-    env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(
-        Path.home() / ".ansible" / "vault-pass"
-    )
     command = [
         *ANSIBLE_PLAYBOOK,
         "-i",
@@ -280,7 +277,7 @@ def run_case(limit: str) -> bool:
     return False
 
 
-def main() -> int:
+def run_regressions() -> int:
     cases = (
         "target_conflict,conflict_peer",
         "hostname_conflict",
@@ -442,6 +439,25 @@ def main() -> int:
 
     print("ok: fleet preflight shares observations and standalone validation aggregates problems")
     return 0
+
+
+def main() -> int:
+    with tempfile.TemporaryDirectory(prefix="lxc-fleet-vault-") as temp_dir:
+        # ansible.cfg names a vault password file that must exist, but the
+        # fixture decrypts nothing: a placeholder keeps the run credential-free.
+        vault_placeholder = Path(temp_dir) / "vault-pass"
+        vault_placeholder.write_text(
+            "unused-fixture-placeholder\n", encoding="utf-8"
+        )
+        previous_vault_password_file = os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE")
+        os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
+        try:
+            return run_regressions()
+        finally:
+            if previous_vault_password_file is None:
+                os.environ.pop("ANSIBLE_VAULT_PASSWORD_FILE", None)
+            else:
+                os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = previous_vault_password_file
 
 
 if __name__ == "__main__":
