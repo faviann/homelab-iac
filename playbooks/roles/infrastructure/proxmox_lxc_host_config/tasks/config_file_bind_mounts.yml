@@ -18,6 +18,8 @@
     done | sort
   args:
     executable: /bin/bash
+  environment:
+    LC_ALL: C
   delegate_to: "{{ proxmox_host_config_delegate }}"
   become: "{{ proxmox_lxc_host_config_become }}"
   register: infrastructure_proxmox_lxc_host_config_current_mounts
