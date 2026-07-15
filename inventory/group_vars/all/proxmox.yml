@@ -75,8 +75,10 @@ proxmox_host_delegate_user: root
 # ==============================================================================
 # Validation Settings
 # ==============================================================================
-# Strict validation mode: if true, abort entire playbook when VMID/name mismatches
-# are detected. If false (default), skip conflicting hosts and continue with others.
+# Strict validation mode applies to mismatches between a target reservation and
+# the common Proxmox observation. If true, target planning fails immediately;
+# if false, the target publishes a validation-failed result without lifecycle
+# actions. Inventory reservation conflicts always fail fleet preflight.
 # Name matching is strict and exact (no FQDN normalization).
 proxmox_validation_strict: false
 

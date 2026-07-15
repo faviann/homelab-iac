@@ -1,0 +1,103 @@
+---
+all:
+  children:
+    lxcs:
+      vars:
+        ansible_connection: local
+        proxmox_skip_self: false
+        proxmox_lxc_controller_pubkey_enabled: false
+        proxmox_lxc_host_config_enabled: false
+        proxmox_default_storage: local-lvm
+        proxmox_default_bind_mounts: {}
+        proxmox_default_idmap: []
+        proxmox_lxc_disable_root_password: true
+        proxmox_lifecycle_intent: validate_only
+        proxmox_lifecycle_policy:
+          strict_validation: false
+          rebuild_on_release_mismatch: false
+          allow_destructive_transitions: false
+        proxmox_fleet_observation_override:
+          containers:
+            - vmid: 5101
+              name: target-a
+              status: stopped
+            - vmid: 5102
+              name: target-b
+              status: stopped
+            - vmid: 5105
+              name: release-problem
+              status: stopped
+        proxmox_lxc_global_defaults:
+          state: present
+          node: pve-a
+          ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+          cores: 1
+          memory: 128
+          disk: 4
+          netif:
+            net0: name=eth0,bridge=vmbr0,ip=dhcp
+          pubkey: ssh-ed25519 AAAAFLEETPREFLIGHT lifecycle@test
+      hosts:
+        target_a:
+          proxmox_lxc:
+            vmid: 5101
+            hostname: target-a
+        target_b:
+          proxmox_lxc:
+            vmid: 5102
+            hostname: target-b
+            node: pve-b
+        target_conflict:
+          proxmox_lxc:
+            vmid: 5199
+            hostname: target-conflict
+          fleet_expected_failure_fragments:
+            - Target identity conflict
+            - VMID 5199
+            - absent_reservation
+        hostname_conflict:
+          proxmox_lxc:
+            vmid: 5203
+            hostname: absent-reserved
+          fleet_expected_failure_fragments:
+            - Target identity conflict
+            - hostname 'absent-reserved'
+            - absent_reservation
+        access_target:
+          proxmox_lxc:
+            vmid: 5103
+            hostname: access-target
+          proxmox_fleet_observation_override:
+            containers: []
+            problems:
+              - Shared Proxmox access failed in the controlled observation.
+          fleet_expected_failure_fragments:
+            - Shared Proxmox access failed
+        release_problem:
+          proxmox_lxc:
+            vmid: 5105
+            hostname: release-problem
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: true
+            allow_destructive_transitions: false
+        absent_reservation:
+          # This managed, currently absent LXC intentionally lacks every
+          # non-identity contract field. Limited target runs must still reserve
+          # its identity without compiling or validating its full contract.
+          proxmox_lxc:
+            vmid: 5199
+            hostname: absent-reserved
+    invalid_identity_reservations:
+      hosts:
+        a_missing_vmid_hostname_owner:
+          proxmox_lxc:
+            hostname: target-a
+        null_hostname_reservation:
+          proxmox_lxc:
+            vmid: 5201
+            hostname: null
+        empty_hostname_reservation:
+          proxmox_lxc:
+            vmid: 5202
+            hostname: ""

@@ -1,0 +1,7 @@
+---
+proxmox_fleet_target_hosts: "{{ ansible_play_hosts }}"
+proxmox_fleet_managed_hosts: "{{ groups['lxcs'] | default(proxmox_fleet_target_hosts) }}"
+
+# Tests and offline callers may supply the result of the shared Proxmox query.
+# Production runs leave this undefined and perform the API request below.
+proxmox_fleet_observation_override: null

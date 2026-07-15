@@ -25,6 +25,14 @@
 - name: Compile desired LXC specification
   ansible.builtin.include_tasks: compile.yml
 
+- name: Run fleet preflight before per-LXC planning
+  ansible.builtin.include_role:
+    name: provisioning/proxmox_lxc_fleet_preflight
+  vars:
+    proxmox_fleet_target_hosts: "{{ ansible_play_hosts }}"
+  run_once: true
+  when: proxmox_fleet_preflight_enabled | bool
+
 - name: Inspect current lifecycle state
   ansible.builtin.include_tasks: inspect.yml
 

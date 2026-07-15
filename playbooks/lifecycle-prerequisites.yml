@@ -1,0 +1,71 @@
+---
+- name: Verify control node has been bootstrapped
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    control_node_project_root: "{{ playbook_dir | dirname }}"
+    control_node_uv_virtualenv: "{{ [playbook_dir | dirname, '.venv'] | path_join }}"
+    control_node_collection_install_path: "{{ [playbook_dir | dirname, 'collections'] | path_join }}"
+    control_node_required_collections:
+      - community.proxmox
+  tasks:
+    - name: Check for uv-managed control node virtual environment
+      ansible.builtin.stat:
+        path: "{{ control_node_uv_virtualenv }}"
+      register: control_node_virtualenv_stat
+      run_once: true
+
+    - name: Check for required Ansible collections
+      ansible.builtin.stat:
+        path: "{{ [control_node_collection_install_path, 'ansible_collections', item | replace('.', '/')] | path_join }}"
+      loop: "{{ control_node_required_collections }}"
+      register: control_node_collection_stats
+      run_once: true
+
+    - name: Detect missing bootstrap artifacts
+      ansible.builtin.set_fact:
+        control_node_missing_collections: >-
+          {{
+            control_node_collection_stats.results
+            | rejectattr('stat.exists')
+            | map(attribute='item')
+            | list
+          }}
+      run_once: true
+
+    - name: Assert bootstrap prerequisites are present
+      ansible.builtin.assert:
+        that:
+          - control_node_virtualenv_stat.stat.exists
+          - control_node_missing_collections | length == 0
+        fail_msg: >-
+          Bootstrap prerequisites are missing. Run `uv run --locked ansible-playbook bootstrap.yml`
+          after `uv sync --locked`. Missing collections: {{ control_node_missing_collections }}.
+        success_msg: Bootstrap prerequisites detected.
+      run_once: true
+
+    - name: Ensure Traefik-integrated Docker hosts define default_domain
+      ansible.builtin.assert:
+        that:
+          - hostvars[item].default_domain is defined
+          - hostvars[item].default_domain | string | length > 0
+        fail_msg: >-
+          Host '{{ item }}' has Traefik-integrated Docker agents enabled but is missing
+          `default_domain` in inventory/host_vars/{{ item }}.yml. Define `default_domain`
+          or explicitly set `traefik_kop_enabled: false` for opt-out hosts.
+        quiet: true
+      loop: "{{ groups['cap_docker'] | default([]) }}"
+      when:
+        - hostvars[item].docker_agents_enabled | default(true) | bool
+        - hostvars[item].traefik_kop_enabled | default(true) | bool
+
+- name: Bootstrap Proxmox host SSH access
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - role: infrastructure/proxmox_host_bootstrap
+      proxmox_validate_api: false

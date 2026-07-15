@@ -1,9 +1,9 @@
 ---
 # Full LXC lifecycle orchestrator.
-# Runs validation first, then delegates host decisions to the lifecycle facade.
+# Validates shared prerequisites before delegating the run to the lifecycle facade.
 
-- name: Validate infrastructure prerequisites and Proxmox state
-  ansible.builtin.import_playbook: validate-infrastructure.yml
+- name: Validate lifecycle prerequisites
+  ansible.builtin.import_playbook: lifecycle-prerequisites.yml
 
 - name: Run the LXC lifecycle facade
   hosts: lxcs

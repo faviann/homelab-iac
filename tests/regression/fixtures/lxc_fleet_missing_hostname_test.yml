@@ -1,0 +1,29 @@
+---
+- name: Reject incomplete untargeted identity reservations
+  hosts: target_a
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_fleet_managed_hosts: >-
+      {{ groups['lxcs'] + groups['invalid_identity_reservations'] }}
+  tasks:
+    - name: Plan through the lifecycle facade
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+
+    - name: Assert malformed reservations and their hostname conflict were aggregated
+      ansible.builtin.assert:
+        that:
+          - lxc_lifecycle_result.outcome.status == 'validation_failed'
+          - "'null_hostname_reservation' in lxc_lifecycle_result.outcome.reason"
+          - "'empty_hostname_reservation' in lxc_lifecycle_result.outcome.reason"
+          - lxc_lifecycle_result.outcome.reason is search('hostname identity reservation')
+          - >-
+            lxc_lifecycle_result.outcome.reason is search(
+              "Managed LXC 'a_missing_vmid_hostname_owner' has no VMID identity reservation"
+            )
+          - >-
+            lxc_lifecycle_result.outcome.reason is search(
+              "Target identity conflict: 'a_missing_vmid_hostname_owner' and 'target_a'"
+            )
+          - lxc_lifecycle_result.outcome.reason is search("hostname 'target-a'")

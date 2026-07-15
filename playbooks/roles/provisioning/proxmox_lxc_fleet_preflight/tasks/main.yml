@@ -1,0 +1,195 @@
+---
+- name: Validate compiled identities for targeted LXCs
+  ansible.builtin.set_fact:
+    proxmox_fleet_preflight_problems: >-
+      {%- set problems = [] -%}
+      {%- for host in proxmox_fleet_target_hosts -%}
+      {%-   if hostvars[host].proxmox_lxc_contract is not defined
+              or hostvars[host].proxmox_lxc_contract.identity is not defined -%}
+      {%-     set _ = problems.append("Target '" ~ host ~ "' has no compiled LXC identity.") -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ problems }}
+
+- name: Compile inventory-wide LXC identity reservations
+  ansible.builtin.set_fact:
+    proxmox_fleet_identity_reservations: >-
+      {%- set reservations = {} -%}
+      {%- for host in proxmox_fleet_managed_hosts -%}
+      {%-   set host_spec = hostvars[host].proxmox_lxc | default({}) -%}
+      {%-   set overrides = hostvars[host].proxmox_lxc_overrides | default({}) -%}
+      {%-   if host in proxmox_fleet_target_hosts
+              and hostvars[host].proxmox_lxc_contract is defined -%}
+      {%-     set identity = hostvars[host].proxmox_lxc_contract.identity -%}
+      {%-   else -%}
+      {%-     set identity = {
+                'vmid': host_spec.vmid | default(overrides.vmid | default(none)),
+                'hostname': host_spec.hostname | default(overrides.hostname | default(host))
+              } -%}
+      {%-   endif -%}
+      {%-   set _ = reservations.update({host: identity}) -%}
+      {%- endfor -%}
+      {{ reservations }}
+
+- name: Detect malformed and conflicting identity reservations
+  ansible.builtin.set_fact:
+    proxmox_fleet_preflight_problems: >-
+      {%- set problems = proxmox_fleet_preflight_problems[:] -%}
+      {%- set target_names = proxmox_fleet_target_hosts -%}
+      {%- for host, identity in proxmox_fleet_identity_reservations.items() -%}
+      {%-   if identity.vmid is none or identity.vmid | string | length == 0 -%}
+      {%-     set _ = problems.append("Managed LXC '" ~ host ~ "' has no VMID identity reservation.") -%}
+      {%-   endif -%}
+      {%-   if identity.hostname is none or identity.hostname | string | trim | length == 0 -%}
+      {%-     set _ = problems.append("Managed LXC '" ~ host ~ "' has no hostname identity reservation.") -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {%- for left_host, left_identity in proxmox_fleet_identity_reservations.items() -%}
+      {%-   for right_host, right_identity in proxmox_fleet_identity_reservations.items() -%}
+      {%-     set vmid_matches = (
+                left_identity.vmid is not none
+                and right_identity.vmid is not none
+                and left_identity.vmid | string | length > 0
+                and right_identity.vmid | string | length > 0
+                and left_identity.vmid | string == right_identity.vmid | string
+              ) -%}
+      {%-     set hostname_matches = (
+                left_identity.hostname is not none
+                and right_identity.hostname is not none
+                and left_identity.hostname | string | trim | length > 0
+                and right_identity.hostname | string | trim | length > 0
+                and left_identity.hostname | string == right_identity.hostname | string
+              ) -%}
+      {%-     if left_host < right_host
+                and (left_host in target_names or right_host in target_names)
+                and (vmid_matches or hostname_matches) -%}
+      {%-       set fields = [] -%}
+      {%-       if vmid_matches -%}
+      {%-         set _ = fields.append('VMID ' ~ left_identity.vmid | string) -%}
+      {%-       endif -%}
+      {%-       if hostname_matches -%}
+      {%-         set _ = fields.append("hostname '" ~ left_identity.hostname ~ "'") -%}
+      {%-       endif -%}
+      {%-       set _ = problems.append(
+                  "Target identity conflict: '" ~ left_host ~ "' and '" ~ right_host
+                  ~ "' both reserve " ~ fields | join(' and ') ~ "."
+                ) -%}
+      {%-     endif -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ problems | unique | list }}
+
+- name: Observe Proxmox once for the targeted LXC set
+  when: proxmox_fleet_observation_override is none
+  module_defaults:
+    group/community.proxmox.proxmox: "{{ _proxmox_auth }}"
+  vars:
+    _proxmox_auth:
+      api_host: "{{ proxmox_api_host }}"
+      api_port: "{{ proxmox_api_port | default(omit) }}"
+      api_user: "{{ proxmox_api_user }}"
+      api_token_id: "{{ proxmox_api_token_id }}"
+      api_token_secret: "{{ proxmox_api_token_secret }}"
+      validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
+  block:
+    - name: Query the common Proxmox LXC observation
+      community.proxmox.proxmox_vm_info:
+        type: lxc
+      register: proxmox_fleet_observation_response
+      changed_when: false
+      no_log: true
+      delegate_to: localhost
+
+    - name: Adopt the common Proxmox LXC observation
+      ansible.builtin.set_fact:
+        proxmox_fleet_common_observation: >-
+          {{ proxmox_fleet_observation_response.proxmox_vms | default([]) }}
+  rescue:
+    - name: Record shared Proxmox access failure
+      ansible.builtin.set_fact:
+        proxmox_fleet_common_observation: []
+        proxmox_fleet_preflight_problems: >-
+          {{
+            proxmox_fleet_preflight_problems
+            + ['Shared Proxmox access failed; no common LXC observation is available.']
+          }}
+
+- name: Adopt supplied common Proxmox observation
+  ansible.builtin.set_fact:
+    proxmox_fleet_common_observation: >-
+      {{ proxmox_fleet_observation_override.containers | default([]) }}
+    proxmox_fleet_preflight_problems: >-
+      {{
+        proxmox_fleet_preflight_problems
+        + (proxmox_fleet_observation_override.problems | default([]))
+      }}
+  when: proxmox_fleet_observation_override is not none
+
+- name: Build common Proxmox identity lookup maps
+  ansible.builtin.set_fact:
+    proxmox_fleet_observed_by_vmid: >-
+      {%- set observed = {} -%}
+      {%- for container in proxmox_fleet_common_observation -%}
+      {%-   set _ = observed.update({container.vmid | string: container}) -%}
+      {%- endfor -%}
+      {{ observed }}
+    proxmox_fleet_observed_by_hostname: >-
+      {%- set observed = {} -%}
+      {%- for container in proxmox_fleet_common_observation -%}
+      {%-   set _ = observed.update({container.name | string: container}) -%}
+      {%- endfor -%}
+      {{ observed }}
+
+- name: Derive per-target observations from the common Proxmox observation
+  ansible.builtin.set_fact:
+    proxmox_fleet_target_observations: >-
+      {%- set observations = {} -%}
+      {%- for host in proxmox_fleet_target_hosts -%}
+      {%-   if hostvars[host].proxmox_lxc_contract is defined -%}
+      {%-     set identity = hostvars[host].proxmox_lxc_contract.identity -%}
+      {%-     set by_vmid = proxmox_fleet_observed_by_vmid.get(identity.vmid | string) -%}
+      {%-     set by_name = proxmox_fleet_observed_by_hostname.get(identity.hostname | string) -%}
+      {%-     set matches = by_vmid is not none and by_name is not none
+                           and by_vmid.vmid | string == by_name.vmid | string -%}
+      {%-     set conflict = (by_vmid is not none or by_name is not none) and not matches -%}
+      {%-     set preflight_failed = proxmox_fleet_preflight_problems | length > 0 -%}
+      {%-     set observation = {
+                'status': 'mismatch' if (preflight_failed or conflict) else 'ok',
+                'type': (
+                  'preflight_failed'
+                  if preflight_failed else (
+                    'identity_conflict'
+                    if conflict else ('match_ok' if matches else 'absent_ok')
+                  )
+                ),
+                'message': (
+                  proxmox_fleet_preflight_problems | join(' ')
+                  if preflight_failed else (
+                    "Observed Proxmox identity conflicts with target '" ~ host ~ "'."
+                    if conflict else (
+                    'VMID and hostname match the common Proxmox observation.'
+                    if matches else 'Container is absent from the common Proxmox observation.'
+                    )
+                  )
+                ),
+                'runtime_state': by_vmid.status | default('unknown') if matches else ('unknown' if conflict else 'absent'),
+                'actual_release': '',
+                'release_probe_state': 'unavailable' if matches else ('not_applicable' if conflict else 'absent'),
+                'common_observation': true,
+                'preflight_problems': proxmox_fleet_preflight_problems
+              } -%}
+      {%-     set _ = observations.update({host: observation}) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ observations }}
+
+- name: Publish fleet preflight facts to targeted planners
+  ansible.builtin.add_host:
+    name: "{{ item }}"
+    proxmox_fleet_preflight_complete: true
+    proxmox_fleet_preflight_problems: "{{ proxmox_fleet_preflight_problems }}"
+    proxmox_fleet_common_observation: "{{ proxmox_fleet_common_observation }}"
+    proxmox_fleet_target_observations: "{{ proxmox_fleet_target_observations }}"
+    lxc_validation_results: "{{ proxmox_fleet_target_observations }}"
+  loop: "{{ proxmox_fleet_target_hosts }}"
+  changed_when: false

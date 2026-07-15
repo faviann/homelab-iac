@@ -1,0 +1,14 @@
+---
+all:
+  children:
+    fleet_preflight_interface_targets:
+      hosts:
+        compiled_identity_target:
+          ansible_connection: local
+          proxmox_lxc:
+            vmid: 6901
+            hostname: raw-identity
+          proxmox_lxc_contract:
+            identity:
+              vmid: 6902
+              hostname: compiled-identity
