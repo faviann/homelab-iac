@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,7 @@ def run_case(temp_root: Path, name: str, *arguments: str) -> bool:
         (7103, "stopped"),
         (7104, "absent"),
         (7105, "stopped"),
+        (7106, "running"),
     ):
         (state_dir / f"{vmid}.state").write_text(state, encoding="utf-8")
         (state_dir / f"{vmid}.release").write_text("12", encoding="utf-8")
@@ -40,7 +42,7 @@ def run_case(temp_root: Path, name: str, *arguments: str) -> bool:
     env["ANSIBLE_COLLECTIONS_PATH"] = os.pathsep.join(
         [str(ASSETS / "collections"), str(REPO_ROOT / "collections")]
     )
-    proc = subprocess.run(
+    proc = subprocess.Popen(
         [
             *ANSIBLE_PLAYBOOK,
             "-i",
@@ -53,23 +55,42 @@ def run_case(temp_root: Path, name: str, *arguments: str) -> bool:
             *arguments,
         ],
         cwd=REPO_ROOT,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
         env=env,
+        start_new_session=True,
     )
+    timeout_seconds = 30 if name == "check" else 60
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as error:
+        os.killpg(proc.pid, signal.SIGTERM)
+        try:
+            proc.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate()
+        print(f"lifecycle planning barrier case {name!r} timed out", file=sys.stderr)
+        print(error.stdout or "", file=sys.stderr)
+        return False
     expected_failure = name in {"barrier", "execution_failure", "compile_failure"}
-    assertions_complete = f"lifecycle_case_assertions_complete={name}" in proc.stdout
+    assertions_complete = f"lifecycle_case_assertions_complete={name}" in stdout
     controlled_failure = (
-        "Barrier fixture published every targeted result before returning" in proc.stdout
+        "Barrier fixture published every targeted result before returning" in stdout
     )
     succeeded = (
         (proc.returncode != 0 and controlled_failure and assertions_complete)
         if expected_failure
         else proc.returncode == 0 and assertions_complete
     )
+    if name == "check":
+        succeeded = succeeded and "Check mode skips guest configuration" in stdout
+    if name == "check_running":
+        succeeded = succeeded and "Model successful base-system configuration" in stdout
     if not succeeded:
         print(f"lifecycle planning barrier case {name!r} failed", file=sys.stderr)
-        print(f"{proc.stdout}\n{proc.stderr}", file=sys.stderr)
+        print(f"{stdout}\n{stderr}", file=sys.stderr)
         return False
     return True
 
@@ -86,15 +107,22 @@ def main() -> int:
             ),
             run_case(
                 temp_root,
-                "check",
+                "limited",
                 "--limit",
                 "barrier_valid",
             ),
             run_case(
                 temp_root,
-                "limited",
+                "check",
                 "--limit",
                 "barrier_valid",
+                "--check",
+            ),
+            run_case(
+                temp_root,
+                "check_running",
+                "--limit",
+                "check_running",
                 "--check",
             ),
             run_case(
@@ -124,6 +152,12 @@ def main() -> int:
                 "workstation",
                 "-e",
                 "proxmox_skip_self=false",
+            ),
+            run_case(
+                temp_root,
+                "unsafe_default",
+                "--limit",
+                "barrier_valid,barrier_after_failure",
             ),
         )
         if not all(cases):

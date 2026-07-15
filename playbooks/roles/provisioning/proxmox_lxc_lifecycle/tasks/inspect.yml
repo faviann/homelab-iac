@@ -1,7 +1,7 @@
 ---
-- name: Seed lifecycle inspection from validation snapshot
+- name: Seed the LXC observation from fleet preflight
   ansible.builtin.set_fact:
-    proxmox_lifecycle_validation_snapshot: >-
+    proxmox_lifecycle_observation: >-
       {{
         lxc_validation_results[inventory_hostname]
         if (
@@ -49,12 +49,12 @@
     that:
       - >-
         not (
-          proxmox_lifecycle_validation_snapshot.status | default('ok') == 'mismatch'
-          and proxmox_lifecycle_validation_snapshot.type | default('')
+          proxmox_lifecycle_observation.status | default('ok') == 'mismatch'
+          and proxmox_lifecycle_observation.type | default('')
             in ['preflight_failed', 'identity_conflict']
         )
     fail_msg: >-
-      {{ proxmox_lifecycle_validation_snapshot.message | default('Fleet preflight failed.') }}
+      {{ proxmox_lifecycle_observation.message | default('Fleet preflight failed.') }}
   when:
     - proxmox_fleet_preflight_enabled | bool
     - not (proxmox_lifecycle_collect_all_planning_problems | default(false) | bool)
@@ -62,8 +62,8 @@
 - name: Require an observation from fleet preflight
   ansible.builtin.assert:
     that:
-      - proxmox_lifecycle_validation_snapshot | length > 0
-      - proxmox_lifecycle_validation_snapshot.common_observation | default(false) | bool
+      - proxmox_lifecycle_observation | length > 0
+      - proxmox_lifecycle_observation.common_observation | default(false) | bool
     fail_msg: >-
       Fleet preflight did not provide a common Proxmox observation for {{ inventory_hostname }}.
   when: proxmox_fleet_preflight_enabled | bool
@@ -81,9 +81,9 @@
     - not (proxmox_fleet_preflight_enabled | bool)
     - proxmox_lifecycle_release_probe_state == 'unavailable'
 
-- name: Build local validation snapshot when no validation play data is present
+- name: Build a local LXC observation for legacy direct-role callers
   ansible.builtin.set_fact:
-    proxmox_lifecycle_validation_snapshot:
+    proxmox_lifecycle_observation:
       status: ok
       type: "{{ 'absent_ok' if proxmox_lifecycle_runtime_state == 'absent' else 'match_ok' }}"
       message: >-
@@ -95,7 +95,7 @@
       remediation: []
   when:
     - not (proxmox_fleet_preflight_enabled | bool)
-    - proxmox_lifecycle_validation_snapshot | length == 0
+    - proxmox_lifecycle_observation | length == 0
 
 - name: Observe the current guest release when required
   ansible.builtin.include_tasks: observe_release.yml

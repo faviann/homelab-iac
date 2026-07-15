@@ -29,10 +29,22 @@
       delegate_to: localhost
       when: not ansible_check_mode
   tasks:
+    - name: Prove the default role entry refuses unsafe multi-target execution
+      when: lifecycle_test_case == 'unsafe_default'
+      block:
+        - name: Invoke the default lifecycle role entry with multiple targets
+          ansible.builtin.include_role:
+            name: provisioning/proxmox_lxc_lifecycle
+      rescue:
+        - name: Capture the safe default-entry refusal
+          ansible.builtin.set_fact:
+            lifecycle_default_entry_refusal: "{{ ansible_failed_result.msg }}"
+
     - name: Run the planning half of the lifecycle facade
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
         tasks_from: plan
+      when: lifecycle_test_case != 'unsafe_default'
 
 - name: Traverse the normal execution half after the barrier
   hosts: lxcs
@@ -44,6 +56,7 @@
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
         tasks_from: execute
+      when: lifecycle_test_case != 'unsafe_default'
 
 - name: Assert lifecycle results from a limit-selected target
   hosts: lxcs
@@ -53,7 +66,13 @@
     - name: Read target execution records
       ansible.builtin.slurp:
         src: "{{ lifecycle_test_state_dir }}/{{ hostvars[item].proxmox_lxc.vmid }}.events"
-      loop: "{{ groups['lxcs'] }}"
+      delegate_to: localhost
+      loop: >-
+        {{
+          ['workstation']
+          if lifecycle_test_case == 'self_skip'
+          else hostvars.localhost.proxmox_lifecycle_target_hosts
+        }}
       register: lifecycle_barrier_event_records
       run_once: true
 
@@ -180,6 +199,24 @@
             | b64decode
             is search('container_transition')
       when: lifecycle_test_case == 'self_include'
+      run_once: true
+
+    - name: Assert the default role entry refused multi-target execution
+      ansible.builtin.assert:
+        that:
+          - hostvars.barrier_valid.lifecycle_default_entry_refusal is defined
+          - >-
+            hostvars.barrier_valid.lifecycle_default_entry_refusal
+            is search('split lifecycle facade')
+          - >-
+            lifecycle_barrier_event_records.results
+            | map(attribute='content')
+            | map('b64decode')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length == 0
+      when: lifecycle_test_case == 'unsafe_default'
       run_once: true
 
     - name: Mark all case-specific assertions complete

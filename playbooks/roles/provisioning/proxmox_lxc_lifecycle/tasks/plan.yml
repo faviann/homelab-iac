@@ -104,7 +104,7 @@
     - proxmox_lifecycle_planning_problem | length == 0
     - proxmox_fleet_preflight_problems | default([]) | length > 0
     - >-
-      proxmox_lifecycle_validation_snapshot.type | default('')
+      proxmox_lifecycle_observation.type | default('')
       == 'preflight_failed'
 
 - name: Collect planning failures across the targeted LXC set

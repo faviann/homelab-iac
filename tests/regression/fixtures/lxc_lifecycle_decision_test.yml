@@ -3,7 +3,7 @@
   hosts: lifecycle_scenarios
   connection: local
   gather_facts: false
-  vars:
+  vars: &lifecycle_scenario_vars
     proxmox_lxc:
       state: "{{ lifecycle_desired_state }}"
       hostname: "{{ inventory_hostname }}"
@@ -69,17 +69,46 @@
       throttle: 1
       delegate_to: localhost
       when: lifecycle_expected_known_host_cleanup is defined
+- name: Plan every successful semantic lifecycle scenario
+  hosts: lifecycle_scenarios:!lifecycle_plan_failures
+  connection: local
+  gather_facts: false
+  vars: *lifecycle_scenario_vars
   tasks:
-    - name: Exercise a lifecycle scenario expected to plan successfully
+    - name: Plan through the split lifecycle facade
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
-      when: lifecycle_expected_planning_failure is not defined
+        tasks_from: plan
 
-    - name: Exercise a lifecycle scenario expected to fail planning
+- name: Plan every scenario expected to fail before execution
+  hosts: lifecycle_plan_failures
+  connection: local
+  gather_facts: false
+  vars: *lifecycle_scenario_vars
+  tasks:
+    - name: Plan through the split lifecycle facade
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
-      when: lifecycle_expected_planning_failure is defined
-  post_tasks:
+        tasks_from: plan
+
+- name: Execute successful semantic lifecycle scenarios linearly after all planning
+  hosts: lifecycle_scenarios:!lifecycle_plan_failures
+  connection: local
+  gather_facts: false
+  serial: 1
+  vars: *lifecycle_scenario_vars
+  tasks:
+    - name: Execute through the split lifecycle facade
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: execute
+
+- name: Assert semantic lifecycle scenario results
+  hosts: lifecycle_scenarios
+  connection: local
+  gather_facts: false
+  vars: *lifecycle_scenario_vars
+  tasks:
     - name: Assert the facade published the scenario's semantic result
       ansible.builtin.assert:
         that:

@@ -10,6 +10,7 @@
     - name: Plan through the lifecycle facade
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan
 
     - name: Assert malformed reservations and their hostname conflict were aggregated
       ansible.builtin.assert:

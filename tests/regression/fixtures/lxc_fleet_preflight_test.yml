@@ -9,6 +9,7 @@
         - name: Plan the targeted LXC lifecycle
           ansible.builtin.include_role:
             name: provisioning/proxmox_lxc_lifecycle
+            tasks_from: plan
       rescue:
         - name: Capture the observable fleet preflight failure
           ansible.builtin.set_fact:

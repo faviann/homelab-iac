@@ -32,6 +32,9 @@ all:
             - vmid: 7105
               name: workstation
               status: stopped
+            - vmid: 7106
+              name: check-running
+              status: running
         proxmox_lxc_global_defaults:
           state: present
           node: pve-a
@@ -44,6 +47,10 @@ all:
           pubkey: ssh-ed25519 AAAABARRIER lifecycle@test
       hosts:
         barrier_valid:
+          ansible_connection: >-
+            {{ 'ssh' if lifecycle_test_case | default('') == 'check' else 'local' }}
+          ansible_host: 192.0.2.1
+          ansible_connect_timeout: 1
           proxmox_lifecycle_intent: full
           proxmox_lxc:
             vmid: 7101
@@ -69,3 +76,8 @@ all:
           proxmox_lxc:
             vmid: 7105
             hostname: workstation
+        check_running:
+          proxmox_lifecycle_intent: full
+          proxmox_lxc:
+            vmid: 7106
+            hostname: check-running

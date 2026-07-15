@@ -4,9 +4,9 @@
     that:
       - proxmox_lifecycle_runtime_state is defined
       - proxmox_lifecycle_runtime_state in ['running', 'stopped', 'absent', 'unknown', 'not_applicable']
-      - proxmox_lifecycle_validation_snapshot is defined
-      - proxmox_lifecycle_validation_snapshot is mapping
-      - proxmox_lifecycle_validation_snapshot.status is defined
+      - proxmox_lifecycle_observation is defined
+      - proxmox_lifecycle_observation is mapping
+      - proxmox_lifecycle_observation.status is defined
       - proxmox_lifecycle_release_mismatch is defined
       - proxmox_lifecycle_release_mismatch | type_debug == 'bool'
       - proxmox_lifecycle_release_probe_state is defined
@@ -16,7 +16,7 @@
       runtime_state={{ proxmox_lifecycle_runtime_state | default('UNDEFINED') }}
       release_mismatch={{ proxmox_lifecycle_release_mismatch | default('UNDEFINED') }}
       release_probe_state={{ proxmox_lifecycle_release_probe_state | default('UNDEFINED') }}
-      validation_snapshot={{ proxmox_lifecycle_validation_snapshot | default('UNDEFINED') | to_json }}
+      observation={{ proxmox_lifecycle_observation | default('UNDEFINED') | to_json }}
 
 - name: Warn when desired release is unset and rebuild policy is enabled
   ansible.builtin.debug:

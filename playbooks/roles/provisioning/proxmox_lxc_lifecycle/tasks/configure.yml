@@ -1,18 +1,18 @@
-- name: Skip runtime-sensitive guest configuration in check mode when container is absent
+- name: Skip runtime-sensitive guest configuration in check mode when container is not running
   ansible.builtin.debug:
     msg: >-
       Check mode skips guest configuration for container
       {{ proxmox_lxc_contract.api_spec.vmid | default(inventory_hostname) }}
-      because runtime state is absent.
+      because the pre-action runtime state is {{ proxmox_lifecycle_runtime_state }}.
   when:
     - proxmox_lxc_lifecycle_plan.configure_guest | bool
     - ansible_check_mode | bool
-    - proxmox_lifecycle_runtime_state == 'absent'
+    - proxmox_lifecycle_runtime_state != 'running'
 
 - name: Run guest configuration actions
   when:
     - proxmox_lxc_lifecycle_plan.configure_guest | bool
-    - not (ansible_check_mode | bool and proxmox_lifecycle_runtime_state == 'absent')
+    - not (ansible_check_mode | bool and proxmox_lifecycle_runtime_state != 'running')
   block:
     - name: Ensure container is accessible via SSH
       ansible.builtin.wait_for_connection:

@@ -2,5 +2,14 @@
 - name: Plan the complete targeted LXC set
   ansible.builtin.include_tasks: plan.yml
 
+- name: Refuse unsafe multi-target execution through the default role entry
+  ansible.builtin.assert:
+    that:
+      - hostvars.localhost.proxmox_lifecycle_target_hosts | length == 1
+    fail_msg: >-
+      The default lifecycle role entry cannot execute multiple targets safely.
+      Use playbooks/lifecycle-lxcs.yml as the split lifecycle facade for
+      all-target planning followed by serial execution.
+
 - name: Execute valid plans after the lifecycle planning barrier
   ansible.builtin.include_tasks: execute.yml
