@@ -56,3 +56,23 @@ def test_common_proxmox_observation_uses_proxmox_module_contract() -> None:
     assert "proxmox_fleet_observation_response.proxmox_vms" in adoption[
         "ansible.builtin.set_fact"
     ]["proxmox_fleet_common_observation"]
+
+
+def test_problem_classification_does_not_parse_display_messages() -> None:
+    source = PREFLIGHT_TASKS.read_text(encoding="utf-8")
+    tasks = yaml.safe_load(source)
+    observation_derivation = next(
+        task
+        for task in tasks
+        if task["name"]
+        == "Derive per-target observations from the common Proxmox observation"
+    )
+    derivation = observation_derivation["ansible.builtin.set_fact"][
+        "proxmox_fleet_target_observations"
+    ]
+
+    assert "proxmox_fleet_preflight_problem_records" in source
+    assert "Classify targeted causes of fleet preflight problems" not in source
+    assert "(\"'\" ~ host ~ \"'\") in problem" not in source
+    assert "problem.cause_hosts" in derivation
+    assert "problem.message" not in derivation

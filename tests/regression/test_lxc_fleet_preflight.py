@@ -282,8 +282,9 @@ def run_case(limit: str) -> bool:
 
 def main() -> int:
     cases = (
-        "target_conflict",
+        "target_conflict,conflict_peer",
         "hostname_conflict",
+        "shared_problem_a,shared_problem_b",
     )
     if not all(run_case(case) for case in cases):
         return 1
@@ -327,7 +328,7 @@ def main() -> int:
             run_actual_query_case(
                 certificate,
                 private_key,
-                limit="access_target",
+                limit="access_target,access_peer",
                 status=503,
             ),
         )

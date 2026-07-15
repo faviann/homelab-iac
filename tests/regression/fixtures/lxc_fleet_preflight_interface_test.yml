@@ -36,3 +36,38 @@
           - lxc_lifecycle_result is not defined
           - proxmox_lifecycle_release_mismatch is not defined
           - proxmox_lifecycle_container_transition is not defined
+
+- name: Exercise structural fleet preflight problem ownership directly
+  hosts: structural_conflict_target
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_fleet_target_hosts:
+      - structural_conflict_target
+    proxmox_fleet_managed_hosts:
+      - structural_conflict_target
+      - structural_conflict_reservation
+    proxmox_fleet_observation_override:
+      containers: []
+  tasks:
+    - name: Invoke fleet preflight for a targeted identity conflict
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_fleet_preflight
+
+    - name: Assert structural ownership and projected display messages
+      ansible.builtin.assert:
+        that:
+          - proxmox_fleet_preflight_problem_records | length == 1
+          - >-
+            proxmox_fleet_preflight_problem_records[0].message
+            == proxmox_fleet_preflight_problems[0]
+          - >-
+            proxmox_fleet_preflight_problem_records[0].cause_hosts
+            == ['structural_conflict_target']
+          - >-
+            proxmox_fleet_preflight_problems[0]
+            == "Target identity conflict: 'structural_conflict_reservation' and
+            'structural_conflict_target' both reserve VMID 6903."
+          - >-
+            proxmox_fleet_target_observations.structural_conflict_target.type
+            == 'preflight_failed'

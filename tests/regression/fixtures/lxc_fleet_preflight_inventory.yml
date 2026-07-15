@@ -55,6 +55,12 @@ all:
             - Target identity conflict
             - VMID 5199
             - absent_reservation
+        conflict_peer:
+          proxmox_lxc:
+            vmid: 5204
+            hostname: conflict-peer
+          fleet_expected_status: blocked
+          fleet_expected_status_fragment: target_conflict
         hostname_conflict:
           proxmox_lxc:
             vmid: 5203
@@ -73,6 +79,36 @@ all:
               - Shared Proxmox access failed in the controlled observation.
           fleet_expected_failure_fragments:
             - Shared Proxmox access failed
+          fleet_expected_shared_problem: true
+        access_peer:
+          proxmox_lxc:
+            vmid: 5104
+            hostname: access-peer
+          fleet_expected_failure_fragments:
+            - Shared Proxmox access failed
+          fleet_expected_shared_problem: true
+        shared_problem_a:
+          proxmox_lxc:
+            vmid: 5205
+            hostname: shared-problem-a
+          proxmox_fleet_observation_override:
+            containers: []
+            problems:
+              - Shared controlled observation problem.
+          fleet_expected_failure_fragments:
+            - Shared controlled observation problem
+          fleet_expected_shared_problem: true
+        shared_problem_b:
+          proxmox_lxc:
+            vmid: 5206
+            hostname: shared-problem-b
+          proxmox_fleet_observation_override:
+            containers: []
+            problems:
+              - Shared controlled observation problem.
+          fleet_expected_failure_fragments:
+            - Shared controlled observation problem
+          fleet_expected_shared_problem: true
         release_problem:
           proxmox_lxc:
             vmid: 5105

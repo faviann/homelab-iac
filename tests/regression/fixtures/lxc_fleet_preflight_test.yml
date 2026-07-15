@@ -25,7 +25,9 @@
           - proxmox_fleet_common_observation | length == 3
       vars:
         fleet_expected_runtime_state: stopped
-      when: fleet_expected_failure_fragments is not defined
+      when:
+        - fleet_expected_failure_fragments is not defined
+        - fleet_expected_status is not defined
 
     - name: Assert all expected fleet preflight problems were reported
       ansible.builtin.assert:
@@ -35,3 +37,23 @@
           - item in lxc_lifecycle_result.outcome.reason
       loop: "{{ fleet_expected_failure_fragments }}"
       when: fleet_expected_failure_fragments is defined
+
+    - name: Assert an otherwise valid planner was blocked by its causative peer
+      ansible.builtin.assert:
+        that:
+          - fleet_observed_failure is not defined
+          - lxc_lifecycle_result.outcome.status == fleet_expected_status
+          - fleet_expected_status_fragment in lxc_lifecycle_result.outcome.reason
+      when: fleet_expected_status is defined
+
+    - name: Assert shared problems have no causative target hosts
+      ansible.builtin.assert:
+        that:
+          - proxmox_fleet_preflight_problem_records | length > 0
+          - >-
+            proxmox_fleet_preflight_problem_records
+            | map(attribute='cause_hosts')
+            | reject('equalto', [])
+            | list
+            | length == 0
+      when: fleet_expected_shared_problem | default(false) | bool
