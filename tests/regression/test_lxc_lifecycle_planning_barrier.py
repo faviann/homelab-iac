@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -36,6 +37,11 @@ def run_case(temp_root: Path, name: str, *arguments: str) -> bool:
     env = os.environ.copy()
     env["PATH"] = f"{ASSETS / 'bin'}:{env['PATH']}"
     env["LIFECYCLE_TEST_STATE_DIR"] = str(state_dir)
+    # ansible.cfg names a vault password file that must exist, but the
+    # fixture decrypts nothing: a placeholder keeps the run credential-free.
+    vault_placeholder = state_dir / "vault-pass"
+    vault_placeholder.write_text("unused-fixture-placeholder\n", encoding="utf-8")
+    env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
     env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
         [str(ASSETS / "roles"), str(REPO_ROOT / "playbooks" / "roles")]
     )
@@ -61,7 +67,10 @@ def run_case(temp_root: Path, name: str, *arguments: str) -> bool:
         env=env,
         start_new_session=True,
     )
-    timeout_seconds = 30 if name == "check" else 60
+    # Hang guard only: cases run concurrently, so allow contention headroom.
+    # A check-mode regression that contacts the host still fails fast through
+    # ansible_connect_timeout=1 and the case assertions, not this timeout.
+    timeout_seconds = 120
     try:
         stdout, stderr = proc.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired as error:
@@ -95,71 +104,37 @@ def run_case(temp_root: Path, name: str, *arguments: str) -> bool:
     return True
 
 
+CASES: tuple[tuple[str, ...], ...] = (
+    ("barrier", "--limit", "barrier_valid,barrier_invalid"),
+    ("limited", "--limit", "barrier_valid"),
+    ("check", "--limit", "barrier_valid", "--check"),
+    ("check_running", "--limit", "check_running", "--check"),
+    (
+        "execution_failure",
+        "--limit",
+        "barrier_valid,barrier_after_failure",
+        "-e",
+        "lifecycle_test_execution_failure_host=barrier_valid",
+    ),
+    ("compile_failure", "--limit", "barrier_valid,barrier_compile_invalid"),
+    ("self_skip", "--limit", "workstation"),
+    ("self_include", "--limit", "workstation", "-e", "proxmox_skip_self=false"),
+    ("unsafe_default", "--limit", "barrier_valid,barrier_after_failure"),
+)
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="lxc-planning-barrier-") as temp_dir:
         temp_root = Path(temp_dir)
-        cases = (
-            run_case(
-                temp_root,
-                "barrier",
-                "--limit",
-                "barrier_valid,barrier_invalid",
-            ),
-            run_case(
-                temp_root,
-                "limited",
-                "--limit",
-                "barrier_valid",
-            ),
-            run_case(
-                temp_root,
-                "check",
-                "--limit",
-                "barrier_valid",
-                "--check",
-            ),
-            run_case(
-                temp_root,
-                "check_running",
-                "--limit",
-                "check_running",
-                "--check",
-            ),
-            run_case(
-                temp_root,
-                "execution_failure",
-                "--limit",
-                "barrier_valid,barrier_after_failure",
-                "-e",
-                "lifecycle_test_execution_failure_host=barrier_valid",
-            ),
-            run_case(
-                temp_root,
-                "compile_failure",
-                "--limit",
-                "barrier_valid,barrier_compile_invalid",
-            ),
-            run_case(
-                temp_root,
-                "self_skip",
-                "--limit",
-                "workstation",
-            ),
-            run_case(
-                temp_root,
-                "self_include",
-                "--limit",
-                "workstation",
-                "-e",
-                "proxmox_skip_self=false",
-            ),
-            run_case(
-                temp_root,
-                "unsafe_default",
-                "--limit",
-                "barrier_valid,barrier_after_failure",
-            ),
-        )
+        # Every case owns an isolated state directory and ansible-playbook
+        # process, so the case matrix runs concurrently for fast feedback.
+        with ThreadPoolExecutor(max_workers=len(CASES)) as executor:
+            cases = list(
+                executor.map(
+                    lambda case: run_case(temp_root, case[0], *case[1:]),
+                    CASES,
+                )
+            )
         if not all(cases):
             return 1
 

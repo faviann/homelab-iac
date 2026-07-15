@@ -33,6 +33,13 @@ def main() -> int:
 
         env = os.environ.copy()
         env["PATH"] = f"{ASSETS / 'bin'}:{env['PATH']}"
+        # One fork per scenario host: the semantic scenarios are isolated
+        # per-vmid, so the whole matrix advances one task-wave at a time.
+        env["ANSIBLE_FORKS"] = "25"
+        # Rendering ~5000 ok/skipped results dominates controller time; hide
+        # them. Failed tasks still print in full with their scenario names.
+        env["ANSIBLE_DISPLAY_OK_HOSTS"] = "false"
+        env["ANSIBLE_DISPLAY_SKIPPED_HOSTS"] = "false"
         env["LIFECYCLE_TEST_STATE_DIR"] = str(state_dir)
         env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
             [str(ASSETS / "roles"), str(REPO_ROOT / "playbooks" / "roles")]
@@ -41,9 +48,11 @@ def main() -> int:
             [str(ASSETS / "collections"), str(REPO_ROOT / "collections")]
         )
         env["ANSIBLE_CACHE_PLUGIN_CONNECTION"] = str(cache_dir)
-        env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(
-            Path.home() / ".ansible" / "vault-pass"
-        )
+        # ansible.cfg names a vault password file that must exist, but the
+        # fixture decrypts nothing: a placeholder keeps the run credential-free.
+        vault_placeholder = temp_root / "vault-pass"
+        vault_placeholder.write_text("unused-fixture-placeholder\n", encoding="utf-8")
+        env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
         env["HOME"] = str(home_dir)
 
         for playbook in PLAYBOOKS:

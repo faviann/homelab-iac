@@ -1,8 +1,14 @@
 ---
+# Speed note: seeding, execution, and assertion plays use the free strategy —
+# each scenario host only touches its own per-vmid observable state, so hosts
+# need not stay in lockstep. Both PLAN plays stay on the linear strategy: the
+# lifecycle planning barrier aggregates every target's planning outcome with
+# run_once tasks, which requires all targets to reach the barrier together.
 - name: Exercise semantic lifecycle scenarios through the single-target facade
   hosts: lifecycle_scenarios
   connection: local
   gather_facts: false
+  strategy: ansible.builtin.free
   vars: &lifecycle_scenario_vars
     proxmox_lxc:
       state: "{{ lifecycle_desired_state }}"
@@ -91,11 +97,15 @@
         name: provisioning/proxmox_lxc_lifecycle
         tasks_from: plan
 
-- name: Execute successful semantic lifecycle scenarios linearly after all planning
+# Scenario isolation note: every scenario observes and mutates only its own
+# per-vmid state files, so this fixture executes scenarios in parallel for
+# fast feedback. Production linear execution and fail-fast ordering (ADR 0001)
+# are covered by the planning-barrier fixture, which keeps serial: 1.
+- name: Execute successful semantic lifecycle scenarios after all planning completes
   hosts: lifecycle_scenarios:!lifecycle_plan_failures
   connection: local
   gather_facts: false
-  serial: 1
+  strategy: ansible.builtin.free
   vars: *lifecycle_scenario_vars
   tasks:
     - name: Execute through the split lifecycle facade
@@ -107,6 +117,7 @@
   hosts: lifecycle_scenarios
   connection: local
   gather_facts: false
+  strategy: ansible.builtin.free
   vars: *lifecycle_scenario_vars
   tasks:
     - name: Assert the facade published the scenario's semantic result
