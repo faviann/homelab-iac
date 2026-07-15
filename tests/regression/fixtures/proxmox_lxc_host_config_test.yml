@@ -182,6 +182,11 @@
           - not proxmox_lxc_host_config_result.overall_changed
           - not proxmox_lxc_host_config_result.restart_required
           - not proxmox_lxc_host_config_result.restart_applied
+          - not proxmox_lxc_host_config_result.components.idmap.changed
+          - not proxmox_lxc_host_config_result.components.bind_mounts.changed
+          - not proxmox_lxc_host_config_result.components.nvidia.changed
+          - not proxmox_lxc_host_config_result.components.wireguard.changed
+          - not proxmox_lxc_host_config_result.components.sysctls.changed
           - "'set 4201 --features' not in (_pct_calls_unchanged.content | b64decode)"
           - "'status 4201' not in (_pct_calls_unchanged.content | b64decode)"
           - "'reboot 4201' not in (_pct_calls_unchanged.content | b64decode)"
