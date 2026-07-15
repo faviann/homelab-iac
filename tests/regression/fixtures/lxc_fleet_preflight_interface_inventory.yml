@@ -12,3 +12,19 @@ all:
             identity:
               vmid: 6902
               hostname: compiled-identity
+    fleet_preflight_interface_conflict_targets:
+      hosts:
+        structural_conflict_target:
+          ansible_connection: local
+          proxmox_lxc:
+            vmid: 6903
+            hostname: structural-conflict
+          proxmox_lxc_contract:
+            identity:
+              vmid: 6903
+              hostname: structural-conflict
+        structural_conflict_reservation:
+          ansible_connection: local
+          proxmox_lxc:
+            vmid: 6903
+            hostname: reserved-elsewhere

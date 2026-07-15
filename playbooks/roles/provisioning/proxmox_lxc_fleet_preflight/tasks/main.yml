@@ -1,15 +1,18 @@
 ---
 - name: Validate compiled identities for targeted LXCs
   ansible.builtin.set_fact:
-    proxmox_fleet_preflight_problems: >-
-      {%- set problems = [] -%}
+    proxmox_fleet_preflight_problem_records: >-
+      {%- set records = [] -%}
       {%- for host in proxmox_fleet_target_hosts -%}
       {%-   if hostvars[host].proxmox_lxc_contract is not defined
               or hostvars[host].proxmox_lxc_contract.identity is not defined -%}
-      {%-     set _ = problems.append("Target '" ~ host ~ "' has no compiled LXC identity.") -%}
+      {%-     set _ = records.append({
+                'message': "Target '" ~ host ~ "' has no compiled LXC identity.",
+                'cause_hosts': [host]
+              }) -%}
       {%-   endif -%}
       {%- endfor -%}
-      {{ problems }}
+      {{ records }}
 
 - name: Compile inventory-wide LXC identity reservations
   ansible.builtin.set_fact:
@@ -33,15 +36,22 @@
 
 - name: Detect malformed and conflicting identity reservations
   ansible.builtin.set_fact:
-    proxmox_fleet_preflight_problems: >-
-      {%- set problems = proxmox_fleet_preflight_problems[:] -%}
+    proxmox_fleet_preflight_problem_records: >-
+      {%- set records = proxmox_fleet_preflight_problem_records[:] -%}
       {%- set target_names = proxmox_fleet_target_hosts -%}
       {%- for host, identity in proxmox_fleet_identity_reservations.items() -%}
+      {%-   set cause_hosts = [host] if host in target_names else [] -%}
       {%-   if identity.vmid is none or identity.vmid | string | length == 0 -%}
-      {%-     set _ = problems.append("Managed LXC '" ~ host ~ "' has no VMID identity reservation.") -%}
+      {%-     set _ = records.append({
+                'message': "Managed LXC '" ~ host ~ "' has no VMID identity reservation.",
+                'cause_hosts': cause_hosts
+              }) -%}
       {%-   endif -%}
       {%-   if identity.hostname is none or identity.hostname | string | trim | length == 0 -%}
-      {%-     set _ = problems.append("Managed LXC '" ~ host ~ "' has no hostname identity reservation.") -%}
+      {%-     set _ = records.append({
+                'message': "Managed LXC '" ~ host ~ "' has no hostname identity reservation.",
+                'cause_hosts': cause_hosts
+              }) -%}
       {%-   endif -%}
       {%- endfor -%}
       {%- for left_host, left_identity in proxmox_fleet_identity_reservations.items() -%}
@@ -70,27 +80,24 @@
       {%-       if hostname_matches -%}
       {%-         set _ = fields.append("hostname '" ~ left_identity.hostname ~ "'") -%}
       {%-       endif -%}
-      {%-       set _ = problems.append(
-                  "Target identity conflict: '" ~ left_host ~ "' and '" ~ right_host
-                  ~ "' both reserve " ~ fields | join(' and ') ~ "."
-                ) -%}
+      {%-       set cause_hosts = [] -%}
+      {%-       if left_host in target_names -%}
+      {%-         set _ = cause_hosts.append(left_host) -%}
+      {%-       endif -%}
+      {%-       if right_host in target_names -%}
+      {%-         set _ = cause_hosts.append(right_host) -%}
+      {%-       endif -%}
+      {%-       set _ = records.append({
+                  'message': (
+                    "Target identity conflict: '" ~ left_host ~ "' and '" ~ right_host
+                    ~ "' both reserve " ~ fields | join(' and ') ~ "."
+                  ),
+                  'cause_hosts': cause_hosts
+                }) -%}
       {%-     endif -%}
       {%-   endfor -%}
       {%- endfor -%}
-      {{ problems | unique | list }}
-
-- name: Classify targeted causes of fleet preflight problems
-  ansible.builtin.set_fact:
-    proxmox_fleet_preflight_cause_hosts: >-
-      {%- set causes = [] -%}
-      {%- for host in proxmox_fleet_target_hosts -%}
-      {%-   for problem in proxmox_fleet_preflight_problems -%}
-      {%-     if ("'" ~ host ~ "'") in problem and host not in causes -%}
-      {%-       set _ = causes.append(host) -%}
-      {%-     endif -%}
-      {%-   endfor -%}
-      {%- endfor -%}
-      {{ causes }}
+      {{ records }}
 
 - name: Observe Proxmox once for the targeted LXC set
   when: proxmox_fleet_observation_override is none
@@ -121,22 +128,31 @@
     - name: Record shared Proxmox access failure
       ansible.builtin.set_fact:
         proxmox_fleet_common_observation: []
-        proxmox_fleet_preflight_problems: >-
+        proxmox_fleet_preflight_problem_records: >-
           {{
-            proxmox_fleet_preflight_problems
-            + ['Shared Proxmox access failed; no common LXC observation is available.']
+            proxmox_fleet_preflight_problem_records
+            + [{
+                'message': 'Shared Proxmox access failed; no common LXC observation is available.',
+                'cause_hosts': []
+              }]
           }}
 
 - name: Adopt supplied common Proxmox observation
   ansible.builtin.set_fact:
     proxmox_fleet_common_observation: >-
       {{ proxmox_fleet_observation_override.containers | default([]) }}
-    proxmox_fleet_preflight_problems: >-
-      {{
-        proxmox_fleet_preflight_problems
-        + (proxmox_fleet_observation_override.problems | default([]))
-      }}
+    proxmox_fleet_preflight_problem_records: >-
+      {%- set records = proxmox_fleet_preflight_problem_records[:] -%}
+      {%- for problem in proxmox_fleet_observation_override.problems | default([]) -%}
+      {%-   set _ = records.append({'message': problem, 'cause_hosts': []}) -%}
+      {%- endfor -%}
+      {{ records }}
   when: proxmox_fleet_observation_override is not none
+
+- name: Project operator-facing fleet preflight messages
+  ansible.builtin.set_fact:
+    proxmox_fleet_preflight_problems: >-
+      {{ proxmox_fleet_preflight_problem_records | map(attribute='message') | list }}
 
 - name: Build common Proxmox identity lookup maps
   ansible.builtin.set_fact:
@@ -165,13 +181,13 @@
       {%-     set matches = by_vmid is not none and by_name is not none
                            and by_vmid.vmid | string == by_name.vmid | string -%}
       {%-     set conflict = (by_vmid is not none or by_name is not none) and not matches -%}
-      {%-     set preflight_failed = (
-                proxmox_fleet_preflight_problems | length > 0
-                and (
-                  proxmox_fleet_preflight_cause_hosts | length == 0
-                  or host in proxmox_fleet_preflight_cause_hosts
-                )
-              ) -%}
+      {%-     set owned_problems = [] -%}
+      {%-     for problem in proxmox_fleet_preflight_problem_records -%}
+      {%-       if problem.cause_hosts | length == 0 or host in problem.cause_hosts -%}
+      {%-         set _ = owned_problems.append(problem) -%}
+      {%-       endif -%}
+      {%-     endfor -%}
+      {%-     set preflight_failed = owned_problems | length > 0 -%}
       {%-     set observation = {
                 'status': 'mismatch' if (preflight_failed or conflict) else 'ok',
                 'type': (
