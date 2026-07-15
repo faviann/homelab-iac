@@ -13,6 +13,11 @@ Full path (--full) — completion checks before handoff:
   everything the fast path covers, plus the remaining lifecycle seams,
   including slow host-configuration idempotence sequencing and the real
   role-composition wiring regression.
+Targeted path (--only FILENAME, repeatable) — focused remediation:
+  registered launchers run sequentially in the supplied order. Add
+  --fail-fast to stop scheduling selected launchers after the first failure.
+  With --full, fail-fast still lets the concurrent fast launchers finish,
+  then schedules no new launcher after a failure.
 
 Both paths use controlled observations only: no live Proxmox, no vault
 secrets, no machine-specific credentials.
@@ -37,6 +42,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Callable, Sequence
 
 
 TESTS = Path(__file__).resolve().parent
@@ -68,6 +74,10 @@ FULL_ONLY_SCRIPTS = (
     "test_lxc_lifecycle_wiring.py",
     "test_proxmox_lxc_host_config_result.py",
 )
+REGISTERED_SCRIPTS = FAST_SCRIPTS + FULL_ONLY_SCRIPTS
+
+LauncherResult = tuple[str, int, float, str]
+Launcher = Callable[[str], LauncherResult]
 
 
 def run_script(script: str) -> tuple[str, int, float, str]:
@@ -91,19 +101,43 @@ def report(result: tuple[str, int, float, str]) -> bool:
     return returncode == 0
 
 
-def run_regressions(*, full: bool) -> int:
+def run_regressions(
+    *,
+    full: bool,
+    fail_fast: bool = False,
+    only: Sequence[str] = (),
+    launcher: Launcher = run_script,
+) -> int:
     failed = []
     launched = 0
+    if only:
+        for script in only:
+            launched += 1
+            if not report(launcher(script)):
+                failed.append(script)
+                if fail_fast:
+                    break
+        if failed:
+            print(f"failed: {', '.join(failed)}", file=sys.stderr)
+            return 1
+        print(f"ok: targeted lifecycle regression set passed ({launched} launchers)")
+        return 0
+
     with ThreadPoolExecutor(max_workers=len(FAST_SCRIPTS)) as executor:
-        for result in executor.map(run_script, FAST_SCRIPTS):
+        for result in executor.map(launcher, FAST_SCRIPTS):
             launched += 1
             if not report(result):
                 failed.append(result[0])
+    if failed and fail_fast:
+        print(f"failed: {', '.join(failed)}", file=sys.stderr)
+        return 1
     if full:
         for script in FULL_ONLY_SCRIPTS:
             launched += 1
-            if not report(run_script(script)):
+            if not report(launcher(script)):
                 failed.append(script)
+                if fail_fast:
+                    break
 
     if failed:
         print(f"failed: {', '.join(failed)}", file=sys.stderr)
@@ -114,14 +148,38 @@ def run_regressions(*, full: bool) -> int:
     return 0
 
 
-def main() -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    launcher: Launcher = run_script,
+) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--full",
         action="store_true",
         help="run the complete lifecycle regression set, not just fast feedback",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="FILENAME",
+        help="run only this registered launcher (repeatable)",
+    )
+    parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="stop scheduling new launchers after a failure",
+    )
+    args = parser.parse_args(argv)
+    if args.only and args.full:
+        parser.error("--only cannot be combined with --full")
+    unknown_scripts = [script for script in args.only if script not in REGISTERED_SCRIPTS]
+    if unknown_scripts:
+        parser.error(
+            f"unknown lifecycle launcher: {unknown_scripts[0]}; "
+            f"registered launchers: {', '.join(REGISTERED_SCRIPTS)}"
+        )
 
     with tempfile.TemporaryDirectory(prefix="lxc-lifecycle-fixtures-") as temp_dir:
         temp_root = Path(temp_dir)
@@ -140,7 +198,12 @@ def main() -> int:
         os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
         os.environ["ANSIBLE_INVENTORY"] = str(fixture_inventory)
         try:
-            return run_regressions(full=args.full)
+            return run_regressions(
+                full=args.full,
+                fail_fast=args.fail_fast,
+                only=args.only,
+                launcher=launcher,
+            )
         finally:
             if previous_vault_password_file is None:
                 os.environ.pop("ANSIBLE_VAULT_PASSWORD_FILE", None)
