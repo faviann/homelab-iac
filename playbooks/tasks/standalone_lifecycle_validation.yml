@@ -4,8 +4,10 @@
     - name: Run validate-only lifecycle planning
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan
       vars:
         proxmox_lifecycle_intent: validate_only
+        proxmox_lifecycle_collect_all_planning_problems: true
   rescue:
     - name: Record this target's planning problem
       ansible.builtin.set_fact:
@@ -25,7 +27,7 @@
       {%- if lxc_standalone_planning_problem is defined -%}
       {%-   set _ = problems.append("Target '" ~ inventory_hostname ~ "': " ~ lxc_standalone_planning_problem) -%}
       {%- elif lxc_lifecycle_result is defined
-             and lxc_lifecycle_result.outcome.status == 'validation_failed' -%}
+             and lxc_lifecycle_result.outcome.status == 'planning_failed' -%}
       {%-   set _ = problems.append("Target '" ~ inventory_hostname ~ "': " ~ lxc_lifecycle_result.outcome.reason) -%}
       {%- endif -%}
       {{ problems }}

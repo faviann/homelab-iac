@@ -32,7 +32,7 @@
             proxmox_lifecycle_intent: full
             proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
             proxmox_lxc_contract: "{{ _base_contract }}"
-            proxmox_lifecycle_validation_snapshot:
+            proxmox_lifecycle_observation:
               status: ok
               message: Build succeeded
             proxmox_lifecycle_runtime_state: BANANAS

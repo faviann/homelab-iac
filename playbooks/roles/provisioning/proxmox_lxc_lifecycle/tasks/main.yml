@@ -1,61 +1,15 @@
 ---
-- name: Skip if this host is the Ansible controller
-  meta: end_host
-  when:
-    - proxmox_skip_self | default(true) | bool
-    - inventory_hostname == lookup('pipe', 'hostname')
+- name: Plan the complete targeted LXC set
+  ansible.builtin.include_tasks: plan.yml
 
-- name: Validate lifecycle intent
+- name: Refuse unsafe multi-target execution through the default role entry
   ansible.builtin.assert:
     that:
-      - proxmox_lifecycle_intent in ['validate_only', 'provision_only', 'configure_only', 'full']
+      - hostvars.localhost.proxmox_lifecycle_target_hosts | length == 1
     fail_msg: >-
-      Invalid proxmox_lifecycle_intent '{{ proxmox_lifecycle_intent }}'.
-      Expected one of: validate_only, provision_only, configure_only, full.
+      The default lifecycle role entry cannot execute multiple targets safely.
+      Use playbooks/lifecycle-lxcs.yml as the split lifecycle facade for
+      all-target planning followed by serial execution.
 
-- name: Merge lifecycle policy defaults
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_policy_effective: >-
-      {{
-        proxmox_lifecycle_policy_default
-        | combine(proxmox_lifecycle_policy | default({}), recursive=True)
-      }}
-    proxmox_lifecycle_rebuilt: false
-
-- name: Compile desired LXC specification
-  ansible.builtin.include_tasks: compile.yml
-
-- name: Run fleet preflight before per-LXC planning
-  ansible.builtin.include_role:
-    name: provisioning/proxmox_lxc_fleet_preflight
-  vars:
-    proxmox_fleet_target_hosts: "{{ ansible_play_hosts }}"
-  run_once: true
-  when: proxmox_fleet_preflight_enabled | bool
-
-- name: Inspect current lifecycle state
-  ansible.builtin.include_tasks: inspect.yml
-
-- name: Validate inspection state is complete and well-typed
-  ansible.builtin.include_tasks: validate_state.yml
-
-- name: Decide lifecycle actions
-  ansible.builtin.include_tasks: decide.yml
-
-- name: Execute host-side actions
-  ansible.builtin.include_tasks: provision.yml
-  when: proxmox_lifecycle_has_host_work | bool
-
-- name: Re-observe current state after provisioning and host reconciliation
-  ansible.builtin.include_tasks: reobserve.yml
-
-- name: Restore guest access after re-observation
-  ansible.builtin.include_tasks: restore_guest_access.yml
-  when: proxmox_lxc_lifecycle_plan.restore_guest_access | bool
-
-- name: Execute guest configuration actions
-  ansible.builtin.include_tasks: configure.yml
-  when: proxmox_lxc_lifecycle_plan.configure_guest | bool
-
-- name: Publish lifecycle results
-  ansible.builtin.include_tasks: publish.yml
+- name: Execute valid plans after the lifecycle planning barrier
+  ansible.builtin.include_tasks: execute.yml

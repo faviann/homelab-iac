@@ -10,11 +10,12 @@
     - name: Plan through the lifecycle facade
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan
 
     - name: Assert malformed reservations and their hostname conflict were aggregated
       ansible.builtin.assert:
         that:
-          - lxc_lifecycle_result.outcome.status == 'validation_failed'
+          - lxc_lifecycle_result.outcome.status == 'planning_failed'
           - "'null_hostname_reservation' in lxc_lifecycle_result.outcome.reason"
           - "'empty_hostname_reservation' in lxc_lifecycle_result.outcome.reason"
           - lxc_lifecycle_result.outcome.reason is search('hostname identity reservation')

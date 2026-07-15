@@ -8,7 +8,9 @@
 - name: Require re-observation before guest-access restoration
   ansible.builtin.assert:
     that:
-      - "'runtime_refresh' in (lifecycle_access_precondition_events.content | b64decode).splitlines()"
+      - >-
+        ansible_check_mode
+        or 'runtime_refresh' in (lifecycle_access_precondition_events.content | b64decode).splitlines()
 
 - name: Record guest-access restoration
   ansible.builtin.copy:

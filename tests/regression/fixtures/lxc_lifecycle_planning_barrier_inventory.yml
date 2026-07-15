@@ -1,0 +1,83 @@
+---
+all:
+  children:
+    lxcs:
+      vars:
+        ansible_connection: local
+        proxmox_lxc_controller_pubkey_enabled: false
+        proxmox_lxc_host_config_enabled: true
+        proxmox_pct_delegate_host: localhost
+        proxmox_api_delegate_host: localhost
+        proxmox_default_storage: local-lvm
+        proxmox_default_bind_mounts: {}
+        proxmox_default_idmap: []
+        proxmox_lxc_disable_root_password: true
+        proxmox_lifecycle_release_probe_tasks_file: >-
+          {{
+            [inventory_dir, '..', '..', '..', 'playbooks', 'tasks', 'probe_lxc_release.yml']
+            | path_join
+          }}
+        proxmox_lifecycle_policy:
+          strict_validation: false
+          rebuild_on_release_mismatch: false
+          allow_destructive_transitions: false
+        proxmox_fleet_observation_override:
+          containers:
+            - vmid: 7101
+              name: barrier-valid
+              status: stopped
+            - vmid: 7103
+              name: barrier-after-failure
+              status: stopped
+            - vmid: 7105
+              name: workstation
+              status: stopped
+            - vmid: 7106
+              name: check-running
+              status: running
+        proxmox_lxc_global_defaults:
+          state: present
+          node: pve-a
+          ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+          cores: 1
+          memory: 128
+          disk: 4
+          netif:
+            net0: name=eth0,bridge=vmbr0,ip=dhcp
+          pubkey: ssh-ed25519 AAAABARRIER lifecycle@test
+      hosts:
+        barrier_valid:
+          ansible_connection: >-
+            {{ 'ssh' if lifecycle_test_case | default('') == 'check' else 'local' }}
+          ansible_host: 192.0.2.1
+          ansible_connect_timeout: 1
+          proxmox_lifecycle_intent: full
+          proxmox_lxc:
+            vmid: 7101
+            hostname: barrier-valid
+        barrier_invalid:
+          proxmox_lifecycle_intent: configure_only
+          proxmox_lxc:
+            vmid: 7102
+            hostname: barrier-invalid
+        barrier_after_failure:
+          proxmox_lifecycle_intent: full
+          proxmox_lxc:
+            vmid: 7103
+            hostname: barrier-after-failure
+        barrier_compile_invalid:
+          proxmox_lifecycle_intent: full
+          proxmox_lxc:
+            vmid: 7104
+            hostname: barrier-compile-invalid
+            cores: 0
+        workstation:
+          proxmox_lifecycle_intent: full
+          proxmox_lxc:
+            vmid: 7105
+            hostname: workstation
+        check_running:
+          proxmox_lifecycle_intent: full
+          proxmox_lxc:
+            vmid: 7106
+            hostname: check-running

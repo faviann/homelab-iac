@@ -1,0 +1,85 @@
+---
+# Execute one already-valid semantic lifecycle plan. The production facade runs
+# this task file with serial: 1 so a recorded failure suppresses later actions.
+
+- name: Skip execution if this host is the Ansible controller
+  ansible.builtin.meta: end_host
+  when:
+    - proxmox_skip_self | default(true) | bool
+    - inventory_hostname == lookup('pipe', 'hostname')
+
+- name: Publish fail-fast suppression after an earlier execution error
+  ansible.builtin.set_fact:
+    lxc_lifecycle_result:
+      intent: "{{ proxmox_lifecycle_intent }}"
+      plan: "{{ proxmox_lxc_lifecycle_plan }}"
+      outcome:
+        status: not_executed
+        reason: >-
+          Lifecycle execution stopped after the failure on
+          {{ hostvars.localhost.proxmox_lifecycle_execution_failure.host }}.
+        rebuilt: false
+      observations:
+        before: "{{ proxmox_lxc_lifecycle_observation_before }}"
+        after: "{{ proxmox_lxc_lifecycle_observation_before }}"
+  when:
+    - not (proxmox_lifecycle_barrier_blocked | bool)
+    - proxmox_lifecycle_intent != 'validate_only'
+    - hostvars.localhost.proxmox_lifecycle_execution_failure | length > 0
+
+- name: Execute the target's valid semantic lifecycle plan
+  when:
+    - not (proxmox_lifecycle_barrier_blocked | bool)
+    - proxmox_lifecycle_intent != 'validate_only'
+    - hostvars.localhost.proxmox_lifecycle_execution_failure | length == 0
+  block:
+    - name: Execute host-side actions
+      ansible.builtin.include_tasks: provision.yml
+      when: proxmox_lifecycle_has_host_work | bool
+
+    - name: Re-observe current state after provisioning and host reconciliation
+      ansible.builtin.include_tasks: reobserve.yml
+
+    - name: Restore guest access after re-observation
+      ansible.builtin.include_tasks: restore_guest_access.yml
+      when: proxmox_lxc_lifecycle_plan.restore_guest_access | bool
+
+    - name: Execute guest configuration actions
+      ansible.builtin.include_tasks: configure.yml
+      when: proxmox_lxc_lifecycle_plan.configure_guest | bool
+
+    - name: Publish lifecycle results
+      ansible.builtin.include_tasks: publish.yml
+  rescue:
+    - name: Capture the first lifecycle execution error
+      ansible.builtin.set_fact:
+        proxmox_lifecycle_execution_problem: >-
+          {{
+            (ansible_failed_result | default({})).msg
+            | default('Lifecycle execution failed for ' ~ inventory_hostname)
+          }}
+
+    - name: Publish the failed execution result
+      ansible.builtin.set_fact:
+        lxc_lifecycle_result:
+          intent: "{{ proxmox_lifecycle_intent }}"
+          plan: "{{ proxmox_lxc_lifecycle_plan }}"
+          outcome:
+            status: execution_failed
+            reason: "{{ proxmox_lifecycle_execution_problem }}"
+            rebuilt: "{{ proxmox_lifecycle_rebuilt | bool }}"
+          observations:
+            before: "{{ proxmox_lxc_lifecycle_observation_before }}"
+            after: >-
+              {{
+                proxmox_lxc_lifecycle_observation_after
+                | default(proxmox_lxc_lifecycle_observation_before)
+              }}
+
+    - name: Stop later targets from performing lifecycle actions
+      ansible.builtin.set_fact:
+        proxmox_lifecycle_execution_failure:
+          host: "{{ inventory_hostname }}"
+          reason: "{{ proxmox_lifecycle_execution_problem }}"
+      delegate_to: localhost
+      delegate_facts: true

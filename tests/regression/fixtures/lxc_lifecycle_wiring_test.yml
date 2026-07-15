@@ -1,0 +1,25 @@
+---
+- name: Exercise the actual production lifecycle wrapper
+  ansible.builtin.import_playbook: ../../../playbooks/lifecycle-lxcs.yml
+
+- name: Assert the production lifecycle summary covers every targeted LXC
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Assert production lifecycle summary includes every targeted LXC
+      ansible.builtin.assert:
+        that:
+          - >-
+            hostvars.localhost.proxmox_lifecycle_target_hosts | sort
+            == ['wiring_target', 'wiring_peer'] | sort
+          - >-
+            hostvars.localhost.lxc_lifecycle_results.keys() | list | sort
+            == ['wiring_target', 'wiring_peer'] | sort
+          - >-
+            hostvars.localhost.lxc_lifecycle_results.wiring_target.outcome.status
+            == 'ensured'
+          - >-
+            hostvars.localhost.lxc_lifecycle_results.wiring_peer.outcome.status
+            == 'ensured'
+      run_once: true

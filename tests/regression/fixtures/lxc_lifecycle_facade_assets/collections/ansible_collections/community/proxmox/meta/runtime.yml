@@ -1,0 +1,6 @@
+---
+requires_ansible: ">=2.17.0"
+action_groups:
+  proxmox:
+    - proxmox
+    - proxmox_vm_info

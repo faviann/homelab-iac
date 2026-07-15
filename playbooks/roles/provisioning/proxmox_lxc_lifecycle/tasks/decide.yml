@@ -28,7 +28,7 @@
 
 - name: Derive lifecycle intent flags
   ansible.builtin.set_fact:
-    proxmox_lifecycle_validation_failed: "{{ proxmox_lifecycle_validation_snapshot.status | default('ok') == 'mismatch' }}"
+    proxmox_lifecycle_validation_failed: "{{ proxmox_lifecycle_observation.status | default('ok') == 'mismatch' }}"
     proxmox_lifecycle_should_provision: "{{ proxmox_lifecycle_intent in ['provision_only', 'full'] }}"
     proxmox_lifecycle_should_configure: "{{ proxmox_lifecycle_intent in ['configure_only', 'full'] }}"
     proxmox_lifecycle_rebuild_required: >-
@@ -40,7 +40,7 @@
 
 - name: Enforce strict lifecycle validation policy
   ansible.builtin.fail:
-    msg: "{{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}"
+    msg: "{{ proxmox_lifecycle_observation.message | default('Lifecycle validation failed') }}"
   when:
     - proxmox_lifecycle_policy_effective.strict_validation | bool
     - proxmox_lifecycle_validation_failed | bool
@@ -130,7 +130,7 @@
       }}
     proxmox_lifecycle_reason: >-
       {%- if proxmox_lifecycle_validation_failed | bool -%}
-      {{ proxmox_lifecycle_validation_snapshot.message | default('Lifecycle validation failed') }}
+      {{ proxmox_lifecycle_observation.message | default('Lifecycle validation failed') }}
       {%- elif proxmox_lifecycle_intent == 'configure_only' and proxmox_lifecycle_runtime_state == 'absent' -%}
       Container does not exist in Proxmox, so configure-only was skipped.
       {%- elif proxmox_lifecycle_container_transition == 'remove' -%}

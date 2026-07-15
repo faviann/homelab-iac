@@ -79,6 +79,19 @@
       {%- endfor -%}
       {{ problems | unique | list }}
 
+- name: Classify targeted causes of fleet preflight problems
+  ansible.builtin.set_fact:
+    proxmox_fleet_preflight_cause_hosts: >-
+      {%- set causes = [] -%}
+      {%- for host in proxmox_fleet_target_hosts -%}
+      {%-   for problem in proxmox_fleet_preflight_problems -%}
+      {%-     if ("'" ~ host ~ "'") in problem and host not in causes -%}
+      {%-       set _ = causes.append(host) -%}
+      {%-     endif -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ causes }}
+
 - name: Observe Proxmox once for the targeted LXC set
   when: proxmox_fleet_observation_override is none
   module_defaults:
@@ -152,7 +165,13 @@
       {%-     set matches = by_vmid is not none and by_name is not none
                            and by_vmid.vmid | string == by_name.vmid | string -%}
       {%-     set conflict = (by_vmid is not none or by_name is not none) and not matches -%}
-      {%-     set preflight_failed = proxmox_fleet_preflight_problems | length > 0 -%}
+      {%-     set preflight_failed = (
+                proxmox_fleet_preflight_problems | length > 0
+                and (
+                  proxmox_fleet_preflight_cause_hosts | length == 0
+                  or host in proxmox_fleet_preflight_cause_hosts
+                )
+              ) -%}
       {%-     set observation = {
                 'status': 'mismatch' if (preflight_failed or conflict) else 'ok',
                 'type': (

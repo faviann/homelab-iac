@@ -9,6 +9,12 @@
     lifecycle_event_record_path: >-
       {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events
 
+- name: Model a controlled lifecycle execution failure
+  ansible.builtin.fail:
+    msg: Controlled host-configuration execution failure for {{ inventory_hostname }}
+  when:
+    - lifecycle_test_execution_failure_host | default('') == inventory_hostname
+
 - name: Model successful host configuration reconciliation
   ansible.builtin.debug:
     msg: Host configuration reconciled by facade test double
