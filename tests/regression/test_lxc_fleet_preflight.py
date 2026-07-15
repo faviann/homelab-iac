@@ -38,9 +38,18 @@ ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 DUMMY_API_USER = "dummy@pam"
 DUMMY_API_TOKEN_ID = "dummy-token"
 DUMMY_API_TOKEN_SECRET = "<REPLACE_ME>"
-EXPECTED_API_PATH = "/api2/json/nodes/pve-a/lxc"
 EXPECTED_AUTHORIZATION = (
     f"PVEAPIToken={DUMMY_API_USER}!{DUMMY_API_TOKEN_ID}={DUMMY_API_TOKEN_SECRET}"
+)
+VERSION_API_PATH = "/api2/json/version"
+NODES_API_PATH = "/api2/json/nodes"
+CLUSTER_RESOURCES_API_PATH = "/api2/json/cluster/resources?type=vm"
+LXC_API_PATH = "/api2/json/nodes/pve-a/lxc"
+EXPECTED_SUCCESS_PATHS = (
+    VERSION_API_PATH,
+    NODES_API_PATH,
+    CLUSTER_RESOURCES_API_PATH,
+    LXC_API_PATH,
 )
 
 COMMON_OBSERVATION = [
@@ -55,12 +64,36 @@ class _ProxmoxHandler(BaseHTTPRequestHandler):
         self.server.requests.append(  # type: ignore[attr-defined]
             (self.path, self.headers.get("Authorization"))
         )
-        status = self.server.response_status  # type: ignore[attr-defined]
-        body = json.dumps(
-            {"data": COMMON_OBSERVATION}
-            if status == 200
-            else {"errors": "controlled Proxmox failure"}
-        ).encode()
+        configured_status = self.server.response_status  # type: ignore[attr-defined]
+        if configured_status != 200:
+            status = configured_status
+            payload = {"errors": "controlled Proxmox failure"}
+        elif self.path == VERSION_API_PATH:
+            status = 200
+            payload = {"data": {"version": "9.0"}}
+        elif self.path == NODES_API_PATH:
+            status = 200
+            payload = {"data": [{"node": "pve-a", "status": "online"}]}
+        elif self.path == CLUSTER_RESOURCES_API_PATH:
+            status = 200
+            payload = {
+                "data": [
+                    {
+                        **container,
+                        "id": f"lxc/{container['vmid']}",
+                        "node": "pve-a",
+                        "type": "lxc",
+                    }
+                    for container in COMMON_OBSERVATION
+                ]
+            }
+        elif self.path == LXC_API_PATH:
+            status = 200
+            payload = {"data": COMMON_OBSERVATION}
+        else:
+            status = 404
+            payload = {"errors": "unknown test endpoint"}
+        body = json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -147,13 +180,17 @@ def run_actual_query_case(
         )
         requests = server.requests[:]  # type: ignore[attr-defined]
 
-    expected_request = (EXPECTED_API_PATH, EXPECTED_AUTHORIZATION)
-    if proc.returncode == 0 and requests == [expected_request]:
+    expected_paths = EXPECTED_SUCCESS_PATHS if status == 200 else (VERSION_API_PATH,)
+    expected_requests = [
+        (path, EXPECTED_AUTHORIZATION) for path in expected_paths
+    ]
+    if proc.returncode == 0 and requests == expected_requests:
         return True
 
     paths = [path for path, _authorization in requests]
-    authorization_matches = (
-        len(requests) == 1 and requests[0][1] == EXPECTED_AUTHORIZATION
+    authorization_matches = bool(requests) and all(
+        authorization == EXPECTED_AUTHORIZATION
+        for _path, authorization in requests
     )
     print(
         f"actual query case {limit!r} status={status} check={check_mode} "
@@ -196,7 +233,7 @@ def generate_localhost_certificate(certificate: Path, private_key: Path) -> None
     private_key.chmod(0o600)
 
 
-def run_case(limit: str, *, check_mode: bool = False) -> bool:
+def run_case(limit: str) -> bool:
     env = os.environ.copy()
     env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(
         Path.home() / ".ansible" / "vault-pass"
@@ -209,8 +246,6 @@ def run_case(limit: str, *, check_mode: bool = False) -> bool:
         "--limit",
         limit,
     ]
-    if check_mode:
-        command.append("--check")
     proc = subprocess.run(
         command,
         cwd=REPO_ROOT,

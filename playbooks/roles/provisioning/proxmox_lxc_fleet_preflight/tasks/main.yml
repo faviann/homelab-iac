@@ -81,26 +81,30 @@
 
 - name: Observe Proxmox once for the targeted LXC set
   when: proxmox_fleet_observation_override is none
+  module_defaults:
+    group/community.proxmox.proxmox: "{{ _proxmox_auth }}"
+  vars:
+    _proxmox_auth:
+      api_host: "{{ proxmox_api_host }}"
+      api_port: "{{ proxmox_api_port | default(omit) }}"
+      api_user: "{{ proxmox_api_user }}"
+      api_token_id: "{{ proxmox_api_token_id }}"
+      api_token_secret: "{{ proxmox_api_token_secret }}"
+      validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
   block:
     - name: Query the common Proxmox LXC observation
-      ansible.builtin.uri:
-        url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/nodes/{{ proxmox_default_node }}/lxc"
-        method: GET
-        headers:
-          Authorization: >-
-            PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}
-        validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
-        status_code: 200
+      community.proxmox.proxmox_vm_info:
+        node: "{{ proxmox_default_node }}"
+        type: lxc
       register: proxmox_fleet_observation_response
       changed_when: false
-      check_mode: false
       no_log: true
-      delegate_to: "{{ proxmox_api_delegate_host | default('localhost') }}"
+      delegate_to: localhost
 
     - name: Adopt the common Proxmox LXC observation
       ansible.builtin.set_fact:
         proxmox_fleet_common_observation: >-
-          {{ proxmox_fleet_observation_response.json.data | default([]) }}
+          {{ proxmox_fleet_observation_response.proxmox_vms | default([]) }}
   rescue:
     - name: Record shared Proxmox access failure
       ansible.builtin.set_fact:
