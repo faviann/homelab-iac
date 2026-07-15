@@ -30,8 +30,10 @@ policy into Python; both are ruled out (ADR 0007).
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -89,15 +91,7 @@ def report(result: tuple[str, int, float, str]) -> bool:
     return returncode == 0
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--full",
-        action="store_true",
-        help="run the complete lifecycle regression set, not just fast feedback",
-    )
-    args = parser.parse_args()
-
+def run_regressions(*, full: bool) -> int:
     failed = []
     launched = 0
     with ThreadPoolExecutor(max_workers=len(FAST_SCRIPTS)) as executor:
@@ -105,7 +99,7 @@ def main() -> int:
             launched += 1
             if not report(result):
                 failed.append(result[0])
-    if args.full:
+    if full:
         for script in FULL_ONLY_SCRIPTS:
             launched += 1
             if not report(run_script(script)):
@@ -115,9 +109,36 @@ def main() -> int:
         print(f"failed: {', '.join(failed)}", file=sys.stderr)
         return 1
 
-    label = "full lifecycle regression set" if args.full else "fast lifecycle feedback path"
+    label = "full lifecycle regression set" if full else "fast lifecycle feedback path"
     print(f"ok: {label} passed ({launched} launchers)")
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="run the complete lifecycle regression set, not just fast feedback",
+    )
+    args = parser.parse_args()
+
+    with tempfile.TemporaryDirectory(prefix="lxc-lifecycle-vault-") as temp_dir:
+        # ansible.cfg names a vault password file that must exist, but the
+        # fixtures decrypt nothing: a placeholder keeps the run credential-free.
+        vault_placeholder = Path(temp_dir) / "vault-pass"
+        vault_placeholder.write_text(
+            "unused-fixture-placeholder\n", encoding="utf-8"
+        )
+        previous_vault_password_file = os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE")
+        os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
+        try:
+            return run_regressions(full=args.full)
+        finally:
+            if previous_vault_password_file is None:
+                os.environ.pop("ANSIBLE_VAULT_PASSWORD_FILE", None)
+            else:
+                os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = previous_vault_password_file
 
 
 if __name__ == "__main__":
