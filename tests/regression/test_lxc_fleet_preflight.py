@@ -11,9 +11,16 @@ import sys
 import tempfile
 import threading
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Iterator
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +33,13 @@ PLAYBOOK = FIXTURES / "lxc_fleet_preflight_test.yml"
 STANDALONE_PLAYBOOK = FIXTURES / "lxc_standalone_validation_test.yml"
 MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
+DUMMY_API_USER = "dummy@pam"
+DUMMY_API_TOKEN_ID = "dummy-token"
+DUMMY_API_TOKEN_SECRET = "<REPLACE_ME>"
+EXPECTED_API_PATH = "/api2/json/nodes/pve-a/lxc"
+EXPECTED_AUTHORIZATION = (
+    f"PVEAPIToken={DUMMY_API_USER}!{DUMMY_API_TOKEN_ID}={DUMMY_API_TOKEN_SECRET}"
+)
 
 COMMON_OBSERVATION = [
     {"vmid": 5101, "name": "target-a", "status": "stopped"},
@@ -36,7 +50,9 @@ COMMON_OBSERVATION = [
 
 class _ProxmoxHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        self.server.request_count += 1  # type: ignore[attr-defined]
+        self.server.requests.append(  # type: ignore[attr-defined]
+            (self.path, self.headers.get("Authorization"))
+        )
         status = self.server.response_status  # type: ignore[attr-defined]
         body = json.dumps(
             {"data": COMMON_OBSERVATION}
@@ -61,7 +77,7 @@ def local_proxmox_server(
     status: int,
 ) -> Iterator[ThreadingHTTPServer]:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _ProxmoxHandler)
-    server.request_count = 0  # type: ignore[attr-defined]
+    server.requests = []  # type: ignore[attr-defined]
     server.response_status = status  # type: ignore[attr-defined]
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(certificate, private_key)
@@ -90,9 +106,9 @@ def run_actual_query_case(
             "proxmox_fleet_observation_override": None,
             "proxmox_api_host": "127.0.0.1",
             "proxmox_api_port": api_port,
-            "proxmox_api_user": "dummy@pam",
-            "proxmox_api_token_id": "dummy-token",
-            "proxmox_api_token_secret": "<REPLACE_ME>",
+            "proxmox_api_user": DUMMY_API_USER,
+            "proxmox_api_token_id": DUMMY_API_TOKEN_ID,
+            "proxmox_api_token_secret": DUMMY_API_TOKEN_SECRET,
             "proxmox_default_node": "pve-a",
             "proxmox_verify_ssl": False,
         }
@@ -127,18 +143,55 @@ def run_actual_query_case(
             text=True,
             env=env,
         )
-        request_count = server.request_count  # type: ignore[attr-defined]
+        requests = server.requests[:]  # type: ignore[attr-defined]
 
-    if proc.returncode == 0 and request_count == 1:
+    expected_request = (EXPECTED_API_PATH, EXPECTED_AUTHORIZATION)
+    if proc.returncode == 0 and requests == [expected_request]:
         return True
 
+    paths = [path for path, _authorization in requests]
+    authorization_matches = (
+        len(requests) == 1 and requests[0][1] == EXPECTED_AUTHORIZATION
+    )
     print(
         f"actual query case {limit!r} status={status} check={check_mode} "
-        f"made {request_count} request(s)",
+        f"made {len(requests)} request(s); paths={paths!r}; "
+        f"authorization matched={authorization_matches}",
         file=sys.stderr,
     )
     print(f"{proc.stdout}\n{proc.stderr}", file=sys.stderr)
     return False
+
+
+def generate_localhost_certificate(certificate: Path, private_key: Path) -> None:
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")]
+    )
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=1))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.IPAddress(ip_address("127.0.0.1"))]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    certificate.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    private_key.write_bytes(
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    private_key.chmod(0o600)
 
 
 def run_case(limit: str, *, check_mode: bool = False) -> bool:
@@ -183,30 +236,7 @@ def main() -> int:
         temp_root = Path(temp_dir)
         certificate = temp_root / "certificate.pem"
         private_key = temp_root / "private-key.pem"
-        certificate_result = subprocess.run(
-            [
-                "openssl",
-                "req",
-                "-x509",
-                "-newkey",
-                "rsa:2048",
-                "-nodes",
-                "-days",
-                "1",
-                "-subj",
-                "/CN=127.0.0.1",
-                "-keyout",
-                str(private_key),
-                "-out",
-                str(certificate),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if certificate_result.returncode != 0:
-            print("failed to create ephemeral HTTPS certificate", file=sys.stderr)
-            print(certificate_result.stderr, file=sys.stderr)
-            return 1
+        generate_localhost_certificate(certificate, private_key)
         actual_cases = (
             run_actual_query_case(
                 certificate,
