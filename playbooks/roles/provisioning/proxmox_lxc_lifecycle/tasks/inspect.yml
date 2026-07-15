@@ -44,15 +44,20 @@
         )
       }}
 
-- name: Reject fleet preflight problems before per-LXC planning
+- name: Reject target-specific fleet preflight and identity problems
   ansible.builtin.assert:
     that:
-      - proxmox_fleet_preflight_problems | default([]) | length == 0
+      - >-
+        not (
+          proxmox_lifecycle_validation_snapshot.status | default('ok') == 'mismatch'
+          and proxmox_lifecycle_validation_snapshot.type | default('')
+            in ['preflight_failed', 'identity_conflict']
+        )
     fail_msg: >-
-      Fleet preflight failed: {{ proxmox_fleet_preflight_problems | default([]) | join(' ') }}
+      {{ proxmox_lifecycle_validation_snapshot.message | default('Fleet preflight failed.') }}
   when:
     - proxmox_fleet_preflight_enabled | bool
-    - proxmox_lifecycle_intent != 'validate_only'
+    - not (proxmox_lifecycle_collect_all_planning_problems | default(false) | bool)
 
 - name: Require an observation from fleet preflight
   ansible.builtin.assert:

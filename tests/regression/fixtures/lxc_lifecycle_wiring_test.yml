@@ -1,0 +1,21 @@
+---
+- name: Plan through the real lifecycle role composition
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Run real lifecycle compilation, preflight, and planning
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan
+
+- name: Execute through the real lifecycle role composition
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Run real lifecycle execution and publication
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: execute

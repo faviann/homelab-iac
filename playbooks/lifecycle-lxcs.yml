@@ -5,7 +5,7 @@
 - name: Validate lifecycle prerequisites
   ansible.builtin.import_playbook: lifecycle-prerequisites.yml
 
-- name: Run the LXC lifecycle facade
+- name: Plan the complete targeted LXC lifecycle
   hosts: lxcs
   gather_facts: false
   become: false
@@ -17,19 +17,41 @@
       api_token_id: "{{ proxmox_api_token_id }}"
       api_token_secret: "{{ proxmox_api_token_secret }}"
       validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
-  roles:
-    - role: provisioning/proxmox_lxc_lifecycle
+  tasks:
+    - name: Plan the complete targeted LXC set
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan
+
+- name: Execute valid LXC lifecycle plans linearly
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  serial: 1
+  module_defaults:
+    community.proxmox.proxmox:
+      api_host: "{{ proxmox_api_host }}"
+      api_port: "{{ proxmox_api_port | default(omit) }}"
+      api_user: "{{ proxmox_api_user }}"
+      api_token_id: "{{ proxmox_api_token_id }}"
+      api_token_secret: "{{ proxmox_api_token_secret }}"
+      validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
+  tasks:
+    - name: Execute one valid LXC lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: execute
 
 - name: Ensure lifecycle summary facts exist on localhost
-  hosts: localhost
-  connection: local
+  hosts: lxcs
   gather_facts: false
+  become: false
   tasks:
     - name: Aggregate lifecycle summary facts from host results
       ansible.builtin.set_fact:
         lxc_lifecycle_results: >-
           {%- set results = {} -%}
-          {%- for host in groups['lxcs'] | default([]) -%}
+          {%- for host in hostvars.localhost.proxmox_lifecycle_target_hosts | default([]) -%}
           {%-   if hostvars[host].lxc_lifecycle_result is defined -%}
           {%-     set _ = results.update({host: hostvars[host].lxc_lifecycle_result}) -%}
           {%-   endif -%}
@@ -37,7 +59,7 @@
           {{ results }}
         lxc_lifecycle_skip_hosts: >-
           {%- set hosts = [] -%}
-          {%- for host in ansible_play_hosts_all | default([]) -%}
+          {%- for host in hostvars.localhost.proxmox_lifecycle_target_hosts | default([]) -%}
           {%-   if hostvars[host].lxc_lifecycle_skip_host | default(false) | bool -%}
           {%-     set _ = hosts.append(host) -%}
           {%-   endif -%}
@@ -45,9 +67,36 @@
           {{ hosts }}
         lxc_lifecycle_rebuilt_hosts: >-
           {%- set hosts = [] -%}
-          {%- for host in ansible_play_hosts_all | default([]) -%}
+          {%- for host in hostvars.localhost.proxmox_lifecycle_target_hosts | default([]) -%}
           {%-   if hostvars[host].proxmox_lxc_rebuilt | default(false) | bool -%}
           {%-     set _ = hosts.append(host) -%}
           {%-   endif -%}
           {%- endfor -%}
           {{ hosts }}
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+
+    - name: Fail after publishing a blocked lifecycle summary
+      ansible.builtin.fail:
+        msg: >-
+          Lifecycle planning failed for
+          {{ hostvars.localhost.proxmox_lifecycle_failed_target_hosts | join(', ') }}; no targeted
+          LXC lifecycle actions were executed.
+      when: >-
+        hostvars.localhost.proxmox_lifecycle_failed_target_hosts
+        | default([])
+        | length > 0
+      run_once: true
+
+    - name: Fail after publishing an execution-error lifecycle summary
+      ansible.builtin.fail:
+        msg: >-
+          Lifecycle execution stopped after the failure on
+          {{ hostvars.localhost.proxmox_lifecycle_execution_failure.host }}:
+          {{ hostvars.localhost.proxmox_lifecycle_execution_failure.reason }}
+      when: >-
+        hostvars.localhost.proxmox_lifecycle_execution_failure
+        | default({})
+        | length > 0
+      run_once: true

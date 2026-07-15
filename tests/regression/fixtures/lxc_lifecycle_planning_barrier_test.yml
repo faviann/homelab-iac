@@ -1,0 +1,198 @@
+---
+- name: Plan every targeted LXC before crossing the lifecycle barrier
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  pre_tasks:
+    - name: Seed empty observable execution records
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc.vmid }}.events"
+        content: ""
+        mode: "0600"
+      delegate_to: localhost
+      when: not ansible_check_mode
+
+    - name: Seed the observed runtime state
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc.vmid }}.state"
+        content: >-
+          {{ 'absent' if inventory_hostname == 'barrier_invalid' else 'stopped' }}
+        mode: "0600"
+      delegate_to: localhost
+      when: not ansible_check_mode
+
+    - name: Seed the observed guest release
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc.vmid }}.release"
+        content: "12"
+        mode: "0600"
+      delegate_to: localhost
+      when: not ansible_check_mode
+  tasks:
+    - name: Run the planning half of the lifecycle facade
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan
+
+- name: Traverse the normal execution half after the barrier
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Run the execution half of the lifecycle facade
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: execute
+
+- name: Assert lifecycle results from a limit-selected target
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Read target execution records
+      ansible.builtin.slurp:
+        src: "{{ lifecycle_test_state_dir }}/{{ hostvars[item].proxmox_lxc.vmid }}.events"
+      loop: "{{ groups['lxcs'] }}"
+      register: lifecycle_barrier_event_records
+      run_once: true
+
+    - name: Assert cause and blocked results are operator-visible
+      ansible.builtin.assert:
+        that:
+          - hostvars.barrier_invalid.lxc_lifecycle_result.outcome.status == 'planning_failed'
+          - >-
+            hostvars.barrier_invalid.lxc_lifecycle_result.outcome.reason
+            is search('Configure-only lifecycle requires an existing running container')
+          - hostvars.barrier_valid.lxc_lifecycle_result.outcome.status == 'blocked'
+          - hostvars.barrier_valid.lxc_lifecycle_result.plan.container_transition == 'start'
+          - >-
+            lifecycle_barrier_event_records.results
+            | map(attribute='content')
+            | map('b64decode')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length == 0
+          - >-
+            hostvars.localhost.proxmox_lifecycle_target_hosts | sort
+            == ['barrier_valid', 'barrier_invalid'] | sort
+          - >-
+            hostvars.barrier_valid.lxc_lifecycle_result.keys() | list | sort
+            == ['intent', 'observations', 'outcome', 'plan'] | sort
+          - "'host_actions' not in hostvars.barrier_valid.lxc_lifecycle_result"
+          - "'internal_snapshot' not in hostvars.barrier_invalid.lxc_lifecycle_result"
+      when: lifecycle_test_case == 'barrier'
+      run_once: true
+
+    - name: Assert command limits exclude unrelated LXCs from the barrier
+      ansible.builtin.assert:
+        that:
+          - hostvars.localhost.proxmox_lifecycle_target_hosts == ['barrier_valid']
+          - hostvars.barrier_valid.lxc_lifecycle_result.outcome.status == lifecycle_expected_valid_status
+          - hostvars.barrier_invalid.lxc_lifecycle_result is not defined
+          - hostvars.barrier_after_failure.lxc_lifecycle_result is not defined
+      vars:
+        lifecycle_expected_valid_status: "{{ 'checked' if ansible_check_mode else 'configured' }}"
+      when: lifecycle_test_case in ['limited', 'check']
+      run_once: true
+
+    - name: Assert execution remains fail-fast without rollback
+      ansible.builtin.assert:
+        that:
+          - >-
+            hostvars.localhost.proxmox_lifecycle_target_hosts
+            == ['barrier_valid', 'barrier_after_failure']
+          - hostvars.barrier_valid.lxc_lifecycle_result.outcome.status == 'execution_failed'
+          - >-
+            hostvars.barrier_after_failure.lxc_lifecycle_result.outcome.status
+            == 'not_executed'
+          - >-
+            lifecycle_barrier_event_records.results
+            | selectattr('item', 'equalto', 'barrier_after_failure')
+            | map(attribute='content')
+            | first
+            | b64decode
+            | trim
+            | length == 0
+          - >-
+            lifecycle_barrier_event_records.results
+            | selectattr('item', 'equalto', 'barrier_valid')
+            | map(attribute='content')
+            | first
+            | b64decode
+            is search('container_transition')
+      when: lifecycle_test_case == 'execution_failure'
+      run_once: true
+
+    - name: Assert a compilation failure blocks an otherwise valid target
+      ansible.builtin.assert:
+        that:
+          - >-
+            hostvars.localhost.proxmox_lifecycle_target_hosts | sort
+            == ['barrier_valid', 'barrier_compile_invalid'] | sort
+          - >-
+            hostvars.barrier_compile_invalid.lxc_lifecycle_result.outcome.status
+            == 'planning_failed'
+          - >-
+            hostvars.barrier_valid.lxc_lifecycle_result.outcome.status
+            == 'blocked'
+          - >-
+            lifecycle_barrier_event_records.results
+            | map(attribute='content')
+            | map('b64decode')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length == 0
+      when: lifecycle_test_case == 'compile_failure'
+      run_once: true
+
+    - name: Assert the default controller guard crosses neither split phase
+      ansible.builtin.assert:
+        that:
+          - >-
+            hostvars.localhost.proxmox_lifecycle_target_hosts
+            | default([])
+            | length == 0
+          - hostvars.workstation.lxc_lifecycle_result is not defined
+          - >-
+            lifecycle_barrier_event_records.results
+            | selectattr('item', 'equalto', 'workstation')
+            | map(attribute='content')
+            | first
+            | b64decode
+            | trim
+            | length == 0
+      when: lifecycle_test_case == 'self_skip'
+      run_once: true
+
+    - name: Assert the controller can be intentionally included
+      ansible.builtin.assert:
+        that:
+          - hostvars.localhost.proxmox_lifecycle_target_hosts == ['workstation']
+          - hostvars.workstation.lxc_lifecycle_result.outcome.status == 'configured'
+          - >-
+            lifecycle_barrier_event_records.results
+            | selectattr('item', 'equalto', 'workstation')
+            | map(attribute='content')
+            | first
+            | b64decode
+            is search('container_transition')
+      when: lifecycle_test_case == 'self_include'
+      run_once: true
+
+    - name: Mark all case-specific assertions complete
+      ansible.builtin.debug:
+        msg: "lifecycle_case_assertions_complete={{ lifecycle_test_case }}"
+      run_once: true
+
+    - name: Fail only after blocked target results were asserted
+      ansible.builtin.fail:
+        msg: >-
+          Barrier fixture published every targeted result before returning
+          the controlled {{ lifecycle_test_case }} failure.
+      when: >-
+        lifecycle_test_case
+        in ['barrier', 'execution_failure', 'compile_failure']
+      run_once: true

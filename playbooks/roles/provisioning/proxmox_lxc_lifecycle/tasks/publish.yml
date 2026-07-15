@@ -4,6 +4,7 @@
     proxmox_lifecycle_status: >-
       {%- if proxmox_lifecycle_validation_failed | bool -%}validation_failed
       {%- elif proxmox_lifecycle_intent == 'validate_only' -%}validated
+      {%- elif ansible_check_mode -%}checked
       {%- elif proxmox_lxc_lifecycle_plan.container_transition == 'remove' -%}removed
       {%- elif (
         not (proxmox_lifecycle_desired_present | bool)
