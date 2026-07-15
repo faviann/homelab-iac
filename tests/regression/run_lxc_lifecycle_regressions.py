@@ -123,15 +123,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    with tempfile.TemporaryDirectory(prefix="lxc-lifecycle-vault-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="lxc-lifecycle-fixtures-") as temp_dir:
+        temp_root = Path(temp_dir)
         # ansible.cfg names a vault password file that must exist, but the
         # fixtures decrypt nothing: a placeholder keeps the run credential-free.
-        vault_placeholder = Path(temp_dir) / "vault-pass"
+        vault_placeholder = temp_root / "vault-pass"
         vault_placeholder.write_text(
             "unused-fixture-placeholder\n", encoding="utf-8"
         )
+        fixture_inventory = temp_root / "inventory.ini"
+        fixture_inventory.write_text(
+            "[local]\nlocalhost ansible_connection=local\n", encoding="utf-8"
+        )
         previous_vault_password_file = os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE")
+        previous_inventory = os.environ.get("ANSIBLE_INVENTORY")
         os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
+        os.environ["ANSIBLE_INVENTORY"] = str(fixture_inventory)
         try:
             return run_regressions(full=args.full)
         finally:
@@ -139,6 +146,10 @@ def main() -> int:
                 os.environ.pop("ANSIBLE_VAULT_PASSWORD_FILE", None)
             else:
                 os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = previous_vault_password_file
+            if previous_inventory is None:
+                os.environ.pop("ANSIBLE_INVENTORY", None)
+            else:
+                os.environ["ANSIBLE_INVENTORY"] = previous_inventory
 
 
 if __name__ == "__main__":
