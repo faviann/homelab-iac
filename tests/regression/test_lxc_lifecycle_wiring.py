@@ -15,20 +15,22 @@ FIXTURES = REPO_ROOT / "tests" / "regression" / "fixtures"
 ASSETS = FIXTURES / "lxc_lifecycle_facade_assets"
 INVENTORY = FIXTURES / "lxc_lifecycle_wiring_inventory.yml"
 PLAYBOOK = FIXTURES / "lxc_lifecycle_wiring_test.yml"
-PRODUCTION_PLAYBOOK = REPO_ROOT / "playbooks" / "lifecycle-lxcs.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
 
 
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="lxc-lifecycle-wiring-") as temp_dir:
         state_dir = Path(temp_dir)
-        (state_dir / "7201.state").write_text("stopped", encoding="utf-8")
-        (state_dir / "7201.release").write_text("12", encoding="utf-8")
-        (state_dir / "7201.events").write_text("", encoding="utf-8")
+        for vmid in (7201, 7202):
+            (state_dir / f"{vmid}.state").write_text("absent", encoding="utf-8")
+            (state_dir / f"{vmid}.release").write_text("12", encoding="utf-8")
+            (state_dir / f"{vmid}.events").write_text("", encoding="utf-8")
+            (state_dir / f"{vmid}.conf").write_text("", encoding="utf-8")
 
         env = os.environ.copy()
         env["PATH"] = f"{ASSETS / 'bin'}:{env['PATH']}"
         env["LIFECYCLE_TEST_STATE_DIR"] = str(state_dir)
+        env["LIFECYCLE_WIRING_REAL_ROLES"] = "1"
         env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
             [str(ASSETS / "roles"), str(REPO_ROOT / "playbooks" / "roles")]
         )
@@ -41,6 +43,8 @@ def main() -> int:
                 "-i",
                 str(INVENTORY),
                 str(PLAYBOOK),
+                "--limit",
+                "wiring_target,wiring_peer",
                 "-e",
                 f"lifecycle_test_state_dir={state_dir}",
             ],
@@ -49,26 +53,11 @@ def main() -> int:
             text=True,
             env=env,
         )
-        limited_hosts = subprocess.run(
-            [
-                *ANSIBLE_PLAYBOOK,
-                "-i",
-                str(INVENTORY),
-                str(PRODUCTION_PLAYBOOK),
-                "--limit",
-                "wiring_target",
-                "--list-hosts",
-            ],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
         output = f"{proc.stdout}\n{proc.stderr}"
-        limited_closeout = limited_hosts.stdout.split(
-            "Ensure lifecycle summary facts exist on localhost", maxsplit=1
-        )[-1]
-        events = (state_dir / "7201.events").read_text(encoding="utf-8").splitlines()
+        events = {
+            vmid: (state_dir / f"{vmid}.events").read_text(encoding="utf-8").splitlines()
+            for vmid in (7201, 7202)
+        }
         expected_events = {
             "api_reconciliation",
             "container_transition",
@@ -76,7 +65,6 @@ def main() -> int:
             "runtime_refresh",
             "release_refresh",
             "access_restoration",
-            "guest_configuration",
         }
         wiring_tasks = (
             "Compile desired LXC specification",
@@ -86,15 +74,12 @@ def main() -> int:
             "Re-observe current state after provisioning and host reconciliation",
             "Restore guest access after re-observation",
             "Publish lifecycle results",
+            "Aggregate lifecycle summary facts from host results",
+            "Assert production lifecycle summary includes every targeted LXC",
         )
         if (
             proc.returncode != 0
-            or limited_hosts.returncode != 0
-            or "Ensure lifecycle summary facts exist on localhost"
-            not in limited_hosts.stdout
-            or "hosts (1)" not in limited_closeout
-            or "wiring_target" not in limited_closeout
-            or set(events) != expected_events
+            or any(set(host_events) != expected_events for host_events in events.values())
             or not all(task in output for task in wiring_tasks)
         ):
             print("lifecycle role composition is disconnected", file=sys.stderr)

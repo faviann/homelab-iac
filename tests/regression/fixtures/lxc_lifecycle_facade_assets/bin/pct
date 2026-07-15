@@ -10,9 +10,34 @@ case "$1" in
     [ "$state" = absent ] && exit 2
     echo "status: $state"
     ;;
+  config)
+    if [ "${LIFECYCLE_WIRING_REAL_ROLES:-}" = 1 ]; then
+      echo host_reconciliation >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
+    fi
+    case "$vmid" in
+      7201) echo "hostname: wiring-target" ;;
+      7202) echo "hostname: wiring-peer" ;;
+      *) echo "hostname: lifecycle-$vmid" ;;
+    esac
+    ;;
   exec)
-    echo release_refresh >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
-    cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.release"
+    command=$*
+    case "$command" in
+      *VERSION_ID*)
+        echo release_refresh >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
+        cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.release"
+        ;;
+      *CHANGED=*)
+        echo access_restoration >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
+        echo "CHANGED=1"
+        ;;
+      *'grep -cxF'*)
+        echo 1
+        ;;
+      *)
+        exit 99
+        ;;
+    esac
     ;;
   *)
     exit 99

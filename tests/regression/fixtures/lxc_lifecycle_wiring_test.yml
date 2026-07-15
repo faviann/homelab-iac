@@ -1,21 +1,25 @@
 ---
-- name: Plan through the real lifecycle role composition
-  hosts: lxcs
-  connection: local
-  gather_facts: false
-  tasks:
-    - name: Run real lifecycle compilation, preflight, and planning
-      ansible.builtin.include_role:
-        name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: plan
+- name: Exercise the actual production lifecycle wrapper
+  ansible.builtin.import_playbook: ../../../playbooks/lifecycle-lxcs.yml
 
-- name: Execute through the real lifecycle role composition
+- name: Assert the production lifecycle summary covers every targeted LXC
   hosts: lxcs
   connection: local
   gather_facts: false
-  serial: 1
   tasks:
-    - name: Run real lifecycle execution and publication
-      ansible.builtin.include_role:
-        name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: execute
+    - name: Assert production lifecycle summary includes every targeted LXC
+      ansible.builtin.assert:
+        that:
+          - >-
+            hostvars.localhost.proxmox_lifecycle_target_hosts | sort
+            == ['wiring_target', 'wiring_peer'] | sort
+          - >-
+            hostvars.localhost.lxc_lifecycle_results.keys() | list | sort
+            == ['wiring_target', 'wiring_peer'] | sort
+          - >-
+            hostvars.localhost.lxc_lifecycle_results.wiring_target.outcome.status
+            == 'ensured'
+          - >-
+            hostvars.localhost.lxc_lifecycle_results.wiring_peer.outcome.status
+            == 'ensured'
+      run_once: true
