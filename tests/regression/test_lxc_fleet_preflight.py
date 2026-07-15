@@ -3,10 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import os
+import ssl
 import subprocess
 import sys
+import tempfile
+import threading
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Iterator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +26,119 @@ PLAYBOOK = FIXTURES / "lxc_fleet_preflight_test.yml"
 STANDALONE_PLAYBOOK = FIXTURES / "lxc_standalone_validation_test.yml"
 MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
 ANSIBLE_PLAYBOOK = "uv run --locked ansible-playbook".split()
+
+COMMON_OBSERVATION = [
+    {"vmid": 5101, "name": "target-a", "status": "stopped"},
+    {"vmid": 5102, "name": "target-b", "status": "stopped"},
+    {"vmid": 5105, "name": "release-problem", "status": "stopped"},
+]
+
+
+class _ProxmoxHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        self.server.request_count += 1  # type: ignore[attr-defined]
+        status = self.server.response_status  # type: ignore[attr-defined]
+        body = json.dumps(
+            {"data": COMMON_OBSERVATION}
+            if status == 200
+            else {"errors": "controlled Proxmox failure"}
+        ).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+@contextmanager
+def local_proxmox_server(
+    certificate: Path,
+    private_key: Path,
+    *,
+    status: int,
+) -> Iterator[ThreadingHTTPServer]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _ProxmoxHandler)
+    server.request_count = 0  # type: ignore[attr-defined]
+    server.response_status = status  # type: ignore[attr-defined]
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls.load_cert_chain(certificate, private_key)
+    server.socket = tls.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def run_actual_query_case(
+    certificate: Path,
+    private_key: Path,
+    *,
+    limit: str,
+    status: int,
+    check_mode: bool = False,
+) -> bool:
+    with local_proxmox_server(certificate, private_key, status=status) as server:
+        api_port = server.server_address[1]
+        extra_vars = {
+            "proxmox_fleet_observation_override": None,
+            "proxmox_api_host": "127.0.0.1",
+            "proxmox_api_port": api_port,
+            "proxmox_api_user": "dummy@pam",
+            "proxmox_api_token_id": "dummy-token",
+            "proxmox_api_token_secret": "<REPLACE_ME>",
+            "proxmox_default_node": "pve-a",
+            "proxmox_verify_ssl": False,
+        }
+        command = [
+            *ANSIBLE_PLAYBOOK,
+            "-i",
+            str(INVENTORY),
+            str(PLAYBOOK),
+            "--limit",
+            limit,
+            "--extra-vars",
+            json.dumps(extra_vars),
+        ]
+        if check_mode:
+            command.append("--check")
+        env = os.environ.copy()
+        for key in (
+            "ALL_PROXY",
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "all_proxy",
+            "https_proxy",
+            "http_proxy",
+        ):
+            env.pop(key, None)
+        env["NO_PROXY"] = "127.0.0.1,localhost"
+        env["no_proxy"] = "127.0.0.1,localhost"
+        proc = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        request_count = server.request_count  # type: ignore[attr-defined]
+
+    if proc.returncode == 0 and request_count == 1:
+        return True
+
+    print(
+        f"actual query case {limit!r} status={status} check={check_mode} "
+        f"made {request_count} request(s)",
+        file=sys.stderr,
+    )
+    print(f"{proc.stdout}\n{proc.stderr}", file=sys.stderr)
+    return False
 
 
 def run_case(limit: str, *, check_mode: bool = False) -> bool:
@@ -53,15 +173,63 @@ def run_case(limit: str, *, check_mode: bool = False) -> bool:
 
 def main() -> int:
     cases = (
-        "target_a,target_b",
         "target_conflict",
         "hostname_conflict",
-        "access_target",
     )
     if not all(run_case(case) for case in cases):
         return 1
-    if not run_case("target_a,target_b", check_mode=True):
-        return 1
+
+    with tempfile.TemporaryDirectory(prefix="lxc-fleet-https-") as temp_dir:
+        temp_root = Path(temp_dir)
+        certificate = temp_root / "certificate.pem"
+        private_key = temp_root / "private-key.pem"
+        certificate_result = subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-days",
+                "1",
+                "-subj",
+                "/CN=127.0.0.1",
+                "-keyout",
+                str(private_key),
+                "-out",
+                str(certificate),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if certificate_result.returncode != 0:
+            print("failed to create ephemeral HTTPS certificate", file=sys.stderr)
+            print(certificate_result.stderr, file=sys.stderr)
+            return 1
+        actual_cases = (
+            run_actual_query_case(
+                certificate,
+                private_key,
+                limit="target_a,target_b",
+                status=200,
+            ),
+            run_actual_query_case(
+                certificate,
+                private_key,
+                limit="target_a,target_b",
+                status=200,
+                check_mode=True,
+            ),
+            run_actual_query_case(
+                certificate,
+                private_key,
+                limit="access_target",
+                status=503,
+            ),
+        )
+        if not all(actual_cases):
+            return 1
 
     missing_hostname = subprocess.run(
         [
