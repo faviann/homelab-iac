@@ -13,6 +13,28 @@
 
     - name: Decide lifecycle actions
       ansible.builtin.import_tasks: decide.yml
+
+    - name: Publish the target-local semantic plan candidate
+      ansible.builtin.set_fact:
+        lxc_lifecycle_result:
+          intent: "{{ proxmox_lifecycle_intent }}"
+          plan: "{{ proxmox_lxc_lifecycle_plan }}"
+          outcome:
+            status: >-
+              {{
+                'validated'
+                if proxmox_lifecycle_intent == 'validate_only'
+                else (
+                  'validation_failed'
+                  if proxmox_lifecycle_observation.status | default('ok') == 'mismatch'
+                  else 'planned'
+                )
+              }}
+            reason: "{{ proxmox_lxc_lifecycle_plan.reason }}"
+            rebuilt: false
+          observations:
+            before: "{{ proxmox_lxc_lifecycle_observation_before }}"
+            after: "{{ proxmox_lxc_lifecycle_observation_before }}"
   rescue:
     - name: Record the target's semantic planning failure
       ansible.builtin.set_fact:
@@ -34,3 +56,19 @@
     - >-
       proxmox_lifecycle_observation.type | default('')
       == 'preflight_failed'
+
+- name: Publish the target-local failed planning candidate
+  ansible.builtin.set_fact:
+    lxc_lifecycle_result:
+      intent: "{{ proxmox_lifecycle_intent }}"
+      plan: "{{ proxmox_lxc_lifecycle_plan | default({}) }}"
+      outcome:
+        status: planning_failed
+        reason: "{{ proxmox_lifecycle_planning_problem }}"
+        rebuilt: false
+      observations:
+        before: "{{ proxmox_lxc_lifecycle_observation_before | default({}) }}"
+        after: "{{ proxmox_lxc_lifecycle_observation_before | default({}) }}"
+  when:
+    - proxmox_lifecycle_planning_problem | length > 0
+    - lxc_lifecycle_result.outcome.status | default('') != 'planning_failed'

@@ -6,8 +6,6 @@
 
 - name: Compose semantic lifecycle plan
   ansible.builtin.set_fact:
-    proxmox_lifecycle_validation_failed: >-
-      {{ proxmox_lifecycle_observation.status | default('ok') == 'mismatch' }}
     proxmox_lxc_lifecycle_plan: >-
       {%- set validation_failed = proxmox_lifecycle_observation.status | default('ok') == 'mismatch' -%}
       {%- set should_provision = proxmox_lifecycle_intent in ['provision_only', 'full'] -%}
@@ -37,7 +35,9 @@
         and desired_present
         and proxmox_lifecycle_runtime_state != 'absent'
       ) -%}
-      {%- if skip_provision or (not desired_present and proxmox_lifecycle_runtime_state == 'absent') -%}
+      {%- if proxmox_lifecycle_intent == 'configure_only' and rebuild_required -%}
+      {%-   set transition = 'rebuild' -%}
+      {%- elif skip_provision or (not desired_present and proxmox_lifecycle_runtime_state == 'absent') -%}
       {%-   set transition = 'none' -%}
       {%- elif rebuild_required -%}
       {%-   set transition = 'rebuild' -%}
@@ -54,7 +54,11 @@
       {%- elif transition == 'remove' -%}
       {%-   set reason = 'Desired state is absent, so the existing container will be removed.' -%}
       {%- elif transition == 'rebuild' -%}
-      {%-   set reason = 'Guest release ' ~ proxmox_lifecycle_actual_release ~ ' differs from desired release ' ~ proxmox_lifecycle_desired_release ~ ', so the container will be rebuilt.' -%}
+      {%-   set reason = (
+        'Guest release ' ~ proxmox_lifecycle_actual_release
+        ~ ' differs from desired release ' ~ proxmox_lifecycle_desired_release
+        ~ ', so the container will be rebuilt.'
+      ) -%}
       {%- elif transition == 'start' -%}
       {%-   set reason = 'Existing stopped container will be started because guest configuration requires it.' -%}
       {%- elif transition == 'provision' and proxmox_lifecycle_runtime_state == 'absent' -%}
@@ -95,9 +99,9 @@
   ansible.builtin.fail:
     msg: >-
       {%- set desired_present = proxmox_lxc_contract.api_spec.state | default('present') == 'present' -%}
-      {%- set rebuild_required = _proxmox_lifecycle_configure_rebuild_required | bool -%}
+      {%- set rebuild_required = proxmox_lxc_lifecycle_plan.container_transition == 'rebuild' -%}
       {%- if proxmox_lifecycle_policy_effective.strict_validation | bool
-             and proxmox_lifecycle_validation_failed | bool -%}
+             and proxmox_lifecycle_observation.status | default('ok') == 'mismatch' -%}
       {{ proxmox_lifecycle_observation.message | default('Lifecycle validation failed') }}
       {%- elif proxmox_lifecycle_intent == 'configure_only' and not desired_present -%}
       Configure-only lifecycle requires desired state present; desired state is absent.
@@ -114,27 +118,17 @@
       '{{ proxmox_lxc_lifecycle_plan.container_transition }}', but persistent
       lifecycle policy does not authorize destructive transitions.
       {%- endif -%}
-  vars:
-    _proxmox_lifecycle_configure_rebuild_required: >-
-      {{
-        proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-        and proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
-        and proxmox_lifecycle_release_probe_state == 'probed'
-        and proxmox_lifecycle_desired_release | length > 0
-        and proxmox_lifecycle_actual_release | length > 0
-        and proxmox_lifecycle_actual_release != proxmox_lifecycle_desired_release
-      }}
   when: >-
     (
       proxmox_lifecycle_policy_effective.strict_validation | bool
-      and proxmox_lifecycle_validation_failed | bool
+      and proxmox_lifecycle_observation.status | default('ok') == 'mismatch'
     )
     or (
       proxmox_lifecycle_intent == 'configure_only'
       and (
         proxmox_lxc_contract.api_spec.state | default('present') != 'present'
         or proxmox_lifecycle_runtime_state != 'running'
-        or (_proxmox_lifecycle_configure_rebuild_required | bool)
+        or proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
       )
     )
     or (

@@ -1,43 +1,36 @@
 ---
-# Publish only the stable semantic plan/result interfaces. Targeted-set failure
-# details come from the barrier coordinator; planner scratch facts stay local.
+# The target-local planner publishes the stable semantic result candidate.
+# Targeted-set coordination may only preserve it or replace its outcome with the
+# planning-barrier result; it does not inspect planner scratch facts.
 
-- name: Publish the target's semantic planning result
+- name: Publish the target's coordinated semantic planning result
   ansible.builtin.set_fact:
     proxmox_lifecycle_barrier_blocked: >-
       {{ hostvars.localhost.proxmox_lifecycle_failed_target_hosts | default([]) | length > 0 }}
     lxc_lifecycle_result: >-
       {%- set barrier_blocked = hostvars.localhost.proxmox_lifecycle_failed_target_hosts | default([]) | length > 0 -%}
-      {%- set plan = proxmox_lxc_lifecycle_plan | default({}) -%}
-      {%- set before = proxmox_lxc_lifecycle_observation_before | default({}) -%}
-      {%- if proxmox_lifecycle_planning_problem | length > 0 -%}
-      {%-   set status = 'planning_failed' -%}
-      {%-   set reason = proxmox_lifecycle_planning_problem -%}
-      {%- elif barrier_blocked -%}
-      {%-   set status = 'blocked' -%}
-      {%-   set reason = 'Lifecycle planning barrier blocked execution because planning failed for ' ~ (hostvars.localhost.proxmox_lifecycle_failed_target_hosts | join(', ')) ~ '.' -%}
-      {%- elif proxmox_lifecycle_intent == 'validate_only' -%}
-      {%-   set status = 'validated' -%}
-      {%-   set reason = plan.reason -%}
-      {%- elif proxmox_lifecycle_validation_failed | default(false) | bool -%}
-      {%-   set status = 'validation_failed' -%}
-      {%-   set reason = plan.reason -%}
+      {%- if lxc_lifecycle_result.outcome.status == 'planning_failed' or not barrier_blocked -%}
+      {{ lxc_lifecycle_result }}
       {%- else -%}
-      {%-   set status = 'planned' -%}
-      {%-   set reason = plan.reason -%}
-      {%- endif -%}
       {{
-        {
-          'intent': proxmox_lifecycle_intent,
-          'plan': plan,
-          'outcome': {
-            'status': status,
-            'reason': reason,
-            'rebuilt': false
-          },
-          'observations': {
-            'before': before,
-            'after': before
-          }
-        }
+        lxc_lifecycle_result
+        | combine(
+            {
+              'outcome': {
+                'status': 'blocked',
+                'reason': (
+                  'Lifecycle planning barrier blocked execution because planning failed for '
+                  ~ (hostvars.localhost.proxmox_lifecycle_failed_target_hosts | join(', '))
+                  ~ '.'
+                ),
+                'rebuilt': false
+              },
+              'observations': {
+                'before': lxc_lifecycle_result.observations.before,
+                'after': lxc_lifecycle_result.observations.before
+              }
+            },
+            recursive=True
+          )
       }}
+      {%- endif -%}

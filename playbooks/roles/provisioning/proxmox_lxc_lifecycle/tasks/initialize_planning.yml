@@ -26,3 +26,9 @@
     proxmox_lifecycle_selected: true
     proxmox_lifecycle_planning_problem: ""
     proxmox_lifecycle_rebuilt: false
+    proxmox_lxc_rebuilt: false
+    lxc_lifecycle_skip_host: false
+    proxmox_lxc_lifecycle_plan: {}
+    proxmox_lxc_lifecycle_observation_before: {}
+    proxmox_lxc_lifecycle_observation_after: {}
+    lxc_lifecycle_result: {}

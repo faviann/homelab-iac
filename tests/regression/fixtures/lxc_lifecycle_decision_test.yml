@@ -261,3 +261,57 @@
         lifecycle_cache_control: persisted
         cacheable: true
       when: lifecycle_expected_planning_failure is not defined
+
+- name: Reject stale semantic state when a later run fails during compilation
+  hosts: full_create
+  connection: local
+  gather_facts: false
+  vars: *lifecycle_scenario_vars
+  tasks:
+    - name: Capture the completed first-run semantic state
+      ansible.builtin.set_fact:
+        lifecycle_first_run_plan: "{{ proxmox_lxc_lifecycle_plan }}"
+        lifecycle_first_run_observation: "{{ proxmox_lxc_lifecycle_observation_before }}"
+        lifecycle_first_run_result: "{{ lxc_lifecycle_result }}"
+
+    - name: Initialize a second lifecycle run in the same host context
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: initialize_planning
+
+    - name: Fail the second run during target-local compilation
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: compile_target
+      vars:
+        proxmox_lifecycle_intent: invalid_second_run
+
+    - name: Coordinate the failed second-run planning barrier
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_barrier
+
+    - name: Publish the failed second-run semantic result
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: publish_planning_result
+      vars:
+        proxmox_lifecycle_intent: invalid_second_run
+
+    - name: Assert the failed second run owns fresh semantic state
+      ansible.builtin.assert:
+        that:
+          - lifecycle_first_run_plan | length > 0
+          - lifecycle_first_run_observation | length > 0
+          - lifecycle_first_run_result.outcome.status == 'configured'
+          - proxmox_lxc_lifecycle_plan == {}
+          - proxmox_lxc_lifecycle_observation_before == {}
+          - lxc_lifecycle_result.intent == 'invalid_second_run'
+          - lxc_lifecycle_result.plan == {}
+          - lxc_lifecycle_result.outcome.status == 'planning_failed'
+          - lxc_lifecycle_result.outcome.reason is search('Invalid proxmox_lifecycle_intent')
+          - lxc_lifecycle_result.observations.before == {}
+          - lxc_lifecycle_result.observations.after == {}
+        fail_msg: >-
+          A failed later run reused semantic plan, observation, or result state
+          from the completed first run.
