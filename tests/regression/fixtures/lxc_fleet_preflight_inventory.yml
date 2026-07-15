@@ -46,6 +46,7 @@ all:
           proxmox_lxc:
             vmid: 5102
             hostname: target-b
+            node: pve-b
         target_conflict:
           proxmox_lxc:
             vmid: 5199

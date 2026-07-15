@@ -47,7 +47,6 @@ def test_common_proxmox_observation_uses_proxmox_module_contract() -> None:
         "validate_certs",
     }
     assert query["community.proxmox.proxmox_vm_info"] == {
-        "node": "{{ proxmox_default_node }}",
         "type": "lxc",
     }
     assert query["delegate_to"] == "localhost"

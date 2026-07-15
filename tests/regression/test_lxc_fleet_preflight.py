@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,18 +45,25 @@ EXPECTED_AUTHORIZATION = (
 VERSION_API_PATH = "/api2/json/version"
 NODES_API_PATH = "/api2/json/nodes"
 CLUSTER_RESOURCES_API_PATH = "/api2/json/cluster/resources?type=vm"
-LXC_API_PATH = "/api2/json/nodes/pve-a/lxc"
+LXC_API_PATHS = (
+    "/api2/json/nodes/pve-a/lxc",
+    "/api2/json/nodes/pve-b/lxc",
+)
 EXPECTED_SUCCESS_PATHS = (
     VERSION_API_PATH,
-    NODES_API_PATH,
     CLUSTER_RESOURCES_API_PATH,
-    LXC_API_PATH,
+    *LXC_API_PATHS,
 )
 
 COMMON_OBSERVATION = [
-    {"vmid": 5101, "name": "target-a", "status": "stopped"},
-    {"vmid": 5102, "name": "target-b", "status": "stopped"},
-    {"vmid": 5105, "name": "release-problem", "status": "stopped"},
+    {"vmid": 5101, "name": "target-a", "node": "pve-a", "status": "stopped"},
+    {"vmid": 5102, "name": "target-b", "node": "pve-b", "status": "stopped"},
+    {
+        "vmid": 5105,
+        "name": "release-problem",
+        "node": "pve-a",
+        "status": "stopped",
+    },
 ]
 
 
@@ -73,7 +81,12 @@ class _ProxmoxHandler(BaseHTTPRequestHandler):
             payload = {"data": {"version": "9.0"}}
         elif self.path == NODES_API_PATH:
             status = 200
-            payload = {"data": [{"node": "pve-a", "status": "online"}]}
+            payload = {
+                "data": [
+                    {"node": "pve-a", "status": "online"},
+                    {"node": "pve-b", "status": "online"},
+                ]
+            }
         elif self.path == CLUSTER_RESOURCES_API_PATH:
             status = 200
             payload = {
@@ -81,15 +94,21 @@ class _ProxmoxHandler(BaseHTTPRequestHandler):
                     {
                         **container,
                         "id": f"lxc/{container['vmid']}",
-                        "node": "pve-a",
                         "type": "lxc",
                     }
                     for container in COMMON_OBSERVATION
                 ]
             }
-        elif self.path == LXC_API_PATH:
+        elif self.path in LXC_API_PATHS:
             status = 200
-            payload = {"data": COMMON_OBSERVATION}
+            node = self.path.split("/")[5]
+            payload = {
+                "data": [
+                    container
+                    for container in COMMON_OBSERVATION
+                    if container["node"] == node
+                ]
+            }
         else:
             status = 404
             payload = {"errors": "unknown test endpoint"}
@@ -181,10 +200,10 @@ def run_actual_query_case(
         requests = server.requests[:]  # type: ignore[attr-defined]
 
     expected_paths = EXPECTED_SUCCESS_PATHS if status == 200 else (VERSION_API_PATH,)
-    expected_requests = [
+    expected_requests = Counter(
         (path, EXPECTED_AUTHORIZATION) for path in expected_paths
-    ]
-    if proc.returncode == 0 and requests == expected_requests:
+    )
+    if proc.returncode == 0 and Counter(requests) == expected_requests:
         return True
 
     paths = [path for path, _authorization in requests]

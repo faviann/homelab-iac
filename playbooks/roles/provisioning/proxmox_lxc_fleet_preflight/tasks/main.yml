@@ -94,7 +94,6 @@
   block:
     - name: Query the common Proxmox LXC observation
       community.proxmox.proxmox_vm_info:
-        node: "{{ proxmox_default_node }}"
         type: lxc
       register: proxmox_fleet_observation_response
       changed_when: false
