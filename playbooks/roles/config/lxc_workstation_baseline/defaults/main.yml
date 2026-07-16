@@ -89,6 +89,12 @@ workstation_bw_release_api_url: "https://api.github.com/repos/bitwarden/clients/
 workstation_bw_bin_path: /usr/local/bin/bw
 workstation_setup_bin_path: /usr/local/bin/workstation-setup
 workstation_setup_profile_hook_path: /etc/profile.d/workstation-setup.sh
+workstation_update_agent_tools_source_path: >-
+  {{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_update-agent-tools
+workstation_update_agent_tools_bin_path: "{{ workstation_home }}/.local/bin/update-agent-tools"
+workstation_update_source_path: >-
+  {{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_workstation-update
+workstation_update_bin_path: "{{ workstation_home }}/.local/bin/workstation-update"
 workstation_autosync_enabled: true
 workstation_autosync_bin_path: /usr/local/bin/workstation-autosync
 workstation_autosync_min_interval_seconds: 300

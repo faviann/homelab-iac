@@ -159,6 +159,22 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(defaults["workstation_setup_version"], "2")
         self.assertEqual(defaults["workstation_setup_bin_path"], "/usr/local/bin/workstation-setup")
         self.assertEqual(defaults["workstation_setup_profile_hook_path"], "/etc/profile.d/workstation-setup.sh")
+        self.assertEqual(
+            defaults["workstation_update_agent_tools_source_path"],
+            "{{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_update-agent-tools",
+        )
+        self.assertEqual(
+            defaults["workstation_update_agent_tools_bin_path"],
+            "{{ workstation_home }}/.local/bin/update-agent-tools",
+        )
+        self.assertEqual(
+            defaults["workstation_update_source_path"],
+            "{{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_workstation-update",
+        )
+        self.assertEqual(
+            defaults["workstation_update_bin_path"],
+            "{{ workstation_home }}/.local/bin/workstation-update",
+        )
         self.assertNotIn("workstation_bootstrap_unattended", defaults)
         self.assertNotIn("workstation_bootstrap_run_dir", defaults)
         self.assertNotIn("workstation_bootstrap_env_path", defaults)
@@ -244,6 +260,10 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertEqual(options["workstation_setup_marker_path"]["type"], "str")
         self.assertEqual(options["workstation_setup_bin_path"]["type"], "str")
         self.assertEqual(options["workstation_setup_profile_hook_path"]["type"], "str")
+        self.assertEqual(options["workstation_update_agent_tools_source_path"]["type"], "str")
+        self.assertEqual(options["workstation_update_agent_tools_bin_path"]["type"], "str")
+        self.assertEqual(options["workstation_update_source_path"]["type"], "str")
+        self.assertEqual(options["workstation_update_bin_path"]["type"], "str")
         self.assertEqual(options["workstation_dotfiles_repo_url"]["type"], "str")
         self.assertEqual(options["workstation_github_cli_token_item"]["type"], "str")
         self.assertEqual(options["workstation_nix_install_enabled"]["type"], "bool")
@@ -336,7 +356,10 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("gh auth login --hostname github.com --with-token", setup_template)
         self.assertIn("gh api user", setup_template)
         self.assertIn("git@github.com", setup_template)
-        self.assertIn("executable_workstation-update", setup_template)
+        self.assertIn("workstation_update_agent_tools_source_path", setup_template)
+        self.assertIn("workstation_update_agent_tools_bin_path", setup_template)
+        self.assertIn("workstation_update_source_path", setup_template)
+        self.assertIn("workstation_update_bin_path", setup_template)
         self.assertIn("environment healthy", setup_template)
         self.assertIn("environment repaired and ready", setup_template)
         self.assertNotIn("mise", setup_template)

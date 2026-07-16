@@ -75,6 +75,7 @@ exit 0
         "rg",
         "ssh",
         "ssh-keygen",
+        "update-agent-tools",
         "uv",
     ):
         _write_executable(bin_dir / name, mock)
@@ -147,6 +148,16 @@ def test_workstation_first_login_setup_contract() -> None:
             / "bin"
             / "executable_workstation-update"
         )
+        update_agent_tools = home / ".local" / "bin" / "update-agent-tools"
+        update_agent_tools_source = (
+            home
+            / ".local"
+            / "share"
+            / "chezmoi"
+            / "dot_local"
+            / "bin"
+            / "executable_update-agent-tools"
+        )
 
         _write_executable(workstation_update_source, "#!/bin/sh\nexit 0\n")
         repaired = _run_setup(root, env)
@@ -162,6 +173,14 @@ def test_workstation_first_login_setup_contract() -> None:
         healthy_commands = (root / "commands.log").read_text(encoding="utf-8")
         assert "home-manager switch" not in healthy_commands
         assert "bw unlock --raw" not in healthy_commands
+
+        update_agent_tools.unlink()
+        _write_executable(update_agent_tools_source, "#!/bin/sh\nexit 0\n")
+        repaired_agent_tools = _run_setup(root, env)
+        assert repaired_agent_tools.returncode == 0, repaired_agent_tools.stderr
+        assert update_agent_tools.is_file() and os.access(update_agent_tools, os.X_OK)
+        assert "workstation-setup: environment healthy." not in repaired_agent_tools.stdout
+        assert "workstation-setup: environment repaired and ready." in repaired_agent_tools.stdout
 
         workstation_update.unlink()
         workstation_update_source.unlink()

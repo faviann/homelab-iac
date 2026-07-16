@@ -57,7 +57,7 @@ _workstation_autosync() {
     cat "{{ workstation_autosync_notices_path }}"
     : > "{{ workstation_autosync_notices_path }}"
   fi
-  if [ ! -x "{{ workstation_home }}/.local/bin/workstation-update" ]; then
+  if [ ! -x "{{ workstation_update_bin_path }}" ]; then
     printf 'workstation-update is missing or not executable. Run workstation-setup to repair the workstation.\n' >&2
   fi
   [ -x "{{ workstation_autosync_bin_path }}" ] || return 0
