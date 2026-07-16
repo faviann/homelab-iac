@@ -78,7 +78,11 @@ validate_marker_state() {
   grep -Fxq "version=$SETUP_VERSION" "$MARKER_PATH" || return 1
   grep -Fxq "dotfiles=$DOTFILES_REPO_URL" "$MARKER_PATH" || return 1
   grep -Fxq "fingerprint=$MARKER_FINGERPRINT" "$MARKER_PATH" || return 1
-  validate_environment >/dev/null 2>&1 || return 1
+  (validate_environment) >/dev/null 2>&1 || return 1
+}
+
+required_managed_commands_ready() {
+  test -x "$WORKSTATION_HOME/.local/bin/workstation-update"
 }
 
 ensure_bitwarden_unlocked() {
@@ -121,10 +125,15 @@ update_chezmoi_source_without_secrets() {
 
 install_setup_dotfiles_without_secrets() {
   update_agent_tools_source="$HOME/.local/share/chezmoi/dot_local/bin/executable_update-agent-tools"
+  workstation_update_source="$HOME/.local/share/chezmoi/dot_local/bin/executable_workstation-update"
   npmrc_source="$HOME/.local/share/chezmoi/dot_npmrc"
 
   if [ -f "$update_agent_tools_source" ]; then
     install -m 0755 "$update_agent_tools_source" "$HOME/.local/bin/update-agent-tools"
+  fi
+
+  if [ -f "$workstation_update_source" ]; then
+    install -m 0755 "$workstation_update_source" "$HOME/.local/bin/workstation-update"
   fi
 
   if [ -f "$npmrc_source" ]; then
@@ -204,6 +213,10 @@ validate_environment() {
   test "$(command -v pi)" = "$WORKSTATION_HOME/.local/bin/pi" \
     || fail "pi must resolve from $WORKSTATION_HOME/.local/bin"
   pi --version >/dev/null || fail "pi missing or not working"
+  test "$(command -v workstation-update)" = "$WORKSTATION_HOME/.local/bin/workstation-update" \
+    || fail "workstation-update must resolve from $WORKSTATION_HOME/.local/bin"
+  test -x "$WORKSTATION_HOME/.local/bin/workstation-update" \
+    || fail "workstation-update missing or not executable"
   hermes version >/dev/null || fail "hermes missing or not working"
   openclaw --version >/dev/null || fail "openclaw missing or not working"
 
@@ -236,6 +249,7 @@ write_marker() {
 }
 
 if validate_marker_state; then
+  printf 'workstation-setup: environment healthy.\n'
   exit 0
 fi
 
@@ -250,6 +264,11 @@ else
     install_setup_dotfiles_without_secrets
   fi
 fi
+if ! required_managed_commands_ready; then
+  ensure_bitwarden_unlocked
+  ensure_chezmoi
+  install_setup_dotfiles_without_secrets
+fi
 switch_home_manager
 ensure_agent_tools
 if ! gh auth status --hostname github.com >/dev/null 2>&1; then
@@ -258,4 +277,4 @@ if ! gh auth status --hostname github.com >/dev/null 2>&1; then
 fi
 validate_environment
 write_marker
-printf 'workstation-setup: environment ready.\n'
+printf 'workstation-setup: environment repaired and ready.\n'

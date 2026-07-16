@@ -336,6 +336,9 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("gh auth login --hostname github.com --with-token", setup_template)
         self.assertIn("gh api user", setup_template)
         self.assertIn("git@github.com", setup_template)
+        self.assertIn("executable_workstation-update", setup_template)
+        self.assertIn("environment healthy", setup_template)
+        self.assertIn("environment repaired and ready", setup_template)
         self.assertNotIn("mise", setup_template)
         self.assertNotIn("parse_env_file", setup_template)
         self.assertNotIn("/run/workstation-bootstrap", setup_template)
@@ -357,6 +360,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("WORKSTATION_SETUP_SKIP", profile_hook)
         self.assertIn("workstation_setup_marker_path", profile_hook)
         self.assertIn("workstation_setup_bin_path", profile_hook)
+        self.assertIn("workstation-update is missing or not executable", profile_hook)
         persistent_home_tasks = load_yaml(
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml"
         )
