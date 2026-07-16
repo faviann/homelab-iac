@@ -9,12 +9,16 @@
     proxmox_lxc_host_config_path_root: "{{ temp_root }}/etc/pve/lxc"
     # A short deadline keeps permanent-failure coverage bounded by the role's own
     # configurable knobs rather than by a test-only delay override. These bounds
-    # are tuned against the mock's 1.2s guest command so the deadline is reached
+    # are tuned against the mock's 1.2s guest command so the 5s deadline is reached
     # part-way through a cycle: the seam must stop rather than squeeze in a final
     # attempt too short to complete, whose kill would mask the container's error.
+    # The deadline, not the per-attempt timeout, is what must bite here, so the
+    # per-attempt timeout stays wide enough that a loaded machine cannot kill a
+    # genuine attempt and turn this into a flake: the attempts get 4.0s and 2.8s
+    # budgets for a 1.2s command.
     proxmox_lxc_host_config_restart_ready_timeout: 5
     proxmox_lxc_host_config_restart_ready_delay: 1
-    proxmox_lxc_host_config_restart_ready_command_timeout: 2
+    proxmox_lxc_host_config_restart_ready_command_timeout: 4
     proxmox_lxc_contract:
       host_config:
         vmid: 4204

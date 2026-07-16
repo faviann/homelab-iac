@@ -344,6 +344,20 @@ class GuestCommandReadinessTests(unittest.TestCase):
         self.assertIn("execution timeout", exception.payload["msg"])
         self.assertNotIn("never seen", exception.payload["msg"])
 
+    def test_all_timeouts_message_does_not_contradict_its_own_stderr(self) -> None:
+        # The last attempt is clamped to the 4s left on the deadline, not the
+        # configured 5s: the message must not claim a figure the stderr denies.
+        self.install_results([self.result(255, "never seen")], attempt_cost=99.0)
+
+        exception = self.run_wait_exec(
+            {"ready_timeout": 10, "ready_delay": 1, "ready_command_timeout": 5}
+        )
+
+        message = exception.payload["msg"]
+        self.assertEqual([budget for _, budget in self.calls], [5, 4.0])
+        self.assertIn("exceeded its 4.0s execution timeout", message)
+        self.assertNotIn("5s per-attempt", message)
+
     def test_a_tiny_deadline_still_makes_one_usable_attempt(self) -> None:
         self.install_results([self.result(0)], attempt_cost=0.5)
 
@@ -374,8 +388,15 @@ class RunPctCommandTimeoutTests(unittest.TestCase):
         temp_dir = tempfile.TemporaryDirectory(prefix="proxmox-pct-unit-")
         self.addCleanup(temp_dir.cleanup)
         fake_pct = Path(temp_dir.name) / "pct"
+        # `hang` blocks; `orphan` leaves a child holding the pipes after the
+        # parent is killed; anything else returns at once.
         fake_pct.write_text(
-            '#!/bin/sh\nif [ "$1" = hang ]; then sleep 60; fi\necho fixture-ok\n',
+            "#!/bin/sh\n"
+            'case "$1" in\n'
+            "  hang) sleep 60 ;;\n"
+            "  orphan) sleep 5 & wait ;;\n"
+            "esac\n"
+            "echo fixture-ok\n",
             encoding="utf-8",
         )
         fake_pct.chmod(0o755)
@@ -398,6 +419,23 @@ class RunPctCommandTimeoutTests(unittest.TestCase):
 
         self.assertEqual(result["rc"], 0)
         self.assertEqual(result["stdout"], "fixture-ok")
+
+    def test_killpg_fallback_cannot_block_on_orphaned_pipes(self) -> None:
+        # Force kill_process_group down its fallback, where only pct is killed and
+        # a surviving child keeps the pipes open. Reading output must still be
+        # bounded: this is the very hang the timeout exists to prevent.
+        self.module.kill_process_group = lambda proc: proc.kill()
+        self.module.KILL_GRACE_SECONDS = 1
+
+        started = time.monotonic()
+        result = self.module.run_pct_command(
+            module=None, cmd_args=["orphan"], kill_after=1
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(result["rc"], self.module.TIMEOUT_RC)
+        self.assertIn("did not release its pipes", result["stderr"])
+        self.assertLess(elapsed, 4)
 
     def test_only_the_killable_path_detaches_into_its_own_session(self) -> None:
         # Detaching costs Ctrl-C propagation, so unbounded pct calls must stay in

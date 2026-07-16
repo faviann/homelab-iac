@@ -176,6 +176,11 @@ TIMEOUT_RC = 124
 # reached instead of starting one.
 MIN_USEFUL_ATTEMPT_SECONDS = 1.0
 
+# Grace for collecting output from an already-killed process. The kill releases
+# the pipes at once, so this only bites if the killpg fallback left a child
+# holding them; reading must never outlast the timeout it exists to enforce.
+KILL_GRACE_SECONDS = 5
+
 
 def kill_process_group(proc):
     """Kill the timed-out pct process and every child it spawned."""
@@ -218,7 +223,12 @@ def run_pct_command(module, cmd_args, kill_after=None):
         rc = proc.returncode
     except subprocess.TimeoutExpired:
         kill_process_group(proc)
-        stdout, stderr = proc.communicate()
+        try:
+            stdout, stderr = proc.communicate(timeout=KILL_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            # kill_process_group fell back to killing pct alone and a surviving
+            # child still holds the pipes. Abandon the output rather than block.
+            stdout, stderr = '', 'output unavailable: killed pct did not release its pipes'
         rc = TIMEOUT_RC
         stderr = (stderr or '') + (
             f"\npct command exceeded its {round(kill_after, 2)}s execution timeout and was killed"
@@ -273,9 +283,13 @@ def wait_for_guest_command(module, vmid, ready_timeout, ready_delay, command_tim
         )
     else:
         diagnosis = result
+        # No figure of our own here: attempts near the deadline are killed at a
+        # clamped budget, so naming command_timeout would contradict the stderr
+        # below, which carries the budget the last attempt was actually killed at.
         condition = (
-            f"Every attempt was killed at its {command_timeout}s per-attempt "
-            "execution timeout; the container never answered."
+            "Every attempt was killed at its per-attempt execution timeout; the "
+            f"container never answered. Last attempt rc={result['rc']}, "
+            f"stderr: {result['stderr'] or '<empty>'}"
         )
 
     module.fail_json(
