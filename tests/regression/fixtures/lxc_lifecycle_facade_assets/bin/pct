@@ -7,7 +7,10 @@ case "$1" in
   status)
     echo runtime_refresh >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
     state=$(cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.state")
-    [ "$state" = absent ] && exit 2
+    if [ "$state" = absent ]; then
+      echo "CT $vmid does not exist" >&2
+      exit 2
+    fi
     echo "status: $state"
     ;;
   config)

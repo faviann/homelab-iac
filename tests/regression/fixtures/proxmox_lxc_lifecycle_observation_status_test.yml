@@ -1,0 +1,164 @@
+---
+- name: Test structured lifecycle runtime-state observation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_pct_delegate_host: localhost
+    proxmox_host_delegate_user: root
+    proxmox_lxc_contract:
+      api_spec:
+        vmid: 4251
+  environment:
+    PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+  tasks:
+    - name: Place controlled pct observation tool on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          case "$(cat "{{ temp_root }}/pct-case")" in
+            running)
+              echo "status: running"
+              ;;
+            stopped)
+              echo "status: stopped"
+              ;;
+            missing)
+              echo "CT $2 does not exist" >&2
+              exit 2
+              ;;
+            timeout)
+              echo "pct command exceeded its 60s execution timeout and was killed" >&2
+              exit 124
+              ;;
+            generic_failure)
+              echo "permission denied while reading /etc/pve" >&2
+              exit 13
+              ;;
+            *)
+              echo "unexpected controlled observation case" >&2
+              exit 99
+              ;;
+          esac
+
+    - name: Select running observation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-case"
+        mode: "0644"
+        content: running
+
+    - name: Observe running container
+      ansible.builtin.include_tasks:
+        file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/observe_runtime_state.yml"
+
+    - name: Assert running status remains unchanged
+      ansible.builtin.assert:
+        that:
+          - proxmox_lifecycle_observed_runtime_state == 'running'
+
+    - name: Select stopped observation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-case"
+        mode: "0644"
+        content: stopped
+
+    - name: Observe stopped container
+      ansible.builtin.include_tasks:
+        file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/observe_runtime_state.yml"
+
+    - name: Assert stopped status remains unchanged
+      ansible.builtin.assert:
+        that:
+          - proxmox_lifecycle_observed_runtime_state == 'stopped'
+
+    - name: Select positively missing observation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-case"
+        mode: "0644"
+        content: missing
+
+    - name: Observe missing container
+      ansible.builtin.include_tasks:
+        file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/observe_runtime_state.yml"
+
+    - name: Assert recognized missing response becomes absent
+      ansible.builtin.assert:
+        that:
+          - proxmox_lifecycle_observed_runtime_state == 'absent'
+          - proxmox_lifecycle_observe_status_result.status == 'absent'
+
+    - name: Select timeout observation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-case"
+        mode: "0644"
+        content: timeout
+
+    - name: Initialize timeout result
+      ansible.builtin.set_fact:
+        _timeout_observation_failed: false
+        _timeout_observation_result: {}
+
+    - name: Observe a timed-out status command
+      block:
+        - name: Query timeout observation
+          ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/observe_runtime_state.yml"
+
+        - name: Mark unexpected continuation after timeout
+          ansible.builtin.set_fact:
+            _timeout_observation_continued: true
+      rescue:
+        - name: Capture expected timeout failure
+          ansible.builtin.set_fact:
+            _timeout_observation_failed: true
+            _timeout_observation_result: "{{ ansible_failed_result }}"
+
+    - name: Assert timeout stays an actionable observation failure
+      ansible.builtin.assert:
+        that:
+          - _timeout_observation_failed
+          - not (_timeout_observation_continued | default(false) | bool)
+          - _timeout_observation_result.rc == 124
+          - _timeout_observation_result.cmd == 'pct status 4251'
+          - _timeout_observation_result.stderr == 'pct command exceeded its 60s execution timeout and was killed'
+          - _timeout_observation_result.msg is search('LXC 4251')
+          - _timeout_observation_result.msg is search('rc=124')
+
+    - name: Select generic failed observation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-case"
+        mode: "0644"
+        content: generic_failure
+
+    - name: Initialize generic failure result
+      ansible.builtin.set_fact:
+        _generic_observation_failed: false
+        _generic_observation_result: {}
+
+    - name: Observe an unrecognized failed status command
+      block:
+        - name: Query generic failed observation
+          ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/observe_runtime_state.yml"
+
+        - name: Mark unexpected continuation after generic failure
+          ansible.builtin.set_fact:
+            _generic_observation_continued: true
+      rescue:
+        - name: Capture expected generic observation failure
+          ansible.builtin.set_fact:
+            _generic_observation_failed: true
+            _generic_observation_result: "{{ ansible_failed_result }}"
+
+    - name: Assert unrecognized error stays an actionable observation failure
+      ansible.builtin.assert:
+        that:
+          - _generic_observation_failed
+          - not (_generic_observation_continued | default(false) | bool)
+          - _generic_observation_result.rc == 13
+          - _generic_observation_result.cmd == 'pct status 4251'
+          - _generic_observation_result.stderr == 'permission denied while reading /etc/pve'
+          - _generic_observation_result.msg is search('LXC 4251')
+          - _generic_observation_result.msg is search('rc=13')
