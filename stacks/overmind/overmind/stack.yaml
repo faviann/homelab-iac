@@ -7,11 +7,6 @@ portability:
   tier: host-bound-app
   owner: stack
 runtime:
-  template_inputs:
-    - stack_vars.overmind_version
-    - stack_vars.postgres_admin_password
-    - stack_vars.memsrv_password
-    - stack_vars.agent_key
   host_requirements:
     external_networks: []
     host_directories:

@@ -157,6 +157,7 @@ class OvermindContractTests(unittest.TestCase):
 
         self.assertEqual(metadata["name"], "overmind")
         self.assertEqual(metadata["portability"]["tier"], "host-bound-app")
+        self.assertNotIn("template_inputs", metadata["runtime"])
         self.assertEqual(host_requirements["external_networks"], [])
         self.assertEqual(
             host_requirements["host_directories"],
