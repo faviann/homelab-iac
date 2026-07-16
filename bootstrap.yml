@@ -8,8 +8,6 @@
   tags:
     - always
     - bootstrap
-  collections:
-    - community.crypto
   vars:
     control_node_project_root: "{{ playbook_dir }}"
     control_node_collection_requirements: "{{ [playbook_dir, 'collections', 'requirements.yml'] | path_join }}"

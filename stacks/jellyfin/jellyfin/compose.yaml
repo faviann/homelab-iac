@@ -1,3 +1,4 @@
+---
 x-prereq-dirs:
   - ./appdata/jellyfin/config
   - /ephemeral/jellyfin/cache

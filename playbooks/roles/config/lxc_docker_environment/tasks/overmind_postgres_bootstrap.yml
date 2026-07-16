@@ -84,6 +84,7 @@
   environment:
     PGPASSWORD: "{{ overmind_postgres_bootstrap.admin_password }}"
   when: _overmind_memory_database_exists.stdout | trim != "1"
+  changed_when: true
   no_log: true
 
 - name: Check whether overmind memsrv role exists
@@ -127,8 +128,10 @@
     PGPASSWORD: "{{ overmind_postgres_bootstrap.admin_password }}"
   args:
     stdin: |
-      CREATE ROLE {{ overmind_postgres_bootstrap.memsrv_role }} WITH LOGIN PASSWORD '{{ overmind_postgres_bootstrap.memsrv_password | replace("'", "''") }}';
+      CREATE ROLE {{ overmind_postgres_bootstrap.memsrv_role }} WITH LOGIN
+      PASSWORD '{{ overmind_postgres_bootstrap.memsrv_password | replace("'", "''") }}';
   when: _overmind_memsrv_role_exists.stdout | trim != "1"
+  changed_when: true
   no_log: true
 
 - name: Check whether overmind memsrv login password is current
@@ -174,8 +177,10 @@
     PGPASSWORD: "{{ overmind_postgres_bootstrap.admin_password }}"
   args:
     stdin: |
-      ALTER ROLE {{ overmind_postgres_bootstrap.memsrv_role }} WITH LOGIN PASSWORD '{{ overmind_postgres_bootstrap.memsrv_password | replace("'", "''") }}';
+      ALTER ROLE {{ overmind_postgres_bootstrap.memsrv_role }} WITH LOGIN
+      PASSWORD '{{ overmind_postgres_bootstrap.memsrv_password | replace("'", "''") }}';
   when:
     - _overmind_memsrv_role_exists.stdout | trim == "1"
     - _overmind_memsrv_password_current.rc | default(1) != 0
+  changed_when: true
   no_log: true

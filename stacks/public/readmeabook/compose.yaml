@@ -1,9 +1,10 @@
+---
 services:
   readmeabook:
     image: ghcr.io/kikootwo/readmeabook:latest
-#    build:
-#      context: .
-#      dockerfile: dockerfile.unified
+    #    build:
+    #      context: .
+    #      dockerfile: dockerfile.unified
     container_name: readmeabook
     restart: unless-stopped
     ports:
@@ -105,7 +106,6 @@ services:
       # LOG_LEVEL: "info"
       # DISABLE_LOCAL_LOGIN: "true"  # Set to "true" to disable local login (force OAuth)
       # ALLOW_WEAK_PASSWORD: "true"  # Set to "true" to remove minimum password length requirement
-
 
       # ========================================================================
       # IMPORTANT: Public URL Configuration (Required for OAuth)

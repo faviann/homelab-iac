@@ -5,13 +5,11 @@
       {%- if _proxmox_lifecycle_release_evidence_missing | bool -%}
       Guest release observation is required when release-based rebuild policy
       is enabled for a desired-present container; observed release state is
-      {{ proxmox_lifecycle_release_probe_state | default('UNDEFINED') }}.
-      {%- else -%}
+      {{ proxmox_lifecycle_release_probe_state | default('UNDEFINED') }}.{%- else -%}
       Lifecycle inspection produced invalid state for {{ inventory_hostname }}.
       runtime_state={{ proxmox_lifecycle_runtime_state | default('UNDEFINED') }}
       release_probe_state={{ proxmox_lifecycle_release_probe_state | default('UNDEFINED') }}
-      observation={{ proxmox_lifecycle_observation | default('UNDEFINED') | to_json }}
-      {%- endif -%}
+      observation={{ proxmox_lifecycle_observation | default('UNDEFINED') | to_json }}{%- endif -%}
   vars:
     _proxmox_lifecycle_inspection_invalid: >-
       {{
@@ -21,7 +19,8 @@
         or proxmox_lifecycle_observation is not mapping
         or proxmox_lifecycle_observation.status is not defined
         or proxmox_lifecycle_release_probe_state is not defined
-        or proxmox_lifecycle_release_probe_state not in ['probed', 'probe_failed', 'absent', 'skipped_stopped', 'unavailable', 'not_applicable']
+        or proxmox_lifecycle_release_probe_state not in
+           ['probed', 'probe_failed', 'absent', 'skipped_stopped', 'unavailable', 'not_applicable']
       }}
     _proxmox_lifecycle_release_evidence_missing: >-
       {{

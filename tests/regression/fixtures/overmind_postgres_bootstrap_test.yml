@@ -66,16 +66,18 @@
         mode: "0755"
 
     - name: Run bootstrap once
-      block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include overmind postgres bootstrap tasks
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
 
     - name: Run bootstrap again
-      block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include overmind postgres bootstrap tasks a second time
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/overmind_postgres_bootstrap.yml"
 
     - name: Slurp docker call log
       ansible.builtin.slurp:
@@ -85,10 +87,19 @@
     - name: Count bootstrap creation calls
       ansible.builtin.set_fact:
         _docker_log_text: "{{ _docker_log.content | b64decode }}"
-        _createdb_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'ARGS:exec .* createdb .* memory') | list | length }}"
-        _create_role_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'STDIN:CREATE ROLE memsrv') | list | length }}"
-        _alter_role_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'STDIN:ALTER ROLE memsrv') | list | length }}"
-        _password_check_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'ARGS:exec .* -U memsrv -d memory .* SELECT 1') | list | length }}"
+        # These stay YAML double-quoted so the \n splits on real newlines.
+        _createdb_calls: "{{
+          (_docker_log.content | b64decode).split('\n')
+          | select('search', 'ARGS:exec .* createdb .* memory') | list | length }}"
+        _create_role_calls: "{{
+          (_docker_log.content | b64decode).split('\n')
+          | select('search', 'STDIN:CREATE ROLE memsrv') | list | length }}"
+        _alter_role_calls: "{{
+          (_docker_log.content | b64decode).split('\n')
+          | select('search', 'STDIN:ALTER ROLE memsrv') | list | length }}"
+        _password_check_calls: "{{
+          (_docker_log.content | b64decode).split('\n')
+          | select('search', 'ARGS:exec .* -U memsrv -d memory .* SELECT 1') | list | length }}"
 
     - name: Assert bootstrap is scoped to docker exec and re-runnable
       ansible.builtin.assert:

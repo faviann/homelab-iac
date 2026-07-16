@@ -1,3 +1,4 @@
+---
 services:
   traefik-docker-socket-proxy:
     image: tecnativa/docker-socket-proxy
@@ -52,7 +53,7 @@ networks:
   traefik:
     driver: bridge
   shared:
-    external: true #CAREFUL check .env
+    external: true # CAREFUL check .env
 
 x-managed-files:
   - path: ./appdata/traefik3/data/certs/cloudflare-acme.json

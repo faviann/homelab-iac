@@ -41,6 +41,9 @@
 
 - name: Determine desired sysctl and AppArmor configuration
   ansible.builtin.set_fact:
+    # Keep this template in a YAML double-quoted scalar: YAML unescapes the
+    # \n before Jinja runs; a plain/folded scalar would join on literal
+    # backslash-n and break idempotent comparison against the config file.
     infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor: "{{
       infrastructure_proxmox_lxc_host_config_desired_sysctls_apparmor_list
       | unique | sort | join('\n') }}"
@@ -53,7 +56,7 @@
     - name: Remove existing sysctl and AppArmor configuration
       ansible.builtin.lineinfile:
         path: "{{ infrastructure_proxmox_lxc_host_config_file }}"
-        regexp: '^lxc\.(sysctl|apparmor)\.'
+        regexp: "^lxc\\.(sysctl|apparmor)\\."
         state: absent
         create: false
       delegate_to: "{{ proxmox_host_config_delegate }}"

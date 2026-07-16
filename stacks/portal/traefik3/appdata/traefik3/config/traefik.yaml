@@ -1,3 +1,4 @@
+---
 # ---
 global:
   checkNewVersion: false
@@ -16,12 +17,12 @@ log:
 # Access logs - https://doc.traefik.io/traefik/observability/access-logs/
 ################################################################
 accessLog:
-  addInternals: true  # things like ping@internal
+  addInternals: true # things like ping@internal
   filePath: /logs/traefik-access.log # In the Common Log Format (CLF) by default
   bufferingSize: 100 # Number of log lines
   fields:
     names:
-      StartUTC: drop  # Write logs in Container Local Time instead of UTC
+      StartUTC: drop # Write logs in Container Local Time instead of UTC
   filters:
     statusCodes:
       - "204-299"
@@ -44,10 +45,10 @@ entryPoints:
           to: websecure
           scheme: https
           permanent: true
-    # <--
+  # <--
   websecure:
     address: ":443"
-    asDefault: true #Makes it the default
+    asDefault: true # Makes it the default
     http2:
       maxConcurrentStreams: 250
     http3: {}
@@ -66,27 +67,32 @@ entryPoints:
               - "*.local.faviann.com"
 #          - main: example2.com # change this to your proxy domain
 #            sans:
-#              - '*.example2.com' # change this to your proxy domain  
+#              - '*.example2.com' # change this to your proxy domain
 
 serversTransport:
   insecureSkipVerify: true
-              
+
 # -- Configure your CertificateResolver here...
 certificatesResolvers:
   cloudflare:
     acme:
-      email: "faviann@gmail.com"  # <-- Change this to your email
+      email: "faviann@gmail.com" # <-- Change this to your email
       storage: /var/traefik/certs/cloudflare-acme.json
       caServer: https://acme-v02.api.letsencrypt.org/directory # prod (default)
       # caServer: https://acme-staging-v02.api.letsencrypt.org/directory # staging
       dnsChallenge:
-        provider: cloudflare  # <-- (Optional) Change this to your DNS provider
+        provider: cloudflare # <-- (Optional) Change this to your DNS provider
         resolvers:
           - "1.1.1.1:53"
           - "1.0.0.1:53"
         propagation:
-          #disablePropagationCheck: true # uncomment this if you have issues pulling certificates through cloudflare, By setting this flag to true disables the need to wait for the propagation of the TXT record to all authoritative name servers.
-          #delayBeforeCheck: 60s # uncomment along with disablePropagationCheck if needed to ensure the TXT record is ready before verification is attempted 
+          # Uncomment if you have issues pulling certificates through
+          # Cloudflare: setting this to true disables waiting for the TXT
+          # record to propagate to all authoritative name servers.
+          # disablePropagationCheck: true
+          # Uncomment along with disablePropagationCheck if needed to ensure
+          # the TXT record is ready before verification is attempted.
+          # delayBeforeCheck: 60s
 
 # --> (Optional) Disable TLS Cert verification check
 # serversTransport:
@@ -98,11 +104,13 @@ providers:
     # Default rule dynamically gets DOMAIN from labels
     watch: true
     endpoint: "tcp://traefik-docker-socket-proxy:2375"
-    exposedByDefault: false  # <-- (Optional) Change this to true if you want to expose all services
+    exposedByDefault: false # <-- (Optional) Change this to true if you want to expose all services
     # Specify discovery network - This ensures correct name resolving and possible issues with containers, that are in multiple networks.
     # E.g. Database container in a separate network and a container in the frontend and database network.
     # network: shared
-    defaultRule: "Host(`{{ index .Labels \"com.docker.compose.project\"}}.{{ index .Labels \"traefik.domain\" | default \"local.faviann.com\" }}`)"
+    defaultRule: >-
+      Host(`{{ index .Labels "com.docker.compose.project"}}.{{ index .Labels
+      "traefik.domain" | default "local.faviann.com" }}`)
   redis:
     endpoints:
       # assumes a redis link with this service name running on the same

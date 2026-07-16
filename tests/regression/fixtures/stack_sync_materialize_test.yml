@@ -42,6 +42,7 @@
             - ./data/uploads
             - ./data/cache
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/compose.yaml.j2"
+        mode: "0644"
 
     - name: Create a templated Komf .env.j2
       ansible.builtin.copy:
@@ -51,11 +52,13 @@
           KOMF_KOMGA_PASSWORD={{ '{{' }} stack_vars.komga_password | compose_env {{ '}}' }}
           STACK_NAME={{ '{{' }} stack_name {{ '}}' }}
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/.env.j2"
+        mode: "0644"
 
     - name: Create a static config file
       ansible.builtin.copy:
         content: "static-config-content"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/config.conf"
+        mode: "0644"
 
     - name: Run actual find ops to populate discover registers
       ansible.builtin.find:
@@ -68,7 +71,8 @@
       delegate_to: localhost
       become: false
 
-    - ansible.builtin.find:
+    - name: Find static stack files
+      ansible.builtin.find:
         paths: "{{ lxc_docker_environment_internal.stacks_source }}"
         patterns: "*"
         excludes: "*.j2,.gitkeep"
@@ -79,7 +83,8 @@
       delegate_to: localhost
       become: false
 
-    - ansible.builtin.find:
+    - name: Find stack directories
+      ansible.builtin.find:
         paths: "{{ lxc_docker_environment_internal.stacks_source }}"
         recurse: true
         file_type: directory
@@ -129,7 +134,8 @@
         path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/config.conf"
       register: _static_file_stat
 
-    - ansible.builtin.assert:
+    - name: Assert static config file exists at target
+      ansible.builtin.assert:
         that:
           - _static_file_stat.stat.exists
         fail_msg: "Static config.conf not found at target path"
@@ -142,7 +148,8 @@
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/compose.yaml.j2"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/.env.j2"
 
-    - ansible.builtin.assert:
+    - name: Assert no .j2 sources exist at target
+      ansible.builtin.assert:
         that:
           - _j2_source_stats.results | map(attribute='stat.exists') | select('equalto', true) | list | length == 0
         fail_msg: ".j2 source files should not appear at target"
@@ -156,7 +163,9 @@
           - lxc_stack_sync_manifest_plan.stack_dirs_to_create | length > 0
           - lxc_stack_sync_manifest_plan.files_to_render | length == 2
           - lxc_stack_sync_manifest_plan.files_to_copy | length == 1
-          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/uploads') in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
-          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/cache') not in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/uploads')
+            in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/cache')
+            not in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
           - lxc_stack_sync_manifest_plan.ownership_overrides | length == 1
         fail_msg: "Planner output did not capture the expected stack assets and prereq dirs"

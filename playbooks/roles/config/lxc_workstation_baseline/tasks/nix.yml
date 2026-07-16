@@ -11,12 +11,15 @@
     path: /nix/var/nix/profiles/default/bin/nix
   register: _workstation_nix_bin
 
-- name: Install Determinate Nix
+# Upstream installer is a curl-piped script; get_url cannot replace it.
+- name: Install Determinate Nix # noqa: command-instead-of-module
   ansible.builtin.shell:
-    cmd: >-
-      curl --proto '=https' --tlsv1.2 -sSf -L {{ workstation_nix_install_url | quote }}
-      | sh -s -- install --no-confirm
+    cmd: |
+      set -o pipefail
+      curl --proto '=https' --tlsv1.2 -sSf -L {{ workstation_nix_install_url | quote }} \
+        | sh -s -- install --no-confirm
     creates: /nix/receipt.json
+    executable: /bin/bash
 
 - name: Verify Nix is installed
   ansible.builtin.command:

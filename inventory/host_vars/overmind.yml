@@ -10,24 +10,24 @@ traefik_kop_enabled: false
 
 lxc_docker_env_host_directories:
   - path: /data/overmind/postgres/pgdata
-    owner: '999'
-    group: '999'
+    owner: "999"
+    group: "999"
     mode: "0700"
 
 proxmox_lxc_host_directories:
   - path: /tank/overmind
-    owner: '100000'
-    group: '100000'
+    owner: "100000"
+    group: "100000"
     mode: "0755"
   - path: /tank/backups/overmind
-    owner: '100000'
-    group: '100000'
+    owner: "100000"
+    group: "100000"
     mode: "0700"
 
 lxc_docker_env_path_ownership_overrides:
   - path: /data/overmind/postgres/pgdata
-    owner: '999'
-    group: '999'
+    owner: "999"
+    group: "999"
     recurse: false
 
 lxc_docker_env_stack_vars:

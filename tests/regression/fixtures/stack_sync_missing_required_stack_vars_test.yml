@@ -33,6 +33,7 @@
             komf:
               image: "example.invalid/komf-{{ '{{' }} stack_name {{ '}}' }}:latest"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/compose.yaml.j2"
+        mode: "0644"
 
     - name: Create a templated Komf .env.j2
       ansible.builtin.copy:
@@ -42,11 +43,13 @@
           KOMF_KOMGA_PASSWORD={{ '{{' }} stack_vars.komga_password | replace('$', '$$') {{ '}}' }}
           STACK_NAME={{ '{{' }} stack_name {{ '}}' }}
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/.env.j2"
+        mode: "0644"
 
     - name: Create a static config file
       ansible.builtin.copy:
         content: "static-config-content"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/config.conf"
+        mode: "0644"
 
     - name: Run actual find ops to populate discover registers
       ansible.builtin.find:
@@ -59,7 +62,8 @@
       delegate_to: localhost
       become: false
 
-    - ansible.builtin.find:
+    - name: Find static stack files
+      ansible.builtin.find:
         paths: "{{ lxc_docker_environment_internal.stacks_source }}"
         patterns: "*"
         excludes: "*.j2,.gitkeep"
@@ -70,7 +74,8 @@
       delegate_to: localhost
       become: false
 
-    - ansible.builtin.find:
+    - name: Find stack directories
+      ansible.builtin.find:
         paths: "{{ lxc_docker_environment_internal.stacks_source }}"
         recurse: true
         file_type: directory

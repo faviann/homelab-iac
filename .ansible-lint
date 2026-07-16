@@ -1,6 +1,27 @@
 ---
+# Repo-wide lint gate: `uv run --locked ansible-lint` must exit 0.
 profile: production
 warn_list:
   - experimental
+skip_list:
+  # Established repository variable vocabulary predates role-prefix naming;
+  # renaming public role inputs would break existing inventories/playbooks.
+  - var-naming[no-role-prefix]
+  # Roles intentionally live in a nested hierarchy under
+  # playbooks/roles/{base,infrastructure,provisioning,config}/ and are
+  # imported by path on purpose.
+  - role-name[path]
 exclude_paths:
   - archive/
+  # Installed third-party dependencies (gitignored), not repo code —
+  # equivalent to excluding node_modules.
+  - collections/ansible_collections/
+  - .ansible/roles/
+  # Authentik application blueprints use app-specific YAML tags
+  # (!Find, !KeyOf) that ansible-lint cannot parse; they are app data,
+  # not Ansible content.
+  - stacks/auth/auth/appdata/authentik/blueprints/
+  # ansible-vault encrypted file: must start with the $ANSIBLE_VAULT
+  # header, so yaml rules (e.g. document-start) cannot apply and fix
+  # mode must never rewrite it.
+  - inventory/group_vars/all/vault.yml

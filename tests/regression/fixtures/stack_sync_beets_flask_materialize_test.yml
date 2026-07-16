@@ -214,5 +214,6 @@
           - "'beets-flask/.env' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
           - "'beets-flask/appdata/beets/config.yaml' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
           - "'/data/media/_ingest/music' in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
-          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/beets-flask/appdata/startup.sh') in (lxc_stack_sync_manifest_plan.managed_files | map(attribute='path') | list)"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/beets-flask/appdata/startup.sh')
+            in (lxc_stack_sync_manifest_plan.managed_files | map(attribute='path') | list)"
         fail_msg: "Rendered beets-flask stack contract did not match expectations"

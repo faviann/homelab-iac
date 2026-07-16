@@ -21,7 +21,6 @@
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
-    workstation_autosync_bin_path: "{{ temp_root }}/bin/workstation-autosync"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
     workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
@@ -110,11 +109,12 @@
         mode: "0755"
 
     - name: Include workstation baseline role with PATH mocks
-      block:
-        - ansible.builtin.include_role:
-            name: config/lxc_workstation_baseline
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include workstation baseline role
+          ansible.builtin.include_role:
+            name: config/lxc_workstation_baseline
 
     - name: Stat persistent home root
       ansible.builtin.stat:

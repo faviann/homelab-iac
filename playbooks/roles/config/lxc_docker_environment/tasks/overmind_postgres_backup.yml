@@ -102,8 +102,9 @@
   register: _overmind_verified_backups
 
 - name: Create initial overmind verified backup when none exists
-  ansible.builtin.command:
-    cmd: systemctl start overmind-postgres-backup.service
+  ansible.builtin.systemd_service:
+    name: overmind-postgres-backup.service
+    state: started
   when:
     - not ansible_check_mode
     - _overmind_verified_backups.matched | int == 0

@@ -75,16 +75,16 @@
     - name: Prompt for Proxmox root password
       ansible.builtin.pause:
         prompt: |
-          
+
           ╔════════════════════════════════════════════════════════════════════╗
           ║  SSH Key Authentication Setup Required                            ║
           ╚════════════════════════════════════════════════════════════════════╝
-          
+
           SSH key authentication to {{ proxmox_host }} is not configured.
-          
+
           Please enter the root password to automatically add your SSH key.
           This prompt will not appear on subsequent runs.
-          
+
           Password for root@{{ proxmox_host }}
         echo: false
       register: proxmox_root_password
@@ -193,7 +193,10 @@
 
     - name: Key successfully configured
       ansible.builtin.debug:
-        msg: "✓ SSH public key {{ 'added to' if key_exists_check.rc != 0 else 'verified in' }} {{ proxmox_host }}:/root/.ssh/authorized_keys ({{ key_verification_count.stdout | trim }} occurrence(s))"
+        msg: >-
+          ✓ SSH public key {{ 'added to' if key_exists_check.rc != 0 else 'verified in' }}
+          {{ proxmox_host }}:/root/.ssh/authorized_keys
+          ({{ key_verification_count.stdout | trim }} occurrence(s))
 
     # Wait briefly for SSH to process changes
     - name: Wait for SSH to process changes

@@ -8,7 +8,7 @@
     service_agents_enabled: false
     lxc_stack_sync_managed_assets:
       changed_results: []
-    lxc_stack_sync_deploy_exclude_regex: '^[^/]+/(README(\..*)?|docs($|/.*)|stack\.ya?ml|metadata\.(ya?ml|json))$'
+    lxc_stack_sync_deploy_exclude_regex: "^[^/]+/(README(\\..*)?|docs($|/.*)|stack\\.ya?ml|metadata\\.(ya?ml|json))$"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       root_docker_conf_path: "{{ temp_root }}/shared"

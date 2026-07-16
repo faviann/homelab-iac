@@ -31,6 +31,9 @@
 
 - name: Determine desired ID mappings (sorted)
   ansible.builtin.set_fact:
+    # Keep this template in a YAML double-quoted scalar: YAML unescapes the
+    # \n before Jinja runs; a plain/folded scalar would join on literal
+    # backslash-n and break idempotent comparison against the config file.
     infrastructure_proxmox_lxc_host_config_desired_idmap: "{{
       infrastructure_proxmox_lxc_host_config_desired_idmap_list | join('\n') }}"
 

@@ -1,3 +1,4 @@
+---
 services:
   komf:
     image: sndxr/komf:latest
@@ -12,7 +13,11 @@ services:
       KOMF_KOMGA_BASE_URI: ${KOMF_KOMGA_BASE_URI}
       KOMF_KOMGA_USER: ${KOMF_KOMGA_USER}
       KOMF_KOMGA_PASSWORD: ${KOMF_KOMGA_PASSWORD}
-      JAVA_TOOL_OPTIONS: "-XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=compact -XX:ShenandoahGuaranteedGCInterval=3600000 -XX:TrimNativeHeapInterval=3600000"
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC
+        -XX:ShenandoahGCHeuristics=compact
+        -XX:ShenandoahGuaranteedGCInterval=3600000
+        -XX:TrimNativeHeapInterval=3600000
     labels:
       homepage.instance.admin.group: Media Management
       homepage.instance.admin.name: Komf

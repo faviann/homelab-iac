@@ -78,11 +78,12 @@
           esac
 
     - name: Include workstation baseline role with PATH mocks
-      block:
-        - ansible.builtin.include_role:
-            name: config/lxc_workstation_baseline
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include workstation baseline role
+          ansible.builtin.include_role:
+            name: config/lxc_workstation_baseline
 
     - name: Stat workstation ssh directory
       ansible.builtin.stat:
@@ -118,7 +119,8 @@
           - workstation_authorized_keys_stat.stat.uid == workstation_uid
           - workstation_authorized_keys_stat.stat.gid == workstation_gid
           - workstation_authorized_keys_stat.stat.mode == "0600"
-          - (workstation_authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE faviann@laptop\nssh-ed25519 AAAATESTKEYTWO faviann@phone\n"
+          - (workstation_authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE
+            faviann@laptop\nssh-ed25519 AAAATESTKEYTWO faviann@phone\n"
           - not workstation_private_key_stat.stat.exists
           - not workstation_known_hosts_stat.stat.exists
         fail_msg: "Workstation baseline did not write only the expected inbound GitHub authorized_keys"

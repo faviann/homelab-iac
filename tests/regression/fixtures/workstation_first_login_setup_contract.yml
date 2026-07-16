@@ -62,11 +62,12 @@
           esac
 
     - name: Include workstation baseline role with PATH mocks
-      block:
-        - ansible.builtin.include_role:
-            name: config/lxc_workstation_baseline
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include workstation baseline role
+          ansible.builtin.include_role:
+            name: config/lxc_workstation_baseline
 
     - name: Stat workstation setup command
       ansible.builtin.stat:
@@ -148,7 +149,8 @@
           - (setup_command_raw.content | b64decode) is search('pi --version')
           - (setup_command_raw.content | b64decode) is search('hermes version')
           - (setup_command_raw.content | b64decode) is search('openclaw --version')
-          - (setup_command_raw.content | b64decode) is search('export PATH="\$WORKSTATION_HOME/.local/bin:\$WORKSTATION_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin')
+          - (setup_command_raw.content | b64decode) is search('export
+            PATH="\$WORKSTATION_HOME/.local/bin:\$WORKSTATION_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin')
           - (setup_command_raw.content | b64decode) is search('dotfiles/github-cli-token')
           - (setup_command_raw.content | b64decode) is search('gh api user')
           - (setup_command_raw.content | b64decode) is search('git@github.com')

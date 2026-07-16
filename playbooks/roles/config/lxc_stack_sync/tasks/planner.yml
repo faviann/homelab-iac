@@ -76,7 +76,8 @@
     outputs: >-
       {%- set planned_outputs = [] -%}
       {%- for file in _per_host_j2_files.files | default([]) -%}
-      {%- set _ = planned_outputs.append(file.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '')) -%}
+      {%- set _ = planned_outputs.append(file.path
+        | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '')) -%}
       {%- endfor -%}
       {{ planned_outputs }}
 
@@ -101,7 +102,8 @@
       {%- endfor -%}
       {%- for file in _per_host_static_files.files | default([]) -%}
       {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
-      {%- if (relative_path | basename) in compose_names and relative_path not in (lxc_stack_sync_manifest_plan.templated_outputs | default([])) -%}
+      {%- if (relative_path | basename) in compose_names
+        and relative_path not in (lxc_stack_sync_manifest_plan.templated_outputs | default([])) -%}
       {%- set target_path = lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path -%}
       {%- set _ = specs.append({
         'source_path': file.path,

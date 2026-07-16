@@ -8,7 +8,6 @@ proxmox_lifecycle_policy_default:
   cleanup_rebuilt_state: true
 
 proxmox_lifecycle_policy: {}
-
 proxmox_lifecycle_desired_release: ""
 
 proxmox_lifecycle_release_probe_tasks_file: >-

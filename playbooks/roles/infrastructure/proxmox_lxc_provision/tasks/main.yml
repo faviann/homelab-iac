@@ -86,5 +86,6 @@
 - name: Report container provisioning outcome
   ansible.builtin.debug:
     msg: >-
-      Container {{ proxmox_lxc_api_spec.hostname }} (vmid {{ proxmox_lxc_api_spec.vmid }}) ensured {{ proxmox_lxc_api_spec.state | default('present') }}.
+      Container {{ proxmox_lxc_api_spec.hostname }} (vmid {{ proxmox_lxc_api_spec.vmid }})
+      ensured {{ proxmox_lxc_api_spec.state | default('present') }}.
   when: proxmox_lxc_result is defined and proxmox_lxc_result.changed

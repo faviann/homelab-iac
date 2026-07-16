@@ -1,3 +1,4 @@
+---
 x-prereq-dirs:
   - ./appdata/jellystat-db/config
   - ./appdata/jellystat-db/data

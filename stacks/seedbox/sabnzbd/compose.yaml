@@ -1,3 +1,4 @@
+---
 x-prereq-dirs:
   - ./appdata/sabnzbd
   - /ephemeral/sabnzbd
@@ -22,6 +23,6 @@ services:
       - $SABNZBD_PORT:8080 # sabnzbd
     volumes:
       - ./appdata/sabnzbd:/config
-      - /data:/data #optional
-      - /ephemeral/sabnzbd:/ephemeral #optional
+      - /data:/data # optional
+      - /ephemeral/sabnzbd:/ephemeral # optional
 networks: {}
