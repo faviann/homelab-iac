@@ -123,7 +123,9 @@ rc:
     returned: always
     type: int
 status:
-    description: Parsed container status (when command=status)
+    description:
+        - Parsed container status (when command=status)
+        - C(absent) is returned only for the recognized missing-container response
     returned: when command=status
     type: str
 config:
@@ -324,6 +326,20 @@ def parse_status(stdout):
     return stdout.strip()
 
 
+def is_missing_container_status(vmid, result):
+    """Recognize pct's explicit answer that the requested container is absent."""
+    match = re.fullmatch(
+        rf"Configuration file 'nodes/(?P<node>[^/']+)/lxc/"
+        rf"{re.escape(str(vmid))}\.conf' does not exist",
+        result['stderr'].strip()
+    )
+    if match is None:
+        return False
+
+    node = match.group('node')
+    return node not in {'.', '..'} and '\x00' not in node
+
+
 def parse_config(stdout):
     """Parse pct config output into dict"""
     config = {}
@@ -429,13 +445,19 @@ def main():
     # Parse command-specific output
     if command == 'status' and result['rc'] == 0:
         response['status'] = parse_status(result['stdout'])
+    elif command == 'status' and is_missing_container_status(vmid, result):
+        # Ansible treats a nonzero `rc` in exit_json as a failed task even when
+        # the adapter positively recognized the result. At this public seam,
+        # absence is a successful observation rather than a failed pct call.
+        response['rc'] = 0
+        response['status'] = 'absent'
     elif command == 'config' and result['rc'] == 0:
         response['config'] = parse_config(result['stdout'])
 
     # Fail if command failed. Naming the LXC and the exact call is what makes a
     # wedged host actionable, and matches the readiness message above: a killed
     # call reports rc=TIMEOUT_RC and carries the bound it exceeded in stderr.
-    if result['rc'] != 0:
+    if result['rc'] != 0 and response.get('status') != 'absent':
         module.fail_json(
             msg=(
                 f"LXC {vmid}: '{result['cmd']}' failed with rc={result['rc']}. "

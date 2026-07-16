@@ -64,6 +64,7 @@ FULL_ONLY_SCRIPTS = (
     "test_lxc_spec_layer_merge.py",
     "test_proxmox_lxc_provision_contract.py",
     "test_proxmox_lxc_lifecycle_configure_check_mode_absent.py",
+    "test_proxmox_lxc_lifecycle_observation_status.py",
     "test_lxc_manual_ssh_recovery.py",
     "test_lxc_ssh_key_injector_identity_mismatch.py",
     "test_lxc_fleet_preflight.py",

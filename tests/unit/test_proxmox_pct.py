@@ -192,7 +192,7 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         self.assertEqual(cmd_args, ["config", "404"])
         self.assertEqual(payload["config"], {"arch": "amd64", "features": "nesting=1,keyctl=1"})
 
-    def test_nonzero_rc_fails_with_result_payload(self) -> None:
+    def test_recognized_missing_container_returns_structured_absent_status(self) -> None:
         payload, cmd_args = self.run_main(
             {
                 "vmid": 505,
@@ -200,12 +200,89 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 "exec_command": None,
                 "config_options": None,
             },
-            {"stdout": "", "stderr": "CT 505 does not exist", "rc": 2, "cmd": "pct status 505"},
+            {
+                "stdout": "",
+                "stderr": (
+                    "Configuration file 'nodes/pve-a/lxc/505.conf' does not exist"
+                ),
+                "rc": 2,
+                "cmd": "pct status 505",
+            },
         )
 
         self.assertEqual(cmd_args, ["status", "505"])
-        self.assertEqual(payload["rc"], 2)
-        self.assertIn("CT 505 does not exist", payload["msg"])
+        self.assertEqual(payload["rc"], 0)
+        self.assertEqual(payload["status"], "absent")
+        self.assertEqual(
+            payload["stderr"],
+            "Configuration file 'nodes/pve-a/lxc/505.conf' does not exist",
+        )
+        self.assertFalse(payload["changed"])
+
+    def test_unrecognized_nonzero_status_fails_with_original_result_payload(self) -> None:
+        payload, cmd_args = self.run_main(
+            {
+                "vmid": 505,
+                "command": "status",
+                "exec_command": None,
+                "config_options": None,
+            },
+            {
+                "stdout": "",
+                "stderr": "permission denied while reading /etc/pve",
+                "rc": 13,
+                "cmd": "pct status 505",
+            },
+        )
+
+        self.assertEqual(cmd_args, ["status", "505"])
+        self.assertEqual(payload["rc"], 13)
+        self.assertEqual(payload["cmd"], "pct status 505")
+        self.assertEqual(payload["stderr"], "permission denied while reading /etc/pve")
+        self.assertIn("LXC 505", payload["msg"])
+        self.assertIn("permission denied while reading /etc/pve", payload["msg"])
+
+    def test_missing_response_for_another_lxc_is_not_treated_as_absent(self) -> None:
+        payload, _ = self.run_main(
+            {
+                "vmid": 505,
+                "command": "status",
+                "exec_command": None,
+                "config_options": None,
+            },
+            {
+                "stdout": "",
+                "stderr": (
+                    "Configuration file 'nodes/pve-a/lxc/999.conf' does not exist"
+                ),
+                "rc": 2,
+                "cmd": "pct status 505",
+            },
+        )
+
+        self.assertNotIn("status", payload)
+        self.assertIn("nodes/pve-a/lxc/999.conf", payload["msg"])
+
+    def test_missing_response_with_nested_node_path_is_not_treated_as_absent(self) -> None:
+        payload, _ = self.run_main(
+            {
+                "vmid": 505,
+                "command": "status",
+                "exec_command": None,
+                "config_options": None,
+            },
+            {
+                "stdout": "",
+                "stderr": (
+                    "Configuration file 'nodes/pve/a/lxc/505.conf' does not exist"
+                ),
+                "rc": 2,
+                "cmd": "pct status 505",
+            },
+        )
+
+        self.assertNotIn("status", payload)
+        self.assertIn("nodes/pve/a/lxc/505.conf", payload["msg"])
 
     def test_a_failure_names_the_lxc_and_the_command_that_failed(self) -> None:
         # A wedged pct is only actionable if the operator can tell which LXC and
