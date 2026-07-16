@@ -96,7 +96,14 @@ class OvermindContractTests(unittest.TestCase):
         self.assertIn("pg_isready -U postgres -d postgres", services["postgres"]["healthcheck"]["test"][1])
         self.assertEqual(
             services["server"]["healthcheck"]["test"],
-            ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/healthz"],
+            [
+                "CMD",
+                "/bin/bash",
+                "-ec",
+                "exec 3<>/dev/tcp/127.0.0.1/8080; "
+                'printf "GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n" >&3; '
+                'IFS= read -r status <&3; [[ "$$status" == *" 200 "* ]]',
+            ],
         )
 
     def test_secret_templates_and_managed_key_file_contract(self) -> None:
