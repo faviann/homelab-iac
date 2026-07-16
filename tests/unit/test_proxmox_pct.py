@@ -35,10 +35,18 @@ class FakeAnsibleModule:
     """Minimal AnsibleModule stub for exercising main()."""
 
     params_queue: list[dict] = []
+    # What main() declared, so tests can assert on the adapter's real surface
+    # instead of restating it.
+    last_kwargs: dict = {}
 
     def __init__(self, *args, **kwargs):
         self.params = self.params_queue.pop(0)
         self.check_mode = False
+        FakeAnsibleModule.last_kwargs = kwargs
+
+    @classmethod
+    def last_argument_spec(cls) -> dict:
+        return cls.last_kwargs.get("argument_spec", {})
 
     def exit_json(self, **kwargs):
         raise ModuleExit(kwargs)
@@ -71,8 +79,9 @@ class ProxmoxPctModuleTests(unittest.TestCase):
     def run_main(self, params: dict, run_result: dict):
         captured = {}
 
-        def fake_run_pct_command(module, cmd_args):
+        def fake_run_pct_command(module, cmd_args, kill_after):
             captured["cmd_args"] = cmd_args
+            captured["kill_after"] = kill_after
             return run_result
 
         FakeAnsibleModule.params_queue = [params]
@@ -82,6 +91,7 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         with self.assertRaises((ModuleExit, ModuleFail)) as context:
             self.module.main()
 
+        self.captured = captured
         return context.exception.payload, captured.get("cmd_args")
 
     def test_exec_command_uses_shell_wrapper(self) -> None:
@@ -91,7 +101,6 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 "command": "exec",
                 "exec_command": ". /etc/os-release && printf '%s' \"$VERSION_ID\"",
                 "config_options": None,
-                "timeout": 30,
             },
             {"stdout": "12", "stderr": "", "rc": 0, "cmd": "pct exec 101"},
         )
@@ -110,13 +119,44 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 "command": "reboot",
                 "exec_command": None,
                 "config_options": None,
-                "timeout": 30,
             },
             {"stdout": "", "stderr": "", "rc": 0, "cmd": "pct reboot 202"},
         )
 
         self.assertEqual(cmd_args, ["reboot", "202"])
         self.assertTrue(payload["changed"])
+
+    def test_reboot_gets_a_wider_bound_than_a_read(self) -> None:
+        # pct reboot stops the guest and starts it again, so it is the one
+        # remaining command with a duration of its own to respect.
+        self.run_main(
+            {"vmid": 202, "command": "reboot", "exec_command": None, "config_options": None},
+            {"stdout": "", "stderr": "", "rc": 0, "cmd": "pct reboot 202"},
+        )
+        reboot_bound = self.captured["kill_after"]
+
+        self.run_main(
+            {"vmid": 202, "command": "status", "exec_command": None, "config_options": None},
+            {"stdout": "status: running", "stderr": "", "rc": 0, "cmd": "pct status 202"},
+        )
+        status_bound = self.captured["kill_after"]
+
+        self.assertEqual(reboot_bound, self.module.PCT_REBOOT_TIMEOUT_SECONDS)
+        self.assertEqual(status_bound, self.module.PCT_COMMAND_TIMEOUT_SECONDS)
+        self.assertGreater(reboot_bound, status_bound)
+
+    def test_the_adapter_offers_no_uncalled_command_and_no_timeout_option(self) -> None:
+        self.run_main(
+            {"vmid": 202, "command": "status", "exec_command": None, "config_options": None},
+            {"stdout": "status: running", "stderr": "", "rc": 0, "cmd": "pct status 202"},
+        )
+        spec = FakeAnsibleModule.last_argument_spec()
+
+        self.assertEqual(
+            spec["command"]["choices"],
+            ["status", "config", "set", "exec", "reboot", "wait_exec"],
+        )
+        self.assertNotIn("timeout", spec)
 
     def test_status_command_returns_structured_status(self) -> None:
         payload, cmd_args = self.run_main(
@@ -125,7 +165,6 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 "command": "status",
                 "exec_command": None,
                 "config_options": None,
-                "timeout": 30,
             },
             {"stdout": "status: running", "stderr": "", "rc": 0, "cmd": "pct status 303"},
         )
@@ -141,7 +180,6 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 "command": "config",
                 "exec_command": None,
                 "config_options": None,
-                "timeout": 30,
             },
             {
                 "stdout": "arch: amd64\nfeatures: nesting=1,keyctl=1",
@@ -161,7 +199,6 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 "command": "status",
                 "exec_command": None,
                 "config_options": None,
-                "timeout": 30,
             },
             {"stdout": "", "stderr": "CT 505 does not exist", "rc": 2, "cmd": "pct status 505"},
         )
@@ -169,6 +206,30 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         self.assertEqual(cmd_args, ["status", "505"])
         self.assertEqual(payload["rc"], 2)
         self.assertIn("CT 505 does not exist", payload["msg"])
+
+    def test_a_failure_names_the_lxc_and_the_command_that_failed(self) -> None:
+        # A wedged pct is only actionable if the operator can tell which LXC and
+        # which call produced it, matching the readiness message from #45.
+        payload, _ = self.run_main(
+            {
+                "vmid": 606,
+                "command": "status",
+                "exec_command": None,
+                "config_options": None,
+            },
+            {
+                "stdout": "",
+                "stderr": "pct command exceeded its 60s execution timeout and was killed",
+                "rc": 124,
+                "cmd": "pct status 606",
+            },
+        )
+
+        message = payload["msg"]
+        self.assertIn("LXC 606", message)
+        self.assertIn("pct status 606", message)
+        self.assertIn("rc=124", message)
+        self.assertIn("execution timeout", message)
 
 
 class GuestCommandReadinessTests(unittest.TestCase):
@@ -226,7 +287,6 @@ class GuestCommandReadinessTests(unittest.TestCase):
             "command": "wait_exec",
             "exec_command": None,
             "config_options": None,
-            "timeout": 30,
             "ready_timeout": 30,
             "ready_delay": 3,
             "ready_command_timeout": 10,
@@ -369,6 +429,23 @@ class GuestCommandReadinessTests(unittest.TestCase):
             self.calls[0][1], self.module.MIN_USEFUL_ATTEMPT_SECONDS
         )
 
+    def test_readiness_bounds_are_required_rather_than_defaulted_here(self) -> None:
+        # Single source of truth: the host-config role's defaults/argument_specs
+        # pair owns 120/3/10. A module-side copy is unreachable (the role always
+        # passes all three) and can only drift into stale documentation, so the
+        # adapter requires them declaratively instead of restating the numbers.
+        self.install_results([self.result(0)])
+        self.run_wait_exec({})
+        spec = FakeAnsibleModule.last_argument_spec()
+
+        readiness_options = ["ready_timeout", "ready_delay", "ready_command_timeout"]
+        for option in readiness_options:
+            self.assertNotIn("default", spec[option], f"{option} restates a role default")
+        self.assertIn(
+            ("command", "wait_exec", readiness_options),
+            FakeAnsibleModule.last_kwargs["required_if"],
+        )
+
     def test_invalid_bounds_are_rejected(self) -> None:
         self.install_results([self.result(0)])
 
@@ -414,11 +491,27 @@ class RunPctCommandTimeoutTests(unittest.TestCase):
         self.assertIn("execution timeout", result["stderr"])
         self.assertLess(elapsed, 30)
 
-    def test_unbounded_command_preserves_existing_behaviour(self) -> None:
-        result = self.module.run_pct_command(module=None, cmd_args=["quick"])
+    def test_command_that_answers_within_its_bound_returns_its_output(self) -> None:
+        result = self.module.run_pct_command(module=None, cmd_args=["quick"], kill_after=10)
 
         self.assertEqual(result["rc"], 0)
         self.assertEqual(result["stdout"], "fixture-ok")
+
+    def test_process_group_kill_leaves_no_child_holding_the_pipes(self) -> None:
+        # `orphan` leaves a grandchild on the output pipes. Killing the whole
+        # process group reaps it too, so the output is collected at once. If only
+        # pct died, the grandchild would hold the pipes for its full 5s sleep and
+        # the read would fall through to the "did not release its pipes" path.
+        started = time.monotonic()
+        result = self.module.run_pct_command(
+            module=None, cmd_args=["orphan"], kill_after=1
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(result["rc"], self.module.TIMEOUT_RC)
+        self.assertNotIn("did not release its pipes", result["stderr"])
+        self.assertIn("execution timeout", result["stderr"])
+        self.assertLess(elapsed, 4)
 
     def test_killpg_fallback_cannot_block_on_orphaned_pipes(self) -> None:
         # Force kill_process_group down its fallback, where only pct is killed and
@@ -437,18 +530,19 @@ class RunPctCommandTimeoutTests(unittest.TestCase):
         self.assertIn("did not release its pipes", result["stderr"])
         self.assertLess(elapsed, 4)
 
-    def test_only_the_killable_path_detaches_into_its_own_session(self) -> None:
-        # Detaching costs Ctrl-C propagation, so unbounded pct calls must stay in
-        # the caller's process group; only the killpg path needs its own.
-        # Swapping the module's own `subprocess` reference leaves the real
-        # subprocess module untouched.
+    def test_every_pct_call_detaches_into_its_own_session(self) -> None:
+        # Every call is now bounded, so every call must be killable, so every call
+        # detaches. The cost is deliberate: Ctrl-C no longer reaches pct. No
+        # long-running interactive pct command remains, and the bound is what ends
+        # a wedged call now. Swapping the module's own `subprocess` reference
+        # leaves the real subprocess module untouched.
         spy = self.SubprocessSpy(self.module.subprocess)
         self.module.subprocess = spy
 
-        self.module.run_pct_command(module=None, cmd_args=["quick"])
         self.module.run_pct_command(module=None, cmd_args=["quick"], kill_after=5)
+        self.module.run_pct_command(module=None, cmd_args=["quick"], kill_after=600)
 
-        self.assertEqual(spy.sessions, [False, True])
+        self.assertEqual(spy.sessions, [True, True])
 
     class SubprocessSpy:
         def __init__(self, real):
@@ -460,6 +554,87 @@ class RunPctCommandTimeoutTests(unittest.TestCase):
         def Popen(self, *args, **kwargs):  # noqa: N802 - mirrors subprocess.Popen
             self.sessions.append(kwargs.get("start_new_session"))
             return self.real.Popen(*args, **kwargs)
+
+
+class EveryOfferedCommandIsBoundedTests(unittest.TestCase):
+    """No pct invocation the adapter offers may outlive its bound.
+
+    Driven end-to-end through main() against a real pct that never returns, so
+    the bound is demonstrated by a call that genuinely hangs rather than by
+    inspection of the argument spec.
+    """
+
+    # Minimum params each command needs beyond vmid/command. Asserted below to
+    # cover the adapter's full choices list, so a new command cannot be added
+    # without deciding its bound here.
+    EXTRA_PARAMS: dict[str, dict] = {
+        "status": {},
+        "config": {},
+        "set": {"config_options": {"memory": 2048}},
+        "exec": {"exec_command": "true"},
+        "reboot": {},
+        "wait_exec": {
+            "ready_timeout": 2,
+            "ready_delay": 0,
+            "ready_command_timeout": 1,
+        },
+    }
+
+    def setUp(self) -> None:
+        self.module = load_module()
+        temp_dir = tempfile.TemporaryDirectory(prefix="proxmox-pct-bound-")
+        self.addCleanup(temp_dir.cleanup)
+        # A pct that never answers, whatever it is asked. This is the wedged
+        # pmxcfs the bound exists for.
+        fake_pct = Path(temp_dir.name) / "pct"
+        fake_pct.write_text("#!/bin/sh\nsleep 60\n", encoding="utf-8")
+        fake_pct.chmod(0o755)
+
+        original_path = os.environ["PATH"]
+        os.environ["PATH"] = f"{temp_dir.name}{os.pathsep}{original_path}"
+        self.addCleanup(os.environ.__setitem__, "PATH", original_path)
+
+        self.module.AnsibleModule = FakeAnsibleModule
+        # Shrink the production bounds so the mechanism is provable in seconds.
+        # The values themselves are not under test here.
+        self.module.PCT_COMMAND_TIMEOUT_SECONDS = 1
+        self.module.PCT_REBOOT_TIMEOUT_SECONDS = 1
+
+    def run_command(self, command: str):
+        params = {
+            "vmid": 4242,
+            "command": command,
+            "exec_command": None,
+            "config_options": None,
+            "ready_timeout": None,
+            "ready_delay": None,
+            "ready_command_timeout": None,
+        }
+        params.update(self.EXTRA_PARAMS[command])
+        FakeAnsibleModule.params_queue = [params]
+
+        started = time.monotonic()
+        with self.assertRaises((ModuleExit, ModuleFail)) as context:
+            self.module.main()
+        return context.exception, time.monotonic() - started
+
+    def test_a_pct_that_never_returns_is_killed_and_reported_for_every_command(self) -> None:
+        for command in self.EXTRA_PARAMS:
+            with self.subTest(command=command):
+                exception, elapsed = self.run_command(command)
+
+                self.assertIsInstance(exception, ModuleFail)
+                # Without the bound this would sit on the fixture's 60s sleep.
+                self.assertLess(elapsed, 30)
+                message = exception.payload["msg"]
+                self.assertIn("4242", message)
+                self.assertIn("execution timeout", message)
+
+        self.assertEqual(
+            set(FakeAnsibleModule.last_argument_spec()["command"]["choices"]),
+            set(self.EXTRA_PARAMS),
+            "a command the adapter offers has no bound proven here",
+        )
 
 
 if __name__ == "__main__":
