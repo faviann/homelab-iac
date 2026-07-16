@@ -12,8 +12,10 @@ WORKSTATION_HOME="{{ workstation_home }}"
 BW_BIN="{{ workstation_bw_bin_path }}"
 UPDATE_AGENT_TOOLS_SOURCE="{{ workstation_update_agent_tools_source_path }}"
 UPDATE_AGENT_TOOLS_BIN="{{ workstation_update_agent_tools_bin_path }}"
+UPDATE_AGENT_TOOLS_REQUIRES_BITWARDEN="{{ workstation_update_agent_tools_requires_bitwarden | bool | lower }}"
 WORKSTATION_UPDATE_SOURCE="{{ workstation_update_source_path }}"
 WORKSTATION_UPDATE_BIN="{{ workstation_update_bin_path }}"
+WORKSTATION_UPDATE_REQUIRES_BITWARDEN="{{ workstation_update_requires_bitwarden | bool | lower }}"
 MARKER_FINGERPRINT="{{ workstation_setup_version }}|{{ workstation_dotfiles_repo_url }}|{{ workstation_github_cli_token_item }}|{{ workstation_home_manager_flake_ref }}|{{ workstation_bw_bin_path }}"
 
 export HOME="$WORKSTATION_HOME"
@@ -108,14 +110,18 @@ required_managed_commands_ready() {
 }
 
 secret_backed_managed_command_repair_required() {
-  local destination_path source_path specification
+  local destination_path remainder requires_bitwarden source_path specification
 
   for specification in \
-    "$UPDATE_AGENT_TOOLS_SOURCE|$UPDATE_AGENT_TOOLS_BIN" \
-    "$WORKSTATION_UPDATE_SOURCE|$WORKSTATION_UPDATE_BIN"; do
+    "$UPDATE_AGENT_TOOLS_SOURCE|$UPDATE_AGENT_TOOLS_BIN|$UPDATE_AGENT_TOOLS_REQUIRES_BITWARDEN" \
+    "$WORKSTATION_UPDATE_SOURCE|$WORKSTATION_UPDATE_BIN|$WORKSTATION_UPDATE_REQUIRES_BITWARDEN"; do
     source_path="${specification%%|*}"
-    destination_path="${specification#*|}"
-    if [ ! -x "$destination_path" ] && [ -f "$source_path.tmpl" ]; then
+    remainder="${specification#*|}"
+    destination_path="${remainder%%|*}"
+    requires_bitwarden="${remainder#*|}"
+    if [ "$requires_bitwarden" = "true" ] \
+      && [ ! -x "$destination_path" ] \
+      && [ -f "$source_path.tmpl" ]; then
       return 0
     fi
   done

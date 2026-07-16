@@ -21,6 +21,7 @@
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
+    workstation_update_requires_bitwarden: true
     workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
     lxc_ssh_user: "{{ workstation_username }}"
