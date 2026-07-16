@@ -1,0 +1,96 @@
+---
+name: overmind
+
+x-prereq-dirs:
+  - /data/overmind/postgres/pgdata
+
+x-managed-files:
+  - path: ./agent-keys.yaml
+    mode: "0600"
+
+services:
+  postgres:
+    image: docker.io/library/postgres:18
+    container_name: overmind-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD in .env}
+      POSTGRES_DB: postgres
+    volumes:
+      - /data/overmind/postgres/pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    stop_grace_period: 60s
+
+  bootstrap:
+    image: docker.io/library/postgres:18
+    environment:
+      POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD in .env}
+      MEMSRV_PASSWORD: ${MEMSRV_PASSWORD:?Set MEMSRV_PASSWORD in .env}
+    entrypoint: ["/bin/bash", "-euc"]
+    command:
+      - |
+        export PGPASSWORD="$${POSTGRES_ADMIN_PASSWORD}"
+        psql --host postgres --username postgres --dbname postgres \
+          --set=ON_ERROR_STOP=1 \
+          --set=memsrv_password="$${MEMSRV_PASSWORD}" <<'SQL'
+        SELECT format('CREATE ROLE memsrv LOGIN PASSWORD %L', :'memsrv_password')
+        WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'memsrv')
+        \gexec
+        ALTER ROLE memsrv WITH LOGIN PASSWORD :'memsrv_password';
+        SELECT 'CREATE DATABASE memory'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'memory')
+        \gexec
+        SQL
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate:
+    image: ghcr.io/faviann/overmind:${OVERMIND_VERSION:?Set OVERMIND_VERSION in .env; no latest default is provided}
+    entrypoint: ["memctl"]
+    command: ["migrate"]
+    environment:
+      MEMSRV_ADMIN_CONNECTION_STRING: Host=postgres;Port=5432;Database=memory;Username=postgres
+      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD in .env}
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    restart: "no"
+
+  server:
+    image: ghcr.io/faviann/overmind:${OVERMIND_VERSION:?Set OVERMIND_VERSION in .env; no latest default is provided}
+    environment:
+      MEMSRV_CONNECTION_STRING: Host=postgres;Port=5432;Database=memory;Username=memsrv
+      PGPASSWORD: ${MEMSRV_PASSWORD:?Set MEMSRV_PASSWORD in .env}
+      MEMSRV_AGENT_KEYS_PATH: ${MEMSRV_AGENT_KEYS_PATH:-/run/secrets/agent-keys.yaml}
+      MEMSRV_HTTP_URL: http://0.0.0.0:8080
+    ports:
+      - "${OVERMIND_HTTP_BIND:-0.0.0.0}:${OVERMIND_HTTP_PORT:-8080}:8080"
+    volumes:
+      - type: bind
+        source: ${OVERMIND_AGENT_KEYS_FILE:-./agent-keys.yaml}
+        target: ${MEMSRV_AGENT_KEYS_PATH:-/run/secrets/agent-keys.yaml}
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test:
+        - CMD
+        - /bin/bash
+        - -ec
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080;
+          printf "GET /healthz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+          IFS= read -r status <&3; [[ "$$status" == *" 200 "* ]]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped

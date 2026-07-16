@@ -1,5 +1,5 @@
 ---
-# Host-specific configuration for the overmind memory substrate
+# Host-specific configuration for the Overmind memory service
 # Inherits from: tier_small, cap_docker
 
 lxc_hwaddr: "BC:24:11:0B:3D:9D"
@@ -31,32 +31,16 @@ lxc_docker_env_path_ownership_overrides:
     recurse: false
 
 lxc_docker_env_stack_vars:
-  postgres:
-    postgres_password: "{{ vault_overmind_postgres_password }}"
-  memsrv:
-    memsrv_connection_string: "{{ overmind_memsrv_connection_string }}"
-
-overmind_memsrv_connection_string: "postgresql://memsrv:{{ vault_overmind_memsrv_password | urlencode }}@overmind-postgres:5432/memory"
-
-overmind_migrations_enabled: true
-overmind_image_repository: ghcr.io/faviann/overmind
-overmind_image_tag: "1.0.0"
-overmind_migration_network: postgres_default
-
-overmind_postgres_bootstrap_enabled: true
-overmind_postgres_bootstrap:
-  container_name: overmind-postgres
-  admin_user: overmind
-  admin_database: overmind
-  admin_password: "{{ vault_overmind_postgres_password }}"
-  memory_database: memory
-  memsrv_role: memsrv
-  memsrv_password: "{{ vault_overmind_memsrv_password }}"
+  overmind:
+    overmind_version: "1.0.0"
+    postgres_admin_password: "{{ vault_overmind_postgres_password }}"
+    memsrv_password: "{{ vault_overmind_memsrv_password }}"
+    agent_key: "{{ vault_overmind_homelab_dev_agent_key }}"
 
 overmind_postgres_backup_enabled: true
 overmind_postgres_backup:
   container_name: overmind-postgres
-  admin_user: overmind
+  admin_user: postgres
   admin_password: "{{ vault_overmind_postgres_password }}"
   database: memory
   backup_dir: /backups/overmind
@@ -74,9 +58,8 @@ proxmox_lxc_bind_mounts_overrides:
 proxmox_lxc_overrides:
   vmid: 307
   hostname: overmind
-  description: "Overmind memory substrate managed via Ansible"
+  description: "Overmind memory service managed via Ansible"
   tags:
     - ansible
     - overmind
     - memory
-    - database

@@ -193,14 +193,6 @@
   ansible.builtin.include_role:
     name: config/lxc_stack_sync
 
-- name: Bootstrap overmind Postgres application database
-  ansible.builtin.include_tasks: overmind_postgres_bootstrap.yml
-  when: overmind_postgres_bootstrap_enabled | default(false) | bool
-
-- name: Run overmind Postgres schema migrations
-  ansible.builtin.include_tasks: overmind_migrations.yml
-  when: overmind_migrations_enabled | default(false) | bool
-
 - name: Configure overmind verified Postgres backups
   ansible.builtin.include_tasks: overmind_postgres_backup.yml
   when: overmind_postgres_backup_enabled | default(false) | bool

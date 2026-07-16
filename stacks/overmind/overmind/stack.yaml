@@ -1,11 +1,11 @@
 ---
 schema_version: 1
 kind: stack
-name: postgres
-description: Postgres substrate for overmind memory services
+name: overmind
+description: Complete Overmind HTTP MCP application
 portability:
   tier: host-bound-app
-  owner: inventory
+  owner: stack
 runtime:
   host_requirements:
     external_networks: []
