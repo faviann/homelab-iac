@@ -8,7 +8,7 @@ case "$1" in
     echo runtime_refresh >> "$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
     state=$(cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.state")
     if [ "$state" = absent ]; then
-      echo "CT $vmid does not exist" >&2
+      echo "Configuration file 'nodes/pve-a/lxc/$vmid.conf' does not exist" >&2
       exit 2
     fi
     echo "status: $state"

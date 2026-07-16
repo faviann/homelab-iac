@@ -26,7 +26,7 @@
               echo "status: stopped"
               ;;
             missing)
-              echo "CT $2 does not exist" >&2
+              echo "Configuration file 'nodes/pve-a/lxc/$2.conf' does not exist" >&2
               exit 2
               ;;
             timeout)
