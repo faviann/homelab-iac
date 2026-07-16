@@ -20,7 +20,7 @@
 
 ## [TD-001] Guest-command readiness defaults are declared in three places
 - **Category**: tech-debt
-- **Tracker**: #49
+- **Tracker**: #48 (folded in; #49 closed as covered)
 - **Location**: `playbooks/roles/infrastructure/proxmox_lxc_host_config/defaults/main.yml`, that role's `meta/argument_specs.yml`, `library/proxmox_pct.py` (`argument_spec`)
 - **Context**: Issue #45 review — the readiness values 120/3/10 are declared in all three, but the role always passes them explicitly, so the module-side defaults are unreachable and can drift into stale documentation. Deleting them is less code yet makes `wait_exec` unusable standalone and breaks the module's EXAMPLES. Left alone deliberately; needs a judgement call, not a mechanical fix.
 - **Added**: 2026-07-16
