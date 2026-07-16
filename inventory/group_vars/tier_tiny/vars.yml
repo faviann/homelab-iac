@@ -4,8 +4,8 @@
 
 proxmox_lxc_group_defaults:
   cores: 1
-  memory: 1024  # MB
-  disk: "8"    # GB
-  swap: 256     # MB
+  memory: 1024 # MB
+  disk: "8" # GB
+  swap: 256 # MB
   netif:
     net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth"

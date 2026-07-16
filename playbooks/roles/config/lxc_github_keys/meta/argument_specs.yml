@@ -19,7 +19,8 @@ argument_specs:
         type: list
         elements: str
         required: false
-        description: GitHub usernames whose public SSH keys should be merged and deduplicated into authorized_keys. Populated from lxc_github_users by default.
+        description: GitHub usernames whose public SSH keys should be merged and deduplicated into authorized_keys. Populated from
+          lxc_github_users by default.
       lxc_github_keys_base_url:
         type: str
         required: false

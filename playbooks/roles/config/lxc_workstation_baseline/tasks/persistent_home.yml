@@ -12,10 +12,14 @@
       - workstation_persistent_home_links | selectattr('path', 'defined') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | selectattr('target', 'defined') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | selectattr('mode', 'defined') | list | length == workstation_persistent_home_links | length
-      - workstation_persistent_home_links | map(attribute='type') | map('string') | select('equalto', 'bind_mount') | list | length == workstation_persistent_home_links | length
-      - workstation_persistent_home_links | map(attribute='path') | map('string') | select('match', '^' ~ workstation_home ~ '/.+') | list | length == workstation_persistent_home_links | length
-      - workstation_persistent_home_links | map(attribute='target') | map('string') | select('match', '^' ~ workstation_persistent_home_root ~ '/.+') | list | length == workstation_persistent_home_links | length
-      - workstation_persistent_home_links | map(attribute='mode') | map('string') | select('match', '^0[0-7]{3}$') | list | length == workstation_persistent_home_links | length
+      - workstation_persistent_home_links | map(attribute='type') | map('string') | select('equalto', 'bind_mount') | list | length ==
+        workstation_persistent_home_links | length
+      - workstation_persistent_home_links | map(attribute='path') | map('string') | select('match', '^' ~ workstation_home ~ '/.+') | list |
+        length == workstation_persistent_home_links | length
+      - workstation_persistent_home_links | map(attribute='target') | map('string') | select('match', '^' ~ workstation_persistent_home_root
+        ~ '/.+') | list | length == workstation_persistent_home_links | length
+      - workstation_persistent_home_links | map(attribute='mode') | map('string') | select('match', '^0[0-7]{3}$') | list | length ==
+        workstation_persistent_home_links | length
       - workstation_persistent_home_mount_state in ['mounted', 'present']
       - workstation_persistent_home_fstab_path | string | length > 0
     fail_msg: >-

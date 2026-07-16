@@ -35,7 +35,10 @@
 
 - name: Resolve AoE LAN proxy firewall allowlist address
   ansible.builtin.shell:
-    cmd: "getent ahostsv4 {{ workstation_aoe_proxy_firewall_allowed_endpoint | quote }} | awk '{print $1}' | sort -u"
+    cmd: |
+      set -o pipefail
+      getent ahostsv4 {{ workstation_aoe_proxy_firewall_allowed_endpoint | quote }} | awk '{print $1}' | sort -u
+    executable: /bin/bash
   register: workstation_aoe_proxy_firewall_resolution
   failed_when: false
   changed_when: false
@@ -47,12 +50,7 @@
   ansible.builtin.assert:
     that:
       - workstation_aoe_proxy_firewall_resolution.rc == 0
-      - (
-          workstation_aoe_proxy_firewall_resolution.stdout_lines
-          | default([])
-          | select('match', '^[0-9]+(?:\\.[0-9]+){3}$')
-          | list
-          | length
+      - ( workstation_aoe_proxy_firewall_resolution.stdout_lines | default([]) | select('match', '^[0-9]+(?:\\.[0-9]+){3}$') | list | length
         ) > 0
     fail_msg: >-
       config/lxc_workstation_baseline could not resolve any IPv4 address for

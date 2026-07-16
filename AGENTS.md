@@ -82,6 +82,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `uv run --locked python tests/regression/run_lxc_lifecycle_regressions.py --only <launcher.py>` | Target one registered lifecycle launcher in the same credential-free fixture environment. Repeat `--only` to run several launchers in the supplied order |
 | `uv run --locked python tests/regression/run_lxc_lifecycle_regressions.py --full --fail-fast` | Remediation pass — finish the concurrent fast launchers, then stop scheduling after the first observed failure |
 | `uv run --locked python tests/regression/run_lxc_lifecycle_regressions.py --full` | Full lifecycle regression set (~6 min) — fast path plus host-config idempotence, real role-composition wiring, fleet preflight, and contract seams. Run before handing off lifecycle work |
+| `uv run --locked ansible-lint` | Repo-wide lint gate (production profile) — must exit 0. Only `var-naming[no-role-prefix]` and `role-name[path]` are exempted; rationale lives as comments in `.ansible-lint` |
 | `./setup.sh` | Fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
 | `ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 

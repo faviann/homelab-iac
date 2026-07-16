@@ -3,7 +3,19 @@ extends: default
 ignore: |
   archive/
   .ansible/
+  collections/
+  stacks/auth/auth/appdata/authentik/blueprints/
 rules:
   line-length:
     max: 140
     level: warning
+  # The settings below are required by ansible-lint for a compatible
+  # custom yamllint config (enables `ansible-lint --fix`).
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: false
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

@@ -12,5 +12,6 @@
   tasks:
     - name: Include lxc_github_keys role with empty users list
       block:
-        - ansible.builtin.include_role:
+        - name: Include lxc_github_keys role
+          ansible.builtin.include_role:
             name: config/lxc_github_keys

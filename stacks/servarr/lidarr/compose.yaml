@@ -1,3 +1,4 @@
+---
 x-prereq-dirs:
   - ./appdata/lidarr
 x-managed-files:

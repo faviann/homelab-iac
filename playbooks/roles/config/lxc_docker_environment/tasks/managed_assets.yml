@@ -16,6 +16,8 @@
     label: "{{ item.item.name }}"
   when: item.stat.exists
   failed_when: false
+  # One-shot migration cleanup: only runs while a legacy compose file exists.
+  changed_when: true
 
 - name: Remove legacy managed stack directories
   ansible.builtin.file:
@@ -71,7 +73,7 @@
     state: directory
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0755'
+    mode: "0755"
   when: docker_agents_enabled | default(false)
 
 - name: Ensure Dockhand Hawser stack directory exists
@@ -80,7 +82,7 @@
     state: directory
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0755'
+    mode: "0755"
   when: lxc_docker_env_hawser_enabled | default(false)
 
 - name: Remove legacy root admin directory
@@ -102,7 +104,7 @@
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/.env"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0644'
+    mode: "0644"
   when:
     - docker_agents_enabled | default(false)
     - (traefik_kop_enabled | default(false)) or (lxc_docker_env_hawser_enabled | default(false))
@@ -124,7 +126,7 @@
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/compose.yml"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0644'
+    mode: "0644"
   when: docker_agents_enabled | default(false)
   register: _template_docker_agents_compose_result
 
@@ -134,7 +136,7 @@
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/compose.override.yaml"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0644'
+    mode: "0644"
   when:
     - docker_agents_enabled | default(false)
     - traefik_kop_enabled | default(false)
@@ -161,8 +163,8 @@
     dest: "{{ lxc_docker_environment_internal.docker_agents_stack_dir }}/"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0644'
-    directory_mode: '0755'
+    mode: "0644"
+    directory_mode: "0755"
   when:
     - docker_agents_enabled | default(false)
     - _docker_agents_static_assets.stat.exists | default(false)
@@ -189,7 +191,9 @@
     label: "{{ item.path }}"
   register: _managed_assets_docs_removal
 
-- name: Ensure shared Docker root ownership is correct
+# Ownership-only normalization of the existing bind-mount root; the mount's
+# mode is owned by host provisioning and must not be reset here.
+- name: Ensure shared Docker root ownership is correct # noqa: risky-file-permissions
   ansible.builtin.file:
     path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
@@ -203,7 +207,7 @@
     state: directory
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0755'
+    mode: "0755"
   register: _managed_assets_stacks_dir
 
 - name: Publish managed asset results for stack sync

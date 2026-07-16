@@ -41,7 +41,8 @@
       {%-   set compiled.value = compiled.value | combine(layer, recursive=True) -%}
       {%- endfor -%}
       {%- if compiled.value.disk is defined and compiled.value.disk | string is not search(':') -%}
-      {%-   set compiled.value = compiled.value | combine({'disk': proxmox_default_storage ~ ':' ~ (compiled.value.disk | string)}, recursive=True) -%}
+      {%-   set compiled.value = compiled.value
+              | combine({'disk': proxmox_default_storage ~ ':' ~ (compiled.value.disk | string)}, recursive=True) -%}
       {%- endif -%}
       {%- if lxc_hwaddr is defined
              and compiled.value.netif is defined
@@ -60,7 +61,8 @@
       {%- if proxmox_lxc_controller_pubkey_enabled | bool
              and compiled.value.pubkey is not defined
              and proxmox_lxc_controller_pubkey_path | default('') | length > 0 -%}
-      {%-   set controller_pubkey = lookup('ansible.builtin.file', proxmox_lxc_controller_pubkey_path, errors='ignore') | default('', true) -%}
+      {%-   set controller_pubkey = lookup('ansible.builtin.file',
+              proxmox_lxc_controller_pubkey_path, errors='ignore') | default('', true) -%}
       {%-   if controller_pubkey | length > 0 -%}
       {%-     set compiled.value = compiled.value | combine({'pubkey': controller_pubkey}, recursive=True) -%}
       {%-   endif -%}
@@ -124,7 +126,8 @@
             'vmid': identity.vmid,
             'hostname': identity.hostname,
             'host_directories': proxmox_lxc_host_directories | default([]),
-            'bind_mounts': proxmox_default_bind_mounts | default({}) | combine(proxmox_lxc_bind_mounts_overrides | default({}), recursive=True),
+            'bind_mounts': proxmox_default_bind_mounts | default({})
+              | combine(proxmox_lxc_bind_mounts_overrides | default({}), recursive=True),
             'idmap': proxmox_lxc_idmap_overrides | default(proxmox_default_idmap, true),
             'features': _proxmox_lxc_compiled_spec.features | default([]),
             'configure_nvidia_runtime': configure_nvidia_runtime | default(false) | bool,

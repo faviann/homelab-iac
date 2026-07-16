@@ -7,7 +7,7 @@
     state: directory
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0755'
+    mode: "0755"
 
 - name: Stop stale deployed top-level stack projects
   ansible.builtin.command:
@@ -25,11 +25,14 @@
     argv:
       - mv
       - "{{ item.path }}"
-      - "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}/{{ item.path | basename }}-{{ ansible_date_time.iso8601_basic_short }}"
+      - >-
+        {{ lxc_docker_environment_internal.stale_stack_quarantine_root
+        }}/{{ item.path | basename }}-{{ ansible_date_time.iso8601_basic_short }}
   loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
   loop_control:
     label: "{{ item.path | basename }}"
   register: _stack_sync_quarantine_results
+  changed_when: true
   when: (item.path | basename) in lxc_docker_env_stale_top_level_stack_dirs
 
 - name: Publish quarantine slice into stack reconciliation

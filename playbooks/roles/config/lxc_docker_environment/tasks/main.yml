@@ -60,6 +60,8 @@
   become: true
   become_user: "{{ lxc_docker_environment_internal.docker_user }}"
   failed_when: false
+  # One-shot migration cleanup: only runs while the legacy dir still exists.
+  changed_when: true
   when:
     - _dockge_dir_stat.stat.exists
     - _dockge_dir_stat.stat.isdir

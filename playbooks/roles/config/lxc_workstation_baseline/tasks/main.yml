@@ -20,7 +20,9 @@
     update_cache: true
   when: workstation_packages | length > 0
 
-- name: Generate en_US.UTF-8 locale
+# grep -q closes the pipe early, so pipefail would misfire on SIGPIPE; the
+# `||` fallback already handles a failed probe.
+- name: Generate en_US.UTF-8 locale # noqa: risky-shell-pipe
   ansible.builtin.shell:
     cmd: locale -a 2>/dev/null | grep -qi 'en_US.utf8' || locale-gen en_US.UTF-8
   register: workstation_locale_gen

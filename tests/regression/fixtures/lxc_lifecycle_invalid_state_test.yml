@@ -28,7 +28,8 @@
   tasks:
     - name: Invalid runtime state causes validation failure
       block:
-        - ansible.builtin.set_fact:
+        - name: Seed an invalid lifecycle runtime state
+          ansible.builtin.set_fact:
             proxmox_lifecycle_intent: full
             proxmox_lifecycle_policy_effective: "{{ _base_policy }}"
             proxmox_lxc_contract: "{{ _base_contract }}"
@@ -41,10 +42,12 @@
             proxmox_lifecycle_release_mismatch: false
             proxmox_lifecycle_desired_release: "12"
 
-        - ansible.builtin.include_tasks:
+        - name: Run lifecycle state validation
+          ansible.builtin.include_tasks:
             file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/validate_state.yml"
 
-        - ansible.builtin.fail:
+        - name: Fail if validation did not reject the invalid state
+          ansible.builtin.fail:
             msg: validate_state.yml should have failed but did not
       rescue:
         - name: Verify the failure mentions the invalid runtime state

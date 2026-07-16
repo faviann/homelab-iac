@@ -34,16 +34,19 @@
           x-prereq-dirs:
             - ./appdata/config
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/compose.yaml"
+        mode: "0644"
 
     - name: Create deployable static config file
       ansible.builtin.copy:
         content: "deploy-me"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/config.ini"
+        mode: "0644"
 
     - name: Create stack-local docs and metadata that must not deploy
       ansible.builtin.copy:
         content: "{{ item.content }}"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/{{ item.path }}"
+        mode: "0644"
       loop:
         - path: README.md
           content: |
@@ -145,7 +148,8 @@
           - "'myapp/metadata.yaml' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
           - "'myapp/metadata.yml' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
           - "'myapp/metadata.json' not in (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)"
-          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp/docs') not in (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]))"
+          - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp/docs')
+            not in (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]))"
         fail_msg: "Planner should exclude docs and metadata from deploy materialization"
 
     - name: Assert stack.yaml is parsed as role-scoped metadata

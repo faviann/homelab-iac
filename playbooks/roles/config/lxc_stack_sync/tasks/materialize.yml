@@ -19,7 +19,7 @@
     state: directory
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0755'
+    mode: "0755"
   loop: "{{ lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]) }}"
   loop_control:
     label: "{{ item | relpath(lxc_docker_environment_internal.shared_mount_source ~ '/stacks') }}"
@@ -32,7 +32,7 @@
     dest: "{{ item.dest_path }}"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0644'
+    mode: "0644"
   vars:
     stack_name: "{{ item.stack_name }}"
     stack_vars: "{{ (lxc_docker_env_stack_vars | default({}))[item.stack_name] | default({}) }}"
@@ -47,7 +47,7 @@
     dest: "{{ item.dest_path }}"
     owner: "{{ lxc_docker_environment_internal.shared_owner }}"
     group: "{{ lxc_docker_environment_internal.shared_group }}"
-    mode: '0644'
+    mode: "0644"
   loop: "{{ lxc_stack_sync_manifest_plan.files_to_copy | default([]) }}"
   loop_control:
     label: "{{ item.relative_path }}"

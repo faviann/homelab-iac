@@ -20,8 +20,9 @@
           exit 0
 
     - name: Include lxc_github_keys role with empty GitHub response
-      block:
-        - ansible.builtin.include_role:
-            name: config/lxc_github_keys
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include lxc_github_keys role
+          ansible.builtin.include_role:
+            name: config/lxc_github_keys

@@ -1,3 +1,4 @@
+---
 - name: Skip runtime-sensitive guest configuration in check mode when container is not running
   ansible.builtin.debug:
     msg: >-

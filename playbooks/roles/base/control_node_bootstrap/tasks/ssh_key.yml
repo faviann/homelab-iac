@@ -22,14 +22,14 @@
   ansible.builtin.debug:
     msg: |
       ⚠️  WARNING: Existing RSA key detected at {{ control_node_ssh_private_key_path }}
-      
+
       For better security, consider regenerating with ed25519:
       1. Remove the old key: rm {{ control_node_ssh_private_key_path }}*
       2. Re-run this playbook to generate a new ed25519 key
       3. Re-run proxmox_host_bootstrap to add the new key to Proxmox
-      
+
       Current key: {{ existing_key_type.stdout | default('unknown') }}
-  when: 
+  when:
     - ssh_key_stat.stat.exists
     - existing_key_type.stdout is defined
     - "'RSA' in existing_key_type.stdout"
@@ -45,13 +45,15 @@
   register: control_node_keypair
   when: not ssh_key_stat.stat.exists
 
-- name: Ensure control node SSH public key permissions
+# Must run in the same pass as key generation; bootstrap has no later
+# handler flush before the key is consumed.
+- name: Ensure control node SSH public key permissions # noqa: no-handler
   ansible.builtin.file:
     path: "{{ control_node_ssh_public_key_path }}"
     state: file
     mode: "0644"
   when: control_node_keypair is changed
-  
+
 - name: Show location of generated public key
   ansible.builtin.debug:
     msg: "Control node SSH public key available at {{ control_node_ssh_public_key_path }}"

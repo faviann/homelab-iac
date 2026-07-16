@@ -30,19 +30,24 @@
         - "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/myapp"
         - "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/not-desired"
 
-    - ansible.builtin.copy:
+    - name: Create desired myapp compose file
+      ansible.builtin.copy:
         content: "services:\n  app:\n    image: myapp:latest\n"
         dest: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/myapp/compose.yaml"
+        mode: "0644"
 
-    - ansible.builtin.copy:
+    - name: Create not-desired compose file
+      ansible.builtin.copy:
         content: "services:\n  other:\n    image: other:latest\n"
         dest: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/not-desired/compose.yaml"
+        mode: "0644"
 
     - name: Include start with mock docker on PATH
-      block:
-        - ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/start.yml"
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include stack sync start tasks
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/start.yml"
 
     - name: Slurp docker call log
       ansible.builtin.slurp:
@@ -64,7 +69,8 @@
     - name: Assert compose up called exactly once (not-desired skipped)
       ansible.builtin.set_fact:
         _compose_up_calls: "{{ (_docker_log.content | b64decode).split('\n') | select('search', 'compose up') | list | length }}"
-    - ansible.builtin.assert:
+    - name: Assert exactly one compose up call
+      ansible.builtin.assert:
         that:
           - _compose_up_calls | int == 1
         fail_msg: "Expected 1 compose up call (myapp only), got {{ _compose_up_calls }}. Log: {{ _docker_log.content | b64decode }}"

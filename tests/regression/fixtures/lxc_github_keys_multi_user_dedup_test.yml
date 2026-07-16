@@ -43,12 +43,12 @@
           esac
 
     - name: Include lxc_github_keys role with mock curl on PATH
-      block:
-        - ansible.builtin.include_role:
-            name: config/lxc_github_keys
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
-
+      block:
+        - name: Include lxc_github_keys role
+          ansible.builtin.include_role:
+            name: config/lxc_github_keys
     - name: Read authorized_keys
       ansible.builtin.slurp:
         src: "{{ lxc_github_keys_home }}/.ssh/authorized_keys"
@@ -57,5 +57,6 @@
     - name: Assert lxc_github_keys deduplicated keys across multiple users
       ansible.builtin.assert:
         that:
-          - (authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE faviann@laptop\nssh-ed25519 AAAATESTKEYTWO faviann@phone\n"
+          - (authorized_keys_content.content | b64decode) == "ssh-ed25519 AAAATESTKEYONE faviann@laptop\nssh-ed25519 AAAATESTKEYTWO
+            faviann@phone\n"
         fail_msg: "lxc_github_keys did not correctly deduplicate keys across multiple users"

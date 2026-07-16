@@ -34,22 +34,29 @@
       ansible.builtin.shell: |
         gpg --batch --yes --dearmor -o {{ lxc_nvidia_runtime_keyring_path }} < /tmp/nvidia-container-toolkit.gpgkey
       when: _nvidia_gpg_download is changed or not _nvidia_keyring_stat.stat.exists
+      # Guarded above: every actual run rewrites the keyring.
+      changed_when: true
 
     - name: Clean up temporary GPG key
       ansible.builtin.file:
         path: /tmp/nvidia-container-toolkit.gpgkey
         state: absent
 
-    - name: Add NVIDIA Container Toolkit APT repository
+    # The repo list is fetched and rewritten in one stream; get_url cannot
+    # apply the signed-by transform, so curl stays. noqa is scoped to that.
+    - name: Add NVIDIA Container Toolkit APT repository # noqa: command-instead-of-module
       ansible.builtin.shell: |
+        set -o pipefail
         curl -s -L {{ lxc_nvidia_runtime_repo_list_url }} \
           | sed 's#deb https://#deb [signed-by={{ lxc_nvidia_runtime_keyring_path }}] https://#g' \
           > /etc/apt/sources.list.d/nvidia-container-toolkit.list
       args:
         creates: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        executable: /bin/bash
       register: _nvidia_repo_added
 
-    - name: Update apt cache after adding NVIDIA repository
+    # Must run before the toolkit install below; a handler would fire too late.
+    - name: Update apt cache after adding NVIDIA repository # noqa: no-handler
       ansible.builtin.apt:
         update_cache: true
       when: _nvidia_repo_added is changed
@@ -71,7 +78,7 @@
     - name: Set no-cgroups for unprivileged LXC compatibility
       ansible.builtin.lineinfile:
         path: "{{ lxc_nvidia_runtime_config_toml }}"
-        regexp: '^#?\s*no-cgroups\s*='
+        regexp: "^#?\\s*no-cgroups\\s*="
         line: "no-cgroups = {{ lxc_nvidia_runtime_no_cgroups | lower }}"
       notify: Restart Docker for NVIDIA runtime
 

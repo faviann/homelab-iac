@@ -18,4 +18,6 @@
 
 - name: Display reboot status
   ansible.builtin.debug:
-    msg: "Container {{ (_reboot_required_stat.stat.exists and lxc_base_system_reboot_enabled) | ternary('rebooted', 'does not require reboot') }}"
+    msg: >-
+      Container {{ (_reboot_required_stat.stat.exists and lxc_base_system_reboot_enabled)
+      | ternary('rebooted', 'does not require reboot') }}

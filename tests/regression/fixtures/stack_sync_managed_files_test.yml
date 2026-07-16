@@ -34,6 +34,7 @@
             - path: ./data/certs/secret.json
               mode: "0600"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/testapp/compose.yaml"
+        mode: "0644"
 
     - name: Run actual find ops to populate discover registers
       ansible.builtin.find:
@@ -46,7 +47,8 @@
       delegate_to: localhost
       become: false
 
-    - ansible.builtin.find:
+    - name: Find static stack files
+      ansible.builtin.find:
         paths: "{{ lxc_docker_environment_internal.stacks_source }}"
         patterns: "*"
         excludes: "*.j2,.gitkeep"
@@ -57,7 +59,8 @@
       delegate_to: localhost
       become: false
 
-    - ansible.builtin.find:
+    - name: Find stack directories
+      ansible.builtin.find:
         paths: "{{ lxc_docker_environment_internal.stacks_source }}"
         recurse: true
         file_type: directory
@@ -72,7 +75,8 @@
       ansible.builtin.stat:
         path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs/secret.json"
       register: _managed_file_stat
-    - ansible.builtin.assert:
+    - name: Assert managed file exists
+      ansible.builtin.assert:
         that:
           - _managed_file_stat.stat.exists
         fail_msg: "Managed file was not created at resolved target path"
@@ -87,6 +91,7 @@
       ansible.builtin.copy:
         content: "existing-content"
         dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs/secret.json"
+        mode: "0600"
 
     - name: Re-run materialize to verify existing files are not overwritten
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
@@ -95,7 +100,8 @@
       ansible.builtin.slurp:
         src: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/testapp/data/certs/secret.json"
       register: _preserved_content
-    - ansible.builtin.assert:
+    - name: Assert existing managed file content was preserved
+      ansible.builtin.assert:
         that:
           - "'existing-content' in (_preserved_content.content | b64decode)"
         fail_msg: "Managed file content was overwritten — force:false not honoured"
@@ -105,7 +111,8 @@
         that:
           - lxc_stack_sync_manifest_plan.managed_files | length == 1
           - lxc_stack_sync_manifest_plan.managed_file_parent_dirs | length == 1
-          - lxc_stack_sync_manifest_plan.managed_files[0].path == (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/testapp/data/certs/secret.json')
+          - lxc_stack_sync_manifest_plan.managed_files[0].path == (lxc_docker_environment_internal.shared_mount_source ~
+            '/stacks/testapp/data/certs/secret.json')
           - _stack_sync_managed_file_parent_dir_results.results | length > 0
           - _stack_sync_managed_file_create_results.results | length > 0
         fail_msg: "Planner output did not register the deduped managed file plan"

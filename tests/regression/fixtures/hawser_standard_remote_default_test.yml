@@ -40,7 +40,7 @@
       ansible.builtin.file:
         path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: Render managed assets for a remote Docker host
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/managed_assets.yml"
@@ -109,7 +109,7 @@
       ansible.builtin.file:
         path: "{{ lxc_docker_environment_internal.shared_mount_source }}"
         state: directory
-        mode: '0755'
+        mode: "0755"
 
     - name: Render managed assets for portal
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_docker_environment/tasks/managed_assets.yml"

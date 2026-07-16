@@ -1,3 +1,4 @@
+---
 services:
   beets-flask:
     image: pspitzner/beets-flask:stable

@@ -241,7 +241,7 @@ uv run --locked ansible-playbook site.yml --tags validation
 |-- pyproject.toml                     # Python dependency declarations for uv
 |-- uv.lock                            # Locked Python dependency resolution
 |-- site.yml                           # Top-level orchestration playbook
-`-- .ansible-lint
+`-- .ansible-lint                      # Lint gate config: production profile; exemption rationale in comments
 ```
 
 ## Documentation

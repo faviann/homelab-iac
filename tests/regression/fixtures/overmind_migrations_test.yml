@@ -41,6 +41,9 @@
             printf 'STDIN:%s\n' "$stdin" >> "$log"
           fi
 
+          memctl_image="{{ overmind_image_repository }}:{{ overmind_image_tag }}"
+          memctl_cmd="run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING --entrypoint memctl $memctl_image"
+
           case "$*" in
             *"pg_isready"*)
               exit 0
@@ -84,7 +87,7 @@
               fi
               exit 1
               ;;
-            *"run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING --entrypoint memctl {{ overmind_image_repository }}:{{ overmind_image_tag }} migrate")
+            *"$memctl_cmd migrate")
               if [ ! -f "$state/role-created" ]; then
                 exit 1
               fi
@@ -110,7 +113,7 @@
               esac
               exit 1
               ;;
-            *"run --rm --network postgres_default -e MEMSRV_ADMIN_CONNECTION_STRING --entrypoint memctl {{ overmind_image_repository }}:{{ overmind_image_tag }} verify-schema")
+            *"$memctl_cmd verify-schema")
               if [ ! -f "$state/verify-db-migrated" ]; then
                 exit 1
               fi

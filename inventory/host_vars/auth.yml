@@ -36,8 +36,8 @@ lxc_docker_env_stack_vars:
 
 lxc_docker_env_path_ownership_overrides:
   - path: "/shared/{{ inventory_hostname }}/stacks/auth/appdata/database"
-    owner: '70'
-    group: '70'
+    owner: "70"
+    group: "70"
     recurse: true
 
 # Container definition for proxmox_lxc_provision role

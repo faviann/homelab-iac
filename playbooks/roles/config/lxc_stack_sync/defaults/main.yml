@@ -1,7 +1,6 @@
 ---
 lxc_stack_sync_managed_assets:
   changed_results: []
-
 # Repo-only stack documentation and metadata may live beside compose files, but
 # must never be copied to /conf/docker/stacks.
-lxc_stack_sync_deploy_exclude_regex: '^[^/]+/(README(\..*)?|docs($|/.*)|stack\.ya?ml|metadata\.(ya?ml|json))$'
+lxc_stack_sync_deploy_exclude_regex: "^[^/]+/(README(\\..*)?|docs($|/.*)|stack\\.ya?ml|metadata\\.(ya?ml|json))$"

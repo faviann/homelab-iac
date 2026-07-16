@@ -11,7 +11,6 @@ ansible_user: root
 ansible_connection: ssh
 
 proxmox_lxc_group_defaults: {}
-
 lxc_ssh_user: faviann
 lxc_ssh_uid: 1000
 lxc_ssh_gid: 1000

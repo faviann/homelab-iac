@@ -51,7 +51,7 @@
       - key: net.ipv4.ip_forward
         value: 1
     lxc_disable_apparmor: true
-    lxc_hwaddr: 'AA:BB:CC:DD:EE:FF'
+    lxc_hwaddr: "AA:BB:CC:DD:EE:FF"
     proxmox_lxc_controller_pubkey_enabled: false
     proxmox_lxc_disable_root_password: true
   tasks:
