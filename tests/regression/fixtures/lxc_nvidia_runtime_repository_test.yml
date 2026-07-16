@@ -1,0 +1,180 @@
+---
+- name: Test retryable NVIDIA repository publication
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    lxc_nvidia_runtime_enabled: true
+    lxc_nvidia_runtime_keyring_path: /fixture/keyrings/nvidia.gpg
+  tasks:
+    - name: Prepare isolated repository fixture
+      tags: lxc_nvidia_runtime_repository
+      block:
+        - name: Create isolated APT cache directories
+          ansible.builtin.file:
+            path: "{{ temp_root }}/{{ item }}"
+            state: directory
+            mode: "0755"
+          loop:
+            - apt-lists/partial
+            - apt-archives/partial
+
+        - name: Configure APT to use only isolated empty state
+          ansible.builtin.copy:
+            dest: "{{ temp_root }}/apt.conf"
+            mode: "0644"
+            content: |
+              Dir::Etc::sourcelist "/dev/null";
+              Dir::Etc::sourceparts "/dev/null";
+              Dir::State::lists "{{ temp_root }}/apt-lists";
+              Dir::Cache::archives "{{ temp_root }}/apt-archives";
+              Acquire::Languages "none";
+
+        - name: Place failing curl on PATH
+          ansible.builtin.copy:
+            dest: "{{ temp_root }}/curl"
+            mode: "0755"
+            content: |
+              #!/bin/sh
+              printf '%s\n' 'deb https://partial.invalid/stable /'
+              exit 22
+
+    - name: Exercise failed publication
+      environment:
+        APT_CONFIG: "{{ temp_root }}/apt.conf"
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include lxc_nvidia_runtime role for failed publication
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.include_role:
+            name: config/lxc_nvidia_runtime
+
+        - name: Reject an unexpectedly successful failed publication
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.fail:
+            msg: The mocked failed repository pipeline succeeded unexpectedly
+      rescue:
+        - name: Check repository artifact after failed publication
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.stat:
+            path: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+          register: failed_repo_artifact
+
+        - name: Assert failed publication left no final artifact
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.assert:
+            that: not failed_repo_artifact.stat.exists
+            fail_msg: A failed NVIDIA repository publication left a final artifact
+
+        - name: Place successful curl on PATH
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.copy:
+            dest: "{{ temp_root }}/curl"
+            mode: "0755"
+            content: |
+              #!/bin/sh
+              printf '%s\n' 'deb https://nvidia.example/stable /'
+
+        - name: Place failing sed on PATH
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.copy:
+            dest: "{{ temp_root }}/sed"
+            mode: "0755"
+            content: |
+              #!/bin/sh
+              printf '%s\n' 'deb https://partial-transform.invalid/stable /'
+              exit 23
+
+        - name: Exercise failed transform
+          environment:
+            APT_CONFIG: "{{ temp_root }}/apt.conf"
+            PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+          block:
+            - name: Include lxc_nvidia_runtime role for failed transform
+              tags: lxc_nvidia_runtime_repository
+              ansible.builtin.include_role:
+                name: config/lxc_nvidia_runtime
+
+            - name: Reject an unexpectedly successful failed transform
+              tags: lxc_nvidia_runtime_repository
+              ansible.builtin.fail:
+                msg: The mocked failed repository transform succeeded unexpectedly
+          rescue:
+            - name: Check repository artifact after failed transform
+              tags: lxc_nvidia_runtime_repository
+              ansible.builtin.stat:
+                path: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+              register: failed_transform_artifact
+
+            - name: Assert failed transform left no final artifact
+              tags: lxc_nvidia_runtime_repository
+              ansible.builtin.assert:
+                that: not failed_transform_artifact.stat.exists
+                fail_msg: A failed NVIDIA repository transform left a final artifact
+
+        - name: Remove failing sed from PATH
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.file:
+            path: "{{ temp_root }}/sed"
+            state: absent
+
+        - name: Retry without cleanup
+          environment:
+            APT_CONFIG: "{{ temp_root }}/apt.conf"
+            PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+          block:
+            - name: Retry lxc_nvidia_runtime role
+              tags: lxc_nvidia_runtime_repository
+              ansible.builtin.include_role:
+                name: config/lxc_nvidia_runtime
+
+        - name: Record retry task result
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.set_fact:
+            retry_published_repository: "{{ _nvidia_repo_added is changed }}"
+
+        - name: Read published NVIDIA repository
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.slurp:
+            src: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+          register: published_repo
+
+        - name: Record published repository identity
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.stat:
+            path: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+          register: published_repo_stat
+
+        - name: Assert retry published the complete rewritten repository
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.assert:
+            that:
+              - retry_published_repository
+              - >-
+                (published_repo.content | b64decode)
+                == 'deb [signed-by=/fixture/keyrings/nvidia.gpg] https://nvidia.example/stable /\n'
+
+        - name: Rerun after successful publication
+          environment:
+            APT_CONFIG: "{{ temp_root }}/apt.conf"
+            PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+          block:
+            - name: Rerun lxc_nvidia_runtime role
+              tags: lxc_nvidia_runtime_repository
+              ansible.builtin.include_role:
+                name: config/lxc_nvidia_runtime
+
+        - name: Assert valid repository is idempotent
+          tags: lxc_nvidia_runtime_repository
+          block:
+            - name: Read repository identity after idempotent rerun
+              ansible.builtin.stat:
+                path: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+              register: rerun_repo_stat
+
+            - name: Assert valid repository was not rewritten
+              ansible.builtin.assert:
+                that:
+                  - _nvidia_repo_added is not changed
+                  - rerun_repo_stat.stat.inode == published_repo_stat.stat.inode
+                fail_msg: A valid NVIDIA repository was unnecessarily rewritten
