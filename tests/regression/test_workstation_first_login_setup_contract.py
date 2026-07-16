@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -75,6 +76,7 @@ exit 0
         "rg",
         "ssh",
         "ssh-keygen",
+        "setsid",
         "update-agent-tools",
         "uv",
     ):
@@ -113,6 +115,16 @@ def _run_setup(temp_root: Path, env: dict[str, str]) -> subprocess.CompletedProc
         env=env,
         check=False,
     )
+
+
+def _wait_for_command(command_log: Path, expected: str) -> str:
+    commands = ""
+    for _ in range(50):
+        commands = command_log.read_text(encoding="utf-8")
+        if expected in commands:
+            return commands
+        time.sleep(0.02)
+    return commands
 
 
 def test_workstation_first_login_setup_contract() -> None:
@@ -192,8 +204,21 @@ def test_workstation_first_login_setup_contract() -> None:
         assert "environment repaired and ready" not in escalated.stdout
         assert "bw unlock --raw" in (root / "commands.log").read_text(encoding="utf-8")
 
-        (root / "bin" / "workstation-autosync").unlink()
-        profile = subprocess.run(
+        (root / "bw-state").write_text("unauthenticated", encoding="utf-8")
+        (root / "commands.log").write_text("", encoding="utf-8")
+        unauthenticated = _run_setup(root, env)
+        assert unauthenticated.returncode != 0
+        assert "Bitwarden is unauthenticated" in unauthenticated.stderr
+        assert "Bitwarden is locked" in unauthenticated.stderr
+        assert not workstation_update.exists()
+        assert "environment healthy" not in unauthenticated.stdout
+        assert "environment repaired and ready" not in unauthenticated.stdout
+        unauthenticated_commands = (root / "commands.log").read_text(encoding="utf-8")
+        assert "bw login" in unauthenticated_commands
+        assert "bw unlock --raw" in unauthenticated_commands
+
+        (root / "commands.log").write_text("", encoding="utf-8")
+        missing_checker_profile = subprocess.run(
             ["bash", "-c", f'. "{root / "etc/profile.d/workstation-setup.sh"}"'],
             text=True,
             stdout=subprocess.PIPE,
@@ -201,6 +226,24 @@ def test_workstation_first_login_setup_contract() -> None:
             env=env | {"SSH_CONNECTION": "test"},
             check=False,
         )
-        assert profile.returncode == 0
-        assert "workstation-update is missing or not executable" in profile.stderr
-        assert "Run workstation-setup to repair the workstation" in profile.stderr
+        assert missing_checker_profile.returncode == 0
+        assert "workstation-update is missing or not executable" in missing_checker_profile.stderr
+        assert "Run workstation-setup to repair the workstation" in missing_checker_profile.stderr
+        expected_autosync_launch = f"setsid {root / 'bin' / 'workstation-autosync'}"
+        missing_checker_commands = _wait_for_command(root / "commands.log", expected_autosync_launch)
+        assert expected_autosync_launch in missing_checker_commands
+
+        _write_executable(workstation_update, "#!/bin/sh\nexit 0\n")
+        (root / "commands.log").write_text("", encoding="utf-8")
+        checker_present_profile = subprocess.run(
+            ["bash", "-c", f'. "{root / "etc/profile.d/workstation-setup.sh"}"'],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env | {"SSH_CONNECTION": "test"},
+            check=False,
+        )
+        assert checker_present_profile.returncode == 0
+        assert "workstation-update is missing or not executable" not in checker_present_profile.stderr
+        checker_present_commands = _wait_for_command(root / "commands.log", expected_autosync_launch)
+        assert expected_autosync_launch in checker_present_commands
