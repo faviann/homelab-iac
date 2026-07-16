@@ -11,7 +11,7 @@
 - name: Publish fail-fast suppression after an earlier execution error
   ansible.builtin.set_fact:
     lxc_lifecycle_result:
-      intent: "{{ proxmox_lifecycle_intent }}"
+      intent: "{{ lxc_lifecycle_result.intent }}"
       plan: "{{ proxmox_lxc_lifecycle_plan }}"
       outcome:
         status: not_executed
@@ -20,8 +20,8 @@
           {{ hostvars.localhost.proxmox_lifecycle_execution_failure.host }}.
         rebuilt: false
       observations:
-        before: "{{ proxmox_lxc_lifecycle_observation_before }}"
-        after: "{{ proxmox_lxc_lifecycle_observation_before }}"
+        before: "{{ lxc_lifecycle_result.observations.before }}"
+        after: "{{ lxc_lifecycle_result.observations.before }}"
   when:
     - not (proxmox_lifecycle_barrier_blocked | bool)
     - proxmox_lifecycle_intent != 'validate_only'
@@ -35,7 +35,9 @@
   block:
     - name: Execute host-side actions
       ansible.builtin.include_tasks: provision.yml
-      when: proxmox_lifecycle_has_host_work | bool
+      when: >-
+        proxmox_lxc_lifecycle_plan.container_transition != 'none'
+        or (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
 
     - name: Re-observe current state after provisioning and host reconciliation
       ansible.builtin.include_tasks: reobserve.yml
@@ -62,18 +64,18 @@
     - name: Publish the failed execution result
       ansible.builtin.set_fact:
         lxc_lifecycle_result:
-          intent: "{{ proxmox_lifecycle_intent }}"
+          intent: "{{ lxc_lifecycle_result.intent }}"
           plan: "{{ proxmox_lxc_lifecycle_plan }}"
           outcome:
             status: execution_failed
             reason: "{{ proxmox_lifecycle_execution_problem }}"
             rebuilt: "{{ proxmox_lifecycle_rebuilt | bool }}"
           observations:
-            before: "{{ proxmox_lxc_lifecycle_observation_before }}"
+            before: "{{ lxc_lifecycle_result.observations.before }}"
             after: >-
               {{
                 proxmox_lxc_lifecycle_observation_after
-                | default(proxmox_lxc_lifecycle_observation_before)
+                | default(lxc_lifecycle_result.observations.before)
               }}
 
     - name: Stop later targets from performing lifecycle actions

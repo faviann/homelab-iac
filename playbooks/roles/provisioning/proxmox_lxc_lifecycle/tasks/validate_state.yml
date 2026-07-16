@@ -1,22 +1,41 @@
 ---
-- name: Validate lifecycle inspection state is complete
-  ansible.builtin.assert:
-    that:
-      - proxmox_lifecycle_runtime_state is defined
-      - proxmox_lifecycle_runtime_state in ['running', 'stopped', 'absent', 'unknown', 'not_applicable']
-      - proxmox_lifecycle_observation is defined
-      - proxmox_lifecycle_observation is mapping
-      - proxmox_lifecycle_observation.status is defined
-      - proxmox_lifecycle_release_mismatch is defined
-      - proxmox_lifecycle_release_mismatch | type_debug == 'bool'
-      - proxmox_lifecycle_release_probe_state is defined
-      - proxmox_lifecycle_release_probe_state in ['probed', 'probe_failed', 'absent', 'skipped_stopped', 'unavailable', 'not_applicable']
-    fail_msg: >-
+- name: Reject incomplete lifecycle state or missing required release evidence
+  ansible.builtin.fail:
+    msg: >-
+      {%- if _proxmox_lifecycle_release_evidence_missing | bool -%}
+      Guest release observation is required when release-based rebuild policy
+      is enabled for a desired-present container; observed release state is
+      {{ proxmox_lifecycle_release_probe_state | default('UNDEFINED') }}.
+      {%- else -%}
       Lifecycle inspection produced invalid state for {{ inventory_hostname }}.
       runtime_state={{ proxmox_lifecycle_runtime_state | default('UNDEFINED') }}
-      release_mismatch={{ proxmox_lifecycle_release_mismatch | default('UNDEFINED') }}
       release_probe_state={{ proxmox_lifecycle_release_probe_state | default('UNDEFINED') }}
       observation={{ proxmox_lifecycle_observation | default('UNDEFINED') | to_json }}
+      {%- endif -%}
+  vars:
+    _proxmox_lifecycle_inspection_invalid: >-
+      {{
+        proxmox_lifecycle_runtime_state is not defined
+        or proxmox_lifecycle_runtime_state not in ['running', 'stopped', 'absent', 'unknown', 'not_applicable']
+        or proxmox_lifecycle_observation is not defined
+        or proxmox_lifecycle_observation is not mapping
+        or proxmox_lifecycle_observation.status is not defined
+        or proxmox_lifecycle_release_probe_state is not defined
+        or proxmox_lifecycle_release_probe_state not in ['probed', 'probe_failed', 'absent', 'skipped_stopped', 'unavailable', 'not_applicable']
+      }}
+    _proxmox_lifecycle_release_evidence_missing: >-
+      {{
+        proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
+        and proxmox_lxc_contract.api_spec.state | default('present') == 'present'
+        and proxmox_lifecycle_runtime_state != 'absent'
+        and (
+          proxmox_lifecycle_release_probe_state != 'probed'
+          or proxmox_lifecycle_actual_release | length == 0
+        )
+      }}
+  when: >-
+    (_proxmox_lifecycle_inspection_invalid | bool)
+    or (_proxmox_lifecycle_release_evidence_missing | bool)
 
 - name: Warn when desired release is unset and rebuild policy is enabled
   ansible.builtin.debug:
@@ -27,21 +46,3 @@
   when:
     - proxmox_lifecycle_desired_release | length == 0
     - proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
-
-- name: Require guest release evidence for release-based rebuild planning
-  ansible.builtin.assert:
-    that:
-      - >-
-        not (
-          proxmox_lifecycle_policy_effective.rebuild_on_release_mismatch | bool
-          and proxmox_lxc_contract.api_spec.state | default('present') == 'present'
-          and proxmox_lifecycle_runtime_state != 'absent'
-        )
-        or (
-          proxmox_lifecycle_release_probe_state == 'probed'
-          and proxmox_lifecycle_actual_release | length > 0
-        )
-    fail_msg: >-
-      Guest release observation is required when release-based rebuild policy
-      is enabled for a desired-present container; observed release state is
-      {{ proxmox_lifecycle_release_probe_state }}.

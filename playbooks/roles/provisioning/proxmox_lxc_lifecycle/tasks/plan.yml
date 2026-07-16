@@ -1,193 +1,25 @@
 ---
-# Compile and plan the complete targeted LXC set without executing lifecycle
-# actions. Results are published here when the planning barrier blocks the run.
+# Compatibility composition for direct role callers. The production facade
+# invokes these internal modules in separate plays so target-local compilation
+# and semantic planning can use independent scheduling without weakening the
+# targeted-set planning barrier.
 
-- name: Skip if this host is the Ansible controller
-  ansible.builtin.meta: end_host
-  when:
-    - proxmox_skip_self | default(true) | bool
-    - inventory_hostname == lookup('pipe', 'hostname')
+- name: Initialize lifecycle planning
+  ansible.builtin.include_tasks: initialize_planning.yml
 
-- name: Record the command-targeted LXC set
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_target_hosts: "{{ ansible_play_hosts }}"
-    proxmox_lifecycle_execution_failure: {}
-  delegate_to: localhost
-  delegate_facts: true
+- name: Compile the target-local LXC contract
+  ansible.builtin.include_tasks: compile_target.yml
+
+- name: Coordinate targeted-set fleet preflight
+  ansible.builtin.include_tasks: coordinate_preflight.yml
   run_once: true
 
-- name: Reset target-local lifecycle planning state
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_planning_problem: ""
-    proxmox_lifecycle_rebuilt: false
+- name: Build the target-local semantic lifecycle plan
+  ansible.builtin.include_tasks: plan_target.yml
 
-- name: Compile the target's desired LXC contract
-  block:
-    - name: Validate lifecycle intent
-      ansible.builtin.assert:
-        that:
-          - proxmox_lifecycle_intent in ['validate_only', 'provision_only', 'configure_only', 'full']
-        fail_msg: >-
-          Invalid proxmox_lifecycle_intent '{{ proxmox_lifecycle_intent }}'.
-          Expected one of: validate_only, provision_only, configure_only, full.
-
-    - name: Merge lifecycle policy defaults
-      ansible.builtin.set_fact:
-        proxmox_lifecycle_policy_effective: >-
-          {{
-            proxmox_lifecycle_policy_default
-            | combine(proxmox_lifecycle_policy | default({}), recursive=True)
-          }}
-
-    - name: Compile desired LXC specification
-      ansible.builtin.include_tasks: compile.yml
-  rescue:
-    - name: Record the target's contract-compilation failure
-      ansible.builtin.set_fact:
-        proxmox_lifecycle_planning_problem: >-
-          {{
-            (ansible_failed_result | default({})).msg
-            | default('LXC contract compilation failed for ' ~ inventory_hostname)
-          }}
-
-- name: Collect targets with successfully compiled LXC contracts
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_compiled_target_hosts: >-
-      {%- set compiled = [] -%}
-      {%- for host in proxmox_lifecycle_target_hosts -%}
-      {%-   if hostvars[host].proxmox_lifecycle_planning_problem | default('') | length == 0
-              and hostvars[host].proxmox_lxc_contract is defined -%}
-      {%-     set _ = compiled.append(host) -%}
-      {%-   endif -%}
-      {%- endfor -%}
-      {{ compiled }}
-  vars:
-    proxmox_lifecycle_target_hosts: "{{ hostvars.localhost.proxmox_lifecycle_target_hosts }}"
-  delegate_to: localhost
-  delegate_facts: true
+- name: Coordinate the all-target lifecycle planning barrier
+  ansible.builtin.include_tasks: coordinate_barrier.yml
   run_once: true
 
-- name: Run fleet preflight after every target contract was compiled
-  ansible.builtin.include_role:
-    name: provisioning/proxmox_lxc_fleet_preflight
-  vars:
-    proxmox_fleet_target_hosts: "{{ hostvars.localhost.proxmox_lifecycle_compiled_target_hosts }}"
-  run_once: true
-  when: proxmox_fleet_preflight_enabled | bool
-
-- name: Observe and plan this target without lifecycle actions
-  when: proxmox_lifecycle_planning_problem | length == 0
-  block:
-    - name: Inspect current lifecycle state
-      ansible.builtin.include_tasks: inspect.yml
-
-    - name: Validate inspection state is complete and well-typed
-      ansible.builtin.include_tasks: validate_state.yml
-
-    - name: Decide lifecycle actions
-      ansible.builtin.include_tasks: decide.yml
-  rescue:
-    - name: Record the target's semantic planning failure
-      ansible.builtin.set_fact:
-        proxmox_lifecycle_planning_problem: >-
-          {{
-            (ansible_failed_result | default({})).msg
-            | default('LXC lifecycle planning failed for ' ~ inventory_hostname)
-          }}
-
-- name: Record fleet preflight after collecting independent target problems
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_planning_problem: >-
-      Fleet preflight failed: {{ proxmox_fleet_preflight_problems | join(' ') }}
-  when:
-    - proxmox_lifecycle_collect_all_planning_problems | default(false) | bool
-    - proxmox_lifecycle_planning_problem | length == 0
-    - proxmox_fleet_preflight_problems | default([]) | length > 0
-    - >-
-      proxmox_lifecycle_observation.type | default('')
-      == 'preflight_failed'
-
-- name: Collect planning failures across the targeted LXC set
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_failed_target_hosts: >-
-      {%- set failed = [] -%}
-      {%- for host in proxmox_lifecycle_target_hosts -%}
-      {%-   if hostvars[host].proxmox_lifecycle_planning_problem | default('') | length > 0 -%}
-      {%-     set _ = failed.append(host) -%}
-      {%-   endif -%}
-      {%- endfor -%}
-      {{ failed }}
-  vars:
-    proxmox_lifecycle_target_hosts: "{{ hostvars.localhost.proxmox_lifecycle_target_hosts }}"
-  delegate_to: localhost
-  delegate_facts: true
-  run_once: true
-
-- name: Record whether the all-target planning barrier is closed
-  ansible.builtin.set_fact:
-    proxmox_lifecycle_barrier_blocked: >-
-      {{ hostvars.localhost.proxmox_lifecycle_failed_target_hosts | length > 0 }}
-
-- name: Publish a result for a target that caused planning to fail
-  ansible.builtin.set_fact:
-    lxc_lifecycle_result:
-      intent: "{{ proxmox_lifecycle_intent }}"
-      plan: "{{ proxmox_lxc_lifecycle_plan | default({}) }}"
-      outcome:
-        status: planning_failed
-        reason: "{{ proxmox_lifecycle_planning_problem }}"
-        rebuilt: false
-      observations:
-        before: "{{ proxmox_lxc_lifecycle_observation_before | default({}) }}"
-        after: "{{ proxmox_lxc_lifecycle_observation_before | default({}) }}"
-  when: proxmox_lifecycle_planning_problem | length > 0
-
-- name: Publish a blocked result for an otherwise valid plan
-  ansible.builtin.set_fact:
-    lxc_lifecycle_result:
-      intent: "{{ proxmox_lifecycle_intent }}"
-      plan: "{{ proxmox_lxc_lifecycle_plan }}"
-      outcome:
-        status: blocked
-        reason: >-
-          Lifecycle planning barrier blocked execution because planning failed
-          for {{ hostvars.localhost.proxmox_lifecycle_failed_target_hosts | join(', ') }}.
-        rebuilt: false
-      observations:
-        before: "{{ proxmox_lxc_lifecycle_observation_before }}"
-        after: "{{ proxmox_lxc_lifecycle_observation_before }}"
-  when:
-    - proxmox_lifecycle_planning_problem | length == 0
-    - proxmox_lifecycle_barrier_blocked | bool
-
-- name: Publish a successful validate-only result
-  ansible.builtin.set_fact:
-    lxc_lifecycle_result:
-      intent: "{{ proxmox_lifecycle_intent }}"
-      plan: "{{ proxmox_lxc_lifecycle_plan }}"
-      outcome:
-        status: validated
-        reason: "{{ proxmox_lifecycle_reason }}"
-        rebuilt: false
-      observations:
-        before: "{{ proxmox_lxc_lifecycle_observation_before }}"
-        after: "{{ proxmox_lxc_lifecycle_observation_before }}"
-  when:
-    - not (proxmox_lifecycle_barrier_blocked | bool)
-    - proxmox_lifecycle_intent == 'validate_only'
-
-- name: Publish the plan awaiting lifecycle execution
-  ansible.builtin.set_fact:
-    lxc_lifecycle_result:
-      intent: "{{ proxmox_lifecycle_intent }}"
-      plan: "{{ proxmox_lxc_lifecycle_plan }}"
-      outcome:
-        status: planned
-        reason: "{{ proxmox_lifecycle_reason }}"
-        rebuilt: false
-      observations:
-        before: "{{ proxmox_lxc_lifecycle_observation_before }}"
-        after: "{{ proxmox_lxc_lifecycle_observation_before }}"
-  when:
-    - not (proxmox_lifecycle_barrier_blocked | bool)
-    - proxmox_lifecycle_intent != 'validate_only'
+- name: Publish target planning results
+  ansible.builtin.include_tasks: publish_planning_result.yml

@@ -41,10 +41,88 @@
             lifecycle_default_entry_refusal: "{{ ansible_failed_result.msg }}"
 
     - name: Run the planning half of the lifecycle facade
-      ansible.builtin.include_role:
+      ansible.builtin.import_role:
         name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: plan
-      when: lifecycle_test_case != 'unsafe_default'
+        tasks_from: initialize_planning
+      when: lifecycle_test_case not in ['unsafe_default', 'self_include_then_skip']
+
+    - name: Intentionally include the controller in the first lifecycle invocation
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: initialize_planning
+      vars:
+        proxmox_skip_self: false
+      when: lifecycle_test_case == 'self_include_then_skip'
+
+- name: Compile every targeted LXC contract independently before Fleet preflight
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  tasks:
+    - name: Compile the target-local LXC contract
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: compile_target
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+
+- name: Coordinate Fleet preflight for successfully compiled target identities
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Run Fleet preflight after every compilation attempt completed
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_preflight
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+      run_once: true
+
+- name: Build every targeted semantic lifecycle plan independently
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  tasks:
+    - name: Build the target-local semantic lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan_target
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+
+- name: Coordinate the all-target lifecycle planning barrier
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Collect every target-local planning outcome
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_barrier
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
+      run_once: true
+
+- name: Publish the semantic result for every targeted LXC
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  strategy: ansible.builtin.free
+  tasks:
+    - name: Publish the target's stable semantic planning result
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: publish_planning_result
+      when:
+        - lifecycle_test_case != 'unsafe_default'
+        - proxmox_lifecycle_selected | default(false) | bool
 
 - name: Traverse the normal execution half after the barrier
   hosts: lxcs
@@ -56,7 +134,15 @@
       ansible.builtin.include_role:
         name: provisioning/proxmox_lxc_lifecycle
         tasks_from: execute
-      when: lifecycle_test_case != 'unsafe_default'
+      when: lifecycle_test_case not in ['unsafe_default', 'self_include_then_skip']
+
+    - name: Execute the intentionally included controller lifecycle
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: execute
+      vars:
+        proxmox_skip_self: false
+      when: lifecycle_test_case == 'self_include_then_skip'
 
 - name: Assert lifecycle results from a limit-selected target
   hosts: lxcs
@@ -174,7 +260,7 @@
             hostvars.localhost.proxmox_lifecycle_target_hosts
             | default([])
             | length == 0
-          - hostvars.workstation.lxc_lifecycle_result is not defined
+          - hostvars.workstation.lxc_lifecycle_result == {}
           - >-
             lifecycle_barrier_event_records.results
             | selectattr('item', 'equalto', 'workstation')
@@ -233,3 +319,61 @@
         lifecycle_test_case
         in ['barrier', 'execution_failure', 'compile_failure']
       run_once: true
+
+- name: Start a later invocation that self-skips the previously included controller
+  hosts: workstation
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Prove the first invocation published controller semantic state
+      ansible.builtin.assert:
+        that:
+          - hostvars.localhost.proxmox_lifecycle_target_hosts == ['workstation']
+          - proxmox_lxc_lifecycle_plan | length > 0
+          - proxmox_lxc_lifecycle_observation_before | length > 0
+          - lxc_lifecycle_result.outcome.status == 'configured'
+      when: lifecycle_test_case == 'self_include_then_skip'
+
+    - name: Seed prior-run execution summary state
+      ansible.builtin.set_fact:
+        proxmox_lifecycle_rebuilt: true
+        proxmox_lxc_rebuilt: true
+        lxc_lifecycle_skip_host: true
+      when: lifecycle_test_case == 'self_include_then_skip'
+
+    - name: Initialize the default self-skipping controller invocation
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: initialize_planning
+      when: lifecycle_test_case == 'self_include_then_skip'
+
+- name: Assert the self-skipped invocation owns empty semantic and coordination state
+  hosts: workstation
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Assert no included-controller state survived the skipped invocation
+      ansible.builtin.assert:
+        that:
+          - not (proxmox_lifecycle_selected | bool)
+          - proxmox_lifecycle_planning_problem == ''
+          - not (proxmox_lifecycle_rebuilt | bool)
+          - not (proxmox_lxc_rebuilt | bool)
+          - not (lxc_lifecycle_skip_host | bool)
+          - proxmox_lxc_lifecycle_plan == {}
+          - proxmox_lxc_lifecycle_observation_before == {}
+          - proxmox_lxc_lifecycle_observation_after == {}
+          - lxc_lifecycle_result == {}
+          - hostvars.localhost.proxmox_lifecycle_target_hosts == []
+          - hostvars.localhost.proxmox_lifecycle_compiled_target_hosts == []
+          - hostvars.localhost.proxmox_lifecycle_failed_target_hosts == []
+          - hostvars.localhost.proxmox_lifecycle_execution_failure == {}
+        fail_msg: >-
+          The later self-skipped controller invocation retained semantic or
+          targeted-set coordination state from the included invocation.
+      when: lifecycle_test_case == 'self_include_then_skip'
+
+    - name: Mark include-then-skip assertions complete
+      ansible.builtin.debug:
+        msg: "lifecycle_case_assertions_complete=self_include_then_skip"
+      when: lifecycle_test_case == 'self_include_then_skip'

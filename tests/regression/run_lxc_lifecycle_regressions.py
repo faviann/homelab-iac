@@ -22,14 +22,12 @@ Targeted path (--only FILENAME, repeatable) — focused remediation:
 Both paths use controlled observations only: no live Proxmox, no vault
 secrets, no machine-specific credentials.
 
-Measured constraint (issue #28): the fast path runs in about 70s on the
-control workstation, above the 30s target. The dominant remaining cost is
-the two linear-strategy plan plays of the semantic facade matrix: the
-lifecycle planning barrier aggregates every target's planning outcome with
-run_once tasks, so those plays cannot use the free strategy, and each of
-the facade role's many small tasks pays Ansible's per-task process cost.
-Going lower would mean thinning the scenario matrix or moving lifecycle
-policy into Python; both are ruled out (ADR 0007).
+Lifecycle planning keeps compilation and semantic plan construction in
+independently scheduled Ansible plays. Fleet preflight and the all-target
+planning barrier run only after their preceding target-local phase completes;
+production execution remains linear. This preserves the full Ansible-native
+scenario matrix while avoiding target-local planner task waves at the
+targeted-set coordination seams (issue #44).
 """
 
 from __future__ import annotations

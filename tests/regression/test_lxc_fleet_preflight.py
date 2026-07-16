@@ -376,7 +376,7 @@ def run_regressions() -> int:
         or "Run aggregate standalone lifecycle validation" not in validation_tasks.stdout
         or normal_tasks.returncode != 0
         or "Run aggregate standalone lifecycle validation" in normal_tasks.stdout
-        or "Compile desired LXC specification" not in normal_tasks.stdout
+        or "Build the effective LXC specification" not in normal_tasks.stdout
     ):
         print("site.yml validation tag routing is incorrect", file=sys.stderr)
         print(f"validation route:\n{validation_tasks.stdout}\n{validation_tasks.stderr}", file=sys.stderr)

@@ -5,11 +5,11 @@
 - name: Validate lifecycle prerequisites
   ansible.builtin.import_playbook: lifecycle-prerequisites.yml
 
-- name: Plan the complete targeted LXC lifecycle
+- name: Initialize the targeted LXC lifecycle run
   hosts: lxcs
   gather_facts: false
   become: false
-  module_defaults:
+  module_defaults: &proxmox_module_defaults
     community.proxmox.proxmox:
       api_host: "{{ proxmox_api_host }}"
       api_port: "{{ proxmox_api_port | default(omit) }}"
@@ -18,24 +18,82 @@
       api_token_secret: "{{ proxmox_api_token_secret }}"
       validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
   tasks:
-    - name: Plan the complete targeted LXC set
+    - name: Initialize target selection and planning state
       ansible.builtin.import_role:
         name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: plan
+        tasks_from: initialize_planning
+
+- name: Compile every targeted LXC contract independently
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  strategy: ansible.builtin.free
+  module_defaults: *proxmox_module_defaults
+  tasks:
+    - name: Compile one target-local LXC contract
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: compile_target
+      when: proxmox_lifecycle_selected | default(false) | bool
+
+- name: Coordinate Fleet preflight after targeted compilation
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  module_defaults: *proxmox_module_defaults
+  tasks:
+    - name: Run targeted-set Fleet preflight coordination
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_preflight
+      when: proxmox_lifecycle_selected | default(false) | bool
+      run_once: true
+
+- name: Build every targeted semantic LXC lifecycle plan independently
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  strategy: ansible.builtin.free
+  module_defaults: *proxmox_module_defaults
+  tasks:
+    - name: Build one target-local semantic lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan_target
+      when: proxmox_lifecycle_selected | default(false) | bool
+
+- name: Coordinate the all-target lifecycle planning barrier
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  module_defaults: *proxmox_module_defaults
+  tasks:
+    - name: Collect every target-local planning outcome
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_barrier
+      when: proxmox_lifecycle_selected | default(false) | bool
+      run_once: true
+
+- name: Publish every targeted LXC planning result
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  strategy: ansible.builtin.free
+  module_defaults: *proxmox_module_defaults
+  tasks:
+    - name: Publish one stable semantic plan and result
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: publish_planning_result
+      when: proxmox_lifecycle_selected | default(false) | bool
 
 - name: Execute valid LXC lifecycle plans linearly
   hosts: lxcs
   gather_facts: false
   become: false
   serial: 1
-  module_defaults:
-    community.proxmox.proxmox:
-      api_host: "{{ proxmox_api_host }}"
-      api_port: "{{ proxmox_api_port | default(omit) }}"
-      api_user: "{{ proxmox_api_user }}"
-      api_token_id: "{{ proxmox_api_token_id }}"
-      api_token_secret: "{{ proxmox_api_token_secret }}"
-      validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
+  module_defaults: *proxmox_module_defaults
   tasks:
     - name: Execute one valid LXC lifecycle plan
       ansible.builtin.import_role:

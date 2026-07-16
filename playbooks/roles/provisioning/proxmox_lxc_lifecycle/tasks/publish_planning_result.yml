@@ -1,0 +1,36 @@
+---
+# The target-local planner publishes the stable semantic result candidate.
+# Targeted-set coordination may only preserve it or replace its outcome with the
+# planning-barrier result; it does not inspect planner scratch facts.
+
+- name: Publish the target's coordinated semantic planning result
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_barrier_blocked: >-
+      {{ hostvars.localhost.proxmox_lifecycle_failed_target_hosts | default([]) | length > 0 }}
+    lxc_lifecycle_result: >-
+      {%- set barrier_blocked = hostvars.localhost.proxmox_lifecycle_failed_target_hosts | default([]) | length > 0 -%}
+      {%- if lxc_lifecycle_result.outcome.status == 'planning_failed' or not barrier_blocked -%}
+      {{ lxc_lifecycle_result }}
+      {%- else -%}
+      {{
+        lxc_lifecycle_result
+        | combine(
+            {
+              'outcome': {
+                'status': 'blocked',
+                'reason': (
+                  'Lifecycle planning barrier blocked execution because planning failed for '
+                  ~ (hostvars.localhost.proxmox_lifecycle_failed_target_hosts | join(', '))
+                  ~ '.'
+                ),
+                'rebuilt': false
+              },
+              'observations': {
+                'before': lxc_lifecycle_result.observations.before,
+                'after': lxc_lifecycle_result.observations.before
+              }
+            },
+            recursive=True
+          )
+      }}
+      {%- endif -%}
