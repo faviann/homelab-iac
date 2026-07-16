@@ -8,8 +8,11 @@
     proxmox_lxc_host_config_become: false
     proxmox_lxc_host_config_path_root: "{{ temp_root }}/etc/pve/lxc"
     # A short deadline keeps permanent-failure coverage bounded by the role's own
-    # configurable knobs rather than by a test-only delay override.
-    proxmox_lxc_host_config_restart_ready_timeout: 3
+    # configurable knobs rather than by a test-only delay override. These bounds
+    # are tuned against the mock's 1.2s guest command so the deadline is reached
+    # part-way through a cycle: the seam must stop rather than squeeze in a final
+    # attempt too short to complete, whose kill would mask the container's error.
+    proxmox_lxc_host_config_restart_ready_timeout: 5
     proxmox_lxc_host_config_restart_ready_delay: 1
     proxmox_lxc_host_config_restart_ready_command_timeout: 2
     proxmox_lxc_contract:
@@ -62,7 +65,10 @@
             reboot)
               ;;
             exec)
-              # The restarted container is running but never usable.
+              # The restarted container is running but never usable. The guest
+              # command takes real time, so a clamped final attempt would be
+              # killed before it could report this error.
+              sleep 1.2
               echo "container is not ready for guest commands" >&2
               exit 255
               ;;
@@ -105,8 +111,11 @@
           - "'4204' in _readiness_failure_msg"
           - "'ready for guest commands' in _readiness_failure_msg"
           - "'pct exec 4204 -- sh -c true' in _readiness_failure_msg"
-          - "'3s readiness deadline' in _readiness_failure_msg"
+          - "'5s readiness deadline' in _readiness_failure_msg"
+          # The container's real error survives: it is not masked by the kill of
+          # a final attempt that never had the budget to answer.
           - "'container is not ready for guest commands' in _readiness_failure_msg"
+          - "'execution timeout' not in _readiness_failure_msg"
           - "'reboot 4204' in (_pct_calls_unready.content | b64decode)"
           # Polling is bounded: it retried, then gave up at the deadline.
           - "((_pct_calls_unready.content | b64decode).split('exec 4204') | length) > 2"

@@ -34,7 +34,7 @@ options:
         description:
             - Command to execute inside the container (when command=exec)
             - Passed to C(sh -c) so shell syntax and quoting are preserved
-            - "When command=wait_exec this is the readiness probe; it defaults to a minimal true command"
+            - Ignored by wait_exec, whose readiness probe is deliberately fixed and minimal
         required: false
         type: str
     ready_timeout:
@@ -150,14 +150,6 @@ changed:
     description: Whether the operation changed the container state
     returned: always
     type: bool
-attempts:
-    description: Number of readiness attempts made (when command=wait_exec)
-    returned: when command=wait_exec
-    type: int
-elapsed:
-    description: Seconds spent polling for readiness (when command=wait_exec)
-    returned: when command=wait_exec
-    type: float
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -171,16 +163,18 @@ import time
 # Readiness at this seam means only that the container accepts a guest command
 # through the Proxmox host. It deliberately says nothing about SSH access,
 # systemd boot state, or application health: those belong to the modules that
-# require them.
+# require them. The probe is fixed rather than configurable so it cannot drift
+# into a boot-complete or application-health check.
 READY_EXEC_COMMAND = 'true'
 
 # rc reported for an attempt killed by its per-attempt execution timeout,
 # matching the conventional timeout(1) exit status.
 TIMEOUT_RC = 124
 
-# Floor for a clamped per-attempt timeout, so a nearly exhausted deadline still
-# gives the final attempt a chance to run rather than a zero-length one.
-MIN_ATTEMPT_TIMEOUT = 0.1
+# Smallest budget in which a real pct exec can plausibly answer. An attempt with
+# less than this cannot report anything but its own kill, so the deadline is
+# reached instead of starting one.
+MIN_USEFUL_ATTEMPT_SECONDS = 1.0
 
 
 def kill_process_group(proc):
@@ -191,14 +185,15 @@ def kill_process_group(proc):
         proc.kill()
 
 
-def run_pct_command(module, cmd_args, timeout=None):
+def run_pct_command(module, cmd_args, kill_after=None):
     """Execute pct command and return results.
 
-    timeout is a real per-invocation execution timeout in seconds. When it is
-    None the call waits indefinitely, preserving the behaviour of every
-    non-readiness pct command (pct stop/shutdown govern their own duration via
-    pct's --timeout). When it is set, an overrunning pct process is killed and
-    reported as a failed attempt rather than blocking the run forever.
+    kill_after is a real wall-clock kill deadline in seconds, distinct from the
+    module's `timeout` option (which is only pct's own --timeout flag for
+    stop/shutdown). When it is None the call waits indefinitely, preserving the
+    behaviour of every non-readiness pct command. When it is set, an overrunning
+    pct process is killed and reported as a failed attempt rather than blocking
+    the run forever.
     """
     cmd = ['pct'] + cmd_args
 
@@ -208,25 +203,25 @@ def run_pct_command(module, cmd_args, timeout=None):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            # Own process group: pct spawns children (lxc-attach and the guest
-            # command itself) that inherit the output pipes. Killing only pct
-            # would leave them holding those pipes open, and the timeout would
-            # then block in communicate() exactly as long as the hang it exists
-            # to bound. The whole group must go.
-            start_new_session=True
+            # Only the killable path needs its own process group: pct spawns
+            # children (lxc-attach and the guest command) that inherit the output
+            # pipes, so killing pct alone would leave them holding those pipes and
+            # communicate() would block exactly as long as the hang it must bound.
+            # Unbounded calls stay in the caller's group so Ctrl-C still reaches them.
+            start_new_session=kill_after is not None
         )
     except Exception as e:
         module.fail_json(msg=f"Failed to execute pct command: {str(e)}")
 
     try:
-        stdout, stderr = proc.communicate(timeout=timeout)
+        stdout, stderr = proc.communicate(timeout=kill_after)
         rc = proc.returncode
     except subprocess.TimeoutExpired:
         kill_process_group(proc)
         stdout, stderr = proc.communicate()
         rc = TIMEOUT_RC
         stderr = (stderr or '') + (
-            f"\npct command exceeded its {round(timeout, 2)}s execution timeout and was killed"
+            f"\npct command exceeded its {round(kill_after, 2)}s execution timeout and was killed"
         )
     except Exception as e:
         module.fail_json(msg=f"Failed to execute pct command: {str(e)}")
@@ -239,50 +234,63 @@ def run_pct_command(module, cmd_args, timeout=None):
     }
 
 
-def wait_for_guest_command(module, vmid, exec_command, ready_timeout, ready_delay, command_timeout):
+def wait_for_guest_command(module, vmid, ready_timeout, ready_delay, command_timeout):
     """Poll pct exec until it succeeds or the overall readiness deadline expires.
 
-    Every attempt is bounded by command_timeout, attempts are separated by
-    ready_delay, and no new attempt starts once ready_timeout would be crossed.
-    The per-attempt timeout is additionally clamped to the time left on the
-    deadline, so a hung final attempt cannot overrun the overall budget.
+    Attempts are separated by ready_delay and bounded by command_timeout, further
+    clamped to the time left on the deadline so a hung attempt cannot overrun the
+    overall budget. An attempt only starts if the deadline still leaves room for
+    the delay before it and a usable budget for the attempt itself: a shorter one
+    could only ever report its own kill, masking the container's real error. The
+    first attempt always runs, even under a deadline smaller than that budget.
     """
-    cmd_args = ['exec', str(vmid), '--', 'sh', '-c', exec_command]
+    cmd_args = ['exec', str(vmid), '--', 'sh', '-c', READY_EXEC_COMMAND]
     started = time.monotonic()
     deadline = started + ready_timeout
     attempts = 0
+    # The container's own answer, kept so a timed-out attempt cannot mask it.
+    last_genuine = None
 
     while True:
         attempts += 1
-        attempt_timeout = max(
-            MIN_ATTEMPT_TIMEOUT,
-            min(command_timeout, deadline - time.monotonic()),
-        )
-        result = run_pct_command(module, cmd_args, timeout=attempt_timeout)
+        remaining = deadline - time.monotonic()
+        kill_after = min(command_timeout, max(remaining, MIN_USEFUL_ATTEMPT_SECONDS))
+        result = run_pct_command(module, cmd_args, kill_after=kill_after)
         if result['rc'] == 0:
-            result['attempts'] = attempts
-            result['elapsed'] = round(time.monotonic() - started, 2)
             return result
-        if time.monotonic() + ready_delay >= deadline:
+        if result['rc'] != TIMEOUT_RC:
+            last_genuine = result
+        if time.monotonic() + ready_delay + MIN_USEFUL_ATTEMPT_SECONDS >= deadline:
             break
         time.sleep(ready_delay)
 
     elapsed = round(time.monotonic() - started, 2)
+    if last_genuine is not None:
+        diagnosis = last_genuine
+        condition = (
+            f"Last error rc={last_genuine['rc']}, "
+            f"stderr: {last_genuine['stderr'] or '<empty>'}"
+        )
+    else:
+        diagnosis = result
+        condition = (
+            f"Every attempt was killed at its {command_timeout}s per-attempt "
+            "execution timeout; the container never answered."
+        )
+
     module.fail_json(
         msg=(
             f"LXC {vmid} did not become ready for guest commands: "
-            f"'pct exec {vmid} -- sh -c {exec_command}' never succeeded within the "
+            f"'pct exec {vmid} -- sh -c {READY_EXEC_COMMAND}' never succeeded within the "
             f"{ready_timeout}s readiness deadline ({attempts} attempts over {elapsed}s). "
-            f"Last attempt rc={result['rc']}, stderr: {result['stderr'] or '<empty>'}"
+            f"{condition}"
         ),
         changed=False,
         vmid=vmid,
-        attempts=attempts,
-        elapsed=elapsed,
-        stdout=result['stdout'],
-        stderr=result['stderr'],
-        rc=result['rc'],
-        cmd=result['cmd'],
+        stdout=diagnosis['stdout'],
+        stderr=diagnosis['stderr'],
+        rc=diagnosis['rc'],
+        cmd=diagnosis['cmd'],
     )
 
 
@@ -344,14 +352,13 @@ def main():
                     "and ready_delay >= 0"
                 )
             )
-        probe_command = exec_command or READY_EXEC_COMMAND
         if module.check_mode:
             module.exit_json(
                 changed=False,
                 msg=f"Would wait for LXC {vmid} to accept guest commands"
             )
         result = wait_for_guest_command(
-            module, vmid, probe_command, ready_timeout, ready_delay, ready_command_timeout
+            module, vmid, ready_timeout, ready_delay, ready_command_timeout
         )
         module.exit_json(changed=False, **result)
 

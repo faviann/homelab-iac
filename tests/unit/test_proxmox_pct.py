@@ -195,12 +195,27 @@ class GuestCommandReadinessTests(unittest.TestCase):
             self.test.clock += seconds
 
     def install_results(self, results: list[dict], attempt_cost: float = 0.0):
-        """Serve queued pct results; the last one repeats for further attempts."""
+        """Serve queued pct results; the last one repeats for further attempts.
 
-        def fake_run_pct_command(module, cmd_args, timeout=None):
-            self.calls.append((cmd_args, timeout))
-            # A real attempt cannot outlive its timeout: it gets killed at it.
-            self.clock += min(attempt_cost, timeout)
+        attempt_cost models how long the guest command really takes. An attempt
+        that outlives its budget is killed and reports TIMEOUT_RC instead of the
+        container's answer, exactly as the live adapter does.
+        """
+
+        def fake_run_pct_command(module, cmd_args, kill_after=None):
+            self.calls.append((cmd_args, kill_after))
+            if kill_after is not None and attempt_cost > kill_after:
+                self.clock += kill_after
+                return {
+                    "stdout": "",
+                    "stderr": (
+                        f"pct command exceeded its {kill_after}s execution timeout "
+                        "and was killed"
+                    ),
+                    "rc": self.module.TIMEOUT_RC,
+                    "cmd": "pct exec 4201",
+                }
+            self.clock += attempt_cost
             return results[min(len(self.calls) - 1, len(results) - 1)]
 
         self.module.run_pct_command = fake_run_pct_command
@@ -239,7 +254,6 @@ class GuestCommandReadinessTests(unittest.TestCase):
         self.assertEqual(cmd_args, ["exec", "4201", "--", "sh", "-c", "true"])
         self.assertEqual(timeout, 10)
         self.assertEqual(self.sleeps, [])
-        self.assertEqual(exception.payload["attempts"], 1)
         self.assertFalse(exception.payload["changed"])
 
     def test_delayed_success_retries_with_bounded_delay(self) -> None:
@@ -250,7 +264,6 @@ class GuestCommandReadinessTests(unittest.TestCase):
         self.assertIsInstance(exception, ModuleExit)
         self.assertEqual(len(self.calls), 3)
         self.assertEqual(self.sleeps, [3, 3])
-        self.assertEqual(exception.payload["attempts"], 3)
 
     def test_every_attempt_carries_a_real_execution_timeout(self) -> None:
         self.install_results([self.result(124, "killed"), self.result(0)])
@@ -265,16 +278,16 @@ class GuestCommandReadinessTests(unittest.TestCase):
         exception = self.run_wait_exec({"ready_timeout": 10, "ready_delay": 3})
 
         self.assertIsInstance(exception, ModuleFail)
-        # Attempts stop once another delay would cross the 10s deadline.
-        self.assertEqual(len(self.calls), 4)
-        self.assertEqual(self.sleeps, [3, 3, 3])
+        # Attempts stop once another delay plus a usable attempt budget would
+        # cross the 10s deadline; a 4th attempt at t=9 could not answer in time.
+        self.assertEqual(len(self.calls), 3)
+        self.assertEqual(self.sleeps, [3, 3])
         self.assertLessEqual(self.clock, 10)
         message = exception.payload["msg"]
         self.assertIn("4201", message)
         self.assertIn("pct exec 4201 -- sh -c true", message)
         self.assertIn("10s readiness deadline", message)
         self.assertIn("container is not ready", message)
-        self.assertEqual(exception.payload["attempts"], 4)
 
     def test_deadline_accounts_for_time_spent_inside_attempts(self) -> None:
         self.install_results([self.result(255)], attempt_cost=4.0)
@@ -284,6 +297,63 @@ class GuestCommandReadinessTests(unittest.TestCase):
         self.assertIsInstance(exception, ModuleFail)
         self.assertEqual(len(self.calls), 2)
         self.assertLessEqual(self.clock, 10)
+
+    def test_deadline_exhaustion_reports_the_containers_real_error(self) -> None:
+        # Attempts that really take time: the deadline must not be spent on a
+        # final attempt too short to complete, whose kill would then mask the
+        # container's actual error.
+        self.install_results(
+            [self.result(255, "container is not ready")], attempt_cost=2.0
+        )
+
+        exception = self.run_wait_exec(
+            {"ready_timeout": 11, "ready_delay": 3, "ready_command_timeout": 10}
+        )
+
+        self.assertIsInstance(exception, ModuleFail)
+        message = exception.payload["msg"]
+        self.assertIn("container is not ready", message)
+        self.assertNotIn("execution timeout", message)
+        self.assertEqual(exception.payload["rc"], 255)
+        # A third attempt could only have started with a 1s budget it cannot meet.
+        self.assertEqual(len(self.calls), 2)
+
+    def test_no_attempt_starts_without_a_usable_budget(self) -> None:
+        self.install_results(
+            [self.result(255, "container is not ready")], attempt_cost=2.0
+        )
+
+        self.run_wait_exec(
+            {"ready_timeout": 11, "ready_delay": 3, "ready_command_timeout": 10}
+        )
+
+        for _, budget in self.calls:
+            self.assertGreaterEqual(budget, self.module.MIN_USEFUL_ATTEMPT_SECONDS)
+
+    def test_all_attempts_timing_out_is_reported_as_such(self) -> None:
+        # No genuine error ever arrives: the message must say so rather than
+        # pretend the container answered.
+        self.install_results([self.result(255, "never seen")], attempt_cost=99.0)
+
+        exception = self.run_wait_exec(
+            {"ready_timeout": 30, "ready_delay": 3, "ready_command_timeout": 5}
+        )
+
+        self.assertIsInstance(exception, ModuleFail)
+        self.assertEqual(exception.payload["rc"], self.module.TIMEOUT_RC)
+        self.assertIn("execution timeout", exception.payload["msg"])
+        self.assertNotIn("never seen", exception.payload["msg"])
+
+    def test_a_tiny_deadline_still_makes_one_usable_attempt(self) -> None:
+        self.install_results([self.result(0)], attempt_cost=0.5)
+
+        exception = self.run_wait_exec({"ready_timeout": 1, "ready_delay": 3})
+
+        self.assertIsInstance(exception, ModuleExit)
+        self.assertEqual(len(self.calls), 1)
+        self.assertGreaterEqual(
+            self.calls[0][1], self.module.MIN_USEFUL_ATTEMPT_SECONDS
+        )
 
     def test_invalid_bounds_are_rejected(self) -> None:
         self.install_results([self.result(0)])
@@ -316,7 +386,7 @@ class RunPctCommandTimeoutTests(unittest.TestCase):
 
     def test_overrunning_command_is_killed_and_reported_as_failed(self) -> None:
         started = time.monotonic()
-        result = self.module.run_pct_command(module=None, cmd_args=["hang"], timeout=1)
+        result = self.module.run_pct_command(module=None, cmd_args=["hang"], kill_after=1)
         elapsed = time.monotonic() - started
 
         self.assertEqual(result["rc"], self.module.TIMEOUT_RC)
@@ -328,6 +398,30 @@ class RunPctCommandTimeoutTests(unittest.TestCase):
 
         self.assertEqual(result["rc"], 0)
         self.assertEqual(result["stdout"], "fixture-ok")
+
+    def test_only_the_killable_path_detaches_into_its_own_session(self) -> None:
+        # Detaching costs Ctrl-C propagation, so unbounded pct calls must stay in
+        # the caller's process group; only the killpg path needs its own.
+        # Swapping the module's own `subprocess` reference leaves the real
+        # subprocess module untouched.
+        spy = self.SubprocessSpy(self.module.subprocess)
+        self.module.subprocess = spy
+
+        self.module.run_pct_command(module=None, cmd_args=["quick"])
+        self.module.run_pct_command(module=None, cmd_args=["quick"], kill_after=5)
+
+        self.assertEqual(spy.sessions, [False, True])
+
+    class SubprocessSpy:
+        def __init__(self, real):
+            self.real = real
+            self.sessions: list[bool | None] = []
+            self.PIPE = real.PIPE
+            self.TimeoutExpired = real.TimeoutExpired
+
+        def Popen(self, *args, **kwargs):  # noqa: N802 - mirrors subprocess.Popen
+            self.sessions.append(kwargs.get("start_new_session"))
+            return self.real.Popen(*args, **kwargs)
 
 
 if __name__ == "__main__":

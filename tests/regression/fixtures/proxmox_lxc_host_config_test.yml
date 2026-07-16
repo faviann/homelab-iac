@@ -105,32 +105,20 @@
             reboot)
               ;;
             exec)
-              # Controlled guest-command readiness. The mode file selects
-              # immediate success, delayed success, or permanent failure.
-              MODE=ready
-              if [ -f "{{ temp_root }}/pct-exec-mode.txt" ]; then
-                MODE=$(cat "{{ temp_root }}/pct-exec-mode.txt")
-              fi
-              case "$MODE" in
-                ready)
-                  ;;
-                delayed)
-                  COUNT=0
-                  if [ -f "{{ temp_root }}/pct-exec-attempts.txt" ]; then
-                    COUNT=$(cat "{{ temp_root }}/pct-exec-attempts.txt")
-                  fi
-                  COUNT=$((COUNT + 1))
-                  printf '%s\n' "$COUNT" > "{{ temp_root }}/pct-exec-attempts.txt"
-                  if [ "$COUNT" -lt 3 ]; then
-                    echo "container is not ready for guest commands" >&2
-                    exit 255
-                  fi
-                  ;;
-                *)
+              # Controlled guest-command readiness: immediate success, unless the
+              # delayed marker asks for success only on the third attempt.
+              if [ -f "{{ temp_root }}/pct-exec-delayed" ]; then
+                COUNT=0
+                if [ -f "{{ temp_root }}/pct-exec-attempts.txt" ]; then
+                  COUNT=$(cat "{{ temp_root }}/pct-exec-attempts.txt")
+                fi
+                COUNT=$((COUNT + 1))
+                printf '%s\n' "$COUNT" > "{{ temp_root }}/pct-exec-attempts.txt"
+                if [ "$COUNT" -lt 3 ]; then
                   echo "container is not ready for guest commands" >&2
                   exit 255
-                  ;;
-              esac
+                fi
+              fi
               ;;
             *)
               echo "unexpected pct args: $*" >&2
@@ -325,10 +313,10 @@
 
     # The restarted container refuses guest commands twice before accepting them.
     - name: Make guest-command readiness succeed only after failed attempts
-      ansible.builtin.copy:
-        dest: "{{ temp_root }}/pct-exec-mode.txt"
+      ansible.builtin.file:
+        path: "{{ temp_root }}/pct-exec-delayed"
+        state: touch
         mode: "0644"
-        content: "delayed"
 
     - name: Apply semantic managed-state reduction
       environment:
