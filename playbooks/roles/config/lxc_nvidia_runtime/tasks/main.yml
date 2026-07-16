@@ -42,18 +42,28 @@
         path: /tmp/nvidia-container-toolkit.gpgkey
         state: absent
 
-    # The repo list is fetched and rewritten in one stream; get_url cannot
-    # apply the signed-by transform, so curl stays. noqa is scoped to that.
+    # get_url cannot apply the signed-by transform, so curl stays. The
+    # transformed list is published only after the complete pipeline succeeds.
     - name: Add NVIDIA Container Toolkit APT repository # noqa: command-instead-of-module
+      tags: lxc_nvidia_runtime_repository
       ansible.builtin.shell: |
-        set -o pipefail
-        curl -s -L {{ lxc_nvidia_runtime_repo_list_url }} \
+        set -o errexit -o pipefail
+        repo=/etc/apt/sources.list.d/nvidia-container-toolkit.list
+        candidate=$(mktemp "${repo}.XXXXXX")
+        trap 'rm -f "$candidate"' EXIT
+        curl -fsSL {{ lxc_nvidia_runtime_repo_list_url }} \
           | sed 's#deb https://#deb [signed-by={{ lxc_nvidia_runtime_keyring_path }}] https://#g' \
-          > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+          > "$candidate"
+        test -s "$candidate"
+        cmp -s "$candidate" "$repo" && exit 0
+        chmod 0644 "$candidate"
+        mv "$candidate" "$repo"
+        trap - EXIT
+        echo published
       args:
-        creates: /etc/apt/sources.list.d/nvidia-container-toolkit.list
         executable: /bin/bash
       register: _nvidia_repo_added
+      changed_when: "'published' in _nvidia_repo_added.stdout_lines"
 
     # Must run before the toolkit install below; a handler would fire too late.
     - name: Update apt cache after adding NVIDIA repository # noqa: no-handler

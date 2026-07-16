@@ -1,0 +1,3 @@
+---
+# The repository fixture exercises lxc_nvidia_runtime's public role entrypoint.
+# Its Docker dependency is outside that seam and intentionally inert here.
