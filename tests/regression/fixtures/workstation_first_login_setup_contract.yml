@@ -21,6 +21,7 @@
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
+    workstation_update_requires_bitwarden: true
     workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
     lxc_ssh_user: "{{ workstation_username }}"
@@ -125,6 +126,7 @@
           - (setup_command_raw.content | b64decode) is search('install_setup_dotfiles_without_secrets')
           - (setup_command_raw.content | b64decode) is search('git -C "\$HOME/.local/share/chezmoi" pull --ff-only')
           - (setup_command_raw.content | b64decode) is search('dot_local/bin/executable_update-agent-tools')
+          - (setup_command_raw.content | b64decode) is search('dot_local/bin/executable_workstation-update')
           - (setup_command_raw.content | b64decode) is search('dot_npmrc')
           - (setup_command_raw.content | b64decode) is search('if ! local_bootstrap_ready; then')
           - (setup_command_raw.content | b64decode) is search('ensure_bitwarden_unlocked')
@@ -154,7 +156,8 @@
           - (setup_command_raw.content | b64decode) is search('dotfiles/github-cli-token')
           - (setup_command_raw.content | b64decode) is search('gh api user')
           - (setup_command_raw.content | b64decode) is search('git@github.com')
-          - (setup_command_raw.content | b64decode) is search('environment ready')
+          - (setup_command_raw.content | b64decode) is search('environment healthy')
+          - (setup_command_raw.content | b64decode) is search('environment repaired and ready')
           - not ((setup_command_raw.content | b64decode) is search('mise'))
           - not ((setup_command_raw.content | b64decode) is search('/run/workstation-bootstrap'))
           - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTID'))
@@ -170,6 +173,7 @@
           - (setup_hook_raw.content | b64decode) is search('version=2')
           - not ((setup_hook_raw.content | b64decode) is search('\\[ ! -e '))
           - (setup_hook_raw.content | b64decode) is search('workstation-setup')
+          - (setup_hook_raw.content | b64decode) is search('workstation-update is missing or not executable')
           - not ((setup_hook_raw.content | b64decode) is search('mise'))
           - not ((setup_hook_raw.content | b64decode) is search('/run/workstation-bootstrap'))
           - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTID'))

@@ -10,6 +10,12 @@ GITHUB_CLI_TOKEN_ITEM="{{ workstation_github_cli_token_item }}"
 HOME_MANAGER_FLAKE_REF="{{ workstation_home_manager_flake_ref }}"
 WORKSTATION_HOME="{{ workstation_home }}"
 BW_BIN="{{ workstation_bw_bin_path }}"
+UPDATE_AGENT_TOOLS_SOURCE="{{ workstation_update_agent_tools_source_path }}"
+UPDATE_AGENT_TOOLS_BIN="{{ workstation_update_agent_tools_bin_path }}"
+UPDATE_AGENT_TOOLS_REQUIRES_BITWARDEN="{{ workstation_update_agent_tools_requires_bitwarden | bool | lower }}"
+WORKSTATION_UPDATE_SOURCE="{{ workstation_update_source_path }}"
+WORKSTATION_UPDATE_BIN="{{ workstation_update_bin_path }}"
+WORKSTATION_UPDATE_REQUIRES_BITWARDEN="{{ workstation_update_requires_bitwarden | bool | lower }}"
 MARKER_FINGERPRINT="{{ workstation_setup_version }}|{{ workstation_dotfiles_repo_url }}|{{ workstation_github_cli_token_item }}|{{ workstation_home_manager_flake_ref }}|{{ workstation_bw_bin_path }}"
 
 export HOME="$WORKSTATION_HOME"
@@ -78,7 +84,48 @@ validate_marker_state() {
   grep -Fxq "version=$SETUP_VERSION" "$MARKER_PATH" || return 1
   grep -Fxq "dotfiles=$DOTFILES_REPO_URL" "$MARKER_PATH" || return 1
   grep -Fxq "fingerprint=$MARKER_FINGERPRINT" "$MARKER_PATH" || return 1
-  validate_environment >/dev/null 2>&1 || return 1
+  (validate_environment) >/dev/null 2>&1 || return 1
+}
+
+required_managed_commands_ready() {
+  local command_name expected_path resolved_path specification
+  required_managed_command_error=""
+
+  for specification in \
+    "update-agent-tools|$UPDATE_AGENT_TOOLS_BIN" \
+    "workstation-update|$WORKSTATION_UPDATE_BIN"; do
+    command_name="${specification%%|*}"
+    expected_path="${specification#*|}"
+    if [ ! -x "$expected_path" ]; then
+      required_managed_command_error="$command_name missing or not executable at $expected_path"
+      return 1
+    fi
+    resolved_path="$(command -v "$command_name" 2>/dev/null || true)"
+    if [ "$resolved_path" != "$expected_path" ]; then
+      required_managed_command_error="$command_name must resolve from $expected_path"
+      return 1
+    fi
+  done
+  return 0
+}
+
+secret_backed_managed_command_repair_required() {
+  local destination_path remainder requires_bitwarden source_path specification
+
+  for specification in \
+    "$UPDATE_AGENT_TOOLS_SOURCE|$UPDATE_AGENT_TOOLS_BIN|$UPDATE_AGENT_TOOLS_REQUIRES_BITWARDEN" \
+    "$WORKSTATION_UPDATE_SOURCE|$WORKSTATION_UPDATE_BIN|$WORKSTATION_UPDATE_REQUIRES_BITWARDEN"; do
+    source_path="${specification%%|*}"
+    remainder="${specification#*|}"
+    destination_path="${remainder%%|*}"
+    requires_bitwarden="${remainder#*|}"
+    if [ "$requires_bitwarden" = "true" ] \
+      && [ ! -x "$destination_path" ] \
+      && [ -f "$source_path.tmpl" ]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 ensure_bitwarden_unlocked() {
@@ -120,11 +167,14 @@ update_chezmoi_source_without_secrets() {
 }
 
 install_setup_dotfiles_without_secrets() {
-  update_agent_tools_source="$HOME/.local/share/chezmoi/dot_local/bin/executable_update-agent-tools"
   npmrc_source="$HOME/.local/share/chezmoi/dot_npmrc"
 
-  if [ -f "$update_agent_tools_source" ]; then
-    install -m 0755 "$update_agent_tools_source" "$HOME/.local/bin/update-agent-tools"
+  if [ -f "$UPDATE_AGENT_TOOLS_SOURCE" ]; then
+    install -D -m 0755 "$UPDATE_AGENT_TOOLS_SOURCE" "$UPDATE_AGENT_TOOLS_BIN"
+  fi
+
+  if [ -f "$WORKSTATION_UPDATE_SOURCE" ]; then
+    install -D -m 0755 "$WORKSTATION_UPDATE_SOURCE" "$WORKSTATION_UPDATE_BIN"
   fi
 
   if [ -f "$npmrc_source" ]; then
@@ -204,6 +254,7 @@ validate_environment() {
   test "$(command -v pi)" = "$WORKSTATION_HOME/.local/bin/pi" \
     || fail "pi must resolve from $WORKSTATION_HOME/.local/bin"
   pi --version >/dev/null || fail "pi missing or not working"
+  required_managed_commands_ready || fail "$required_managed_command_error"
   hermes version >/dev/null || fail "hermes missing or not working"
   openclaw --version >/dev/null || fail "openclaw missing or not working"
 
@@ -236,6 +287,7 @@ write_marker() {
 }
 
 if validate_marker_state; then
+  printf 'workstation-setup: environment healthy.\n'
   exit 0
 fi
 
@@ -250,6 +302,12 @@ else
     install_setup_dotfiles_without_secrets
   fi
 fi
+if ! required_managed_commands_ready \
+  && secret_backed_managed_command_repair_required; then
+  ensure_bitwarden_unlocked
+  ensure_chezmoi
+  install_setup_dotfiles_without_secrets
+fi
 switch_home_manager
 ensure_agent_tools
 if ! gh auth status --hostname github.com >/dev/null 2>&1; then
@@ -258,4 +316,4 @@ if ! gh auth status --hostname github.com >/dev/null 2>&1; then
 fi
 validate_environment
 write_marker
-printf 'workstation-setup: environment ready.\n'
+printf 'workstation-setup: environment repaired and ready.\n'
