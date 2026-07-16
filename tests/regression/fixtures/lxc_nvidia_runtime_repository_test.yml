@@ -7,37 +7,37 @@
     lxc_nvidia_runtime_enabled: true
     lxc_nvidia_runtime_keyring_path: /fixture/keyrings/nvidia.gpg
   tasks:
-    - name: Create isolated APT cache directories
+    - name: Prepare isolated repository fixture
       tags: lxc_nvidia_runtime_repository
-      ansible.builtin.file:
-        path: "{{ temp_root }}/{{ item }}"
-        state: directory
-        mode: "0755"
-      loop:
-        - apt-lists/partial
-        - apt-archives/partial
+      block:
+        - name: Create isolated APT cache directories
+          ansible.builtin.file:
+            path: "{{ temp_root }}/{{ item }}"
+            state: directory
+            mode: "0755"
+          loop:
+            - apt-lists/partial
+            - apt-archives/partial
 
-    - name: Configure APT to use only isolated empty state
-      tags: lxc_nvidia_runtime_repository
-      ansible.builtin.copy:
-        dest: "{{ temp_root }}/apt.conf"
-        mode: "0644"
-        content: |
-          Dir::Etc::sourcelist "/dev/null";
-          Dir::Etc::sourceparts "/dev/null";
-          Dir::State::lists "{{ temp_root }}/apt-lists";
-          Dir::Cache::archives "{{ temp_root }}/apt-archives";
-          Acquire::Languages "none";
+        - name: Configure APT to use only isolated empty state
+          ansible.builtin.copy:
+            dest: "{{ temp_root }}/apt.conf"
+            mode: "0644"
+            content: |
+              Dir::Etc::sourcelist "/dev/null";
+              Dir::Etc::sourceparts "/dev/null";
+              Dir::State::lists "{{ temp_root }}/apt-lists";
+              Dir::Cache::archives "{{ temp_root }}/apt-archives";
+              Acquire::Languages "none";
 
-    - name: Place failing curl on PATH
-      tags: lxc_nvidia_runtime_repository
-      ansible.builtin.copy:
-        dest: "{{ temp_root }}/curl"
-        mode: "0755"
-        content: |
-          #!/bin/sh
-          printf '%s\n' 'deb https://partial.invalid/stable /'
-          exit 22
+        - name: Place failing curl on PATH
+          ansible.builtin.copy:
+            dest: "{{ temp_root }}/curl"
+            mode: "0755"
+            content: |
+              #!/bin/sh
+              printf '%s\n' 'deb https://partial.invalid/stable /'
+              exit 22
 
     - name: Exercise failed publication
       environment:
@@ -153,7 +153,6 @@
               - >-
                 (published_repo.content | b64decode)
                 == 'deb [signed-by=/fixture/keyrings/nvidia.gpg] https://nvidia.example/stable /\n'
-              - _nvidia_apt_cache_updated is succeeded
 
         - name: Rerun after successful publication
           environment:

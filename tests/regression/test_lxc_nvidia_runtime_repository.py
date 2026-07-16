@@ -100,7 +100,7 @@ def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
 def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
     result = run_isolated_playbook(
         APT_ORDER_PLAYBOOK,
-        "lxc_nvidia_runtime_repository,lxc_nvidia_runtime_toolkit_install",
+        "lxc_nvidia_runtime_package_setup",
     )
 
     output = f"{result.stdout}\n{result.stderr}"
