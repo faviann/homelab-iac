@@ -188,14 +188,19 @@
   register: infrastructure_proxmox_lxc_host_config_container_restart
 
 # This must remain synchronous so the published result describes the completed reboot.
-- name: Wait for container to complete reboot  # noqa: no-handler
-  ansible.builtin.pause:
-    seconds: 15
-    prompt: >-
-      Waiting for container {{ infrastructure_proxmox_lxc_host_config_spec.vmid }}
-      to complete reboot and start SSH service
+# Readiness here is only that the restarted container accepts a guest command through
+# the Proxmox host: the exact next operation this seam requires. SSH readiness stays
+# owned by the guest-configuration connection wait, after guest access is restored.
+- name: Wait for restarted container to accept guest commands  # noqa: no-handler
+  proxmox_pct:
+    vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
+    command: wait_exec
+    ready_timeout: "{{ proxmox_lxc_host_config_restart_ready_timeout }}"
+    ready_delay: "{{ proxmox_lxc_host_config_restart_ready_delay }}"
+    ready_command_timeout: "{{ proxmox_lxc_host_config_restart_ready_command_timeout }}"
   when: infrastructure_proxmox_lxc_host_config_container_restart is changed
   delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: "{{ proxmox_lxc_host_config_become }}"
 
 # This must remain synchronous so callers receive the final restart outcome.
 - name: Update result after config-file-driven restart  # noqa: no-handler var-naming[no-role-prefix]

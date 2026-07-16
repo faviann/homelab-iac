@@ -17,3 +17,17 @@
 - **Location**: `rotate-vault-passphrase.sh`, `configure-vault.sh`, `setup.sh`
 - **Context**: 2026-07-05 architecture review — the vault/setup shell scripts (~800+ lines combined) have no focused tests and remain a high-risk untested surface.
 - **Added**: 2026-07-05
+
+## [TD-001] Guest-command readiness defaults are declared in three places
+- **Category**: tech-debt
+- **Tracker**: #48 (folded in; #49 closed as covered)
+- **Location**: `playbooks/roles/infrastructure/proxmox_lxc_host_config/defaults/main.yml`, that role's `meta/argument_specs.yml`, `library/proxmox_pct.py` (`argument_spec`)
+- **Context**: Issue #45 review — the readiness values 120/3/10 are declared in all three, but the role always passes them explicitly, so the module-side defaults are unreachable and can drift into stale documentation. Deleting them is less code yet makes `wait_exec` unusable standalone and breaks the module's EXAMPLES. Left alone deliberately; needs a judgement call, not a mechanical fix.
+- **Added**: 2026-07-16
+
+## [TD-002] Only the readiness path bounds its pct subprocess
+- **Category**: tech-debt
+- **Tracker**: #48
+- **Location**: `library/proxmox_pct.py` (`run_pct_command`)
+- **Context**: Issue #45 review — `run_pct_command` bounds the subprocess only when `kill_after` is passed, which today is just the readiness probe. A hung `pct config`, `pct status`, or `pct set` still blocks forever on an unbounded `communicate()`. Issue #45's "no subprocess can hang indefinitely" was scoped to readiness on purpose: widening it risked breaking `pct stop --timeout 30`, where pct governs its own duration and the right bound is not the same number. Worth revisiting so every pct call has an upper bound.
+- **Added**: 2026-07-16

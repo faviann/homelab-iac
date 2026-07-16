@@ -16,3 +16,13 @@ proxmox_lxc_host_config_become: true  # noqa: var-naming[no-role-prefix]
 # Overridable for regression fixtures that exercise the role without a live Proxmox host.
 # This public role input predates the nested role path and remains caller-compatible.
 proxmox_lxc_host_config_path_root: /etc/pve/lxc  # noqa: var-naming[no-role-prefix]
+
+# Guest-command readiness after a host-config-driven restart.
+# Readiness is proven by a minimal command executing inside the LXC through the
+# Proxmox host, not by runtime state, SSH access, or application health.
+# Overall deadline for the restarted container to accept a guest command.
+proxmox_lxc_host_config_restart_ready_timeout: 120  # noqa: var-naming[no-role-prefix]
+# Bounded delay between readiness attempts.
+proxmox_lxc_host_config_restart_ready_delay: 3  # noqa: var-naming[no-role-prefix]
+# Real per-attempt execution timeout: an overrunning pct exec is killed, never hangs.
+proxmox_lxc_host_config_restart_ready_command_timeout: 10  # noqa: var-naming[no-role-prefix]
