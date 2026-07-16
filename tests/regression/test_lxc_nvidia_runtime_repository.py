@@ -17,6 +17,13 @@ PLAYBOOK = (
     / "fixtures"
     / "lxc_nvidia_runtime_repository_test.yml"
 )
+APT_ORDER_PLAYBOOK = (
+    REPO_ROOT
+    / "tests"
+    / "regression"
+    / "fixtures"
+    / "lxc_nvidia_runtime_apt_order_test.yml"
+)
 FIXTURE_ROLES = (
     REPO_ROOT
     / "tests"
@@ -27,7 +34,9 @@ FIXTURE_ROLES = (
 )
 
 
-def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
+def run_isolated_playbook(
+    playbook: Path, tags: str
+) -> subprocess.CompletedProcess[str]:
     with tempfile.TemporaryDirectory(prefix="lxc-nvidia-repository-") as temp_root:
         repository_dir = Path(temp_root) / "repository"
         repository_dir.mkdir()
@@ -63,11 +72,11 @@ def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
                 "run",
                 "--locked",
                 "ansible-playbook",
-                str(PLAYBOOK),
+                str(playbook),
                 "-f",
                 "1",
                 "--tags",
-                "lxc_nvidia_runtime_repository",
+                tags,
                 "-e",
                 f"temp_root={temp_root}",
             ],
@@ -77,6 +86,22 @@ def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
             env=env,
             timeout=30,
         )
+
+    return result
+
+
+def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
+    result = run_isolated_playbook(PLAYBOOK, "lxc_nvidia_runtime_repository")
+
+    output = f"{result.stdout}\n{result.stderr}"
+    assert result.returncode == 0, output
+
+
+def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
+    result = run_isolated_playbook(
+        APT_ORDER_PLAYBOOK,
+        "lxc_nvidia_runtime_repository,lxc_nvidia_runtime_toolkit_install",
+    )
 
     output = f"{result.stdout}\n{result.stderr}"
     assert result.returncode == 0, output

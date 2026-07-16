@@ -67,11 +67,14 @@
 
     # Must run before the toolkit install below; a handler would fire too late.
     - name: Update apt cache after adding NVIDIA repository # noqa: no-handler
+      tags: lxc_nvidia_runtime_repository
       ansible.builtin.apt:
         update_cache: true
       when: _nvidia_repo_added is changed
+      register: _nvidia_apt_cache_updated
 
     - name: Install NVIDIA Container Toolkit
+      tags: lxc_nvidia_runtime_toolkit_install
       ansible.builtin.apt:
         name: nvidia-container-toolkit
         state: present
