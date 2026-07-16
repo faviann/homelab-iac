@@ -107,6 +107,21 @@ required_managed_commands_ready() {
   return 0
 }
 
+secret_backed_managed_command_repair_required() {
+  local destination_path source_path specification
+
+  for specification in \
+    "$UPDATE_AGENT_TOOLS_SOURCE|$UPDATE_AGENT_TOOLS_BIN" \
+    "$WORKSTATION_UPDATE_SOURCE|$WORKSTATION_UPDATE_BIN"; do
+    source_path="${specification%%|*}"
+    destination_path="${specification#*|}"
+    if [ ! -x "$destination_path" ] && [ -f "$source_path.tmpl" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 ensure_bitwarden_unlocked() {
   status_json="$(bw status 2>/dev/null || true)"
   status="$(printf '%s' "$status_json" | status_from_json 2>/dev/null || true)"
@@ -281,7 +296,8 @@ else
     install_setup_dotfiles_without_secrets
   fi
 fi
-if ! required_managed_commands_ready; then
+if ! required_managed_commands_ready \
+  && secret_backed_managed_command_repair_required; then
   ensure_bitwarden_unlocked
   ensure_chezmoi
   install_setup_dotfiles_without_secrets

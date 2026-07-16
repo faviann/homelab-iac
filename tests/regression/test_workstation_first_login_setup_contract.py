@@ -197,6 +197,18 @@ def test_workstation_first_login_setup_contract() -> None:
         workstation_update.unlink()
         workstation_update_source.unlink()
         (root / "commands.log").write_text("", encoding="utf-8")
+        absent_source = _run_setup(root, env)
+        assert absent_source.returncode != 0
+        assert "Bitwarden is locked" not in absent_source.stderr
+        assert "Bitwarden is unauthenticated" not in absent_source.stderr
+        assert "environment healthy" not in absent_source.stdout
+        assert "environment repaired and ready" not in absent_source.stdout
+        absent_source_commands = (root / "commands.log").read_text(encoding="utf-8")
+        assert not any(line.startswith("bw ") for line in absent_source_commands.splitlines())
+
+        workstation_update_secret_source = Path(f"{workstation_update_source}.tmpl")
+        workstation_update_secret_source.write_text("secret-backed\n", encoding="utf-8")
+        (root / "commands.log").write_text("", encoding="utf-8")
         escalated = _run_setup(root, env)
         assert escalated.returncode != 0
         assert "Bitwarden is locked" in escalated.stderr
