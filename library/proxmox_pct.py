@@ -13,8 +13,9 @@ module: proxmox_pct
 short_description: Manage Proxmox LXC containers via pct command
 description:
     - Execute pct commands against Proxmox LXC containers
-    - "Wraps common pct operations: status, config, set, exec, start, stop, restart, reboot, shutdown"
+    - "Wraps common pct operations: status, config, set, exec, reboot"
     - "Adds wait_exec: bounded polling until the container accepts a guest command through the host"
+    - Every invocation carries an upper bound; an overrunning pct is killed and reported
 version_added: "1.0.0"
 author:
     - "homelab-iac"
@@ -29,7 +30,7 @@ options:
             - The pct command to execute
         required: true
         type: str
-        choices: ['status', 'config', 'set', 'exec', 'start', 'stop', 'restart', 'reboot', 'shutdown', 'wait_exec']
+        choices: ['status', 'config', 'set', 'exec', 'reboot', 'wait_exec']
     exec_command:
         description:
             - Command to execute inside the container (when command=exec)
@@ -39,36 +40,34 @@ options:
         type: str
     ready_timeout:
         description:
-            - Overall readiness deadline in seconds (when command=wait_exec)
+            - Overall readiness deadline in seconds
+            - Required when command=wait_exec; no default here on purpose, see the module notes
             - No further attempt starts once the deadline would be crossed
         required: false
         type: int
-        default: 120
     ready_delay:
         description:
-            - Delay between readiness attempts in seconds (when command=wait_exec)
+            - Delay between readiness attempts in seconds
+            - Required when command=wait_exec
         required: false
         type: int
-        default: 3
     ready_command_timeout:
         description:
-            - Per-attempt execution timeout in seconds (when command=wait_exec)
+            - Per-attempt execution timeout in seconds
+            - Required when command=wait_exec
             - A readiness attempt that exceeds it is killed and counted as a failed attempt
         required: false
         type: int
-        default: 10
     config_options:
         description:
             - Configuration options to set (when command=set)
             - Dict of key-value pairs
         required: false
         type: dict
-    timeout:
-        description:
-            - Timeout for stop/shutdown commands in seconds
-        required: false
-        type: int
-        default: 30
+notes:
+    - The readiness bounds have no defaults here. Their single source of truth is the
+      calling role's defaults/argument_specs pair, which always passes all three
+      explicitly. A copy in this module would be unreachable and could only drift.
 '''
 
 EXAMPLES = r'''
@@ -96,25 +95,10 @@ EXAMPLES = r'''
     command: exec
     exec_command: "ls -la /root"
 
-- name: Start container
-  proxmox_pct:
-    vmid: 100
-    command: start
-
-- name: Stop container
-  proxmox_pct:
-    vmid: 100
-    command: stop
-
-- name: Restart container
-  proxmox_pct:
-    vmid: 100
-    command: restart
-
 - name: Reboot container
-    proxmox_pct:
-        vmid: 100
-        command: reboot
+  proxmox_pct:
+    vmid: 100
+    command: reboot
 
 - name: Wait for a restarted container to accept guest commands
   proxmox_pct:
@@ -181,6 +165,23 @@ MIN_USEFUL_ATTEMPT_SECONDS = 1.0
 # holding them; reading must never outlast the timeout it exists to enforce.
 KILL_GRACE_SECONDS = 5
 
+# Upper bound for every pct command except reboot. status, config, set and exec
+# are /etc/pve reads-writes or a trivial guest command: on a healthy host they
+# answer in well under a second. The realistic failure is not slowness but a
+# wedged pmxcfs, where /etc/pve stops answering at all and the call never
+# returns. 60s is far past any healthy latency (it absorbs a quorum re-election
+# blip) while still failing a run in seconds rather than stalling it forever.
+PCT_COMMAND_TIMEOUT_SECONDS = 60
+
+# reboot is the one remaining command with a duration of its own: it shuts the
+# guest down and starts it again, and pct's own shutdown timeout alone defaults
+# to 60s. Bounding it at PCT_COMMAND_TIMEOUT_SECONDS would kill legitimately slow
+# reboots mid-flight, so it gets its own bound with room for a slow guest to stop
+# and boot. It is a bound against a wedged host, not a reboot SLA: a healthy
+# reboot finishes far inside it, and readiness after the reboot is proven
+# separately by wait_exec.
+PCT_REBOOT_TIMEOUT_SECONDS = 300
+
 
 def kill_process_group(proc):
     """Kill the timed-out pct process and every child it spawned."""
@@ -190,15 +191,14 @@ def kill_process_group(proc):
         proc.kill()
 
 
-def run_pct_command(module, cmd_args, kill_after=None):
+def run_pct_command(module, cmd_args, kill_after):
     """Execute pct command and return results.
 
-    kill_after is a real wall-clock kill deadline in seconds, distinct from the
-    module's `timeout` option (which is only pct's own --timeout flag for
-    stop/shutdown). When it is None the call waits indefinitely, preserving the
-    behaviour of every non-readiness pct command. When it is set, an overrunning
-    pct process is killed and reported as a failed attempt rather than blocking
-    the run forever.
+    kill_after is a mandatory wall-clock kill deadline in seconds: an overrunning
+    pct process is killed and reported as a failed command rather than blocking
+    the run forever. It is required rather than optional so "every pct invocation
+    is bounded" is a property of this function's signature, not a convention a
+    future call site can forget.
     """
     cmd = ['pct'] + cmd_args
 
@@ -208,12 +208,19 @@ def run_pct_command(module, cmd_args, kill_after=None):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            # Only the killable path needs its own process group: pct spawns
-            # children (lxc-attach and the guest command) that inherit the output
-            # pipes, so killing pct alone would leave them holding those pipes and
-            # communicate() would block exactly as long as the hang it must bound.
-            # Unbounded calls stay in the caller's group so Ctrl-C still reaches them.
-            start_new_session=kill_after is not None
+            # Every call is bounded, so every call must be killable, so every call
+            # gets its own process group: pct spawns children (lxc-attach and the
+            # guest command) that inherit the output pipes, so killing pct alone
+            # would leave them holding those pipes and communicate() would block
+            # exactly as long as the hang it must bound.
+            #
+            # Deliberate consequence: detaching means Ctrl-C no longer reaches pct.
+            # Accepted. No long-running interactive pct command remains in this
+            # adapter -- every command it offers is a short host operation or a
+            # reboot -- so the bound above, not the operator's terminal, is what
+            # ends a wedged call. Re-coupling Ctrl-C would cost the kill that
+            # bounds these calls, which is the more valuable of the two.
+            start_new_session=True
         )
     except Exception as e:
         module.fail_json(msg=f"Failed to execute pct command: {str(e)}")
@@ -334,18 +341,19 @@ def main():
             command=dict(
                 type='str',
                 required=True,
-                choices=[
-                    'status', 'config', 'set', 'exec', 'start', 'stop',
-                    'restart', 'reboot', 'shutdown', 'wait_exec'
-                ]
+                choices=['status', 'config', 'set', 'exec', 'reboot', 'wait_exec']
             ),
             exec_command=dict(type='str', required=False),
             config_options=dict(type='dict', required=False),
-            timeout=dict(type='int', required=False, default=30),
-            ready_timeout=dict(type='int', required=False, default=120),
-            ready_delay=dict(type='int', required=False, default=3),
-            ready_command_timeout=dict(type='int', required=False, default=10)
+            # No defaults for the readiness bounds: see the module notes. The
+            # calling role owns those numbers and always passes them.
+            ready_timeout=dict(type='int', required=False),
+            ready_delay=dict(type='int', required=False),
+            ready_command_timeout=dict(type='int', required=False)
         ),
+        required_if=[
+            ('command', 'wait_exec', ['ready_timeout', 'ready_delay', 'ready_command_timeout'])
+        ],
         supports_check_mode=True
     )
 
@@ -353,7 +361,6 @@ def main():
     command = module.params['command']
     exec_command = module.params.get('exec_command')
     config_options = module.params.get('config_options')
-    timeout = module.params['timeout']
 
     if command == 'wait_exec':
         ready_timeout = module.params['ready_timeout']
@@ -395,20 +402,8 @@ def main():
             module.fail_json(msg="exec_command required for 'exec' command")
         cmd_args = ['exec', str(vmid), '--', 'sh', '-c', exec_command]
         changed = False
-    elif command == 'start':
-        cmd_args = ['start', str(vmid)]
-        changed = True
-    elif command == 'stop':
-        cmd_args = ['stop', str(vmid), '--timeout', str(timeout)]
-        changed = True
-    elif command == 'restart':
-        cmd_args = ['restart', str(vmid), '--timeout', str(timeout)]
-        changed = True
     elif command == 'reboot':
         cmd_args = ['reboot', str(vmid)]
-        changed = True
-    elif command == 'shutdown':
-        cmd_args = ['shutdown', str(vmid), '--timeout', str(timeout)]
         changed = True
     else:
         module.fail_json(msg=f"Unsupported command: {command}")
@@ -417,7 +412,10 @@ def main():
     if module.check_mode and changed:
         module.exit_json(changed=True, msg=f"Would execute: pct {' '.join(cmd_args)}")
 
-    result = run_pct_command(module, cmd_args)
+    kill_after = (
+        PCT_REBOOT_TIMEOUT_SECONDS if command == 'reboot' else PCT_COMMAND_TIMEOUT_SECONDS
+    )
+    result = run_pct_command(module, cmd_args, kill_after=kill_after)
 
     # Build response
     response = {
@@ -434,10 +432,15 @@ def main():
     elif command == 'config' and result['rc'] == 0:
         response['config'] = parse_config(result['stdout'])
 
-    # Fail if command failed
+    # Fail if command failed. Naming the LXC and the exact call is what makes a
+    # wedged host actionable, and matches the readiness message above: a killed
+    # call reports rc=TIMEOUT_RC and carries the bound it exceeded in stderr.
     if result['rc'] != 0:
         module.fail_json(
-            msg=f"pct command failed: {result['stderr']}",
+            msg=(
+                f"LXC {vmid}: '{result['cmd']}' failed with rc={result['rc']}. "
+                f"stderr: {result['stderr'] or '<empty>'}"
+            ),
             **response
         )
 
