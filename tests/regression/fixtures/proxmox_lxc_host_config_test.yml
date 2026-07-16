@@ -7,6 +7,11 @@
     proxmox_host_config_delegate: localhost
     proxmox_lxc_host_config_become: false
     proxmox_lxc_host_config_path_root: "{{ temp_root }}/etc/pve/lxc"
+    # Guest-command readiness is bounded, not slept through. The controlled pct
+    # adapter answers instantly, so these bounds only cap the failure scenarios.
+    proxmox_lxc_host_config_restart_ready_timeout: 20
+    proxmox_lxc_host_config_restart_ready_delay: 1
+    proxmox_lxc_host_config_restart_ready_command_timeout: 5
     proxmox_lxc_contract:
       host_config:
         vmid: 4201
@@ -99,6 +104,34 @@
               ;;
             reboot)
               ;;
+            exec)
+              # Controlled guest-command readiness. The mode file selects
+              # immediate success, delayed success, or permanent failure.
+              MODE=ready
+              if [ -f "{{ temp_root }}/pct-exec-mode.txt" ]; then
+                MODE=$(cat "{{ temp_root }}/pct-exec-mode.txt")
+              fi
+              case "$MODE" in
+                ready)
+                  ;;
+                delayed)
+                  COUNT=0
+                  if [ -f "{{ temp_root }}/pct-exec-attempts.txt" ]; then
+                    COUNT=$(cat "{{ temp_root }}/pct-exec-attempts.txt")
+                  fi
+                  COUNT=$((COUNT + 1))
+                  printf '%s\n' "$COUNT" > "{{ temp_root }}/pct-exec-attempts.txt"
+                  if [ "$COUNT" -lt 3 ]; then
+                    echo "container is not ready for guest commands" >&2
+                    exit 255
+                  fi
+                  ;;
+                *)
+                  echo "container is not ready for guest commands" >&2
+                  exit 255
+                  ;;
+              esac
+              ;;
             *)
               echo "unexpected pct args: $*" >&2
               exit 1
@@ -155,6 +188,9 @@
           - "'set 4201 --features keyctl=1,nesting=1' in (_pct_calls_initial.content | b64decode)"
           - "'status 4201' in (_pct_calls_initial.content | b64decode)"
           - "'reboot 4201' in (_pct_calls_initial.content | b64decode)"
+          # Immediate guest-command readiness: one probe, no retry, no fixed pause.
+          - "'exec 4201 -- sh -c true' in (_pct_calls_initial.content | b64decode)"
+          - "((_pct_calls_initial.content | b64decode).split('exec 4201') | length) == 2"
         fail_msg: "Initial host reconciliation did not converge authoritative managed sets"
 
     - name: Reset mock pct call log before unchanged reconciliation
@@ -190,6 +226,7 @@
           - "'set 4201 --features' not in (_pct_calls_unchanged.content | b64decode)"
           - "'status 4201' not in (_pct_calls_unchanged.content | b64decode)"
           - "'reboot 4201' not in (_pct_calls_unchanged.content | b64decode)"
+          - "'exec 4201' not in (_pct_calls_unchanged.content | b64decode)"
         fail_msg: "An unchanged authoritative reconciliation was not idempotent"
 
     - name: Externally reorder equivalent managed configuration
@@ -254,6 +291,7 @@
           - "'set 4201 --features' not in (_pct_calls_reordered.content | b64decode)"
           - "'status 4201' not in (_pct_calls_reordered.content | b64decode)"
           - "'reboot 4201' not in (_pct_calls_reordered.content | b64decode)"
+          - "'exec 4201' not in (_pct_calls_reordered.content | b64decode)"
         fail_msg: "Equivalent managed ordering caused a false change or restart"
 
     - name: Reduce every managed category to an empty desired set
@@ -285,6 +323,13 @@
         mode: "0644"
         content: ""
 
+    # The restarted container refuses guest commands twice before accepting them.
+    - name: Make guest-command readiness succeed only after failed attempts
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-exec-mode.txt"
+        mode: "0644"
+        content: "delayed"
+
     - name: Apply semantic managed-state reduction
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
@@ -302,6 +347,11 @@
       ansible.builtin.slurp:
         src: "{{ temp_root }}/pct-calls.log"
       register: _pct_calls_reduced
+
+    - name: Read guest-command readiness attempt count after semantic reduction
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/pct-exec-attempts.txt"
+      register: _pct_exec_attempts_reduced
 
     - name: Assert empty desired sets remove only managed configuration
       ansible.builtin.assert:
@@ -327,6 +377,10 @@
           - "'set 4201 --delete features' in (_pct_calls_reduced.content | b64decode)"
           - "'status 4201' in (_pct_calls_reduced.content | b64decode)"
           - "'reboot 4201' in (_pct_calls_reduced.content | b64decode)"
+          # Delayed readiness: the seam retried until the guest command succeeded,
+          # and only then published restart_applied.
+          - "((_pct_exec_attempts_reduced.content | b64decode) | trim | int) == 3"
+          - "((_pct_calls_reduced.content | b64decode).split('exec 4201') | length) == 4"
         fail_msg: "Empty desired sets did not remove all managed configuration"
 
     - name: Reset mock pct call log before final unchanged reconciliation
@@ -357,4 +411,5 @@
           - "'set 4201 --features' not in (_pct_calls_final.content | b64decode)"
           - "'status 4201' not in (_pct_calls_final.content | b64decode)"
           - "'reboot 4201' not in (_pct_calls_final.content | b64decode)"
+          - "'exec 4201' not in (_pct_calls_final.content | b64decode)"
         fail_msg: "The final reconciliation repeated a semantic managed change"

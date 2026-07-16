@@ -1,0 +1,116 @@
+---
+- name: Test host-config guest-command readiness failing at its deadline
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_host_config_delegate: localhost
+    proxmox_lxc_host_config_become: false
+    proxmox_lxc_host_config_path_root: "{{ temp_root }}/etc/pve/lxc"
+    # A short deadline keeps permanent-failure coverage bounded by the role's own
+    # configurable knobs rather than by a test-only delay override.
+    proxmox_lxc_host_config_restart_ready_timeout: 3
+    proxmox_lxc_host_config_restart_ready_delay: 1
+    proxmox_lxc_host_config_restart_ready_command_timeout: 2
+    proxmox_lxc_contract:
+      host_config:
+        vmid: 4204
+        hostname: readiness-deadline-host
+        host_directories: []
+        bind_mounts: {}
+        idmap:
+          - u 0 100000 65536
+          - g 0 100000 65536
+        features: []
+        configure_nvidia_runtime: false
+        wireguard_kernel_module_access: false
+        lxc_custom_sysctls: []
+        lxc_disable_apparmor: false
+  tasks:
+    - name: Create temp Proxmox config root
+      ansible.builtin.file:
+        path: "{{ proxmox_lxc_host_config_path_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Seed container config file with a restart-requiring divergence
+      ansible.builtin.copy:
+        dest: "{{ proxmox_lxc_host_config_path_root }}/4204.conf"
+        mode: "0644"
+        content: |
+          arch: amd64
+          hostname: readiness-deadline-host
+          memory: 2048
+          unprivileged: 1
+          lxc.idmap: u 0 200000 65536
+          rootfs: local-lvm:vm-4204-disk-0,size=16G
+
+    - name: Place mock pct script that never accepts guest commands
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "$*" >> "{{ temp_root }}/pct-calls.log"
+          case "$1" in
+            config)
+              echo "arch: amd64"
+              ;;
+            status)
+              echo "status: running"
+              ;;
+            reboot)
+              ;;
+            exec)
+              # The restarted container is running but never usable.
+              echo "container is not ready for guest commands" >&2
+              exit 255
+              ;;
+            *)
+              echo "unexpected pct args: $*" >&2
+              exit 1
+              ;;
+          esac
+          exit 0
+
+    - name: Initialize readiness failure result
+      ansible.builtin.set_fact:
+        _readiness_failed: false
+        _readiness_failure_msg: ""
+
+    - name: Reconcile against a container that never accepts guest commands
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        # The role's nested concern path is intentional and part of this production-hierarchy fixture.
+        - name: Include host configuration role for unreachable readiness  # noqa: role-name[path]
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+      rescue:
+        - name: Record expected readiness failure
+          ansible.builtin.set_fact:
+            _readiness_failed: true
+            _readiness_failure_msg: "{{ ansible_failed_result.msg | default('') }}"
+
+    - name: Read mock pct call log after unreachable readiness
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_unready
+
+    - name: Assert unreachable readiness fails at the deadline without publishing a restart
+      ansible.builtin.assert:
+        that:
+          - _readiness_failed
+          # Actionable: names the LXC identity and the readiness condition that failed.
+          - "'4204' in _readiness_failure_msg"
+          - "'ready for guest commands' in _readiness_failure_msg"
+          - "'pct exec 4204 -- sh -c true' in _readiness_failure_msg"
+          - "'3s readiness deadline' in _readiness_failure_msg"
+          - "'container is not ready for guest commands' in _readiness_failure_msg"
+          - "'reboot 4204' in (_pct_calls_unready.content | b64decode)"
+          # Polling is bounded: it retried, then gave up at the deadline.
+          - "((_pct_calls_unready.content | b64decode).split('exec 4204') | length) > 2"
+          # restart_applied is published only once the readiness outcome is known.
+          - not proxmox_lxc_host_config_result.restart_applied
+          - proxmox_lxc_host_config_result.restart_required
+        fail_msg: "Unreachable guest-command readiness did not fail at the configured deadline"

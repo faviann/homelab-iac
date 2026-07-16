@@ -36,6 +36,10 @@ _Avoid_: Normal lifecycle configuration, full convergence
 The portion of an LXC's Proxmox-host configuration whose complete desired state is expressed by the compiled LXC contract. Manual changes within a managed category are not durable; configuration outside managed categories remains untouched.
 _Avoid_: Additive configuration, minimum configuration
 
+**Guest-command readiness**:
+The proof that an LXC accepts a minimal command executed inside it through the Proxmox host. It is bounded by a deadline and is the only readiness managed host configuration establishes after a restart. It does not imply SSH access, boot completion, or application health; those remain owned by the modules that require them, and SSH access stays owned by the guest-configuration connection wait.
+_Avoid_: Container running, boot complete, SSH ready
+
 **LXC observation**:
 A point-in-time representation of an LXC's current infrastructure and runtime state, used to compare reality with its compiled desired state.
 _Avoid_: Validation snapshot, independently queried state

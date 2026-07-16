@@ -21,3 +21,21 @@ argument_specs:
         required: false
         default: /etc/pve/lxc
         description: Root path containing Proxmox LXC config files.
+      proxmox_lxc_host_config_restart_ready_timeout:
+        type: int
+        required: false
+        default: 120
+        description: >-
+          Overall deadline, in seconds, for a restarted LXC to accept a guest command
+          through the Proxmox host.
+      proxmox_lxc_host_config_restart_ready_delay:
+        type: int
+        required: false
+        default: 3
+        description: Delay, in seconds, between guest-command readiness attempts.
+      proxmox_lxc_host_config_restart_ready_command_timeout:
+        type: int
+        required: false
+        default: 10
+        description: >-
+          Per-attempt execution timeout, in seconds, for the guest-command readiness probe.
