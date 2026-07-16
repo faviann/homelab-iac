@@ -119,6 +119,7 @@ CASES: tuple[tuple[str, ...], ...] = (
     ("compile_failure", "--limit", "barrier_valid,barrier_compile_invalid"),
     ("self_skip", "--limit", "workstation"),
     ("self_include", "--limit", "workstation", "-e", "proxmox_skip_self=false"),
+    ("self_include_then_skip", "--limit", "workstation"),
     ("unsafe_default", "--limit", "barrier_valid,barrier_after_failure"),
 )
 

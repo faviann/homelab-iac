@@ -71,4 +71,3 @@
         after: "{{ proxmox_lxc_lifecycle_observation_before | default({}) }}"
   when:
     - proxmox_lifecycle_planning_problem | length > 0
-    - lxc_lifecycle_result.outcome.status | default('') != 'planning_failed'

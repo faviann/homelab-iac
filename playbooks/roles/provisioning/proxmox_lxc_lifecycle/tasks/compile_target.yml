@@ -30,17 +30,3 @@
             (ansible_failed_result | default({})).msg
             | default('LXC contract compilation failed for ' ~ inventory_hostname)
           }}
-
-- name: Publish the target-local failed compilation candidate
-  ansible.builtin.set_fact:
-    lxc_lifecycle_result:
-      intent: "{{ proxmox_lifecycle_intent }}"
-      plan: "{{ proxmox_lxc_lifecycle_plan }}"
-      outcome:
-        status: planning_failed
-        reason: "{{ proxmox_lifecycle_planning_problem }}"
-        rebuilt: false
-      observations:
-        before: "{{ proxmox_lxc_lifecycle_observation_before }}"
-        after: "{{ proxmox_lxc_lifecycle_observation_before }}"
-  when: proxmox_lifecycle_planning_problem | length > 0

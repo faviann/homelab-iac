@@ -3,9 +3,31 @@
 # linear strategy: it establishes the targeted-set coordination facts consumed
 # by the independently scheduled compilation phase.
 
-- name: Mark this host outside the targeted LXC set until selected
+- name: Reset lifecycle run coordination before target selection
+  ansible.builtin.set_fact:
+    proxmox_lifecycle_target_hosts: []
+    proxmox_lifecycle_compiled_target_hosts: []
+    proxmox_lifecycle_failed_target_hosts: []
+    proxmox_lifecycle_execution_failure: {}
+    lxc_lifecycle_results: {}
+    lxc_lifecycle_skip_hosts: []
+    lxc_lifecycle_rebuilt_hosts: []
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Reset target-local lifecycle state before controller selection
   ansible.builtin.set_fact:
     proxmox_lifecycle_selected: false
+    proxmox_lifecycle_planning_problem: ""
+    proxmox_lifecycle_barrier_blocked: false
+    proxmox_lifecycle_rebuilt: false
+    proxmox_lxc_rebuilt: false
+    lxc_lifecycle_skip_host: false
+    proxmox_lxc_lifecycle_plan: {}
+    proxmox_lxc_lifecycle_observation_before: {}
+    proxmox_lxc_lifecycle_observation_after: {}
+    lxc_lifecycle_result: {}
 
 - name: Skip if this host is the Ansible controller
   ansible.builtin.meta: end_host
@@ -16,19 +38,10 @@
 - name: Record the command-targeted LXC set
   ansible.builtin.set_fact:
     proxmox_lifecycle_target_hosts: "{{ ansible_play_hosts }}"
-    proxmox_lifecycle_execution_failure: {}
   delegate_to: localhost
   delegate_facts: true
   run_once: true
 
-- name: Reset target-local lifecycle planning state
+- name: Mark this host selected for target-local lifecycle planning
   ansible.builtin.set_fact:
     proxmox_lifecycle_selected: true
-    proxmox_lifecycle_planning_problem: ""
-    proxmox_lifecycle_rebuilt: false
-    proxmox_lxc_rebuilt: false
-    lxc_lifecycle_skip_host: false
-    proxmox_lxc_lifecycle_plan: {}
-    proxmox_lxc_lifecycle_observation_before: {}
-    proxmox_lxc_lifecycle_observation_after: {}
-    lxc_lifecycle_result: {}

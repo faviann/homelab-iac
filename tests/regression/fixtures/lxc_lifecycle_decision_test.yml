@@ -286,6 +286,13 @@
       vars:
         proxmox_lifecycle_intent: invalid_second_run
 
+    - name: Publish the second run's target-local planning failure
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan_target
+      vars:
+        proxmox_lifecycle_intent: invalid_second_run
+
     - name: Coordinate the failed second-run planning barrier
       ansible.builtin.import_role:
         name: provisioning/proxmox_lxc_lifecycle
