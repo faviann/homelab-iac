@@ -6,7 +6,6 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
-import time
 from pathlib import Path
 
 
@@ -76,7 +75,6 @@ exit 0
         "rg",
         "ssh",
         "ssh-keygen",
-        "setsid",
         "update-agent-tools",
         "uv",
     ):
@@ -115,16 +113,6 @@ def _run_setup(temp_root: Path, env: dict[str, str]) -> subprocess.CompletedProc
         env=env,
         check=False,
     )
-
-
-def _wait_for_command(command_log: Path, expected: str) -> str:
-    commands = ""
-    for _ in range(50):
-        commands = command_log.read_text(encoding="utf-8")
-        if expected in commands:
-            return commands
-        time.sleep(0.02)
-    return commands
 
 
 def test_workstation_first_login_setup_contract() -> None:
@@ -170,6 +158,28 @@ def test_workstation_first_login_setup_contract() -> None:
             / "bin"
             / "executable_update-agent-tools"
         )
+
+        marker = home / ".local" / "state" / "workstation-setup" / "complete"
+        marker_contents = marker.read_text(encoding="utf-8")
+        marker.unlink()
+        incomplete_profile = subprocess.run(
+            ["script", "-qec", '. "$PROFILE_HOOK"', "/dev/null"],
+            input="n\n",
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+            | {
+                "PROFILE_HOOK": str(root / "etc/profile.d/workstation-setup.sh"),
+                "SSH_CONNECTION": "test",
+            },
+            check=False,
+        )
+        assert incomplete_profile.returncode == 0
+        assert "Workstation setup has not completed. Run workstation-setup now? [y/N]" in (
+            incomplete_profile.stdout
+        )
+        marker.write_text(marker_contents, encoding="utf-8")
 
         _write_executable(workstation_update_source, "#!/bin/sh\nexit 0\n")
         repaired = _run_setup(root, env)
@@ -241,9 +251,19 @@ def test_workstation_first_login_setup_contract() -> None:
         assert missing_checker_profile.returncode == 0
         assert "workstation-update is missing or not executable" in missing_checker_profile.stderr
         assert "Run workstation-setup to repair the workstation" in missing_checker_profile.stderr
-        expected_autosync_launch = f"setsid {root / 'bin' / 'workstation-autosync'}"
-        missing_checker_commands = _wait_for_command(root / "commands.log", expected_autosync_launch)
-        assert expected_autosync_launch in missing_checker_commands
+        assert (root / "commands.log").read_text(encoding="utf-8") == ""
+
+        skipped_prompt_profile = subprocess.run(
+            ["bash", "-c", f'. "{root / "etc/profile.d/workstation-setup.sh"}"'],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env | {"SSH_CONNECTION": "test", "WORKSTATION_SETUP_SKIP": "1"},
+            check=False,
+        )
+        assert skipped_prompt_profile.returncode == 0
+        assert "workstation-update is missing or not executable" in skipped_prompt_profile.stderr
+        assert "Run workstation-setup to repair the workstation" in skipped_prompt_profile.stderr
 
         _write_executable(workstation_update, "#!/bin/sh\nexit 0\n")
         (root / "commands.log").write_text("", encoding="utf-8")
@@ -256,6 +276,7 @@ def test_workstation_first_login_setup_contract() -> None:
             check=False,
         )
         assert checker_present_profile.returncode == 0
+        assert checker_present_profile.stdout == ""
+        assert checker_present_profile.stderr == ""
         assert "workstation-update is missing or not executable" not in checker_present_profile.stderr
-        checker_present_commands = _wait_for_command(root / "commands.log", expected_autosync_launch)
-        assert expected_autosync_launch in checker_present_commands
+        assert (root / "commands.log").read_text(encoding="utf-8") == ""

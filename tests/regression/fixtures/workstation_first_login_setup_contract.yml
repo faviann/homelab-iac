@@ -11,7 +11,6 @@
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_aoe_proxy_firewall_nft_dir: "{{ temp_root }}/etc/nftables.d"
     workstation_aoe_proxy_firewall_service_path: "{{ temp_root }}/etc/systemd/system/workstation-aoe-proxy-firewall.service"
-    workstation_autosync_bin_path: "{{ temp_root }}/bin/workstation-autosync"
     workstation_packages: []
     workstation_locale_enabled: false
     workstation_chezmoi_install_enabled: false
@@ -174,6 +173,8 @@
           - not ((setup_hook_raw.content | b64decode) is search('\\[ ! -e '))
           - (setup_hook_raw.content | b64decode) is search('workstation-setup')
           - (setup_hook_raw.content | b64decode) is search('workstation-update is missing or not executable')
+          - not ((setup_hook_raw.content | b64decode) is search('setsid'))
+          - not ((setup_hook_raw.content | b64decode) is search('chezmoi apply'))
           - not ((setup_hook_raw.content | b64decode) is search('mise'))
           - not ((setup_hook_raw.content | b64decode) is search('/run/workstation-bootstrap'))
           - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTID'))

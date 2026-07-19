@@ -90,15 +90,6 @@
     group: "{{ workstation_system_bin_group }}"
     mode: "0755"
 
-- name: Install workstation autosync command
-  ansible.builtin.template:
-    src: workstation-autosync.sh.j2
-    dest: "{{ workstation_autosync_bin_path }}"
-    owner: "{{ workstation_system_bin_owner }}"
-    group: "{{ workstation_system_bin_group }}"
-    mode: "0755"
-  when: workstation_autosync_enabled | bool
-
 - name: Install workstation setup login hook
   ansible.builtin.template:
     src: workstation-setup-profile.sh.j2

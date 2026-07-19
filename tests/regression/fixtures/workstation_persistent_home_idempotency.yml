@@ -10,7 +10,6 @@
     workstation_home: "{{ temp_root }}/home/faviann"
     workstation_aoe_proxy_firewall_nft_dir: "{{ temp_root }}/etc/nftables.d"
     workstation_aoe_proxy_firewall_service_path: "{{ temp_root }}/etc/systemd/system/workstation-aoe-proxy-firewall.service"
-    workstation_autosync_bin_path: "{{ temp_root }}/bin/workstation-autosync"
     workstation_persistent_home_enabled: true
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
     workstation_persistent_home_mount_state: present
