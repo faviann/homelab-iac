@@ -388,6 +388,8 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("workstation_setup_marker_path", profile_hook)
         self.assertIn("workstation_setup_bin_path", profile_hook)
         self.assertIn("workstation-update is missing or not executable", profile_hook)
+        self.assertNotIn("setsid", profile_hook)
+        self.assertNotIn("chezmoi apply", profile_hook)
         persistent_home_tasks = load_yaml(
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml"
         )

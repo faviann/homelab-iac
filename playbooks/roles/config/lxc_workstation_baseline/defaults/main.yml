@@ -97,12 +97,5 @@ workstation_update_source_path: >-
   {{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_workstation-update
 workstation_update_bin_path: "{{ workstation_home }}/.local/bin/workstation-update"
 workstation_update_requires_bitwarden: false
-workstation_autosync_enabled: true
-workstation_autosync_bin_path: /usr/local/bin/workstation-autosync
-workstation_autosync_min_interval_seconds: 300
-workstation_autosync_log_path: "{{ workstation_home }}/.local/state/workstation-setup/autosync.log"
-workstation_autosync_stamp_path: "{{ workstation_home }}/.local/state/workstation-setup/autosync.last"
-workstation_autosync_lock_path: "{{ workstation_home }}/.local/state/workstation-setup/autosync.lock"
-workstation_autosync_notices_path: "{{ workstation_home }}/.local/state/workstation-setup/notices"
 workstation_system_bin_owner: root
 workstation_system_bin_group: root
