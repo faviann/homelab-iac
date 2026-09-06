@@ -65,6 +65,10 @@ with Path(os.environ["VAULT_TEST_BOUNDARY_CAPTURE"]).open(
             {
                 "boundary": "uv",
                 "command": command[:2],
+                "password_file_flag": any(
+                    argument.startswith("--vault-password-file=")
+                    for argument in command
+                ),
                 "tracked_state": tracked_state,
                 "tracked_digest": tracked_digest,
             }
@@ -122,8 +126,6 @@ if command[:2] == ["ansible-vault", "view"]:
         os.kill(os.getppid(), int(os.environ["VAULT_TEST_VIEW_SIGNAL"]))
     raise SystemExit(0)
 if command[:2] == ["ansible-vault", "rekey"]:
-    if os.environ.get("VAULT_TEST_REKEY_FAIL") == "1":
-        raise SystemExit(91)
     target = Path(command[-1])
     data = target.read_text(encoding="utf-8")
     if not data.startswith("$ANSIBLE_VAULT;"):

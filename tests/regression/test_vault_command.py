@@ -42,7 +42,6 @@ FAKE_KNOB_ENV: dict[str, dict[str, str]] = {
         "decrypt_writes_then_fail": "VAULT_TEST_DECRYPT_WRITES_THEN_FAIL",
         "encrypt_fail": "VAULT_TEST_ENCRYPT_FAIL",
         "python_fail": "VAULT_TEST_PYTHON_FAIL",
-        "rekey_fail": "VAULT_TEST_REKEY_FAIL",
         "require_project_cwd": "VAULT_TEST_REQUIRE_PROJECT_CWD",
         "validate_fail": "VAULT_TEST_VALIDATE_FAIL",
         "verify_fail": "VAULT_TEST_VERIFY_FAIL",
@@ -64,9 +63,7 @@ FAKE_KNOB_ENV: dict[str, dict[str, str]] = {
     "stat": {},
     "bw": {
         "edit_fail": "VAULT_TEST_BW_EDIT_FAIL",
-        "get_fail": "VAULT_TEST_BW_GET_FAIL",
         "status": "VAULT_TEST_BW_STATUS",
-        "unlock_fail": "VAULT_TEST_BW_UNLOCK_FAIL",
     },
     "chezmoi": {"fail": "VAULT_TEST_CHEZMOI_FAIL"},
 }
@@ -1815,12 +1812,70 @@ def test_rotate_publishes_only_after_a_verified_local_rekey(
     # Both verifications happen: the new passphrase locally, then end to end
     # through the live passphrase file after chezmoi regenerated it.
     assert ordered.index(("uv", ["ansible-vault", "view"]), apply_index) > apply_index
+    # The first names the new passphrase file; the authoritative one after
+    # chezmoi apply carries no password-file flag, so it resolves the live file.
+    views = [
+        event
+        for event in boundary_events(env)
+        if event["boundary"] == "uv"
+        and event["command"] == ["ansible-vault", "view"]
+    ]
+    assert [view["password_file_flag"] for view in views] == [True, False]
     assert vault.read_bytes() != vault_before
     assert passphrase_file.read_text(encoding="utf-8") == f"{NEW_PASSPHRASE}\n"
     assert bitwarden_item(env)["notes"] == NEW_PASSPHRASE
     assert run_vault(repo, env, "check").returncode == 0
     for marker in (OLD_PASSPHRASE, NEW_PASSPHRASE, "synthetic-token-marker"):
         assert marker not in output
+
+
+def test_real_rotation_refuses_a_non_standard_live_passphrase_file(
+    rotation_repo: tuple[Path, dict[str, str]], tmp_path: Path
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    standard = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    diverted = tmp_path / "diverted-vault-pass"
+    diverted.write_text(f"{OLD_PASSPHRASE}\n", encoding="utf-8")
+    diverted.chmod(0o600)
+    env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(diverted)
+    vault_before = vault.read_bytes()
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 1, output
+    assert "standard live passphrase file" in output
+    assert vault.read_bytes() == vault_before
+    assert standard.read_text(encoding="utf-8") == f"{OLD_PASSPHRASE}\n"
+    assert diverted.read_text(encoding="utf-8") == f"{OLD_PASSPHRASE}\n"
+    assert bitwarden_item(env)["notes"] == OLD_PASSPHRASE
+    # The refusal lands before any external boundary is touched at all.
+    capture = Path(env["VAULT_TEST_BOUNDARY_CAPTURE"])
+    assert not capture.exists() or boundary_events(env) == []
+
+
+def test_rotate_unlocks_a_locked_bitwarden_session_before_publishing(
+    rotation_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+) -> None:
+    repo, env = rotation_repo
+    fake_executable("bw", env, status="locked")
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 0, output
+    commands = [
+        event["command"]
+        for event in boundary_events(env)
+        if event["boundary"] == "bitwarden"
+    ]
+    assert ["unlock", "--raw"] in commands
+    assert commands.index(["unlock", "--raw"]) < next(
+        index for index, command in enumerate(commands) if command[:2] == ["edit", "item"]
+    )
+    assert bitwarden_item(env)["notes"] == NEW_PASSPHRASE
+    # The session token is never echoed, and no master password is handled here.
+    assert "session-token" not in output
 
 
 def test_rotate_keeps_the_plaintext_workspace_private_and_removes_it(

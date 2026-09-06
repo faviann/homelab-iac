@@ -41,12 +41,18 @@ report_content_failures() {
     check_line "vault_proxmox_api_token_secret" FAIL
 }
 
+vault_file_is_encrypted() {
+    local first_line
+    [[ -f "$VAULT_FILE" ]] \
+        && IFS= read -r first_line <"$VAULT_FILE" \
+        && [[ "$first_line" =~ ^\$ANSIBLE_VAULT\;1\.[12]\;AES256($|\;) ]]
+}
+
 check_vault() {
     local workspace plaintext content_checks mode owner
     CHECK_FAILED=0
 
-    if [[ -f "$VAULT_FILE" ]] && IFS= read -r first_line < "$VAULT_FILE" \
-        && [[ "$first_line" =~ ^\$ANSIBLE_VAULT\;1\.[12]\;AES256($|\;) ]]; then
+    if vault_file_is_encrypted; then
         check_line "vault header" PASS
     else
         check_line "vault header" FAIL
@@ -456,13 +462,6 @@ rotation_recover() {
     return 0
 }
 
-vault_file_is_encrypted() {
-    local first_line
-    [[ -f "$VAULT_FILE" ]] \
-        && IFS= read -r first_line <"$VAULT_FILE" \
-        && [[ "$first_line" == '$ANSIBLE_VAULT;'* ]]
-}
-
 rotation_preflight() {
     local dry_run="$1"
     local required requirement status
@@ -476,6 +475,15 @@ rotation_preflight() {
     done
     [[ -s "$PASS_FILE" ]] || {
         rotation_fail "live passphrase file missing or empty: $PASS_FILE"
+        return 1
+    }
+    # A real rotation publishes through Bitwarden and chezmoi, which regenerate
+    # the standard path that ansible.cfg names. Rotating a passphrase file the
+    # fleet does not read would report success while that standard file stays
+    # OLD, so refuse before anything mutates. A rehearsal repoints internally.
+    [[ "$dry_run" == 1 || "$PASS_FILE" == "$HOME/.ansible/vault-pass" ]] || {
+        rotation_fail \
+            "rotate requires the standard live passphrase file, not $PASS_FILE"
         return 1
     }
     vault_file_is_encrypted || {
@@ -630,8 +638,10 @@ rotate_passphrase() {
     }
     rotation_step "chezmoi apply"
 
-    # Authoritative check: no override flags, so this reads the live passphrase
-    # file exactly the way ansible.cfg does.
+    # Authoritative check: no password-file flag, so this resolves the live
+    # passphrase file the way a fleet run does. Preflight already refused any
+    # non-standard ANSIBLE_VAULT_PASSWORD_FILE, so that is the file ansible.cfg
+    # names.
     uv run --locked ansible-vault view "$VAULT_FILE" >/dev/null 2>&1 || {
         rotation_fail "the live passphrase file cannot decrypt the vault"
         return 1

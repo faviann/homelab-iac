@@ -13,20 +13,19 @@ with Path(os.environ["VAULT_TEST_BOUNDARY_CAPTURE"]).open(
     stream.write(json.dumps({"boundary": "bitwarden", "command": args[:3]}) + "\n")
 
 if args[:1] == ["status"]:
-    status = os.environ.get("VAULT_TEST_BW_STATUS", "unlocked")
+    # An exported session token means unlocked, exactly as the real tool reports.
+    status = "unlocked"
+    if not os.environ.get("BW_SESSION"):
+        status = os.environ.get("VAULT_TEST_BW_STATUS", "unlocked")
     print(json.dumps({"status": status}))
     raise SystemExit(0)
 if args[:1] == ["unlock"]:
-    if os.environ.get("VAULT_TEST_BW_UNLOCK_FAIL") == "1":
-        raise SystemExit(1)
     print("session-token")
     raise SystemExit(0)
 if args[:1] == ["generate"]:
     print(os.environ["VAULT_TEST_NEW_PASSPHRASE"])
     raise SystemExit(0)
 if args[:2] == ["get", "item"]:
-    if os.environ.get("VAULT_TEST_BW_GET_FAIL") == "1":
-        raise SystemExit(1)
     sys.stdout.write(state.read_text(encoding="utf-8"))
     raise SystemExit(0)
 if args[:1] == ["encode"]:
