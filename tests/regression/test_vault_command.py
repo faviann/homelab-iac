@@ -116,6 +116,11 @@ def vault_repo(
             "VAULT_TEST_BOUNDARY_CAPTURE": str(tmp_path / "boundaries.jsonl"),
         }
     )
+    # Ambient values for anything the command or its fakes consult would
+    # outrank the fixture's injection, so drop them: BW_SESSION is how bw
+    # reports an unlocked session, and VISUAL wins over the injected EDITOR.
+    for inherited in ("BW_SESSION", "VISUAL", "EDITOR"):
+        env.pop(inherited, None)
     for name in ("uv", "mv", "rm"):
         fake_executable(name, env)
     return repo, env

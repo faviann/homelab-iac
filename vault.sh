@@ -7,7 +7,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INVOCATION_DIR="$PWD"
 cd "$PROJECT_ROOT" || exit 1
 VAULT_FILE="$PROJECT_ROOT/inventory/group_vars/all/vault.yml"
-PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$HOME/.ansible/vault-pass}"
+STANDARD_PASS_FILE="$HOME/.ansible/vault-pass"
+PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$STANDARD_PASS_FILE}"
 TRANSACTION_WORKSPACE=""
 TRANSACTION_PUBLISH_TMP=""
 
@@ -481,7 +482,7 @@ rotation_preflight() {
     # the standard path that ansible.cfg names. Rotating a passphrase file the
     # fleet does not read would report success while that standard file stays
     # OLD, so refuse before anything mutates. A rehearsal repoints internally.
-    [[ "$dry_run" == 1 || "$PASS_FILE" == "$HOME/.ansible/vault-pass" ]] || {
+    [[ "$dry_run" == 1 || "$PASS_FILE" == "$STANDARD_PASS_FILE" ]] || {
         rotation_fail \
             "rotate requires the standard live passphrase file, not $PASS_FILE"
         return 1
