@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+import base64
+import json
+import os
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+state = Path(os.environ["VAULT_TEST_BW_ITEM_STATE"])
+with Path(os.environ["VAULT_TEST_BOUNDARY_CAPTURE"]).open(
+    "a", encoding="utf-8"
+) as stream:
+    stream.write(json.dumps({"boundary": "bitwarden", "command": args[:3]}) + "\n")
+
+if args[:1] == ["status"]:
+    status = os.environ.get("VAULT_TEST_BW_STATUS", "unlocked")
+    print(json.dumps({"status": status}))
+    raise SystemExit(0)
+if args[:1] == ["unlock"]:
+    if os.environ.get("VAULT_TEST_BW_UNLOCK_FAIL") == "1":
+        raise SystemExit(1)
+    print("session-token")
+    raise SystemExit(0)
+if args[:1] == ["generate"]:
+    print(os.environ["VAULT_TEST_NEW_PASSPHRASE"])
+    raise SystemExit(0)
+if args[:2] == ["get", "item"]:
+    if os.environ.get("VAULT_TEST_BW_GET_FAIL") == "1":
+        raise SystemExit(1)
+    sys.stdout.write(state.read_text(encoding="utf-8"))
+    raise SystemExit(0)
+if args[:1] == ["encode"]:
+    sys.stdout.write(base64.b64encode(sys.stdin.buffer.read()).decode("ascii"))
+    raise SystemExit(0)
+if args[:2] == ["edit", "item"]:
+    if os.environ.get("VAULT_TEST_BW_EDIT_FAIL") == "1":
+        raise SystemExit(1)
+    item = json.loads(base64.b64decode(sys.stdin.buffer.read()))
+    if item.get("id") != args[2]:
+        raise SystemExit(1)
+    state.write_text(json.dumps(item), encoding="utf-8")
+    raise SystemExit(0)
+raise SystemExit(90)

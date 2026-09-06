@@ -42,8 +42,10 @@ FAKE_KNOB_ENV: dict[str, dict[str, str]] = {
         "decrypt_writes_then_fail": "VAULT_TEST_DECRYPT_WRITES_THEN_FAIL",
         "encrypt_fail": "VAULT_TEST_ENCRYPT_FAIL",
         "python_fail": "VAULT_TEST_PYTHON_FAIL",
+        "rekey_fail": "VAULT_TEST_REKEY_FAIL",
         "require_project_cwd": "VAULT_TEST_REQUIRE_PROJECT_CWD",
         "validate_fail": "VAULT_TEST_VALIDATE_FAIL",
+        "verify_fail": "VAULT_TEST_VERIFY_FAIL",
         "view_signal": "VAULT_TEST_VIEW_SIGNAL",
     },
     "mv": {
@@ -60,6 +62,13 @@ FAKE_KNOB_ENV: dict[str, dict[str, str]] = {
         "signal": "VAULT_TEST_EDITOR_SIGNAL",
     },
     "stat": {},
+    "bw": {
+        "edit_fail": "VAULT_TEST_BW_EDIT_FAIL",
+        "get_fail": "VAULT_TEST_BW_GET_FAIL",
+        "status": "VAULT_TEST_BW_STATUS",
+        "unlock_fail": "VAULT_TEST_BW_UNLOCK_FAIL",
+    },
+    "chezmoi": {"fail": "VAULT_TEST_CHEZMOI_FAIL"},
 }
 
 
@@ -201,7 +210,9 @@ def test_vault_requires_an_operation_and_advertises_its_complete_interface() -> 
 
     assert missing.returncode == 2
     assert help_result.returncode == 0
-    assert {"configure", "edit", "check", "set"} <= set(help_result.stdout.split())
+    assert {"configure", "edit", "check", "set", "rotate"} <= set(
+        help_result.stdout.split()
+    )
 
 
 def test_vault_fakes_are_named_executable_fixtures(
@@ -212,8 +223,10 @@ def test_vault_fakes_are_named_executable_fixtures(
     _, env = vault_repo
     installed_bin = Path(env["PATH"].split(":", 1)[0])
     fake_executable("editor", env, capture=tmp_path / "editor-capture")
+    fake_executable("bw", env)
+    fake_executable("chezmoi", env)
 
-    for name in ("uv", "mv", "rm", "editor"):
+    for name in ("uv", "mv", "rm", "editor", "bw", "chezmoi"):
         fixture = FAKE_FIXTURES / name
         assert fixture.is_file()
         assert installed_bin.joinpath(name).read_bytes() == fixture.read_bytes()
@@ -682,6 +695,10 @@ def test_configure_rejects_non_tty_and_all_extra_arguments(
 
 def test_legacy_configure_command_is_absent_without_a_shim() -> None:
     assert not os.path.lexists(REPO_ROOT / "configure-vault.sh")
+
+
+def test_legacy_rotation_command_is_absent_without_a_shim() -> None:
+    assert not os.path.lexists(REPO_ROOT / "rotate-vault-passphrase.sh")
 
 
 def configure_interactions(
@@ -1626,3 +1643,434 @@ def test_set_refuses_the_vault_file_as_its_own_source(
         assert result.stderr == "set vault_transferred: FAIL\n"
         assert_vault_untouched(repo, original)
 
+
+OLD_PASSPHRASE = "old-passphrase-marker"
+NEW_PASSPHRASE = "rotation-new-passphrase-marker12"
+BITWARDEN_ITEM = "dotfiles/ansible-vault-pass"
+
+
+@pytest.fixture
+def rotation_repo(
+    vault_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+    tmp_path: Path,
+) -> tuple[Path, dict[str, str]]:
+    repo, env = vault_repo
+    (repo / "inventory/group_vars/all/vault.yml").write_text(
+        HEADER + VALID_YAML, encoding="utf-8"
+    )
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file.write_text(f"{OLD_PASSPHRASE}\n", encoding="utf-8")
+    passphrase_file.chmod(0o600)
+    item_state = tmp_path / "bitwarden-item.json"
+    item_state.write_text(
+        json.dumps(
+            {
+                "id": "11111111-2222-3333-4444-555555555555",
+                "name": BITWARDEN_ITEM,
+                "notes": OLD_PASSPHRASE,
+                "login": {"password": None},
+                "fields": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    env["VAULT_TEST_BW_ITEM_STATE"] = str(item_state)
+    env["VAULT_TEST_NEW_PASSPHRASE"] = NEW_PASSPHRASE
+    fake_executable("bw", env)
+    fake_executable("chezmoi", env)
+    return repo, env
+
+
+def bitwarden_item(env: dict[str, str]) -> dict[str, object]:
+    return json.loads(
+        Path(env["VAULT_TEST_BW_ITEM_STATE"]).read_text(encoding="utf-8")
+    )
+
+
+def rotate_on_a_tty(
+    repo: Path, env: dict[str, str], answer: str = "yes"
+) -> tuple[int, str]:
+    return run_vault_tty(
+        repo,
+        env,
+        [("Type 'yes' to continue: ", f"{answer}\n")],
+        "rotate",
+    )
+
+
+def test_rotate_dry_run_rehearses_without_touching_any_real_state(
+    rotation_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    vault_before = vault.read_bytes()
+    passphrase_before = passphrase_file.read_bytes()
+
+    result = run_vault(repo, env, "rotate", "--dry-run")
+
+    assert result.returncode == 0, result.stderr
+    assert vault.read_bytes() == vault_before
+    assert passphrase_file.read_bytes() == passphrase_before
+    assert bitwarden_item(env)["notes"] == OLD_PASSPHRASE
+    events = boundary_events(env)
+    assert [event for event in events if event["boundary"] == "bitwarden"] == []
+    assert [event for event in events if event["boundary"] == "chezmoi"] == []
+    uv_commands = [
+        event["command"] for event in events if event["boundary"] == "uv"
+    ]
+    assert ["ansible-vault", "rekey"] in uv_commands
+    assert ["ansible-vault", "view"] in uv_commands
+    assert_no_transaction_artifacts(repo, env)
+
+
+def test_rotate_dry_run_recovery_never_claims_the_real_vault_was_restored(
+    rotation_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    vault_before = vault.read_bytes()
+    fake_executable("uv", env, verify_fail=True)
+
+    result = run_vault(repo, env, "rotate", "--dry-run")
+
+    assert result.returncode == 1
+    assert "the new passphrase does not decrypt the vault" in result.stderr
+    assert "recovered (the rehearsal copy restored to the old passphrase)" in (
+        result.stderr
+    )
+    assert "the vault restored" not in result.stderr
+    assert str(vault) not in result.stderr
+    assert str(passphrase_file) not in result.stderr
+    assert vault.read_bytes() == vault_before
+    assert passphrase_file.read_text(encoding="utf-8") == f"{OLD_PASSPHRASE}\n"
+    assert_no_transaction_artifacts(repo, env)
+
+
+def test_rotate_requires_a_typed_confirmation_before_mutating_anything(
+    rotation_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    vault_before = vault.read_bytes()
+
+    returncode, output = rotate_on_a_tty(repo, env, answer="y")
+
+    assert returncode == 0, output
+    assert "ABORTED" in output
+    assert vault.read_bytes() == vault_before
+    assert passphrase_file.read_text(encoding="utf-8") == f"{OLD_PASSPHRASE}\n"
+    assert bitwarden_item(env)["notes"] == OLD_PASSPHRASE
+    events = boundary_events(env)
+    assert [
+        event
+        for event in events
+        if event["boundary"] == "uv" and event["command"][1:] == ["rekey"]
+    ] == []
+    assert [
+        event for event in events if event["boundary"] == "bitwarden"
+    ] and not [
+        event
+        for event in events
+        if event["boundary"] == "bitwarden" and event["command"][:2] == ["edit", "item"]
+    ]
+
+
+def test_rotate_publishes_only_after_a_verified_local_rekey(
+    rotation_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    vault_before = vault.read_bytes()
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 0, output
+    # Rekey and its verification are recorded strictly before the publish.
+    ordered = [
+        (event["boundary"], event.get("command"))
+        for event in boundary_events(env)
+        if event["boundary"] in ("uv", "bitwarden", "chezmoi")
+    ]
+    rekey = ordered.index(("uv", ["ansible-vault", "rekey"]))
+    verify = next(
+        index
+        for index, entry in enumerate(ordered)
+        if index > rekey and entry == ("uv", ["ansible-vault", "view"])
+    )
+    publish = next(
+        index
+        for index, entry in enumerate(ordered)
+        if entry[0] == "bitwarden" and entry[1][:2] == ["edit", "item"]
+    )
+    apply_index = next(
+        index for index, entry in enumerate(ordered) if entry[0] == "chezmoi"
+    )
+    assert rekey < verify < publish < apply_index
+    # Both verifications happen: the new passphrase locally, then end to end
+    # through the live passphrase file after chezmoi regenerated it.
+    assert ordered.index(("uv", ["ansible-vault", "view"]), apply_index) > apply_index
+    assert vault.read_bytes() != vault_before
+    assert passphrase_file.read_text(encoding="utf-8") == f"{NEW_PASSPHRASE}\n"
+    assert bitwarden_item(env)["notes"] == NEW_PASSPHRASE
+    assert run_vault(repo, env, "check").returncode == 0
+    for marker in (OLD_PASSPHRASE, NEW_PASSPHRASE, "synthetic-token-marker"):
+        assert marker not in output
+
+
+def test_rotate_keeps_the_plaintext_workspace_private_and_removes_it(
+    rotation_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = rotation_repo
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 0, output
+    workspaces = [
+        event for event in boundary_events(env) if event["boundary"] == "rekey-workspace"
+    ]
+    assert len(workspaces) == 1
+    workspace = Path(str(workspaces[0]["workspace"]))
+    assert workspace.parent == Path("/dev/shm")
+    assert workspace.name.startswith("homelab-vault.")
+    assert workspaces[0]["workspace_mode"] == 0o700
+    assert workspaces[0]["new_passphrase_mode"] == 0o600
+    assert not workspace.exists()
+    assert_no_transaction_artifacts(repo, env)
+
+
+def test_rotate_backs_the_old_ciphertext_up_outside_the_repository(
+    rotation_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault_before = vault.read_bytes()
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 0, output
+    backups = list((Path(env["HOME"]) / ".ansible").glob("vault.yml.bak.*"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == vault_before
+    assert backups[0].stat().st_mode & 0o777 == 0o600
+    assert list(repo.rglob("*.bak*")) == []
+
+
+def test_rotate_rolls_back_when_the_publish_fails(
+    rotation_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    vault_before = vault.read_bytes()
+    fake_executable("bw", env, edit_fail=True)
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 1, output
+    assert vault.read_bytes() == vault_before
+    assert passphrase_file.read_text(encoding="utf-8") == f"{OLD_PASSPHRASE}\n"
+    assert bitwarden_item(env)["notes"] == OLD_PASSPHRASE
+    assert [
+        event for event in boundary_events(env) if event["boundary"] == "chezmoi"
+    ] == []
+    assert run_vault(repo, env, "check").returncode == 0
+
+
+def test_rotate_rolls_forward_when_the_live_file_may_already_be_new(
+    rotation_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+) -> None:
+    repo, env = rotation_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    vault_before = vault.read_bytes()
+    fake_executable("chezmoi", env, fail=True)
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 1, output
+    assert vault.read_bytes() != vault_before
+    assert passphrase_file.read_text(encoding="utf-8") == f"{NEW_PASSPHRASE}\n"
+    assert passphrase_file.stat().st_mode & 0o777 == 0o600
+    assert bitwarden_item(env)["notes"] == NEW_PASSPHRASE
+    assert run_vault(repo, env, "check").returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("BW_ITEM", "attacker-item"),
+        ("BW_FIELD", "password"),
+        ("VAULT_FILE", "decoy-vault.yml"),
+        ("LIVE_PASS_FILE", "decoy-passphrase"),
+    ],
+)
+def test_rotate_ignores_every_environment_name_that_could_redirect_it(
+    rotation_repo: tuple[Path, dict[str, str]], name: str, value: str, tmp_path: Path
+) -> None:
+    repo, env = rotation_repo
+    decoy = tmp_path / value
+    env[name] = value if name.startswith("BW_") else str(decoy)
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    vault_before = vault.read_bytes()
+
+    returncode, output = rotate_on_a_tty(repo, env)
+
+    assert returncode == 0, output
+    assert not decoy.exists()
+    assert vault.read_bytes() != vault_before
+    assert passphrase_file.read_text(encoding="utf-8") == f"{NEW_PASSPHRASE}\n"
+    item = bitwarden_item(env)
+    assert item["notes"] == NEW_PASSPHRASE
+    assert item["login"] == {"password": None}
+    requested = [
+        event["command"]
+        for event in boundary_events(env)
+        if event["boundary"] == "bitwarden" and event["command"][:2] == ["get", "item"]
+    ]
+    assert requested and all(command[2] == BITWARDEN_ITEM for command in requested)
+    chezmoi_targets = [
+        event["targets"]
+        for event in boundary_events(env)
+        if event["boundary"] == "chezmoi"
+    ]
+    assert chezmoi_targets == [[str(passphrase_file)]]
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--bw-item",
+        "--bw-field",
+        "--vault-file",
+        "--live-pass-file",
+        "BW_ITEM",
+        "BW_FIELD",
+        "VAULT_FILE",
+        "LIVE_PASS_FILE",
+    ],
+)
+def test_rotate_rejects_every_option_that_could_redirect_it(
+    rotation_repo: tuple[Path, dict[str, str]], option: str
+) -> None:
+    repo, env = rotation_repo
+
+    assert run_vault(repo, env, "rotate", option, "value").returncode == 2
+    assert run_vault(repo, env, "rotate", f"{option}=value").returncode == 2
+
+
+def test_rotate_accepts_its_only_option_exactly_once(
+    rotation_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = rotation_repo
+
+    assert run_vault(repo, env, "rotate", "--dry-run", "--dry-run").returncode == 2
+    assert run_vault(repo, env, "rotate", "--dry-run").returncode == 0
+
+
+def test_rotate_dry_run_rekeys_through_real_ansible_vault(
+    real_vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault.write_text(VALID_YAML, encoding="utf-8")
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+    vault_before = vault.read_bytes()
+
+    result = subprocess.run(
+        [str(repo / "vault.sh"), "rotate", "--dry-run"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert vault.read_bytes() == vault_before
+    assert (
+        Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).read_text(encoding="utf-8")
+        == "real-smoke-passphrase\n"
+    )
+
+
+def test_agent_permitted_operations_never_disclose_a_vault_secret(
+    real_vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    markers = (
+        "disclosure-user-marker",
+        "disclosure-token-id-marker",
+        "disclosure-secret-marker",
+        "disclosure-unrelated-marker",
+    )
+    vault.write_text(
+        "---\n"
+        f"vault_proxmox_api_user: {markers[0]}\n"
+        f"vault_proxmox_api_token_id: {markers[1]}\n"
+        f"vault_proxmox_api_token_secret: {markers[2]}\n"
+        f"unrelated_scalar: {markers[3]}\n",
+        encoding="utf-8",
+    )
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+    created = tmp_path / "created-secret"
+    created.write_text("disclosure-created-marker\n", encoding="utf-8")
+    created.chmod(0o600)
+    replaced = tmp_path / "replaced-secret"
+    replaced.write_text("disclosure-replaced-marker\n", encoding="utf-8")
+    replaced.chmod(0o600)
+
+    runs = [
+        run_vault(repo, env, "check"),
+        run_vault(
+            repo,
+            env,
+            "set",
+            "transferred_key",
+            "--from-file",
+            str(created),
+            "--create",
+        ),
+        run_vault(
+            repo,
+            env,
+            "set",
+            "transferred_key",
+            "--from-file",
+            str(replaced),
+            "--replace",
+        ),
+        subprocess.run(
+            [str(repo / "vault.sh"), "rotate", "--dry-run"],
+            cwd=repo,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ),
+    ]
+
+    for result in runs:
+        assert result.returncode == 0, result.stderr
+        for marker in (
+            *markers,
+            "disclosure-created-marker",
+            "disclosure-replaced-marker",
+            "real-smoke-passphrase",
+        ):
+            assert marker not in result.stdout
+            assert marker not in result.stderr
+    # Both transfers reached the publication path rather than exiting early.
+    assert runs[1].stdout == "set transferred_key: PASS\n"
+    assert runs[2].stdout == "set transferred_key: PASS\n"
+    assert run_real_ansible_vault(repo, env, "decrypt").returncode == 0
+    assert "disclosure-replaced-marker" in vault.read_text(encoding="utf-8")
