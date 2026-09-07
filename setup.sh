@@ -294,6 +294,7 @@ echo "  • Reconcile controller state:   ./setup.sh bootstrap"
 echo "  • Verify the vault:             ./vault.sh check"
 echo "  • Update credentials:           ./vault.sh configure"
 echo "  • Edit the encrypted vault:     ./vault.sh edit"
+echo "  • Rotate the vault passphrase:  ./vault.sh rotate"
 echo "  • Check fleet connectivity:     ./inspect.sh connectivity"
 echo "  • Deploy the fleet:             ./run.sh"
 echo
