@@ -26,6 +26,14 @@ INSPECT = REPO_ROOT / "inspect.sh"
 CONTROLLED_API_USER = "inspect-fixture-user@pam"
 CONTROLLED_API_TOKEN_ID = "inspect-fixture-token-id"
 CONTROLLED_API_TOKEN_SECRET = "inspect-fixture-token-secret"
+FIXTURE_COLLECTIONS = (
+    REPO_ROOT
+    / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
+)
+FIXTURE_COLLECTION_REQUIREMENTS = (
+    REPO_ROOT
+    / "tests/regression/fixtures/controller_prerequisite_empty_collections.yml"
+)
 
 
 def run_inspect(
@@ -519,7 +527,11 @@ def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str
     home = temp_root / "home"
     home.mkdir()
     inventory = temp_root / "inventory.yml"
-    inventory.write_text(inventory_source, encoding="utf-8")
+    inventory_data = yaml.safe_load(inventory_source)
+    inventory_data.setdefault("all", {}).setdefault("vars", {})[
+        "control_node_collection_requirements"
+    ] = str(FIXTURE_COLLECTION_REQUIREMENTS)
+    inventory.write_text(yaml.safe_dump(inventory_data), encoding="utf-8")
     vault_password = temp_root / "vault-pass"
     vault_password.write_text("unused-fixture-placeholder\n", encoding="utf-8")
     env = os.environ.copy()
@@ -528,6 +540,7 @@ def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str
             "HOME": str(home),
             "ANSIBLE_INVENTORY": str(inventory),
             "ANSIBLE_VAULT_PASSWORD_FILE": str(vault_password),
+            "ANSIBLE_COLLECTIONS_PATH": str(FIXTURE_COLLECTIONS),
         }
     )
     return env

@@ -39,6 +39,10 @@ ROLE_INTERFACE_PLAYBOOK = FIXTURES / "lxc_fleet_preflight_interface_test.yml"
 STANDALONE_PLAYBOOK = FIXTURES / "lxc_standalone_validation_test.yml"
 MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
+FIXTURE_COLLECTIONS = (
+    REPO_ROOT
+    / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
+)
 DUMMY_API_USER = "dummy@pam"
 DUMMY_API_TOKEN_ID = "dummy-token"
 DUMMY_API_TOKEN_SECRET = "<REPLACE_ME>"
@@ -453,7 +457,9 @@ def main() -> int:
             "unused-fixture-placeholder\n", encoding="utf-8"
         )
         previous_vault_password_file = os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE")
+        previous_collections_path = os.environ.get("ANSIBLE_COLLECTIONS_PATH")
         os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault_placeholder)
+        os.environ["ANSIBLE_COLLECTIONS_PATH"] = str(FIXTURE_COLLECTIONS)
         try:
             return run_regressions()
         finally:
@@ -461,6 +467,10 @@ def main() -> int:
                 os.environ.pop("ANSIBLE_VAULT_PASSWORD_FILE", None)
             else:
                 os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] = previous_vault_password_file
+            if previous_collections_path is None:
+                os.environ.pop("ANSIBLE_COLLECTIONS_PATH", None)
+            else:
+                os.environ["ANSIBLE_COLLECTIONS_PATH"] = previous_collections_path
 
 
 if __name__ == "__main__":
