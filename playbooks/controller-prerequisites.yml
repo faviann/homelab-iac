@@ -16,7 +16,7 @@
     control_node_project_root: "{{ playbook_dir | dirname }}"
     control_node_uv_virtualenv: "{{ [playbook_dir | dirname, '.venv'] | path_join }}"
     control_node_collection_install_path: "{{ [playbook_dir | dirname, 'collections'] | path_join }}"
-    control_node_collection_requirements: >-
+    control_node_default_collection_requirements: >-
       {{ [playbook_dir | dirname, 'collections', 'requirements.yml'] | path_join }}
   tags:
     - control_node_prerequisites
@@ -38,7 +38,9 @@
 
     - name: Read required Ansible collection versions
       ansible.builtin.include_vars:
-        file: "{{ control_node_collection_requirements }}"
+        file: >-
+          {{ control_node_collection_requirements
+             | default(control_node_default_collection_requirements) }}
         name: control_node_dependency_requirements
       run_once: true
 

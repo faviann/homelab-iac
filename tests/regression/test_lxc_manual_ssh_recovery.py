@@ -153,16 +153,15 @@ def main() -> int:
         env = os.environ.copy()
         env["PATH"] = f"{temp_root}:{env['PATH']}"
         env["ANSIBLE_COLLECTIONS_PATH"] = str(FIXTURE_COLLECTIONS)
-        command = [
+        playbook_command = [
             *ANSIBLE_PLAYBOOK,
             "-i",
             str(inventory),
             str(PLAYBOOK),
-            "--limit",
-            "recovery-host",
             "-e",
             f"control_node_collection_requirements={FIXTURE_COLLECTION_REQUIREMENTS}",
         ]
+        command = [*playbook_command, "--limit", "recovery-host"]
         missing_marker_env = {**env, "HOMELAB_IAC_LIFECYCLE_WRAPPER": ""}
         missing_marker = subprocess.run(
             command,
@@ -217,7 +216,7 @@ def main() -> int:
         for count_file in temp_root.glob("pct-exec-count.*"):
             count_file.unlink()
         no_limit = subprocess.run(
-            [*ANSIBLE_PLAYBOOK, "-i", str(inventory), str(PLAYBOOK)],
+            playbook_command,
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
