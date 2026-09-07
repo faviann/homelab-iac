@@ -105,3 +105,61 @@ def test_absent_observation_fails_closed() -> None:
         launcher.assert_observation_completed(
             completed({"plays": [{"tasks": []}]}), task_name
         )
+
+
+def passing_report() -> dict[str, object]:
+    return {
+        "plays": [{"tasks": [{
+            "task": {"name": "required semantic assertion"},
+            "hosts": {"localhost": {
+                "action": "ansible.builtin.assert",
+                "changed": False,
+                "msg": "All assertions passed",
+                "skipped": False,
+                "failed": False,
+                "unreachable": False,
+            }},
+        }]}]
+    }
+
+
+def test_unique_passing_assertion_is_accepted() -> None:
+    launcher.assert_observation_completed(
+        completed(passing_report()), "required semantic assertion"
+    )
+
+
+@pytest.mark.parametrize("second", ["passed", "skipped", "failed", "unreachable"])
+def test_duplicate_or_conflicting_assertions_fail_closed(second: str) -> None:
+    report = passing_report()
+    duplicate = passing_report()["plays"][0]["tasks"][0]
+    if second != "passed":
+        duplicate["hosts"]["localhost"][second] = True
+    report["plays"][0]["tasks"].append(duplicate)
+    with pytest.raises(AssertionError, match="ambiguous"):
+        launcher.assert_observation_completed(
+            completed(report), "required semantic assertion"
+        )
+
+
+@pytest.mark.parametrize("report", [None, [], {"plays": None}, {"plays": [None]},
+                                   {"plays": [{"tasks": None}]}])
+def test_malformed_report_fails_closed(report: object) -> None:
+    with pytest.raises(AssertionError, match="pinned JSON callback report"):
+        launcher.assert_observation_completed(
+            completed(report), "required semantic assertion"
+        )
+
+
+def test_duplicate_json_keys_fail_closed() -> None:
+    result = completed(passing_report())
+    result.stdout = result.stdout.replace('"failed": false', '"failed": true, "failed": false')
+    with pytest.raises(AssertionError, match="pinned JSON callback report"):
+        launcher.assert_observation_completed(result, "required semantic assertion")
+
+
+def test_candidate_failure_overrides_passing_observation() -> None:
+    result = completed(passing_report())
+    result.returncode = 1
+    with pytest.raises(AssertionError, match="exited 1"):
+        launcher.assert_observation_completed(result, "required semantic assertion")

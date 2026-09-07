@@ -18,24 +18,9 @@ class CallbackModule(CallbackBase):
     def __init__(self) -> None:
         super().__init__()
         self._tasks: list[dict[str, Any]] = []
-        self._task_indexes: dict[str, int] = {}
-
-    def v2_playbook_on_task_start(self, task: Any, is_conditional: bool) -> None:
-        del is_conditional
-        self._task_indexes[str(task._uuid)] = len(self._tasks)
-        self._tasks.append(
-            {
-                "task": {"name": task.get_name(), "action": task.action},
-                "hosts": {},
-            }
-        )
 
     def _record(self, result: Any, status: str) -> None:
         task = result._task
-        task_uuid = str(task._uuid)
-        if task_uuid not in self._task_indexes:
-            self.v2_playbook_on_task_start(task, False)
-        task_report = self._tasks[self._task_indexes[task_uuid]]
         outcome = {
             "action": task.action,
             "changed": bool(result._result.get("changed", False)),
@@ -45,7 +30,12 @@ class CallbackModule(CallbackBase):
         }
         if "msg" in result._result:
             outcome["msg"] = result._result["msg"]
-        task_report["hosts"][result._host.get_name()] = outcome
+        self._tasks.append(
+            {
+                "task": {"name": task.get_name()},
+                "hosts": {result._host.get_name(): outcome},
+            }
+        )
 
     def v2_runner_on_ok(self, result: Any) -> None:
         self._record(result, "passed")

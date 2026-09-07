@@ -22,10 +22,6 @@ from ansible_test_helper import ansible_playbook_command
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK = REPO_ROOT / "playbooks" / "add-ssh-keys-to-lxcs.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
-FIXTURE_COLLECTIONS = (
-    REPO_ROOT
-    / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
-)
 FIXTURE_COLLECTION_REQUIREMENTS = (
     REPO_ROOT
     / "tests/regression/fixtures/controller_prerequisite_empty_collections.yml"
@@ -152,7 +148,8 @@ def main() -> int:
 
         env = os.environ.copy()
         env["PATH"] = f"{temp_root}:{env['PATH']}"
-        env["ANSIBLE_COLLECTIONS_PATH"] = str(FIXTURE_COLLECTIONS)
+        env["ANSIBLE_COLLECTIONS_PATH"] = str(temp_root / "empty-collections")
+        env["ANSIBLE_COLLECTIONS_SCAN_SYS_PATH"] = "false"
         playbook_command = [
             *ANSIBLE_PLAYBOOK,
             "-i",
