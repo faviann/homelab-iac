@@ -127,3 +127,43 @@ _Avoid_: Environment healthy, validated environment, workstation configuration f
 **Workstation configuration freshness**:
 Whether the workstation's active Home Manager generation was built from the currently checked-out dotfiles source. It is evaluated against the local checkout only, never against the remote, and it is independent of workstation tool readiness — working tools prove nothing about it.
 _Avoid_: Drift, environment health, in sync with origin
+
+**Fresh-worktree preparation**:
+The command-surface guarantee that every supported non-live workflow is directly invocable from a fresh checkout and owns reconciliation of its worktree dependencies. It requires no separate user-visible preparation step, does not provision machine prerequisites, and does not grant live-operation capability.
+_Avoid_: Development readiness, handoff readiness, workstation setup
+
+**Locked-environment reconciliation**:
+An optional targeted operation that eagerly materializes or repairs the worktree's locked Python environment without running a consuming workflow. The repository may declare compatible launcher requirements while the machine supplies and selects the launcher; reconciliation is never required sequencing for another supported workflow.
+_Avoid_: Fresh-worktree preparation, mandatory setup
+
+**Supported non-live workflow**:
+A repository-supported development or validation operation that does not cross the live-operation boundary. It semantically owns reconciliation of its worktree dependencies and may require documented machine or environmental conditions, but another user-visible workflow is never its hidden prerequisite.
+_Avoid_: Credential-free workflow, offline workflow
+
+**Workflow prerequisite**:
+A machine or environmental condition that a supported workflow checks when invoked rather than worktree state the workflow owns. Its absence is reported meaningfully distinctly from a candidate failure, without implying a repository-wide error taxonomy.
+_Avoid_: Readiness state, preparation layer
+
+**Workflow dependency**:
+A worktree-owned collection or external role semantically consumed by one supported workflow, which owns reconciling it under the governing dependency policy. Shared storage, declarations, or implementation do not make unrelated dependencies part of that workflow's contract.
+_Avoid_: Bootstrap dependency, controller prerequisite
+
+**Live-operation boundary**:
+The transition at which a workflow uses real credentials or controller identity to interact with managed infrastructure or other live mutable state. Crossing it is a distinct user intent from fresh-worktree preparation.
+_Avoid_: Deployment readiness, worktree readiness
+
+**Controller SSH identity**:
+The machine-global SSH key pair shared by this controller's worktrees and trusted by the managed fleet. A missing key requires an onboarding-or-recovery decision because creating a new identity and restoring an existing trusted identity are different intents.
+_Avoid_: Worktree SSH key, bootstrap artifact
+
+**Controller identity transition**:
+An explicitly authorized creation, restoration, or enrollment of a controller SSH identity. Ordinary live workflows may verify identity and trust but never infer authorization for one transition from missing or untrusted identity.
+_Avoid_: Dependency reconciliation, automatic key repair
+
+**Identity enrollment**:
+An explicitly invoked transition that establishes trust for a selected controller SSH identity on named managed infrastructure. Ordinary inspection or deployment does not authorize enrollment, except that creating or rebuilding a guest may install the already selected identity as part of that authorized effect.
+_Avoid_: SSH prerequisite repair, automatic trust setup
+
+**Live credential requirement**:
+The credential material and authority semantically consumed by one live workflow. Inventory layout or incidental startup behavior must not impose unrelated credentials on that workflow.
+_Avoid_: Global live readiness, controller bootstrap prerequisite
