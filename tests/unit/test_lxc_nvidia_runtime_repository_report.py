@@ -163,3 +163,19 @@ def test_candidate_failure_overrides_passing_observation() -> None:
     result.returncode = 1
     with pytest.raises(AssertionError, match="exited 1"):
         launcher.assert_observation_completed(result, "required semantic assertion")
+
+
+@pytest.mark.parametrize("field,value", [
+    ("skipped", True), ("failed", True), ("unreachable", True),
+    ("failed", None), ("failed", 0), ("action", "ansible.builtin.debug"),
+    ("changed", True), ("msg", "not an assertion result"),
+])
+def test_noncanonical_result_cannot_claim_assertion_success(
+    field: str, value: object
+) -> None:
+    report = passing_report()
+    report["plays"][0]["tasks"][0]["hosts"]["localhost"][field] = value
+    with pytest.raises(AssertionError, match="no unique passing assertion"):
+        launcher.assert_observation_completed(
+            completed(report), "required semantic assertion"
+        )
