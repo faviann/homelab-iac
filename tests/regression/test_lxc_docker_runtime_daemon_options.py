@@ -53,6 +53,9 @@ FIXTURE_SYSTEM_BIN = (
     / "lxc_docker_runtime_daemon_options_assets"
     / "system_bin"
 )
+FIXTURE_OBSERVATION_PLUGINS = (
+    REPO_ROOT / "tests" / "regression" / "fixtures" / "lifecycle_observation_plugins"
+)
 REQUIRED_OBSERVATIONS = (
     "Assert geerlingguy.docker receives a real mapping",
     "Assert non-GPU hosts get daemon options with no runtimes key",
@@ -81,7 +84,8 @@ def run_isolated_playbook() -> subprocess.CompletedProcess[str]:
         env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
             [str(FIXTURE_ROLES), str(REPO_ROOT / "playbooks" / "roles")]
         )
-        env["ANSIBLE_STDOUT_CALLBACK"] = "ansible.posix.json"
+        env["ANSIBLE_CALLBACK_PLUGINS"] = str(FIXTURE_OBSERVATION_PLUGINS)
+        env["ANSIBLE_STDOUT_CALLBACK"] = "lifecycle_observation"
         env["ANSIBLE_VERBOSITY"] = "0"
         env.pop("ANSIBLE_CALLBACKS_ENABLED", None)
         env["TMPDIR"] = temp_root

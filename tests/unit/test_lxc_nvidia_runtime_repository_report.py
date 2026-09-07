@@ -1,0 +1,107 @@
+"""Behavioral tests for NVIDIA runtime execution-proof reporting."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+
+LAUNCHER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "regression"
+    / "test_lxc_nvidia_runtime_repository.py"
+)
+sys.path.insert(0, str(LAUNCHER_PATH.parent))
+try:
+    SPEC = importlib.util.spec_from_file_location(
+        "nvidia_runtime_regression", LAUNCHER_PATH
+    )
+    assert SPEC is not None and SPEC.loader is not None
+    launcher = importlib.util.module_from_spec(SPEC)
+    SPEC.loader.exec_module(launcher)
+finally:
+    sys.path.pop(0)
+
+
+def completed(report: object) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(
+        args=["ansible-playbook"],
+        returncode=0,
+        stdout=json.dumps(report),
+        stderr="",
+    )
+
+
+def test_launcher_uses_fixture_local_observation_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_environment: dict[str, Any] = {}
+
+    def run(*args: object, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        captured_environment.update(kwargs["env"])
+        callback_path = Path(kwargs["env"]["ANSIBLE_CALLBACK_PLUGINS"])
+        assert (callback_path / "lifecycle_observation.py").is_file()
+        return completed({"plays": []})
+
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+
+    launcher.run_isolated_playbook(launcher.PLAYBOOK, "fixture-tag")
+
+    assert captured_environment["ANSIBLE_STDOUT_CALLBACK"] == "lifecycle_observation"
+    assert "ansible.posix" not in captured_environment["ANSIBLE_STDOUT_CALLBACK"]
+
+
+@pytest.mark.parametrize(
+    "outcome", [{"skipped": True}, {"failed": True}, {"unreachable": True}]
+)
+def test_nonpassing_observation_fails_closed(outcome: dict[str, object]) -> None:
+    task_name = "required semantic assertion"
+    report = {
+        "plays": [
+            {
+                "tasks": [
+                    {
+                        "task": {"name": task_name},
+                        "hosts": {"localhost": outcome},
+                    }
+                ]
+            }
+        ]
+    }
+
+    with pytest.raises(AssertionError, match=task_name):
+        launcher.assert_observation_completed(completed(report), task_name)
+
+
+def test_structurally_incomplete_observation_fails_closed() -> None:
+    task_name = "required semantic assertion"
+    report = {
+        "plays": [
+            {
+                "tasks": [
+                    {
+                        "task": {"name": task_name},
+                        "hosts": {"localhost": {}},
+                    }
+                ]
+            }
+        ]
+    }
+
+    with pytest.raises(AssertionError, match=task_name):
+        launcher.assert_observation_completed(completed(report), task_name)
+
+
+def test_absent_observation_fails_closed() -> None:
+    task_name = "required semantic assertion"
+
+    with pytest.raises(AssertionError, match=task_name):
+        launcher.assert_observation_completed(
+            completed({"plays": [{"tasks": []}]}), task_name
+        )

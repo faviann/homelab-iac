@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,10 +17,35 @@ LAUNCHER_PATH = (
     / "regression"
     / "test_lxc_docker_runtime_daemon_options.py"
 )
-SPEC = importlib.util.spec_from_file_location("daemon_options_regression", LAUNCHER_PATH)
-assert SPEC is not None and SPEC.loader is not None
-launcher = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(launcher)
+sys.path.insert(0, str(LAUNCHER_PATH.parent))
+try:
+    SPEC = importlib.util.spec_from_file_location(
+        "daemon_options_regression", LAUNCHER_PATH
+    )
+    assert SPEC is not None and SPEC.loader is not None
+    launcher = importlib.util.module_from_spec(SPEC)
+    SPEC.loader.exec_module(launcher)
+finally:
+    sys.path.pop(0)
+
+
+def test_launcher_uses_fixture_local_observation_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_environment: dict[str, Any] = {}
+
+    def run(*args: object, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        captured_environment.update(kwargs["env"])
+        callback_path = Path(kwargs["env"]["ANSIBLE_CALLBACK_PLUGINS"])
+        assert (callback_path / "lifecycle_observation.py").is_file()
+        return completed({"plays": []})
+
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+
+    launcher.run_isolated_playbook()
+
+    assert captured_environment["ANSIBLE_STDOUT_CALLBACK"] == "lifecycle_observation"
+    assert "ansible.posix" not in captured_environment["ANSIBLE_STDOUT_CALLBACK"]
 
 
 def completed(stdout: object) -> subprocess.CompletedProcess[str]:

@@ -4,19 +4,18 @@
 Ansible exits 0 when a ``--tags`` selector matches no tasks, so a return code
 alone cannot tell a real run apart from a run that asserted nothing. Each
 scenario therefore also requires its own existing final semantic assertion task
-to have run and passed, read out of the machine-readable report emitted by the
-``ansible.posix.json`` stdout callback -- that callback ships in the
-``ansible.posix`` collection, which ``collections/requirements.yml`` pins.
+to have run and passed, read out of the machine-readable report emitted by a
+fixture-local stdout callback.
 
 Matching the human-facing display with a regex was rejected because it renders
 whatever the caller's environment asks for, and that changes without any change
 here.
 
-So ``run_isolated_playbook`` pins the display instead of tolerating it: JSON
-callback, zero verbosity, no inherited extra callbacks, leaving stdout as
-exactly one JSON document. That breaks if another writer still reaches stdout,
-so the safer rule is that stdout which does not parse into the report fails the
-test rather than passing it.
+So ``run_isolated_playbook`` pins the display instead of tolerating it: the
+fixture callback, zero verbosity, no inherited extra callbacks, leaving stdout
+as exactly one JSON document. That breaks if another writer still reaches
+stdout, so the safer rule is that stdout which does not parse into the report
+fails the test rather than passing it.
 
 This guards each scenario's *final* semantic observation only -- that one task
 is required to have run and passed. It does not prove that every assertion
@@ -59,6 +58,9 @@ FIXTURE_ROLES = (
     / "lxc_nvidia_runtime_repository_assets"
     / "roles"
 )
+FIXTURE_OBSERVATION_PLUGINS = (
+    REPO_ROOT / "tests" / "regression" / "fixtures" / "lifecycle_observation_plugins"
+)
 
 
 def run_isolated_playbook(
@@ -90,7 +92,8 @@ def run_isolated_playbook(
         )
         env["UV_CACHE_DIR"] = str(Path(temp_root) / "uv-cache")
         env["TMPDIR"] = temp_root
-        env["ANSIBLE_STDOUT_CALLBACK"] = "ansible.posix.json"
+        env["ANSIBLE_CALLBACK_PLUGINS"] = str(FIXTURE_OBSERVATION_PLUGINS)
+        env["ANSIBLE_STDOUT_CALLBACK"] = "lifecycle_observation"
         # Keep stdout to the report alone: an inherited verbosity prints a
         # config preamble ahead of it, and inherited callbacks interleave their
         # own lines around it. Neither overrides useful human debugging here,
@@ -206,7 +209,10 @@ def assert_observation_completed(
             if name != task_name:
                 continue
             if any(
-                not host_result.get("skipped", False)
+                host_result.get("action") == "ansible.builtin.assert"
+                and host_result.get("changed") is False
+                and host_result.get("msg") == "All assertions passed"
+                and not host_result.get("skipped", False)
                 and not host_result.get("failed", False)
                 and not host_result.get("unreachable", False)
                 for host_result in task.get("hosts", {}).values()
