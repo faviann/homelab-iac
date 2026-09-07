@@ -5,12 +5,19 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tests/regression"))
+try:
+    from ansible_test_helper import ansible_playbook_command
+finally:
+    sys.path.pop(0)
+
 TASKS = REPO_ROOT / "playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks"
 
 
@@ -55,7 +62,7 @@ def api_validation(tmp_path: Path) -> tuple[list[str], dict[str, str]]:
         "ANSIBLE_STDOUT_CALLBACK": "default",
     }
     return [
-        "uv", "run", "--locked", "ansible-playbook", "-i", "localhost,",
+        *ansible_playbook_command(supplies_own_inventory=True), "-i", "localhost,",
         "-c", "local", str(playbook),
     ], env
 
