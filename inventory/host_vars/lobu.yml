@@ -1,0 +1,29 @@
+---
+# Host-specific configuration for the self-hosted Lobu control plane
+# Inherits from: tier_medium, cap_docker
+
+lxc_hwaddr: "BC:24:11:14:5B:9C"
+default_domain: admin.faviann.com
+
+docker_agents_enabled: false
+traefik_kop_enabled: false
+
+lxc_docker_env_stack_vars:
+  lobu:
+    # The dotfiles repository configures the same canonical origin
+    # independently; Ansible does not export this value there.
+    public_gateway_url: "https://lobu.admin.faviann.com"
+    postgres_password: "{{ vault_lobu_postgres_password }}"
+    encryption_key: "{{ vault_lobu_encryption_key }}"
+    better_auth_secret: "{{ vault_lobu_better_auth_secret }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 308
+  hostname: lobu
+  disk: "16"
+  description: "Lobu control plane managed via Ansible"
+  tags:
+    - ansible
+    - lobu
+    - mcp

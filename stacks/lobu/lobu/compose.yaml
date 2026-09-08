@@ -1,0 +1,86 @@
+---
+name: lobu
+
+x-prereq-dirs:
+  - ./appdata/postgres
+  - ./appdata/workspaces
+
+services:
+  postgres:
+    # pgvector, not plain postgres: the baseline Lobu schema migration declares
+    # non-nullable vector columns, so a stock image fails to migrate at all.
+    image: pgvector/pgvector:pg18-trixie@sha256:78bf48b801e792f99e3ac62b5036fd3876e9be48afda16c1e331af1c75ceb2ff
+    container_name: lobu-postgres
+    environment:
+      POSTGRES_USER: lobu
+      POSTGRES_PASSWORD: ${LOBU_POSTGRES_PASSWORD:?Set LOBU_POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: lobu
+    volumes:
+      # Mount the parent, not a pgdata subdirectory: PostgreSQL 18 creates and
+      # owns its nested PGDATA with the ownership and mode it requires.
+      - ./appdata/postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lobu -d lobu"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  lobu:
+    image: ghcr.io/lobu-ai/lobu-app:19.2.0@sha256:0b9d6e43ad1926896697a0cfcc1f2875aa0c55cd175706c208629bf1ab0113f3
+    container_name: lobu-app
+    environment:
+      DATABASE_URL: postgresql://lobu:${LOBU_POSTGRES_PASSWORD:?Set LOBU_POSTGRES_PASSWORD in .env}@postgres:5432/lobu?sslmode=disable
+      ENCRYPTION_KEY: ${LOBU_ENCRYPTION_KEY:?Set LOBU_ENCRYPTION_KEY in .env}
+      BETTER_AUTH_SECRET: ${LOBU_BETTER_AUTH_SECRET:?Set LOBU_BETTER_AUTH_SECRET in .env}
+      # Bare origin, no path prefix. The MCP origin-trust middleware rejects
+      # requests as an opaque MCP error when this does not match what the
+      # client actually sees, so it must equal the public Traefik hostname.
+      PUBLIC_GATEWAY_URL: ${LOBU_PUBLIC_GATEWAY_URL:?Set LOBU_PUBLIC_GATEWAY_URL in .env}
+      # AUTH_COOKIE_DOMAIN intentionally unset: keeps orgs on paths under one
+      # hostname, so no wildcard DNS or extra certificate is needed.
+      #
+      # LOBU_SINGLE_USER is deliberately OFF. Upstream treats single-user mode
+      # as "local install": it replaces the whole login page with an auto
+      # sign-in that POSTs /api/local-init, and that endpoint requires a
+      # loopback TCP peer. Behind any reverse proxy the peer is the proxy, so
+      # the page offers no password field and no browser session can ever be
+      # established — which also blocks ChatGPT's OAuth consent screen.
+      # The one-human-account invariant it used to provide is enforced by the
+      # `bootstrap` service below instead, at the database.
+      LOBU_SINGLE_USER: "0"
+      NODE_ENV: production
+      LOG_LEVEL: INFO
+      # WORKER_ALLOWED_DOMAINS intentionally unset: server-side worker egress
+      # stays deny-all. No inference provider keys are configured.
+    ports:
+      - "${LOBU_HTTP_BIND:-0.0.0.0}:${LOBU_HTTP_PORT:-8787}:8787"
+    volumes:
+      - ./appdata/workspaces:/app/workspaces
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Enforces the one-human-account invariant that LOBU_SINGLE_USER used to
+  # provide, at the only chokepoint nothing can route around. A Traefik rule
+  # would not cover a LAN client reaching the published port directly, and the
+  # app-level guard is unavailable (see LOBU_SINGLE_USER above). Runs after the
+  # gateway is healthy, so upstream migrations have created "user" already.
+  bootstrap:
+    image: pgvector/pgvector:pg18-trixie@sha256:78bf48b801e792f99e3ac62b5036fd3876e9be48afda16c1e331af1c75ceb2ff
+    environment:
+      PGPASSWORD: ${LOBU_POSTGRES_PASSWORD:?Set LOBU_POSTGRES_PASSWORD in .env}
+    entrypoint: ["/bin/bash", "-euc"]
+    command:
+      - |
+        psql --host postgres --username lobu --dbname lobu \
+          --set=ON_ERROR_STOP=1 <<'SQL'
+        CREATE UNIQUE INDEX IF NOT EXISTS lobu_single_human_principal
+          ON "user" ((principal_kind)) WHERE principal_kind = 'human';
+        SQL
+    depends_on:
+      lobu:
+        condition: service_healthy
+    restart: "no"
