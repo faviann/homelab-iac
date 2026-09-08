@@ -24,7 +24,7 @@ import tempfile
 from pathlib import Path
 
 from ansible_test_helper import ansible_playbook_command
-from lifecycle_observation_report import assert_observations_completed as assert_report
+from lifecycle_observation_report import assert_observations_completed
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -109,14 +109,10 @@ def run_isolated_playbook() -> subprocess.CompletedProcess[str]:
         return result
 
 
-def assert_observations_completed(result: subprocess.CompletedProcess[str]) -> None:
-    assert_report(result, REQUIRED_OBSERVATIONS)
-
-
 def test_lxc_docker_runtime_declares_daemon_options_for_gpu_and_non_gpu() -> None:
     result = run_isolated_playbook()
 
-    assert_observations_completed(result)
+    assert_observations_completed(result, REQUIRED_OBSERVATIONS)
 
 
 if __name__ == "__main__":

@@ -17,25 +17,11 @@ class CallbackModule(CallbackBase):
 
     def __init__(self) -> None:
         super().__init__()
-        self._tasks: list[dict[str, Any]] = []
+        self._assertions: list[list[str]] = []
 
     def _record(self, result: Any, status: str) -> None:
-        task = result._task
-        outcome = {
-            "action": task.action,
-            "changed": bool(result._result.get("changed", False)),
-            "failed": status == "failed",
-            "skipped": status == "skipped",
-            "unreachable": status == "unreachable",
-        }
-        if "msg" in result._result:
-            outcome["msg"] = result._result["msg"]
-        self._tasks.append(
-            {
-                "task": {"name": task.get_name()},
-                "hosts": {result._host.get_name(): outcome},
-            }
-        )
+        if result._task.action == "ansible.builtin.assert":
+            self._assertions.append([result._task.get_name(), status])
 
     def v2_runner_on_ok(self, result: Any) -> None:
         self._record(result, "passed")
@@ -52,4 +38,4 @@ class CallbackModule(CallbackBase):
 
     def v2_playbook_on_stats(self, stats: Any) -> None:
         del stats
-        self._display.display(json.dumps({"plays": [{"tasks": self._tasks}]}))
+        self._display.display(json.dumps(self._assertions))

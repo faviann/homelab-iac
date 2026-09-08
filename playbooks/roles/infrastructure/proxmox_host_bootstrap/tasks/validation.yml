@@ -92,13 +92,14 @@
     msg: "Detected {{ pct_list.stdout_lines | length - 1 }} LXC container(s) on {{ proxmox_host }}"
 
 # Resolve the collection only when API validation is requested. The include
-# keeps the public task name and inherited selection tags; its child executes
-# whenever that selection has admitted the include.
+# keeps the public task name; its child uses this role's validation tags.
 - name: Test Proxmox API connectivity
   ansible.builtin.include_tasks:
     file: api.yml
     apply:
-      tags: "{{ ansible_run_tags | difference(ansible_skip_tags) }}"
+      tags:
+        - proxmox_bootstrap
+        - validation
   when: proxmox_validate_api | bool
 
 - name: Proxmox host validation summary

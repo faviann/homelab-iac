@@ -179,13 +179,6 @@ def vars_environment(
         f"""#!/usr/bin/env python3
 import json
 import os
-import ssl
-import threading
-from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from ipaddress import ip_address
-from typing import Iterator
 import sys
 from pathlib import Path
 
@@ -671,7 +664,8 @@ os.execv({real_uv!r}, [{real_uv!r}, *arguments])
             "PATH": f"{fixture_bin}:{env['PATH']}",
             "ANSIBLE_INVENTORY": str(inventory),
             "ANSIBLE_VAULT_PASSWORD_FILE": str(vault_password),
-            "ANSIBLE_COLLECTIONS_PATH": str(FIXTURE_COLLECTIONS),
+            "ANSIBLE_COLLECTIONS_PATH": str(temp_root / "empty-collections"),
+            "ANSIBLE_COLLECTIONS_SCAN_SYS_PATH": "false",
         }
     )
     return env
@@ -856,6 +850,7 @@ def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> 
         observation = temp_root / "observation.json"
         observation.write_text(json.dumps({"proxmox_vms": COMMON_OBSERVATION}), encoding="utf-8")
         env["LIFECYCLE_PROXMOX_OBSERVATION"] = str(observation)
+        env["ANSIBLE_COLLECTIONS_PATH"] = str(FIXTURE_COLLECTIONS)
         result = run_inspect(
             "plan",
             "--limit",

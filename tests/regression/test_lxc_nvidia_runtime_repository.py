@@ -1,25 +1,8 @@
 #!/usr/bin/env python3
-"""Regression test for retryable NVIDIA repository publication.
+"""Exercise retryable NVIDIA repository publication in isolated fixtures.
 
-Ansible exits 0 when a ``--tags`` selector matches no tasks, so a return code
-alone cannot tell a real run apart from a run that asserted nothing. Each
-scenario therefore also requires its own existing final semantic assertion task
-to have run and passed, read out of the machine-readable report emitted by a
-fixture-local stdout callback.
-
-Matching the human-facing display with a regex was rejected because it renders
-whatever the caller's environment asks for, and that changes without any change
-here.
-
-So ``run_isolated_playbook`` pins the display instead of tolerating it: the
-fixture callback, zero verbosity, no inherited extra callbacks, leaving stdout
-as exactly one JSON document. That breaks if another writer still reaches
-stdout, so the safer rule is that stdout which does not parse into the report
-fails the test rather than passing it.
-
-This guards each scenario's *final* semantic observation only -- that one task
-is required to have run and passed. It does not prove that every assertion
-inside a fixture ran.
+Require the final semantic assertion in each scenario to execute and pass;
+Ansible can exit successfully when tag selection executes no assertions.
 """
 
 from __future__ import annotations
@@ -31,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 from ansible_test_helper import ansible_playbook_command
-from lifecycle_observation_report import assert_observations_completed as assert_report
+from lifecycle_observation_report import assert_observations_completed
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -142,16 +125,10 @@ def run_isolated_playbook(
     return result
 
 
-def assert_observation_completed(
-    result: subprocess.CompletedProcess[str], task_name: str
-) -> None:
-    assert_report(result, (task_name,))
-
-
 def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
     result = run_isolated_playbook(PLAYBOOK, "lxc_nvidia_runtime_repository")
 
-    assert_observation_completed(result, "Assert valid repository was not rewritten")
+    assert_observations_completed(result, ("Assert valid repository was not rewritten",))
 
 
 def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
@@ -160,8 +137,8 @@ def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
         "lxc_nvidia_runtime_package_setup",
     )
 
-    assert_observation_completed(
-        result, "Assert cache refresh completed before isolated install failure"
+    assert_observations_completed(
+        result, ("Assert cache refresh completed before isolated install failure",)
     )
 
 
@@ -169,7 +146,7 @@ def test_tag_selection_miss_cannot_pass_execution_proof() -> None:
     result = run_isolated_playbook(PLAYBOOK, "fixture_nonexistent_tag")
     assert result.returncode == 0, result.stderr
     try:
-        assert_observation_completed(result, "Assert valid repository was not rewritten")
+        assert_observations_completed(result, ("Assert valid repository was not rewritten",))
     except AssertionError:
         return
     raise AssertionError("A tag-selection miss passed execution proof")

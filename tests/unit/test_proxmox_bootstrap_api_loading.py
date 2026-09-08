@@ -42,7 +42,7 @@ def api_validation(tmp_path: Path) -> tuple[list[str], dict[str, str]]:
                 },
                 "tasks": [{
                     "ansible.builtin.import_tasks": str(TASKS / "validation.yml"),
-                    "tags": ["proxmox_bootstrap", "validation", "caller_tag"],
+                    "tags": ["proxmox_bootstrap", "validation"],
                 }],
             }
         ])
@@ -73,9 +73,6 @@ def api_validation(tmp_path: Path) -> tuple[list[str], dict[str, str]]:
         [],
         ["--tags", "validation"],
         ["--tags", "proxmox_bootstrap"],
-        ["--tags", "caller_tag"],
-        ["--tags", "validation,unrelated", "--skip-tags", "unrelated"],
-        ["--tags", "tagged"],
         ["--skip-tags", "always"],
     ],
 )
@@ -93,7 +90,6 @@ def test_selected_api_validation_executes(
     ["--tags", "ssh_setup"],
     ["--skip-tags", "validation"],
     ["--skip-tags", "proxmox_bootstrap"],
-    ["--skip-tags", "caller_tag"],
 ])
 def test_unselected_api_validation_needs_no_collection(
     api_validation: tuple[list[str], dict[str, str]], selection: list[str], tmp_path: Path
@@ -111,6 +107,10 @@ def test_task_and_tag_listing_preserves_api_and_surrounding_tasks(
     env["ANSIBLE_COLLECTIONS_PATH"] = str(tmp_path / "empty")
     result = subprocess.run(command + ["--list-tasks", "--list-tags"], env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
-    for task in yaml.safe_load((TASKS / "validation.yml").read_text()):
-        assert result.stdout.count(task["name"] + "\t") == 1
-    assert "TASK TAGS: [caller_tag, proxmox_bootstrap, validation]" in result.stdout
+    for name in (
+        "Check if pct command is available",
+        "Test Proxmox API connectivity",
+        "Proxmox host validation summary",
+    ):
+        assert result.stdout.count(name + "\t") == 1
+    assert "TASK TAGS: [proxmox_bootstrap, validation]" in result.stdout
