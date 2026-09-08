@@ -89,6 +89,7 @@ http:
         || Path(`/api/auth-config`)
         || Path(`/api/auth/get-session`)
         || Path(`/api/auth/sign-in/email`)
+        || Path(`/api/organizations`)
         || PathPrefix(`/assets/`)
         || PathPrefix(`/fonts/`)
         || Path(`/favicon.ico`)

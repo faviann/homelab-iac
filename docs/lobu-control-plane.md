@@ -136,6 +136,8 @@ Against the public origin:
 ```bash
 curl -s https://lobu.admin.faviann.com/.well-known/oauth-protected-resource
 curl -s https://lobu.admin.faviann.com/.well-known/oauth-authorization-server
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+  https://lobu.admin.faviann.com/api/organizations  # must be 200 application/json
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://lobu.admin.faviann.com/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'   # must be 401
@@ -199,7 +201,7 @@ four groups:
 | `/mcp`, `/mcp/*`, the three `/.well-known/*` discovery documents, `/auth.md` | MCP transport and OAuth discovery, including the `/.well-known/oauth-protected-resource/mcp` sub-path Lobu advertises in `WWW-Authenticate` |
 | Named `/oauth/*` endpoints — register, authorize, consent, token, revoke, userinfo, and the four device-flow paths | The OAuth 2.1 surface ChatGPT and `lobu login` actually use |
 | `/api/workers/*`, `/api/me/devices`, `/api/me/devices/mint-child-token` | The authenticated worker gateway the workstation daemon polls |
-| `/auth/login`, `/api/auth-config`, `/api/auth/get-session`, `/api/auth/sign-in/email`, `/assets/*`, favicons, `/logo.png`, `/legal` | The browser sign-in and consent screens, and the metadata ChatGPT fetches during connector validation |
+| `/auth/login`, `/api/auth-config`, `/api/auth/get-session`, `/api/auth/sign-in/email`, `/api/organizations`, `/assets/*`, favicons, `/logo.png`, `/legal` | The browser sign-in and consent screens, including the exact workspace-list endpoint required before CLI login approval, and the metadata ChatGPT fetches during connector validation |
 
 Two exclusions are deliberate and load-bearing:
 
