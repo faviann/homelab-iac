@@ -56,6 +56,8 @@ def test_lobu_public_router_keeps_its_negative_exposure_boundaries() -> None:
     assert "sign-up" not in rule
     # /oauth is enumerated endpoint by endpoint on purpose.
     assert "PathPrefix(`/oauth" not in rule
-    # ForwardAuth in front of the protocol endpoints would break MCP and OAuth,
-    # so its absence is intentional and must stay deliberate.
-    assert "middlewares" not in router
+    # An Authentik/ForwardAuth-style layer in front of the protocol endpoints
+    # would break MCP and dynamic client registration, so its absence is
+    # intentional. An unrelated middleware (headers, rate limit) is fine.
+    attached = router.get("middlewares", [])
+    assert [name for name in attached if "auth" in name.lower()] == []
