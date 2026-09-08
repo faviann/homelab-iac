@@ -10,7 +10,8 @@ traefik_kop_enabled: false
 
 # Canonical public origin for this control plane. ChatGPT and the workstation
 # `lobu daemon` both address the deployment through this one hostname.
-# faviann/dotfiles#126 consumes this value; nothing here writes ~/.config/lobu.
+# The dotfiles repository configures the same origin independently; Ansible does
+# not export this value there or write ~/.config/lobu.
 lobu_public_gateway_url: "https://lobu.admin.faviann.com"
 
 lxc_docker_env_stack_vars:

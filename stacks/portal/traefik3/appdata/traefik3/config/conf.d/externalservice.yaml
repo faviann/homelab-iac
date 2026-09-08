@@ -48,7 +48,7 @@ http:
     # by construction, not by a deny rule.
     #
     # Everything else — the admin SPA at `/` and the `/api/<org>/*` workspace
-    # API — stays LAN-only on http://lobu.faviann.vms:8787.
+    # API — falls through to the Authentik-protected `lobu-admin` router.
     lobu:
       rule: >-
         Host(`lobu.admin.faviann.com`) && (

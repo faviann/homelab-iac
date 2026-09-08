@@ -210,15 +210,16 @@ Two exclusions are deliberate and load-bearing:
   upstream endpoint is not published automatically.
 - **The admin SPA at `/` and the `/api/<org>/*` workspace API are not
   allowlisted.** They are served instead by the `lobu-admin` catch-all at
-  priority 900, which carries `local-ip-restriction`. Traefik evaluates the
+  priority 900, which carries `protected-edge-auth@file`. Traefik evaluates the
   higher priority first, so no MCP, OAuth or worker request ever reaches that
-  middleware; the machine-facing surface is public and the human admin surface
-  is LAN/VPN only, on one hostname and one certificate.
+  middleware; both surfaces use one public hostname and certificate, but only
+  the human admin surface passes through Authentik.
 
 The admin catch-all reuses the shared `admin-wildcard-forwardauth` provider,
 which already covers `*.admin.faviann.com`, and
 `authentik-outpost-admin-subdomains` already routes its callback — so this
-deployment adds no Lobu-specific Authentik object.
+deployment adds no Lobu-specific Authentik object. The shared admin application
+restricts access to the `admins` group.
 
 Note that `*.admin.faviann.com` is publicly routable. A plain DNS query from
 inside the LAN returns `10.1.0.2` because Firewalla answers intercepted queries
@@ -227,9 +228,10 @@ the edge address, which is what ChatGPT sees.
 
 **If a flow breaks after an upgrade**, check the edge before the app: a path
 Lobu started using will show up in `/logs/traefik-access.log` on the `portal`
-LXC as a **403** for an off-LAN client — it fell through to `lobu-admin`
-instead of matching the allowlist. Add that endpoint to the `lobu` rule; do not
-widen it to a bare prefix, and do not remove the restriction from `lobu-admin`.
+LXC as an Authentik redirect for an unauthenticated client — it fell through to
+`lobu-admin` instead of matching the allowlist. Add that endpoint to the `lobu`
+rule; do not widen it to a bare prefix, and do not remove the Authentik boundary
+from `lobu-admin`.
 
 ## Upgrades
 
@@ -260,18 +262,22 @@ and the workstation must re-register as a new device.
 
 ## Workstation boundary
 
-This repository owns the origin and publishes it as inventory data
-(`lobu_public_gateway_url`). It does **not** write into `~/.config/lobu`. That
-directory is persisted device identity: writing to it from configuration
+This repository owns the origin and defines it as inventory data
+(`lobu_public_gateway_url`) for the server stack. The dotfiles repository
+declares the same URL independently; there is no automatic cross-repository
+value consumption. This repository does **not** write into `~/.config/lobu`.
+That directory is persisted device identity: writing to it from configuration
 management is how a duplicate device registration happens.
 
 - `faviann/homelab-iac#270` (closed) persists `~/.config/lobu` across intentional
   workstation LXC rebuilds. As long as that state is intact, restarting or
   rebuilding the workstation reuses the same device.
 - `faviann/dotfiles#112` installs the Lobu CLI and supervises `lobu daemon`.
-- `faviann/dotfiles#126` points that daemon at `https://lobu.admin.faviann.com` with an
-  explicit non-cloud context. Until it lands, the daemon still targets Lobu
-  Cloud.
+- The repository changes for `faviann/dotfiles#126` have landed and configure
+  that daemon for `https://lobu.admin.faviann.com` with an explicit non-cloud
+  context. They have not yet been applied to the live workstation; the issue
+  remains open for interactive context creation, authentication, and live
+  registration checks.
 
 Do not run `lobu login` against Lobu Cloud as part of this rollout. Register the
 device against the self-hosted origin with an explicit context

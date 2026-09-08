@@ -120,4 +120,4 @@ Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged
 → [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
 → [setup.sh](setup.sh) — read when addressing workstation tooling, editor config, or environment setup for contributors.
 → [docs/workstation-persistent-state.md](docs/workstation-persistent-state.md) — read before any workstation deploy that enables persistent home mounts.
-→ [docs/lobu-control-plane.md](docs/lobu-control-plane.md) — read before touching the `lobu` LXC, its stack, or the `lobu.faviann.com` router.
+→ [docs/lobu-control-plane.md](docs/lobu-control-plane.md) — read before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.
