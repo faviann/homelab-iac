@@ -8,15 +8,11 @@ default_domain: admin.faviann.com
 docker_agents_enabled: false
 traefik_kop_enabled: false
 
-# Canonical public origin for this control plane. ChatGPT and the workstation
-# `lobu daemon` both address the deployment through this one hostname.
-# The dotfiles repository configures the same origin independently; Ansible does
-# not export this value there or write ~/.config/lobu.
-lobu_public_gateway_url: "https://lobu.admin.faviann.com"
-
 lxc_docker_env_stack_vars:
   lobu:
-    public_gateway_url: "{{ lobu_public_gateway_url }}"
+    # The dotfiles repository configures the same canonical origin
+    # independently; Ansible does not export this value there.
+    public_gateway_url: "https://lobu.admin.faviann.com"
     postgres_password: "{{ vault_lobu_postgres_password }}"
     encryption_key: "{{ vault_lobu_encryption_key }}"
     better_auth_secret: "{{ vault_lobu_better_auth_secret }}"

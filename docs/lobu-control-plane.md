@@ -262,11 +262,10 @@ and the workstation must re-register as a new device.
 
 ## Workstation boundary
 
-This repository owns the origin and defines it as inventory data
-(`lobu_public_gateway_url`) for the server stack. The dotfiles repository
-declares the same URL independently; there is no automatic cross-repository
-value consumption. This repository does **not** write into `~/.config/lobu`.
-That directory is persisted device identity: writing to it from configuration
+This repository owns the server origin. The dotfiles repository declares the
+same URL independently; there is no automatic cross-repository value
+consumption. This repository does **not** write into `~/.config/lobu`. That
+directory is persisted device identity: writing to it from configuration
 management is how a duplicate device registration happens.
 
 - `faviann/homelab-iac#270` (closed) persists `~/.config/lobu` across intentional

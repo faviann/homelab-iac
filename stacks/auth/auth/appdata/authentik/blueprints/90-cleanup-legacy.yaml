@@ -9,15 +9,3 @@ entries:
   state: absent
   identifiers:
     name: content-editors
-# Lobu briefly had a dedicated forward-auth provider while its origin was
-# lobu.faviann.com. It now lives at lobu.admin.faviann.com and uses the shared
-# admin-wildcard-forwardauth provider, so these objects are obsolete. The
-# application references the provider, so it must be removed first.
-- model: authentik_core.application
-  state: absent
-  identifiers:
-    slug: lobu
-- model: authentik_providers_proxy.proxyprovider
-  state: absent
-  identifiers:
-    name: lobu-forwardauth
