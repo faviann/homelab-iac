@@ -14,6 +14,9 @@ from bitwarden_release_boundary import bitwarden_release_boundary
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
+# The agent tools a healthy workstation must run, each of which production
+# requires to resolve from the managed bin directory.
+AGENT_TOOLS = ("codex", "claude", "pi", "opencode", "omp")
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -297,25 +300,30 @@ def test_workstation_agent_harness_readiness_contract() -> None:
         readiness_commands = (root / "commands.log").read_text(
             encoding="utf-8"
         ).splitlines()
-        # The agent tools a healthy workstation must be able to run. The
-        # managed-path guard behind them is exercised through opencode below.
-        for tool in ("codex", "claude", "pi", "opencode", "omp"):
+        for tool in AGENT_TOOLS:
             assert f"{tool} --version" in readiness_commands
 
+        # Each tool carries its own managed-path requirement, so displacing any
+        # one of them must fail on its own even while it stays runnable from
+        # the earlier PATH entry.
         fallback_bin = root / "fallback-bin"
-        fallback_opencode = fallback_bin / "opencode"
         fallback_bin.mkdir()
-        (home / ".local" / "bin" / "opencode").replace(fallback_opencode)
-        (root / "commands.log").write_text("", encoding="utf-8")
+        for tool in AGENT_TOOLS:
+            managed = home / ".local" / "bin" / tool
+            displaced = fallback_bin / tool
+            managed.replace(displaced)
+            (root / "commands.log").write_text("", encoding="utf-8")
 
-        unmanaged = _run_setup(
-            root, env | {"PATH": f"{fallback_bin}:{env['PATH']}"}
-        )
+            unmanaged = _run_setup(
+                root, env | {"PATH": f"{fallback_bin}:{env['PATH']}"}
+            )
 
-        assert unmanaged.returncode != 0
-        assert (
-            f"opencode must resolve from {home / '.local/bin'}" in unmanaged.stderr
-        )
+            assert unmanaged.returncode != 0
+            assert (
+                f"{tool} must resolve from {home / '.local/bin'}"
+                in unmanaged.stderr
+            )
+            displaced.replace(managed)
 
 
 def test_workstation_configuration_freshness_contract() -> None:

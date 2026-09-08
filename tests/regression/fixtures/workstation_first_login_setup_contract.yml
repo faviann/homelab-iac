@@ -153,16 +153,13 @@
               - (setup_command_raw.content | b64decode) is search('GITHUB_CLI_TOKEN_ITEM="dotfiles/github-cli-token"')
               - (setup_command_raw.content | b64decode) is search('SETUP_VERSION="2"')
 
-        - name: Assert the login hook resolved to the artifacts it must drive
+        # test_workstation_first_login_setup_contract sources the hook, which
+        # covers the paths it resolves: naming the wrong setup command, the
+        # wrong marker, or a marker version the setup command does not write
+        # all fail there. The login PATH is the one thing sourcing does not
+        # check, because none of those assertions depend on it.
+        - name: Assert the login hook exports the workstation login PATH
           ansible.builtin.assert:
             that:
-              # No test sources the hook, and the unit test only sees the
-              # unresolved variable, so this is the one place the hook is shown
-              # to name the path the setup command was actually installed to.
-              - (setup_hook_raw.content | b64decode) is search('"' ~ workstation_setup_bin_path ~ '"')
               - (setup_hook_raw.content | b64decode) is search('export PATH="' ~ workstation_home ~ '/.local/bin:'
                 ~ workstation_home ~ '/.nix-profile/bin:/nix/var/nix/profiles/default/bin:')
-              # The hook reads the marker the setup command writes, so both
-              # must agree on the version line or the prompt never stops.
-              - (setup_hook_raw.content | b64decode) is search('version=2')
-              - (setup_hook_raw.content | b64decode) is search('"' ~ workstation_marker ~ '"')
