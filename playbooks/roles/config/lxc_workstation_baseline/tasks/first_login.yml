@@ -1,8 +1,9 @@
 ---
 # The workstation's first-login entry point: the setup command that brings a
-# fresh account to a working environment, and the profile hook that runs it on
-# an interactive SSH login. Both are installed for the login user, so the
-# command must be executable and the hook only sourced.
+# fresh account to a working environment, and the profile hook that offers to
+# run it on an interactive SSH login. Both live in system locations owned by
+# workstation_system_bin_owner (root by default); the login user only runs
+# them, which is why the command is executable and the hook merely sourced.
 - name: Install workstation setup command
   ansible.builtin.template:
     src: workstation-setup.sh.j2

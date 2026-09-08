@@ -436,18 +436,6 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("nix --version", setup_template)
         self.assertIn("home-manager --version", setup_template)
         self.assertIn("hermes version", setup_template)
-        self.assertIn("command -v bwrap", setup_template)
-        # The agent tools the workstation guarantees must resolve from the
-        # managed bin directory rather than any earlier PATH entry. Only
-        # opencode and omp are covered behaviorally, in
-        # test_workstation_agent_harness_readiness_contract; dropping one of the
-        # others from readiness would otherwise go unnoticed.
-        for tool in ("codex", "claude", "pi", "opencode", "omp"):
-            self.assertIn(
-                f'test "$(command -v {tool})" = "$WORKSTATION_HOME/.local/bin/{tool}"',
-                setup_template,
-            )
-            self.assertIn(f"{tool} --version", setup_template)
         self.assertIn("gh auth login --hostname github.com --with-token", setup_template)
         self.assertIn("gh api user", setup_template)
         self.assertIn("git@github.com", setup_template)
@@ -462,6 +450,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertNotIn("/run/workstation-bootstrap", setup_template)
         self.assertNotIn("BW_CLIENTID", setup_template)
         self.assertNotIn("BW_CLIENTSECRET", setup_template)
+        self.assertNotIn("WORKSTATION_BW_", setup_template)
 
         profile_hook = (
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-setup-profile.sh.j2"

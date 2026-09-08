@@ -297,8 +297,10 @@ def test_workstation_agent_harness_readiness_contract() -> None:
         readiness_commands = (root / "commands.log").read_text(
             encoding="utf-8"
         ).splitlines()
-        assert "opencode --version" in readiness_commands
-        assert "omp --version" in readiness_commands
+        # The agent tools a healthy workstation must be able to run. The
+        # managed-path guard behind them is exercised through opencode below.
+        for tool in ("codex", "claude", "pi", "opencode", "omp"):
+            assert f"{tool} --version" in readiness_commands
 
         fallback_bin = root / "fallback-bin"
         fallback_opencode = fallback_bin / "opencode"
