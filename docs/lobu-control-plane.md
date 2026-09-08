@@ -71,11 +71,19 @@ way you treat the database itself. It is not part of routine maintenance.
    to migrate an unreachable database under `NODE_ENV=production`.
 3. **Deploy the routers**: `./run.sh --limit portal`.
 4. **Create the one human account** at `https://lobu.faviann.com` from a LAN or
-   VPN address. Signup is served by the admin catch-all, which is source-range
-   restricted, so it is not reachable from the public internet.
+   VPN address. Signup is denied at the edge, so use the API directly:
+
+   ```bash
+   curl -s -X POST https://lobu.faviann.com/api/auth/sign-up/email \
+     -H 'Content-Type: application/json' \
+     -d '{"name":"<name>","email":"<email>","password":"<password>"}'
+   ```
+
+   That email becomes the install's identity. Temporarily comment out the
+   `lobu-signup-denied` router if you need this through Traefik, or run it
+   against `http://lobu.faviann.vms:8787` on the LAN.
 5. **Confirm the lockout**: a second signup must fail with
-   `SIGN_UP_DISABLED_IN_SINGLE_USER_MODE`. `LOBU_SINGLE_USER=1` counts real
-   humans only.
+   `FAILED_TO_CREATE_USER` (HTTP 422) and leave the user count at 1.
 6. **Point the workstation at this origin** — owned by `faviann/dotfiles#126`,
    not by this repository. See "Workstation boundary" below.
 7. **Add the connector in ChatGPT** against `https://lobu.faviann.com/mcp`.
@@ -111,6 +119,41 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://lobu.faviann.com/mcp \
 from `PUBLIC_GATEWAY_URL`; the authorization-server document reflects the
 request host. If they disagree, MCP requests fail as an opaque origin-trust
 rejection rather than as a routing error — check `PUBLIC_GATEWAY_URL` first.
+
+## The single-user deviation
+
+`#275`'s brief specified `LOBU_SINGLE_USER=1`. **That setting is unusable behind
+a reverse proxy**, and this deployment deliberately departs from it.
+
+Upstream treats single-user mode as "local install". `singleUserMode: true` in
+`/api/auth-config` makes the login page replace the entire sign-in form with an
+auto sign-in that POSTs `/api/local-init` — no email field, no password field,
+just a "Try again" button. `/api/local-init` requires a **loopback TCP peer**,
+and Docker's port publishing NATs every connection through the bridge gateway,
+so the peer is never `127.0.0.1`. It cannot succeed through Traefik, through an
+SSH tunnel, or even from the LXC's own `127.0.0.1`.
+
+That is not merely an admin-UI inconvenience: `/oauth/authorize` sends
+unauthenticated browsers to `/auth/login`, and ChatGPT's consent step needs a
+real session. With single-user mode on, the connector can never be authorized.
+
+`LOBU_SINGLE_USER` does only two things upstream — set that flag, and install
+the sign-up-blocking hook — and there is no separate switch for the second. So
+the one-human-account invariant is enforced here in the database instead:
+
+```sql
+CREATE UNIQUE INDEX lobu_single_human_principal
+  ON "user" ((principal_kind)) WHERE principal_kind = 'human';
+```
+
+applied by the stack's `bootstrap` service. This is **stronger** than the flag
+it replaces: the app hook only guarded Better Auth's sign-up path, while the
+index covers every route into the database — Traefik, a LAN client reaching the
+published port directly, and container-internal callers alike. A second signup
+returns `FAILED_TO_CREATE_USER` (HTTP 422).
+
+Do not "fix" the login page by turning `LOBU_SINGLE_USER` back on. If you ever
+genuinely need a second human account, drop the index deliberately.
 
 ## Public exposure
 
@@ -208,6 +251,7 @@ default.
 | Setting | State | Why |
 | --- | --- | --- |
 | `AUTH_COOKIE_DOMAIN` | unset | Keeps orgs on paths under one hostname — no wildcard DNS or extra certificate |
+| `LOBU_SINGLE_USER` | `0` | See "The single-user deviation" — upstream ties it to local-install login |
 | `WORKER_ALLOWED_DOMAINS` | unset | Server-side worker egress stays deny-all |
 | provider API keys | none | The gateway boots with zero inference providers; provider resolution no-ops at completion time |
 | `LOBU_RUN_OWNS_DB` | unset | Belongs to `lobu run` local-install mode, not container deployments |

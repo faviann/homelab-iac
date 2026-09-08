@@ -26,19 +26,23 @@ def load_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def test_lobu_declares_persistent_storage_and_single_user_mode() -> None:
+def test_lobu_declares_persistent_storage_and_the_one_account_constraint() -> None:
     """Declarative configuration invariant, not a behavioural check.
 
-    Dropping either mount leaves Lobu healthy while making its state ephemeral,
-    and dropping LOBU_SINGLE_USER removes an intentional security property
-    without otherwise breaking the app. Whether signup is actually refused is
-    proven by the live gate, not here.
+    Dropping either mount leaves Lobu healthy while making its state ephemeral.
+    Dropping the unique index leaves it healthy while silently allowing a second
+    human account — the app-level guard is unavailable here, because upstream
+    ties it to LOBU_SINGLE_USER, which also disables password login. Whether a
+    second signup is actually refused is proven by the live gate, not here.
     """
     services = load_yaml(LOBU_COMPOSE)["services"]
 
     assert "./appdata/postgres:/var/lib/postgresql" in services["postgres"]["volumes"]
     assert "./appdata/workspaces:/app/workspaces" in services["lobu"]["volumes"]
-    assert services["lobu"]["environment"]["LOBU_SINGLE_USER"] == "1"
+
+    ddl = " ".join(services["bootstrap"]["command"])
+    assert "CREATE UNIQUE INDEX" in ddl
+    assert "principal_kind = 'human'" in ddl
 
 
 def test_lobu_public_router_keeps_its_negative_exposure_boundaries() -> None:

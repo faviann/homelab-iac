@@ -110,6 +110,16 @@ http:
       middlewares:
         - local-ip-restriction
 
+    # Signup is enforced closed in the database (see the lobu stack's bootstrap
+    # service). This denies it at the edge too, so the admin catch-all below
+    # never carries an account-creation path even from a LAN or VPN source.
+    # `noop` has no servers, so Traefik answers 503 without reaching Lobu.
+    lobu-signup-denied:
+      rule: "Host(`lobu.faviann.com`) && PathPrefix(`/api/auth/sign-up`)"
+      entryPoints: websecure
+      service: noop
+      priority: 1002
+
     hermes:
       rule: "Host(`hermes.local.faviann.com`)"
       entryPoints: websecure
