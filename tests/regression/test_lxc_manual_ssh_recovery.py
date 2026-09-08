@@ -22,6 +22,10 @@ from ansible_test_helper import ansible_playbook_command
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK = REPO_ROOT / "playbooks" / "add-ssh-keys-to-lxcs.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
+FIXTURE_COLLECTION_REQUIREMENTS = (
+    REPO_ROOT
+    / "tests/regression/fixtures/controller_prerequisite_empty_collections.yml"
+)
 
 
 class _SshPortHandler(socketserver.BaseRequestHandler):
@@ -144,14 +148,17 @@ def main() -> int:
 
         env = os.environ.copy()
         env["PATH"] = f"{temp_root}:{env['PATH']}"
-        command = [
+        env["ANSIBLE_COLLECTIONS_PATH"] = str(temp_root / "empty-collections")
+        env["ANSIBLE_COLLECTIONS_SCAN_SYS_PATH"] = "false"
+        playbook_command = [
             *ANSIBLE_PLAYBOOK,
             "-i",
             str(inventory),
             str(PLAYBOOK),
-            "--limit",
-            "recovery-host",
+            "-e",
+            f"control_node_collection_requirements={FIXTURE_COLLECTION_REQUIREMENTS}",
         ]
+        command = [*playbook_command, "--limit", "recovery-host"]
         missing_marker_env = {**env, "HOMELAB_IAC_LIFECYCLE_WRAPPER": ""}
         missing_marker = subprocess.run(
             command,
@@ -206,7 +213,7 @@ def main() -> int:
         for count_file in temp_root.glob("pct-exec-count.*"):
             count_file.unlink()
         no_limit = subprocess.run(
-            [*ANSIBLE_PLAYBOOK, "-i", str(inventory), str(PLAYBOOK)],
+            playbook_command,
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,

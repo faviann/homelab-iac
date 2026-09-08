@@ -28,6 +28,10 @@ METADATA_LOCK_RELATIVE_PATH = Path(".ansible/homelab-iac-lifecycle.lock.metadata
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
 RAW_LIVE_PLAYBOOK_COMMAND = " ".join(ANSIBLE_PLAYBOOK)
 LIVE_EXECUTION_LIBRARY = REPO_ROOT / "scripts/lib/live-execution.sh"
+FIXTURE_COLLECTIONS = (
+    REPO_ROOT
+    / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
+)
 
 
 def make_fake_uv(bin_dir: Path) -> None:
@@ -246,6 +250,10 @@ all:
                 cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,
+                env={
+                    **os.environ,
+                    "ANSIBLE_COLLECTIONS_PATH": str(FIXTURE_COLLECTIONS),
+                },
                 timeout=30,
             )
             output = f"{list_result.stdout}\n{list_result.stderr}"
@@ -1226,6 +1234,7 @@ def assert_direct_lifecycle_run_is_rejected() -> None:
         env.pop("HOMELAB_IAC_LIFECYCLE_WRAPPER", None)
         env["ANSIBLE_INVENTORY"] = str(inventory)
         env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(vault)
+        env["ANSIBLE_COLLECTIONS_PATH"] = str(FIXTURE_COLLECTIONS)
         proc = subprocess.run(
             [*ANSIBLE_PLAYBOOK, "site.yml"],
             cwd=REPO_ROOT,

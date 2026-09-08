@@ -91,18 +91,16 @@
   ansible.builtin.debug:
     msg: "Detected {{ pct_list.stdout_lines | length - 1 }} LXC container(s) on {{ proxmox_host }}"
 
+# Resolve the collection only when API validation is requested. The include
+# keeps the public task name; its child uses this role's validation tags.
 - name: Test Proxmox API connectivity
+  ansible.builtin.include_tasks:
+    file: api.yml
+    apply:
+      tags:
+        - proxmox_bootstrap
+        - validation
   when: proxmox_validate_api | bool
-  community.proxmox.proxmox_vm_info:
-    api_host: "{{ proxmox_api_host }}"
-    api_user: "{{ proxmox_api_user }}"
-    api_token_id: "{{ proxmox_api_token_id }}"
-    api_token_secret: "{{ proxmox_api_token_secret }}"
-    validate_certs: "{{ proxmox_verify_ssl | default(false) }}"
-    node: "{{ proxmox_default_node }}"
-    type: lxc
-  register: api_check
-  delegate_to: localhost
 
 - name: Proxmox host validation summary
   when: proxmox_ssh_ready | default(true)

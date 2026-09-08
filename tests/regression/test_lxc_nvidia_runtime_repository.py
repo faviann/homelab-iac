@@ -1,31 +1,12 @@
 #!/usr/bin/env python3
-"""Regression test for retryable NVIDIA repository publication.
+"""Exercise retryable NVIDIA repository publication in isolated fixtures.
 
-Ansible exits 0 when a ``--tags`` selector matches no tasks, so a return code
-alone cannot tell a real run apart from a run that asserted nothing. Each
-scenario therefore also requires its own existing final semantic assertion task
-to have run and passed, read out of the machine-readable report emitted by the
-``ansible.posix.json`` stdout callback -- that callback ships in the
-``ansible.posix`` collection, which ``collections/requirements.yml`` pins.
-
-Matching the human-facing display with a regex was rejected because it renders
-whatever the caller's environment asks for, and that changes without any change
-here.
-
-So ``run_isolated_playbook`` pins the display instead of tolerating it: JSON
-callback, zero verbosity, no inherited extra callbacks, leaving stdout as
-exactly one JSON document. That breaks if another writer still reaches stdout,
-so the safer rule is that stdout which does not parse into the report fails the
-test rather than passing it.
-
-This guards each scenario's *final* semantic observation only -- that one task
-is required to have run and passed. It does not prove that every assertion
-inside a fixture ran.
+Require the final semantic assertion in each scenario to execute and pass;
+Ansible can exit successfully when tag selection executes no assertions.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -33,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 from ansible_test_helper import ansible_playbook_command
+from lifecycle_observation_report import assert_observations_completed
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -58,6 +40,9 @@ FIXTURE_ROLES = (
     / "fixtures"
     / "lxc_nvidia_runtime_repository_assets"
     / "roles"
+)
+FIXTURE_OBSERVATION_PLUGINS = (
+    REPO_ROOT / "tests" / "regression" / "fixtures" / "lifecycle_observation_plugins"
 )
 
 
@@ -90,7 +75,8 @@ def run_isolated_playbook(
         )
         env["UV_CACHE_DIR"] = str(Path(temp_root) / "uv-cache")
         env["TMPDIR"] = temp_root
-        env["ANSIBLE_STDOUT_CALLBACK"] = "ansible.posix.json"
+        env["ANSIBLE_CALLBACK_PLUGINS"] = str(FIXTURE_OBSERVATION_PLUGINS)
+        env["ANSIBLE_STDOUT_CALLBACK"] = "lifecycle_observation"
         # Keep stdout to the report alone: an inherited verbosity prints a
         # config preamble ahead of it, and inherited callbacks interleave their
         # own lines around it. Neither overrides useful human debugging here,
@@ -139,95 +125,10 @@ def run_isolated_playbook(
     return result
 
 
-def summarize_failures(report: object, stdout: str) -> str:
-    """Name the tasks the report marks failed or unreachable, and why."""
-    lines: list[str] = []
-    if isinstance(report, dict):
-        for play in report.get("plays", []):
-            for task in play.get("tasks", []):
-                name = task.get("task", {}).get("name")
-                for host, host_result in task.get("hosts", {}).items():
-                    if not (
-                        host_result.get("failed", False)
-                        or host_result.get("unreachable", False)
-                    ):
-                        continue
-                    lines.append(
-                        f"  [{host}] {name}: {host_result.get('msg', '<no msg>')}"
-                    )
-    if not lines:
-        return f"no failing task in its report. Raw stdout:\n{stdout}"
-    return "failing tasks:\n" + "\n".join(lines)
-
-
-def assert_observation_completed(
-    result: subprocess.CompletedProcess[str], task_name: str
-) -> None:
-    """Require a successful run in which ``task_name`` actually ran and passed.
-
-    The JSON report lists every task that started under ``plays[].tasks[]``
-    with its name and a per-host outcome under ``hosts``. A task tag selection
-    filtered out is absent from that list entirely; one that ran but was
-    skipped carries ``skipped: true``, a failed one ``failed: true``, and an
-    unreachable host ``unreachable: true`` -- so a genuine pass is the only
-    outcome carrying none of the three. That reading holds only while stdout is
-    the pinned report, so stdout that will not parse raises instead of passing.
-    """
-    stderr_note = (
-        f"\ncaptured stderr:\n{result.stderr}" if result.stderr.strip() else ""
-    )
-
-    try:
-        report = json.loads(result.stdout)
-    except ValueError:
-        report = None
-
-    if result.returncode != 0:
-        raise AssertionError(
-            f"ansible-playbook exited {result.returncode}, so the task "
-            f"{task_name!r} did not run to a passing result: "
-            f"{summarize_failures(report, result.stdout)}{stderr_note}"
-        )
-
-    if not isinstance(report, dict) or "plays" not in report:
-        raise AssertionError(
-            f"ansible-playbook exited 0, but the task {task_name!r} did not run "
-            f"to a passing result: its stdout is not the pinned JSON callback "
-            f"report, so nothing about the run can be confirmed. Raw stdout:\n"
-            f"{result.stdout}{stderr_note}"
-        )
-
-    observed: list[str] = []
-    for play in report.get("plays", []):
-        for task in play.get("tasks", []):
-            name = task.get("task", {}).get("name")
-            if name not in observed:
-                observed.append(name)
-            if name != task_name:
-                continue
-            if any(
-                not host_result.get("skipped", False)
-                and not host_result.get("failed", False)
-                and not host_result.get("unreachable", False)
-                for host_result in task.get("hosts", {}).values()
-            ):
-                return
-
-    cause = (
-        "it started but every host result skipped, failed, or was unreachable"
-        if task_name in observed
-        else "it never started -- tag selection missed it, or it was renamed"
-    )
-    raise AssertionError(
-        f"ansible-playbook exited 0, but the task {task_name!r} did not run to a "
-        f"passing result: {cause}. Tasks observed: {observed}.{stderr_note}"
-    )
-
-
 def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
     result = run_isolated_playbook(PLAYBOOK, "lxc_nvidia_runtime_repository")
 
-    assert_observation_completed(result, "Assert valid repository was not rewritten")
+    assert_observations_completed(result, ("Assert valid repository was not rewritten",))
 
 
 def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
@@ -236,13 +137,24 @@ def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
         "lxc_nvidia_runtime_package_setup",
     )
 
-    assert_observation_completed(
-        result, "Assert cache refresh completed before isolated install failure"
+    assert_observations_completed(
+        result, ("Assert cache refresh completed before isolated install failure",)
     )
+
+
+def test_tag_selection_miss_cannot_pass_execution_proof() -> None:
+    result = run_isolated_playbook(PLAYBOOK, "fixture_nonexistent_tag")
+    assert result.returncode == 0, result.stderr
+    try:
+        assert_observations_completed(result, ("Assert valid repository was not rewritten",))
+    except AssertionError:
+        return
+    raise AssertionError("A tag-selection miss passed execution proof")
 
 
 if __name__ == "__main__":
     try:
+        test_tag_selection_miss_cannot_pass_execution_proof()
         test_lxc_nvidia_runtime_repository_publication_is_retryable()
         test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install()
     except AssertionError as error:

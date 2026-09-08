@@ -17,7 +17,6 @@ conditional prevents the assertions from running.
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -25,6 +24,7 @@ import tempfile
 from pathlib import Path
 
 from ansible_test_helper import ansible_playbook_command
+from lifecycle_observation_report import assert_observations_completed
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +52,9 @@ FIXTURE_SYSTEM_BIN = (
     / "fixtures"
     / "lxc_docker_runtime_daemon_options_assets"
     / "system_bin"
+)
+FIXTURE_OBSERVATION_PLUGINS = (
+    REPO_ROOT / "tests" / "regression" / "fixtures" / "lifecycle_observation_plugins"
 )
 REQUIRED_OBSERVATIONS = (
     "Assert geerlingguy.docker receives a real mapping",
@@ -81,7 +84,8 @@ def run_isolated_playbook() -> subprocess.CompletedProcess[str]:
         env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
             [str(FIXTURE_ROLES), str(REPO_ROOT / "playbooks" / "roles")]
         )
-        env["ANSIBLE_STDOUT_CALLBACK"] = "ansible.posix.json"
+        env["ANSIBLE_CALLBACK_PLUGINS"] = str(FIXTURE_OBSERVATION_PLUGINS)
+        env["ANSIBLE_STDOUT_CALLBACK"] = "lifecycle_observation"
         env["ANSIBLE_VERBOSITY"] = "0"
         env.pop("ANSIBLE_CALLBACKS_ENABLED", None)
         env["TMPDIR"] = temp_root
@@ -105,78 +109,10 @@ def run_isolated_playbook() -> subprocess.CompletedProcess[str]:
         return result
 
 
-def assert_observations_completed(result: subprocess.CompletedProcess[str]) -> None:
-    """Require each final Ansible assertion to have a passing host result."""
-    stderr_note = (
-        f"\ncaptured stderr:\n{result.stderr}" if result.stderr.strip() else ""
-    )
-    try:
-        report = json.loads(result.stdout)
-    except ValueError:
-        report = None
-
-    if not isinstance(report, dict) or not isinstance(report.get("plays"), list):
-        raise AssertionError(
-            "daemon-options observations cannot be confirmed: stdout is not "
-            "the pinned JSON callback report. Raw stdout:\n"
-            f"{result.stdout}{stderr_note}"
-        )
-
-    outcomes: dict[str, list[object]] = {name: [] for name in REQUIRED_OBSERVATIONS}
-    try:
-        for play in report["plays"]:
-            for task in play.get("tasks", []):
-                name = task.get("task", {}).get("name")
-                if name in outcomes:
-                    outcomes[name].extend(task.get("hosts", {}).values())
-    except (AttributeError, TypeError):
-        raise AssertionError(
-            "daemon-options observations cannot be confirmed: stdout is not "
-            "the pinned JSON callback report. Raw stdout:\n"
-            f"{result.stdout}{stderr_note}"
-        ) from None
-
-    failures = []
-    for name, host_results in outcomes.items():
-        passed = any(
-            isinstance(host_result, dict)
-            and not host_result.get("skipped", False)
-            and not host_result.get("failed", False)
-            and not host_result.get("unreachable", False)
-            and host_result.get("action") == "ansible.builtin.assert"
-            and host_result.get("changed") is False
-            and host_result.get("msg") == "All assertions passed"
-            for host_result in host_results
-        )
-        if passed:
-            continue
-        cause = (
-            "was absent from the report"
-            if not host_results
-            else (
-                "had no host result that passed "
-                "(all were skipped, failed, or unreachable)"
-            )
-        )
-        failures.append(f"{name!r} {cause}")
-
-    if result.returncode != 0 or failures:
-        process_failure = (
-            f"ansible-playbook exited {result.returncode}; "
-            if result.returncode != 0
-            else ""
-        )
-        detail = "; ".join(failures) or "the required observations were present"
-        raise AssertionError(
-            f"{process_failure}daemon-options execution proof failed: {detail}."
-            f"{stderr_note}"
-        )
-
-
 def test_lxc_docker_runtime_declares_daemon_options_for_gpu_and_non_gpu() -> None:
     result = run_isolated_playbook()
 
-    assert_observations_completed(result)
+    assert_observations_completed(result, REQUIRED_OBSERVATIONS)
 
 
 if __name__ == "__main__":

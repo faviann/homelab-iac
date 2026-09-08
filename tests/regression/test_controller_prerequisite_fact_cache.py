@@ -31,6 +31,9 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 INVENTORY = FIXTURES / "controller_prerequisite_target_inventory.yml"
 VAULT_PASSWORD_FILE = REPO_ROOT / "tests" / "fixtures" / "ansible" / "vault-pass"
 PLAYBOOK = REPO_ROOT / "playbooks" / "controller-prerequisites.yml"
+FIXTURE_COLLECTION_REQUIREMENTS = (
+    FIXTURES / "controller_prerequisite_empty_collections.yml"
+)
 TARGET = "prerequisite_cache_target"
 POISONED_FACT = "discovered_interpreter_python"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
@@ -55,6 +58,8 @@ def run_prerequisites(cache_connection: Path) -> subprocess.CompletedProcess[str
             str(PLAYBOOK),
             "-e",
             f"prerequisite_target_pattern={TARGET}",
+            "-e",
+            f"control_node_collection_requirements={FIXTURE_COLLECTION_REQUIREMENTS}",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
