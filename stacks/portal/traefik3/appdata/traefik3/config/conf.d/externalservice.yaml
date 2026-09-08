@@ -90,6 +90,26 @@ http:
       service: lobu
       priority: 1000
 
+    # Lobu redirects browser traffic to PUBLIC_GATEWAY_URL, so its admin SPA is
+    # only usable at the canonical origin (loopback aside). This lower-priority
+    # catch-all serves it, restricted to LAN and VPN source ranges.
+    #
+    # It cannot affect the machine-facing surface: every MCP, OAuth and worker
+    # path is matched by the `lobu` router above at priority 1000, and Traefik
+    # evaluates the higher priority first, so those requests never reach this
+    # middleware. This router only picks up what the allowlist does not match —
+    # today the admin SPA and the /api/<org>/* workspace API.
+    #
+    # Same hostname on purpose: moving the admin SPA to its own host is what
+    # risks breaking OAuth cookies and consent.
+    lobu-admin:
+      rule: "Host(`lobu.faviann.com`)"
+      entryPoints: websecure
+      service: lobu
+      priority: 900
+      middlewares:
+        - local-ip-restriction
+
     hermes:
       rule: "Host(`hermes.local.faviann.com`)"
       entryPoints: websecure

@@ -22,7 +22,7 @@ The workstation daemon polls outward. It is never exposed through Traefik.
 | Stack | `stacks/lobu/lobu/` — `pgvector/pgvector:pg18-trixie` + `ghcr.io/lobu-ai/lobu-app:19.2.0`, both digest-pinned |
 | Durable state | `./appdata/postgres` and `./appdata/workspaces` |
 | Public origin | `https://lobu.faviann.com` → `http://lobu.faviann.vms:8787` |
-| Admin UI | LAN only: `http://lobu.faviann.vms:8787` |
+| Admin UI | `https://lobu.faviann.com`, restricted to LAN/VPN source ranges |
 
 Durable state resolves to `/conf/docker/stacks/lobu/appdata/...`, which is a
 read-write per-host subpath of the shared 256 GB volume — **not** the LXC root
@@ -69,13 +69,13 @@ way you treat the database itself. It is not part of routine maintenance.
 2. **Deploy.** `./run.sh --limit lobu`. The image entrypoint runs its own
    migrations against `DATABASE_URL`, with a connectivity preflight that refuses
    to migrate an unreachable database under `NODE_ENV=production`.
-3. **Create the one human account** in the admin UI at
-   `http://lobu.faviann.vms:8787`. This is a LAN-only step; signup is not
-   reachable through the public origin.
-4. **Confirm the lockout**: a second signup must fail with
+3. **Deploy the routers**: `./run.sh --limit portal`.
+4. **Create the one human account** at `https://lobu.faviann.com` from a LAN or
+   VPN address. Signup is served by the admin catch-all, which is source-range
+   restricted, so it is not reachable from the public internet.
+5. **Confirm the lockout**: a second signup must fail with
    `SIGN_UP_DISABLED_IN_SINGLE_USER_MODE`. `LOBU_SINGLE_USER=1` counts real
-   humans only. Do not publish the router before this passes.
-5. **Deploy the public router**: `./run.sh --limit portal`.
+   humans only.
 6. **Point the workstation at this origin** — owned by `faviann/dotfiles#126`,
    not by this repository. See "Workstation boundary" below.
 7. **Add the connector in ChatGPT** against `https://lobu.faviann.com/mcp`.
@@ -88,6 +88,14 @@ docker ps --format '{{.Names}}\t{{.Status}}'          # both must be healthy
 docker logs --tail 50 lobu-app                        # migrations + boot
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/health
 ```
+
+Do not expect a browser to work against `http://lobu.faviann.vms:8787`. Lobu
+redirects browser traffic to `PUBLIC_GATEWAY_URL`, exempting only loopback, so
+that host answers SPA routes with a 302 to `https://lobu.faviann.com`. API,
+MCP, OAuth and `/.well-known` paths are exempt from the redirect, which is why
+the `curl` checks above still work on the LXC's own port. To reach the admin UI
+without the canonical origin, tunnel to loopback:
+`ssh -L 8787:lobu.faviann.vms:8787 faviann@lobu.faviann.vms`.
 
 Against the public origin:
 
@@ -132,13 +140,21 @@ Two exclusions are deliberate and load-bearing:
   calls are listed, so signup is unreachable by construction and a future
   upstream endpoint is not published automatically.
 - **The admin SPA at `/` and the `/api/<org>/*` workspace API are not
-  allowlisted.** The machine-facing protocol surface is public; the human admin
-  surface stays LAN-only. Anything unmatched is a 404 at the edge.
+  allowlisted.** They are served instead by the `lobu-admin` catch-all at
+  priority 900, which carries `local-ip-restriction`. Traefik evaluates the
+  higher priority first, so no MCP, OAuth or worker request ever reaches that
+  middleware; the machine-facing surface is public and the human admin surface
+  is LAN/VPN only, on one hostname and one certificate.
+
+`local-ip-restriction` compares the client source address, and hairpin NAT
+preserves it, so LAN and VPN clients are admitted even though
+`lobu.faviann.com` resolves to the public address.
 
 **If a flow breaks after an upgrade**, check the edge before the app: a path
-Lobu started using will show up as a 404 for `lobu.faviann.com` in
-`/logs/traefik-access.log` on the `portal` LXC. Add that endpoint — do not widen
-the rule to a bare prefix.
+Lobu started using will show up in `/logs/traefik-access.log` on the `portal`
+LXC as a **403** for an off-LAN client — it fell through to `lobu-admin`
+instead of matching the allowlist. Add that endpoint to the `lobu` rule; do not
+widen it to a bare prefix, and do not remove the restriction from `lobu-admin`.
 
 ## Upgrades
 
