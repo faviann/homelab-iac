@@ -51,7 +51,7 @@ http:
     # API — stays LAN-only on http://lobu.faviann.vms:8787.
     lobu:
       rule: >-
-        Host(`lobu.faviann.com`) && (
+        Host(`lobu.admin.faviann.com`) && (
         Path(`/mcp`)
         || PathPrefix(`/mcp/`)
         || Path(`/.well-known/oauth-protected-resource`)
@@ -97,30 +97,35 @@ http:
 
     # Lobu redirects browser traffic to PUBLIC_GATEWAY_URL, so its admin SPA is
     # only usable at the canonical origin (loopback aside). This lower-priority
-    # catch-all serves it, restricted to LAN and VPN source ranges.
+    # catch-all serves it behind Authentik, so it is reachable from anywhere but
+    # only by an authenticated admin. The shared admin-wildcard provider covers
+    # this host, and authentik-outpost-admin-subdomains already routes its
+    # callback, so no Lobu-specific Authentik object is needed.
     #
     # It cannot affect the machine-facing surface: every MCP, OAuth and worker
     # path is matched by the `lobu` router above at priority 1000, and Traefik
     # evaluates the higher priority first, so those requests never reach this
-    # middleware. This router only picks up what the allowlist does not match —
-    # today the admin SPA and the /api/<org>/* workspace API.
+    # middleware. That separation is what #275 requires — an Authentik boundary
+    # for the human admin UI only, never in front of the protocol endpoints.
+    # This router picks up what the allowlist does not match: the admin SPA and
+    # the /api/<org>/* workspace API.
     #
     # Same hostname on purpose: moving the admin SPA to its own host is what
     # risks breaking OAuth cookies and consent.
     lobu-admin:
-      rule: "Host(`lobu.faviann.com`)"
+      rule: "Host(`lobu.admin.faviann.com`)"
       entryPoints: websecure
       service: lobu
       priority: 900
       middlewares:
-        - local-ip-restriction
+        - protected-edge-auth@file
 
     # Signup is enforced closed in the database (see the lobu stack's bootstrap
     # service). This denies it at the edge too, so the admin catch-all below
     # never carries an account-creation path even from a LAN or VPN source.
     # `noop` has no servers, so Traefik answers 503 without reaching Lobu.
     lobu-signup-denied:
-      rule: "Host(`lobu.faviann.com`) && PathPrefix(`/api/auth/sign-up`)"
+      rule: "Host(`lobu.admin.faviann.com`) && PathPrefix(`/api/auth/sign-up`)"
       entryPoints: websecure
       service: noop
       priority: 1002

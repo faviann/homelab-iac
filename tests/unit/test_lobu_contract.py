@@ -67,8 +67,8 @@ def test_lobu_public_router_keeps_its_negative_exposure_boundaries() -> None:
     assert [name for name in attached if "auth" in name.lower()] == []
 
     # The admin catch-all serves the SPA and the /api/<org>/* workspace API at
-    # the canonical origin. Losing its source-range restriction would publish
-    # both to the internet while every other check still passed.
+    # the canonical origin. Losing its edge auth would publish both to the
+    # internet while every other check still passed.
     admin = load_yaml(TRAEFIK_CONF)["http"]["routers"]["lobu-admin"]
-    assert "local-ip-restriction" in admin["middlewares"]
+    assert "protected-edge-auth@file" in admin["middlewares"]
     assert admin["priority"] < router["priority"]

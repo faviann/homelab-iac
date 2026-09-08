@@ -1,13 +1,13 @@
 # Lobu Control Plane
 
 Read before touching the `lobu` LXC, the `lobu` stack, or the
-`https://lobu.faviann.com` Traefik router.
+`https://lobu.admin.faviann.com` Traefik router.
 
 Lobu's control plane is self-hosted here so ChatGPT can dispatch governed work
 to the workstation's `lobu daemon` without depending on Lobu Cloud:
 
 ```text
-ChatGPT -> https://lobu.faviann.com/mcp -> Lobu control plane (lobu LXC)
+ChatGPT -> https://lobu.admin.faviann.com/mcp -> Lobu control plane (lobu LXC)
         -> device queue / policy / approvals
         -> workstation lobu daemon -> local tooling
 ```
@@ -21,8 +21,8 @@ The workstation daemon polls outward. It is never exposed through Traefik.
 | LXC | `lobu`, vmid 308, `tier_medium` + `cap_docker`, 16 GB root disk |
 | Stack | `stacks/lobu/lobu/` — `pgvector/pgvector:pg18-trixie` + `ghcr.io/lobu-ai/lobu-app:19.2.0`, both digest-pinned |
 | Durable state | `./appdata/postgres` and `./appdata/workspaces` |
-| Public origin | `https://lobu.faviann.com` → `http://lobu.faviann.vms:8787` |
-| Admin UI | `https://lobu.faviann.com`, restricted to LAN/VPN source ranges |
+| Public origin | `https://lobu.admin.faviann.com` → `http://lobu.faviann.vms:8787` |
+| Admin UI | `https://lobu.admin.faviann.com`, behind Authentik (`admins` group) |
 
 Durable state resolves to `/conf/docker/stacks/lobu/appdata/...`, which is a
 read-write per-host subpath of the shared 256 GB volume — **not** the LXC root
@@ -68,9 +68,9 @@ denies `/api/auth/sign-up`, so once the router is live the only account-creation
 path is gone. Steps 3 and 4 run against the LXC's published port on the trusted
 LAN, before any public exposure exists. API paths are exempt from Lobu's
 canonical-origin redirect, so `curl` works there even though a browser would be
-bounced to `https://lobu.faviann.com`.
+bounced to `https://lobu.admin.faviann.com`.
 
-1. **DNS.** `lobu.faviann.vms` must resolve on the LAN, and `lobu.faviann.com`
+1. **DNS.** `lobu.faviann.vms` must resolve on the LAN, and `lobu.admin.faviann.com`
    must resolve publicly to the edge. `*.faviann.com` is already covered by the
    existing wildcard SAN, so no certificate change is needed.
 2. **Deploy the stack.** `./run.sh --limit lobu`. The image entrypoint runs its
@@ -104,11 +104,11 @@ bounced to `https://lobu.faviann.com`.
 
 5. **Publish the routers**: `./run.sh --limit portal`. This exposes the origin
    and closes `/api/auth/sign-up` at the edge.
-6. **Sign in** at `https://lobu.faviann.com` from a LAN or VPN address to
-   confirm the browser session works.
+6. **Sign in** at `https://lobu.admin.faviann.com`. Authentik authenticates you
+   first (members of `admins`), then Lobu's own login.
 7. **Point the workstation at this origin** — owned by `faviann/dotfiles#126`,
    not by this repository. See "Workstation boundary" below.
-8. **Add the connector in ChatGPT** against `https://lobu.faviann.com/mcp`.
+8. **Add the connector in ChatGPT** against `https://lobu.admin.faviann.com/mcp`.
 
 If you ever need to recreate the account later, drop the
 `lobu_single_human_principal` index, repeat steps 3 and 4, and recreate it —
@@ -125,7 +125,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/health
 
 Do not expect a browser to work against `http://lobu.faviann.vms:8787`. Lobu
 redirects browser traffic to `PUBLIC_GATEWAY_URL`, exempting only loopback, so
-that host answers SPA routes with a 302 to `https://lobu.faviann.com`. API,
+that host answers SPA routes with a 302 to `https://lobu.admin.faviann.com`. API,
 MCP, OAuth and `/.well-known` paths are exempt from the redirect, which is why
 the `curl` checks above still work on the LXC's own port. To reach the admin UI
 without the canonical origin, tunnel to loopback:
@@ -134,9 +134,9 @@ without the canonical origin, tunnel to loopback:
 Against the public origin:
 
 ```bash
-curl -s https://lobu.faviann.com/.well-known/oauth-protected-resource
-curl -s https://lobu.faviann.com/.well-known/oauth-authorization-server
-curl -s -o /dev/null -w '%{http_code}\n' -X POST https://lobu.faviann.com/mcp \
+curl -s https://lobu.admin.faviann.com/.well-known/oauth-protected-resource
+curl -s https://lobu.admin.faviann.com/.well-known/oauth-authorization-server
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://lobu.admin.faviann.com/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'   # must be 401
 ```
@@ -215,9 +215,15 @@ Two exclusions are deliberate and load-bearing:
   middleware; the machine-facing surface is public and the human admin surface
   is LAN/VPN only, on one hostname and one certificate.
 
-`local-ip-restriction` compares the client source address, and hairpin NAT
-preserves it, so LAN and VPN clients are admitted even though
-`lobu.faviann.com` resolves to the public address.
+The admin catch-all reuses the shared `admin-wildcard-forwardauth` provider,
+which already covers `*.admin.faviann.com`, and
+`authentik-outpost-admin-subdomains` already routes its callback — so this
+deployment adds no Lobu-specific Authentik object.
+
+Note that `*.admin.faviann.com` is publicly routable. A plain DNS query from
+inside the LAN returns `10.1.0.2` because Firewalla answers intercepted queries
+with the internal address; public resolvers reached over DNS-over-HTTPS return
+the edge address, which is what ChatGPT sees.
 
 **If a flow breaks after an upgrade**, check the edge before the app: a path
 Lobu started using will show up in `/logs/traefik-access.log` on the `portal`
@@ -263,7 +269,7 @@ management is how a duplicate device registration happens.
   workstation LXC rebuilds. As long as that state is intact, restarting or
   rebuilding the workstation reuses the same device.
 - `faviann/dotfiles#112` installs the Lobu CLI and supervises `lobu daemon`.
-- `faviann/dotfiles#126` points that daemon at `https://lobu.faviann.com` with an
+- `faviann/dotfiles#126` points that daemon at `https://lobu.admin.faviann.com` with an
   explicit non-cloud context. Until it lands, the daemon still targets Lobu
   Cloud.
 
