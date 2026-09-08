@@ -11,6 +11,7 @@ workstation_origin_firewall_protected_ports:
   - 18789 # OpenClaw gateway
   - 8788 # Reserved Collie origin
   - 19081 # MCP auth proxy
+  - 19082 # Artifact static server
 workstation_origin_firewall_allowed_hosts:
   - portal
 # Persist selected workstation home paths across intentional LXC rebuilds.

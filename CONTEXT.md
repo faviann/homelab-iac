@@ -4,6 +4,14 @@ This context describes how the repository plans and applies changes to the manag
 
 ## Language
 
+**Artifact publication**:
+A completed file or prepared directory tree copied for browser delivery, independently of its original source and worktree. Publications remain available until deliberately removed; deleting the source or rebuilding the workstation does not define their lifetime.
+_Avoid_: Temporary report, live workspace
+
+**Artifact publishing mapping**:
+The shared agreement between infrastructure and workstation user configuration that associates an existing publication directory with its browser URL prefix. Each relative file path under the directory identifies the same relative resource under the URL prefix.
+_Avoid_: Upload endpoint, artifact registry
+
 **Image update track**:
 An operator-selected version or release line used to discover eligible updates for one effective Compose image. An image-tracked stack can declare a shared default and service-specific exceptions, but every image-bearing service must have an intentional effective image update track.
 _Avoid_: Channel, version inferred from the current tag

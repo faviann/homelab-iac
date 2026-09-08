@@ -1,0 +1,23 @@
+---
+schema_version: 1
+kind: stack
+name: artifacts
+description: Read-only static server for published agent artifacts
+portability:
+  tier: host-bound-app
+  owner: stack
+runtime:
+  template_inputs:
+    - docker_uid
+    - docker_gid
+  host_requirements:
+    external_networks: []
+    host_directories:
+      - /ephemeral/workstation/artifacts
+    ownership_overrides: []
+exposure:
+  traefik: protected
+  homepage_instances: []
+updates:
+  mode: images
+  track: "2"

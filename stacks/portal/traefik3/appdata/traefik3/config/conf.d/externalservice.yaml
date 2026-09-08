@@ -29,6 +29,17 @@ http:
       middlewares:
         - local-ip-restriction
 
+    # Admin-authenticated and deliberately reachable from outside the LAN, so no
+    # local-ip-restriction. Anonymous and non-admin requests are stopped by the
+    # shared admin-wildcard forward auth before any artifact byte is served.
+    artifacts:
+      rule: "Host(`artifacts.admin.faviann.com`)"
+      entryPoints: websecure
+      service: artifacts-workstation
+      priority: 1000
+      middlewares:
+        - protected-edge-auth@file
+
     mcp-auth-proxy:
       rule: "Host(`mcp.faviann.com`) && (Path(`/mcp`) || PathPrefix(`/.well-known/`) || PathPrefix(`/.idp/`) || PathPrefix(`/.auth/`))"
       entryPoints: websecure
@@ -156,6 +167,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://workstation.faviann.vms:4001"
+    artifacts-workstation:
+      loadBalancer:
+        servers:
+          - url: "http://workstation.faviann.vms:19082"
     mcp-auth-proxy-workstation:
       loadBalancer:
         servers:

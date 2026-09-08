@@ -1,0 +1,15 @@
+---
+x-prereq-dirs:
+  - /ephemeral/workstation/artifacts
+
+services:
+  artifacts:
+    image: ghcr.io/static-web-server/static-web-server:2.44.0
+    restart: unless-stopped
+    network_mode: host
+    user: "${PUID}:${PGID}"
+    read_only: true
+    env_file:
+      - .env
+    volumes:
+      - /ephemeral/workstation/artifacts:/srv/artifacts:ro
