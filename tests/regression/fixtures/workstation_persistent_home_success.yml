@@ -342,3 +342,23 @@
           - repos_home_path_stat.stat.isdir
           - not (repos_home_path_stat.stat.islnk | default(false))
         fail_msg: "Workstation persistent home directories or mount paths were not prepared as expected"
+
+    - name: Inspect fresh Lobu persistent target and mount point
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ workstation_persistent_home_root }}/.config/lobu"
+        - "{{ workstation_home }}/.config/lobu"
+      register: lobu_directories
+
+    - name: Assert fresh Lobu directories have private ownership and mode
+      ansible.builtin.assert:
+        that:
+          - item.stat.isdir
+          - not (item.stat.islnk | default(false))
+          - item.stat.uid == workstation_uid
+          - item.stat.gid == workstation_gid
+          - item.stat.mode == '0700'
+      loop: "{{ lobu_directories.results }}"
+      loop_control:
+        label: "{{ item.item }}"
