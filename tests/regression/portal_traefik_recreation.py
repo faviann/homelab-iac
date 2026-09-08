@@ -73,6 +73,7 @@ class ComposeTransitionObservation:
     traefik_started_before: str
     traefik_started_after: str
     redis_healthy_at: str | None
+    redis_keyspace_notifications: str
     local_route_status: int | None
     redis_route_statuses: dict[str, int | None]
     closed_watch_tree: bool
@@ -158,11 +159,11 @@ def _wait_for_redis(container: str) -> None:
     raise AssertionError(f"Redis container {container} did not become ready")
 
 
-def _seed_remote_routes(container: str) -> None:
+def _seed_remote_routes(container: str, host_prefix: str = "") -> None:
     for host in REMOTE_HOSTS:
         name = host.partition(".")[0]
         values = {
-            f"traefik/http/routers/{name}/rule": f"Host(`{host}`)",
+            f"traefik/http/routers/{name}/rule": f"Host(`{host_prefix}{host}`)",
             f"traefik/http/routers/{name}/service": name,
             f"traefik/http/services/{name}/loadbalancer/servers/0/url": (
                 "http://backend:8081/ping"
@@ -170,6 +171,28 @@ def _seed_remote_routes(container: str) -> None:
         }
         for key, value in values.items():
             _docker("exec", container, "redis-cli", "SET", key, value)
+
+
+def _wait_for_empty_redis_watch(container: str) -> None:
+    """Wait until the real provider has subscribed and read the empty replacement."""
+    # In this isolated Redis only Traefik issues SCAN/PSUBSCRIBE. An empty
+    # SCAN completes the watch's initial snapshot without a following MGET.
+    # Wait for that server-side boundary before publishing any route keys:
+    # reconnecting watches otherwise race the seed and can load all or part of it.
+    deadline = time.monotonic() + 30
+    while True:
+        clients = _docker("exec", container, "redis-cli", "CLIENT", "LIST").stdout
+        commands = {
+            field
+            for client in clients.splitlines()
+            for field in client.split()
+            if field.startswith("cmd=")
+        }
+        if {"cmd=psubscribe", "cmd=scan"} <= commands:
+            return
+        if time.monotonic() >= deadline:
+            raise AssertionError("Traefik did not subscribe and scan replacement Redis")
+        time.sleep(0.25)
 
 
 def _probe(port: int, host: str, path: str) -> int | None:
@@ -477,7 +500,8 @@ def _run_compose_recreation_arm(
             project, overrides, "ps", "--quiet", "redis"
         ).stdout.strip()
         _wait_for_redis(redis_id_before)
-        _seed_remote_routes(redis_id_before)
+        # A cached pre-recreation configuration must not count as recovery.
+        _seed_remote_routes(redis_id_before, host_prefix="before-recreation-")
         initial_port = int(
             _docker(
                 "inspect",
@@ -489,7 +513,11 @@ def _run_compose_recreation_arm(
         assert _observe_statuses(initial_port, (LOCAL_HOST,), 15)[LOCAL_HOST] == 200
         assert all(
             status == 200
-            for status in _observe_statuses(initial_port, REMOTE_HOSTS, 15).values()
+            for status in _observe_statuses(
+                initial_port,
+                tuple(f"before-recreation-{host}" for host in REMOTE_HOSTS),
+                15,
+            ).values()
         )
         traefik_started_before = json.loads(
             _docker("inspect", traefik_id_before).stdout
@@ -519,6 +547,17 @@ def _run_compose_recreation_arm(
             project, updated_overrides, "ps", "--quiet", "redis"
         ).stdout.strip()
         _wait_for_redis(redis_id_after)
+        # Redis replacement loses notify-keyspace-events. Traefik's existing
+        # client reconnects without restoring it; restarting Traefik does.
+        # Publish after the empty snapshot so only a functioning watch can
+        # discover the new rules, in both arms (issue #255).
+        _wait_for_empty_redis_watch(redis_id_after)
+        redis_notifications = json.loads(
+            _docker(
+                "exec", redis_id_after, "redis-cli", "--json",
+                "CONFIG", "GET", "notify-keyspace-events",
+            ).stdout
+        )["notify-keyspace-events"]
         _seed_remote_routes(redis_id_after)
 
         redis_inspect = json.loads(_docker("inspect", redis_id_after).stdout)[0]
@@ -568,6 +607,7 @@ def _run_compose_recreation_arm(
             traefik_started_before=traefik_started_before,
             traefik_started_after=traefik_inspect["State"]["StartedAt"],
             redis_healthy_at=redis_healthy_at,
+            redis_keyspace_notifications=redis_notifications,
             local_route_status=local_status,
             redis_route_statuses=redis_statuses,
             closed_watch_tree="watchtree channel is closed" in logs.lower(),
