@@ -1,0 +1,136 @@
+---
+# Alternate-locale boundary for host configuration.
+#
+# Every managed desired set is already converged, so the only production
+# behavior under test is the comparison seam: each component reads the current
+# state through a shell pipeline and compares it against a Jinja-sorted desired
+# string. The shell side pins LC_ALL=C so both sides agree on ordering. The
+# seeded data below is deliberately collation-divergent — a bind-mount option
+# list led by an absolute path, split ID mapping ranges, and two sysctl keys
+# that differ at an underscore — so dropping that normalization reorders the
+# shell output and reports a false change.
+- name: Test locale-independent Proxmox LXC host configuration comparison
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_host_config_delegate: localhost
+    proxmox_lxc_host_config_become: false
+    proxmox_lxc_host_config_path_root: "{{ temp_root }}/etc/pve/lxc"
+    # A converged run never restarts; these bounds only cap a regression.
+    proxmox_lxc_host_config_restart_ready_timeout: 20
+    proxmox_lxc_host_config_restart_ready_delay: 1
+    proxmox_lxc_host_config_restart_ready_command_timeout: 5
+    proxmox_lxc_contract:
+      host_config:
+        vmid: 4202
+        hostname: locale-host
+        host_directories:
+          - path: "{{ temp_root }}/srv/media"
+            mode: "0750"
+        bind_mounts:
+          mp0: "{{ temp_root }}/srv/media,mp=/media,ro=1,backup=0"
+        idmap:
+          - g 0 100000 65536
+          - u 1 100001 65535
+          - u 10 100010 65526
+        features:
+          - nesting=1
+          - keyctl=1
+        configure_nvidia_runtime: true
+        wireguard_kernel_module_access: true
+        lxc_custom_sysctls:
+          - key: net.ipv4.ip_local_port_range
+            value: "1024 65535"
+          - key: net.ipv4.ipfrag_time
+            value: 30
+        lxc_disable_apparmor: true
+  tasks:
+    - name: Create temp Proxmox config root
+      ansible.builtin.file:
+        path: "{{ proxmox_lxc_host_config_path_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Create the managed host directory ahead of the converged run
+      ansible.builtin.file:
+        path: "{{ temp_root }}/srv/media"
+        state: directory
+        mode: "0750"
+
+    - name: Seed an already-converged container config file
+      ansible.builtin.copy:
+        dest: "{{ proxmox_lxc_host_config_path_root }}/4202.conf"
+        mode: "0644"
+        content: |
+          arch: amd64
+          hostname: locale-host
+          memory: 2048
+          unprivileged: 1
+          lxc.idmap: g 0 100000 65536
+          lxc.idmap: u 1 100001 65535
+          lxc.idmap: u 10 100010 65526
+          rootfs: local-lvm:vm-4202-disk-0,size=16G
+          mp0: {{ temp_root }}/srv/media,mp=/media,ro=1,backup=0
+          lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+          lxc.sysctl.net.ipv4.ip_local_port_range = 1024 65535
+          lxc.sysctl.net.ipv4.ipfrag_time = 30
+          lxc.apparmor.profile: unconfined
+          lxc.environment: NVIDIA_VISIBLE_DEVICES=all
+          lxc.environment: NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+          lxc.hook.mount: /usr/share/lxc/hooks/nvidia
+          lxc.hook.pre-start: sh -c '[ ! -f /dev/nvidia0 ] && /usr/bin/nvidia-modprobe -c0 -u'
+
+    - name: Place mock pct script on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "$*" >> "{{ temp_root }}/pct-calls.log"
+          if [ "$1" = "config" ]; then
+            printf 'arch: amd64\nfeatures: keyctl=1,nesting=1\n'
+          fi
+          exit 0
+
+    - name: Reconcile the already-converged host configuration
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        # The role's nested concern path is intentional and part of this production-hierarchy fixture.
+        - name: Include host configuration role for converged reconciliation  # noqa: role-name[path]
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+
+    - name: Read the reconciled container config file
+      ansible.builtin.slurp:
+        src: "{{ proxmox_lxc_host_config_path_root }}/4202.conf"
+      register: _host_config_file_converged
+
+    - name: Read mock pct call log after converged reconciliation
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/pct-calls.log"
+      register: _pct_calls_converged
+
+    - name: Assert every managed comparison is locale-independent
+      ansible.builtin.assert:
+        that:
+          - not proxmox_lxc_host_config_result.overall_changed
+          - not proxmox_lxc_host_config_result.restart_required
+          - not proxmox_lxc_host_config_result.restart_applied
+          - not proxmox_lxc_host_config_result.components.idmap.changed
+          - not proxmox_lxc_host_config_result.components.bind_mounts.changed
+          - not proxmox_lxc_host_config_result.components.nvidia.changed
+          - not proxmox_lxc_host_config_result.components.wireguard.changed
+          - not proxmox_lxc_host_config_result.components.sysctls.changed
+          - not proxmox_lxc_host_config_result.components.features.changed
+          - "'set 4202' not in (_pct_calls_converged.content | b64decode)"
+          - "'status 4202' not in (_pct_calls_converged.content | b64decode)"
+          - "'reboot 4202' not in (_pct_calls_converged.content | b64decode)"
+          - "'exec 4202' not in (_pct_calls_converged.content | b64decode)"
+        fail_msg: >-
+          A converged host reconciliation reported a change under
+          {{ lookup('env', 'LC_ALL') | default('the ambient locale', true) }}.
+          Managed comparisons must not depend on the ambient collation order.
+          Component outcomes: {{ proxmox_lxc_host_config_result.components }}
+          Config file: {{ _host_config_file_converged.content | b64decode }}
