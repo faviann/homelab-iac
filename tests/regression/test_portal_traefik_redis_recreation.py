@@ -87,6 +87,7 @@ def test_pinned_redis_routes_survive_portal_recreation(
             datetime.fromisoformat(observation.traefik_started_after)
         )
         assert not observation.closed_watch_tree
+        assert set(observation.redis_keyspace_notifications) == set("AKE")
         assert observation.local_route_status == 200
         assert observation.redis_route_statuses == dict.fromkeys(REMOTE_HOSTS, 200)
         effective = json.loads(
@@ -120,6 +121,8 @@ def test_pinned_redis_routes_survive_portal_recreation(
             assert any(
                 status != 200 for status in control.redis_route_statuses.values()
             )
+            assert control.redis_route_statuses == dict.fromkeys(REMOTE_HOSTS, 404)
+            assert control.redis_keyspace_notifications == ""
             control_config = json.loads(
                 (
                     Path(experiment.evidence_directory)
