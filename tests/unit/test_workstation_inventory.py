@@ -90,6 +90,13 @@ class WorkstationInventoryTests(unittest.TestCase):
                 "mode": "0700",
             },
             {
+                "name": "lobu",
+                "type": "bind_mount",
+                "path": "{{ workstation_home }}/.config/lobu",
+                "target": "{{ workstation_persistent_home_root }}/.config/lobu",
+                "mode": "0700",
+            },
+            {
                 "name": "herdr",
                 "type": "bind_mount",
                 "path": "{{ workstation_home }}/.config/herdr",
@@ -123,6 +130,7 @@ class WorkstationInventoryTests(unittest.TestCase):
         forbidden_trees = (
             f"{WORKSTATION_HOME}/.config/systemd/user",
             f"{WORKSTATION_HOME}/.local/state/herdr",
+            f"{WORKSTATION_HOME}/.lobu/cache",
         )
         forbidden_exact = f"{WORKSTATION_HOME}/.local/state"
 
@@ -130,7 +138,7 @@ class WorkstationInventoryTests(unittest.TestCase):
             path = link["path"]
             for tree in forbidden_trees:
                 self.assertFalse(
-                    at_or_under(path, tree),
+                    at_or_under(path, tree) or at_or_under(tree, path),
                     msg=(
                         f"persistent home entry {link['name']!r} path {path!r} must not persist "
                         f"regenerable state under {tree!r}"

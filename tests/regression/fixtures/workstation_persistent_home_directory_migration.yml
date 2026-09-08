@@ -18,6 +18,11 @@
         path: "{{ workstation_home }}/.moraine"
         target: "{{ workstation_persistent_home_root }}/.moraine"
         mode: "0700"
+      - name: lobu
+        type: bind_mount
+        path: "{{ workstation_home }}/.config/lobu"
+        target: "{{ workstation_persistent_home_root }}/.config/lobu"
+        mode: "0700"
   tasks:
     - name: Prepare existing Moraine runtime for migration
       when: prepare_existing_moraine_runtime | default(true) | bool
@@ -63,6 +68,44 @@
               - "{{ workstation_home }}/.moraine.pre-persist"
           changed_when: true
 
+    - name: Prepare existing Lobu state for migration
+      when: prepare_existing_moraine_runtime | default(true) | bool
+      block:
+        - name: Create existing Lobu device directory and persistent config parent
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: "0700"
+          loop:
+            - "{{ workstation_home }}/.config/lobu/devices"
+            - "{{ workstation_persistent_home_root }}/.config"
+
+        - name: Create synthetic Lobu auth and device state
+          ansible.builtin.copy:
+            dest: "{{ workstation_home }}/.config/lobu/{{ item }}"
+            content: synthetic-lobu-state
+            mode: "0600"
+          loop:
+            - credentials.json
+            - devices/test-device.json
+
+        - name: Copy existing Lobu state to persistent backing
+          ansible.builtin.command:
+            argv:
+              - cp
+              - -a
+              - "{{ workstation_home }}/.config/lobu"
+              - "{{ workstation_persistent_home_root }}/.config/lobu"
+          changed_when: true
+
+        - name: Retain recoverable pre-persistence Lobu copy
+          ansible.builtin.command:
+            argv:
+              - mv
+              - "{{ workstation_home }}/.config/lobu"
+              - "{{ workstation_home }}/.config/lobu.pre-persist"
+          changed_when: true
+
     - name: Include focused workstation persistent home tasks
       ansible.builtin.include_role:
         name: config/lxc_workstation_baseline
@@ -100,3 +143,34 @@
           - workstation_persistent_home_root ~ '/.moraine' in persistent_home_fstab.content | b64decode
           - workstation_home ~ '/.moraine' in persistent_home_fstab.content | b64decode
         fail_msg: Existing Moraine runtime data was not preserved in persistent home
+
+    - name: Inspect migrated and recoverable Lobu files without reading their contents
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop:
+        - "{{ workstation_persistent_home_root }}/.config/lobu/credentials.json"
+        - "{{ workstation_persistent_home_root }}/.config/lobu/devices/test-device.json"
+        - "{{ workstation_home }}/.config/lobu.pre-persist/credentials.json"
+        - "{{ workstation_home }}/.config/lobu.pre-persist/devices/test-device.json"
+      register: lobu_files
+
+    - name: Assert Lobu file content and permissions survived migration
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg
+          - item.stat.mode == '0600'
+          - item.stat.uid == workstation_uid
+          - item.stat.gid == workstation_gid
+          - item.stat.checksum == ('synthetic-lobu-state' | hash('sha256'))
+      loop: "{{ lobu_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Assert Lobu bind mount declaration
+      ansible.builtin.assert:
+        that:
+          - >-
+            workstation_persistent_home_root ~ '/.config/lobu ' ~
+            workstation_home ~ '/.config/lobu none bind '
+            in persistent_home_fstab.content | b64decode

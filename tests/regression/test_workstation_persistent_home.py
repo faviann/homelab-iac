@@ -76,6 +76,7 @@ def test_workstation_persistent_home_contract() -> None:
         "exists and is not the managed bind mount path",
         "Move or migrate it manually",
         ".claude",
+        ".config/lobu",
     ]
     assert all(marker in conflict_output for marker in expected_markers), conflict_output
 

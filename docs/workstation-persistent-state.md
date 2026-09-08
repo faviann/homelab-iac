@@ -4,7 +4,7 @@
 
 The workstation role bind-mounts selected home paths from `/ephemeral/workstation/home` so they survive an intentional LXC rebuild.
 
-**Status: the original ten declared paths were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
+**Status: the original ten declared paths were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
 
 Note that `~/.claude.json` is a sibling of the mounted `~/.claude` and is therefore *not* covered — see #157.
 
@@ -24,7 +24,66 @@ This is deliberate. A bind mount hides whatever is underneath it, so mounting ov
 
 ## Pre-Deploy Migration
 
-Run these on the workstation, as the workstation user, before `site.yml --limit workstation`.
+Run these on the workstation, as the workstation user, before `./run.sh --include-controller`.
+
+### Lobu
+
+Before enabling `~/.config/lobu`, stop the Lobu daemon through the dotfiles-owned
+user-service lifecycle provided by [faviann/dotfiles#112](https://github.com/faviann/dotfiles/issues/112).
+Use the actual unit name documented there; this repository does not define it.
+An intentional service stop must remain stopped. Exit any manually launched
+`lobu daemon` and other Lobu CLI processes too, and confirm no Lobu process is
+running before copying. Keep them stopped until the mount has been verified.
+
+Run the following as the workstation user in a subshell. It refuses an existing
+backing target or backup (including dangling symlinks), so rerunning cannot nest
+or overwrite state. If either exists, inspect the previous migration before
+proceeding; a failed configuration run may already have created an empty target.
+
+```bash
+(
+  set -eu
+  source_path="$HOME/.config/lobu"
+  target_path=/ephemeral/workstation/home/.config/lobu
+  backup_path="$HOME/.config/lobu.pre-persist"
+  if [ -e "$source_path" ] || [ -L "$source_path" ]; then
+    test -d "$source_path"
+    test ! -L "$source_path"
+    if mountpoint -q "$source_path"; then
+      echo 'Lobu is already mounted; inspect the mount before migrating.' >&2
+      exit 1
+    fi
+    test ! -e "$target_path"
+    test ! -L "$target_path"
+    test ! -e "$backup_path"
+    test ! -L "$backup_path"
+    mkdir -p /ephemeral/workstation/home/.config
+    cp -a "$source_path" "$target_path"
+    chmod 0700 "$target_path"
+    mv "$source_path" "$backup_path"
+    chmod 0700 "$backup_path"
+  fi
+)
+```
+
+If the source is absent, no copy or rename is needed. The role creates the target
+and mount point. `cp -a` preserves child-file ownership, modes, ACLs, and xattrs;
+the role sets only the top-level directories to `0700`, without recursive chmod.
+Treat the backup as sensitive too and retain it until deploy and rebuild validation
+succeed. Never print `credentials.json` or device file contents.
+
+Follow [Deploying](#deploying), then verify the exact mount and directory metadata:
+
+```bash
+findmnt --mountpoint "$HOME/.config/lobu"
+stat -c '%a %U:%G %n' ~/.config/lobu /ephemeral/workstation/home/.config/lobu
+```
+
+Require the intended backing path and `700` with the workstation user's ownership
+on both directories before restarting the dotfiles-owned service. Lobu installation,
+login, and supervision remain owned by dotfiles; this change only persists state.
+
+### Other tools
 
 Before enabling the Moraine mapping, stop Moraine through the dotfiles-owned
 user-service lifecycle so its managed ClickHouse data and checkpoints are not
@@ -120,13 +179,12 @@ The `0700` mode in `workstation_persistent_home_links` applies to the mount poin
 
 ## Deploying
 
-The workstation is the Ansible control node, and `proxmox_skip_self` defaults to true — so a run launched here skips the workstation and reports success having changed nothing. Pass `-e proxmox_skip_self=false` to target it deliberately. Drive it from a plain SSH shell, not from inside a herdr pane.
+The workstation is the Ansible control node, and `proxmox_skip_self` defaults to true — so a run launched here skips the workstation and reports success having changed nothing. Pass `--include-controller` to target it deliberately. Drive it from a plain SSH shell, not from inside a herdr pane.
 
 **Check before applying.** This is the load-bearing step, not an optional dry run:
 
 ```bash
-./run.sh --check \
-  -e proxmox_skip_self=false --limit workstation > /tmp/ws-check.log 2>&1
+./run.sh --check --include-controller > /tmp/ws-check.log 2>&1
 rg "restart_required|failed=|unreachable=" /tmp/ws-check.log
 ```
 
@@ -139,10 +197,8 @@ Why the restart matters more than anything else: `proxmox_lxc_host_config/tasks/
 ```bash
 systemd-run --user --unit=ws-deploy --collect \
   bash -lc 'cd ~/repos/homelab-iac/<worktree> && \
-    ./run.sh \
-    -e proxmox_skip_self=false \
-    -e lxc_base_system_reboot_enabled=false \
-    --limit workstation > /tmp/ws-deploy.log 2>&1'
+    ./run.sh --include-controller -- \
+    -e lxc_base_system_reboot_enabled=false > /tmp/ws-deploy.log 2>&1'
 
 journalctl --user -u ws-deploy -f
 systemctl --user show ws-deploy -p ExecMainStatus   # 0 when it finished cleanly
@@ -159,7 +215,7 @@ Afterwards, confirm the mounts are actually live rather than trusting the play r
 ```bash
 findmnt ~/.claude ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
-        ~/.config/agent-of-empires ~/.hermes ~/.openclaw ~/.config/herdr \
+        ~/.config/lobu ~/.config/agent-of-empires ~/.hermes ~/.openclaw ~/.config/herdr \
         ~/.local/state/collie ~/repos
 ```
 
@@ -181,6 +237,7 @@ Nothing there is the signature of an unreachable Collie: the phone gets no route
 
 - `~/.config/systemd/user/collie.service` — Collie regenerates this unit, and it embeds checkout-specific paths. A persisted copy would pin stale paths across a rebuild.
 - `~/.local/state/herdr/agent-detection` — a herdr cache, rebuilt on demand. Persisting it keeps stale detection results alive.
+- `~/.lobu/cache` — Lobu reconstructible cache; only `~/.config/lobu` is persisted.
 - `~/.cache/opencode` — OpenCode cache data is reconstructible and remains on the container-owned filesystem.
 
 Note that the specific `~/.local/state/collie` and `~/.local/state/opencode` children are mounted, not `~/.local/state`. Mounting the parent would drag unrelated reconstructible state into the contract. The same narrow-path rule keeps `~/.cache/opencode` outside the persistence contract.
@@ -230,6 +287,42 @@ A graceful herdr/Collie shutdown is **not** required here. The migration procedu
 
 Also bank `~/.ansible/ssh/proxmox_lxc` somewhere off the container — see the recovery table below for why.
 
+### Lobu before-manifest
+
+Lobu rebuild validation is **pending**. Once initialized, quiesce Lobu as described
+above and record a hash manifest without printing file contents. Keep the daemon
+stopped while recording it:
+
+```bash
+(
+  set -eu
+  umask 077
+  cd ~/.config/lobu
+  find . -type f -exec sha256sum -- {} + > "$HOME/lobu-before.sha256"
+)
+```
+
+Keep this protected manifest on the driving machine before destroying the LXC.
+It covers `credentials.json` and files under `devices/` when present. Record the
+registered device identifier using the control plane's device view, without copying
+tokens or credentials. The earlier herdr/Collie crash-path guidance does not replace
+this quiescence requirement for a stable Lobu comparison.
+
+After recreation, verify the Lobu mount and compare the restored files against the
+manifest **before** starting Lobu. Coordinate dotfiles convergence so its service
+cannot auto-start and rewrite state ahead of this check. With the manifest restored
+to the workstation user's home:
+
+```bash
+(cd ~/.config/lobu && sha256sum --check --quiet "$HOME/lobu-before.sha256")
+```
+
+Then complete dotfiles convergence, start the supervised daemon, and confirm the
+same registered device reconnects without login or re-enrollment. Runtime startup
+can legitimately update credentials, so use the pre-start hashes to prove file
+preservation and the control-plane identity to prove runtime reuse. Record the live
+result before marking Lobu rebuild validation complete.
+
 ### Drive it from another machine
 
 Not from the workstation. The container is replaced, so anything running inside it dies with it — including the Ansible run.
@@ -244,8 +337,8 @@ ssh-keygen -R workstation && ssh-keygen -R workstation.faviann.vms
 Then deploy. Skip `--check`: it is load-bearing when an existing container might report `restart_required`, but with no container to observe it cannot tell you anything.
 
 ```bash
-./run.sh --limit workstation \
-  -e proxmox_skip_self=false -e lxc_base_system_reboot_enabled=false
+./run.sh --include-controller -- \
+  -e lxc_base_system_reboot_enabled=false
 ```
 
 `lxc_hwaddr` is pinned in `host_vars/workstation.yml`, so the container returns on the same MAC and address.
@@ -284,6 +377,7 @@ Confirm:
 
 - Every declared path appears in `findmnt` (check one target per invocation; an unmounted bind mount is an empty directory, not an error, and the play recap will not flag it).
 - The four hashes from the before-manifest are unchanged.
+- Lobu passes its pre-start hash comparison and reconnects as the same registered device after dotfiles convergence (see [Lobu before-manifest](#lobu-before-manifest)).
 - The before/after OpenCode and OMP file lists match for `~/.omp` and all three durable OpenCode roots; `~/.pi` remains independently mounted.
 - `opencode --version` and `omp --version` succeed from the managed `~/.local/bin` command surface after `workstation-setup` completes.
 - herdr restores its session — `herdr-server.log` reports `session restore evaluated … workspaces=N`.
