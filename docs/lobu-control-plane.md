@@ -63,30 +63,56 @@ way you treat the database itself. It is not part of routine maintenance.
 
 ## Bootstrap
 
+Order matters: create the account **before** publishing the routers. The edge
+denies `/api/auth/sign-up`, so once the router is live the only account-creation
+path is gone. Steps 3 and 4 run against the LXC's published port on the trusted
+LAN, before any public exposure exists. API paths are exempt from Lobu's
+canonical-origin redirect, so `curl` works there even though a browser would be
+bounced to `https://lobu.faviann.com`.
+
 1. **DNS.** `lobu.faviann.vms` must resolve on the LAN, and `lobu.faviann.com`
    must resolve publicly to the edge. `*.faviann.com` is already covered by the
    existing wildcard SAN, so no certificate change is needed.
-2. **Deploy.** `./run.sh --limit lobu`. The image entrypoint runs its own
-   migrations against `DATABASE_URL`, with a connectivity preflight that refuses
-   to migrate an unreachable database under `NODE_ENV=production`.
-3. **Deploy the routers**: `./run.sh --limit portal`.
-4. **Create the one human account** at `https://lobu.faviann.com` from a LAN or
-   VPN address. Signup is denied at the edge, so use the API directly:
+2. **Deploy the stack.** `./run.sh --limit lobu`. The image entrypoint runs its
+   own migrations against `DATABASE_URL`, with a connectivity preflight that
+   refuses to migrate an unreachable database under `NODE_ENV=production`. The
+   `bootstrap` service then applies the one-human-account index; confirm it
+   exited 0 before continuing.
+3. **Create the one human account**, from the LAN, against the LXC directly:
 
    ```bash
-   curl -s -X POST https://lobu.faviann.com/api/auth/sign-up/email \
+   curl -s -X POST http://lobu.faviann.vms:8787/api/auth/sign-up/email \
      -H 'Content-Type: application/json' \
      -d '{"name":"<name>","email":"<email>","password":"<password>"}'
    ```
 
-   That email becomes the install's identity. Temporarily comment out the
-   `lobu-signup-denied` router if you need this through Traefik, or run it
-   against `http://lobu.faviann.vms:8787` on the LAN.
-5. **Confirm the lockout**: a second signup must fail with
-   `FAILED_TO_CREATE_USER` (HTTP 422) and leave the user count at 1.
-6. **Point the workstation at this origin** — owned by `faviann/dotfiles#126`,
+   That email becomes the install's identity.
+4. **Confirm the lockout** before going further — a second signup must fail:
+
+   ```bash
+   curl -s -X POST http://lobu.faviann.vms:8787/api/auth/sign-up/email \
+     -H 'Content-Type: application/json' \
+     -d '{"name":"second","email":"second@example.invalid","password":"<any-long-password>"}'
+   # expect: {"message":"Failed to create user","code":"FAILED_TO_CREATE_USER"}  HTTP 422
+   ```
+
+   Then check the count is still 1:
+
+   ```bash
+   docker exec lobu-postgres psql -U lobu -d lobu -tAc 'select count(*) from "user"'
+   ```
+
+5. **Publish the routers**: `./run.sh --limit portal`. This exposes the origin
+   and closes `/api/auth/sign-up` at the edge.
+6. **Sign in** at `https://lobu.faviann.com` from a LAN or VPN address to
+   confirm the browser session works.
+7. **Point the workstation at this origin** — owned by `faviann/dotfiles#126`,
    not by this repository. See "Workstation boundary" below.
-7. **Add the connector in ChatGPT** against `https://lobu.faviann.com/mcp`.
+8. **Add the connector in ChatGPT** against `https://lobu.faviann.com/mcp`.
+
+If you ever need to recreate the account later, drop the
+`lobu_single_human_principal` index, repeat steps 3 and 4, and recreate it —
+rather than reopening the edge.
 
 ## Health and status
 
