@@ -23,7 +23,8 @@
         bind_mounts:
           mp0: "{{ temp_root }}/srv/media,mp=/media"
         idmap:
-          - u 1 100001 65535
+          - u 0 100000 1
+          - u 1 100001 9
           - u 10 100010 65526
         lxc_custom_sysctls:
           - key: net.ipv4.ip_local_port_range
@@ -47,7 +48,8 @@
         mode: "0644"
         content: |
           mp0: {{ temp_root }}/srv/media,mp=/media
-          lxc.idmap: u 1 100001 65535
+          lxc.idmap: u 0 100000 1
+          lxc.idmap: u 1 100001 9
           lxc.idmap: u 10 100010 65526
           lxc.sysctl.net.ipv4.ip_local_port_range = 1024 65535
           lxc.sysctl.net.ipv4.ipfrag_time = 30
