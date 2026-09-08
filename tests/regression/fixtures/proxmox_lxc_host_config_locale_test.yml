@@ -1,0 +1,89 @@
+---
+# Alternate-locale boundary for host configuration.
+#
+# The config-file components compare current state — read through a shell
+# pipeline ending in sort — against a Jinja-sorted desired string, so the shell
+# side pins LC_ALL=C. Feature reconciliation sorts both sides in Jinja and is
+# not locale-sensitive. A converged reconciliation must therefore stay converged
+# whatever the ambient locale is. The seeded state below is collation-divergent
+# under en_US: a bind-mount option list led by an absolute path, split ID
+# mapping ranges, and two sysctl keys that differ at an underscore.
+- name: Test locale-independent Proxmox LXC host configuration comparison
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    proxmox_host_config_delegate: localhost
+    proxmox_lxc_host_config_become: false
+    proxmox_lxc_host_config_path_root: "{{ temp_root }}/etc/pve/lxc"
+    proxmox_lxc_contract:
+      host_config:
+        vmid: 4202
+        hostname: locale-host
+        bind_mounts:
+          mp0: "{{ temp_root }}/srv/media,mp=/media"
+        idmap:
+          - u 0 100000 1
+          - u 1 100001 9
+          - u 10 100010 65526
+        lxc_custom_sysctls:
+          - key: net.ipv4.ip_local_port_range
+            value: "1024 65535"
+          - key: net.ipv4.ipfrag_time
+            value: 30
+        # Required by the contract; these managed sets stay empty.
+        configure_nvidia_runtime: false
+        wireguard_kernel_module_access: false
+        lxc_disable_apparmor: false
+  tasks:
+    - name: Create temp Proxmox config root
+      ansible.builtin.file:
+        path: "{{ proxmox_lxc_host_config_path_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Seed an already-converged container config file
+      ansible.builtin.copy:
+        dest: "{{ proxmox_lxc_host_config_path_root }}/4202.conf"
+        mode: "0644"
+        content: |
+          mp0: {{ temp_root }}/srv/media,mp=/media
+          lxc.idmap: u 0 100000 1
+          lxc.idmap: u 1 100001 9
+          lxc.idmap: u 10 100010 65526
+          lxc.sysctl.net.ipv4.ip_local_port_range = 1024 65535
+          lxc.sysctl.net.ipv4.ipfrag_time = 30
+
+    # Feature reconciliation always runs and shells out to pct, so the mock is
+    # needed even though that comparison is not locale-sensitive; report no
+    # features and stay converged.
+    - name: Place mock pct script on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          case "$1" in
+            config) echo "arch: amd64" ;;
+            status) echo "status: stopped" ;;
+          esac
+          exit 0
+
+    - name: Reconcile the already-converged host configuration
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        # The role's nested concern path is intentional and part of this production-hierarchy fixture.
+        - name: Include host configuration role for converged reconciliation  # noqa: role-name[path]
+          ansible.builtin.include_role:
+            name: infrastructure/proxmox_lxc_host_config
+
+    - name: Assert a converged reconciliation reports no change
+      ansible.builtin.assert:
+        that:
+          - not proxmox_lxc_host_config_result.overall_changed
+        fail_msg: >-
+          A converged host reconciliation reported a change under
+          {{ lookup('env', 'LC_ALL') | default('the ambient locale', true) }}.
+          Managed comparisons must not depend on the ambient collation order.
+          Component outcomes: {{ proxmox_lxc_host_config_result.components }}
