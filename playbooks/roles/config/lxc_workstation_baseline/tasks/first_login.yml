@@ -1,0 +1,21 @@
+---
+# The workstation's first-login entry point: the setup command that brings a
+# fresh account to a working environment, and the profile hook that offers to
+# run it on an interactive SSH login. Both live in system locations owned by
+# workstation_system_bin_owner (root by default); the login user only runs
+# them, which is why the command is executable and the hook merely sourced.
+- name: Install workstation setup command
+  ansible.builtin.template:
+    src: workstation-setup.sh.j2
+    dest: "{{ workstation_setup_bin_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
+    mode: "0755"
+
+- name: Install workstation setup login hook
+  ansible.builtin.template:
+    src: workstation-setup-profile.sh.j2
+    dest: "{{ workstation_setup_profile_hook_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
+    mode: "0644"

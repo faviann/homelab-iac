@@ -362,8 +362,6 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("Install Bitwarden CLI", task_names, "missing bw CLI install task")
         self.assertIn("Install Determinate Nix", task_names, "missing Nix install task")
         self.assertIn("Enable workstation user lingering", task_names, "missing linger task")
-        self.assertIn("Install workstation setup command", task_names, "missing setup command task")
-        self.assertIn("Install workstation setup login hook", task_names, "missing setup login hook task")
         self.assertNotIn("Install mise", task_names)
         self.assertNotIn("Install workstation bootstrap script", task_names)
         self.assertNotIn("Run unattended workstation bootstrap", task_names)
@@ -413,8 +411,6 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("bitwarden_cli.yml", rendered_tasks)
         self.assertIn("nix.yml", rendered_tasks)
         self.assertIn("loginctl", rendered_tasks)
-        self.assertIn("workstation-setup.sh.j2", rendered_tasks)
-        self.assertIn("workstation-setup-profile.sh.j2", rendered_tasks)
         self.assertNotIn("mise.yml", rendered_tasks)
         self.assertNotIn("bootstrap.yml", rendered_tasks)
         self.assertNotIn("workstation_bootstrap_unattended", rendered_tasks)
@@ -454,6 +450,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertNotIn("/run/workstation-bootstrap", setup_template)
         self.assertNotIn("BW_CLIENTID", setup_template)
         self.assertNotIn("BW_CLIENTSECRET", setup_template)
+        self.assertNotIn("WORKSTATION_BW_", setup_template)
 
         profile_hook = (
             REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/templates/workstation-setup-profile.sh.j2"

@@ -96,18 +96,5 @@
     creates: "/var/lib/systemd/linger/{{ workstation_username }}"
   when: workstation_enable_linger | bool
 
-- name: Install workstation setup command
-  ansible.builtin.template:
-    src: workstation-setup.sh.j2
-    dest: "{{ workstation_setup_bin_path }}"
-    owner: "{{ workstation_system_bin_owner }}"
-    group: "{{ workstation_system_bin_group }}"
-    mode: "0755"
-
-- name: Install workstation setup login hook
-  ansible.builtin.template:
-    src: workstation-setup-profile.sh.j2
-    dest: "{{ workstation_setup_profile_hook_path }}"
-    owner: "{{ workstation_system_bin_owner }}"
-    group: "{{ workstation_system_bin_group }}"
-    mode: "0644"
+- name: Install workstation first-login artifacts
+  ansible.builtin.include_tasks: first_login.yml

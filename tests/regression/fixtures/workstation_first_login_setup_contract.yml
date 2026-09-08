@@ -4,11 +4,16 @@
   connection: local
   gather_facts: false
   vars:
+    # True runs the whole baseline role and verifies the setup contract.
+    # False renders only the first-login artifacts, for behavioral scenarios
+    # that exercise the rendered files themselves.
+    first_login_full_role: true
     role_root: "{{ playbook_dir }}/../../../playbooks/roles/config/lxc_workstation_baseline"
     workstation_username: "{{ lookup('pipe', 'id -un') }}"
     workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
+    workstation_marker: "{{ workstation_home }}/.local/state/workstation-setup/complete"
     workstation_origin_firewall_nft_dir: "{{ temp_root }}/etc/nftables.d"
     workstation_origin_firewall_service_path: "{{ temp_root }}/etc/systemd/system/workstation-origin-firewall.service"
     workstation_packages: []
@@ -64,118 +69,97 @@
     - name: Include workstation baseline role with PATH mocks
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      when: first_login_full_role | bool
       block:
         - name: Include workstation baseline role
           ansible.builtin.include_role:
             name: config/lxc_workstation_baseline
 
-    - name: Stat workstation setup command
-      ansible.builtin.stat:
-        path: "{{ workstation_setup_bin_path }}"
-      register: setup_command_stat
+    - name: Install first-login artifacts through the production role seam
+      ansible.builtin.include_role:
+        name: config/lxc_workstation_baseline
+        tasks_from: first_login.yml
+      when: not (first_login_full_role | bool)
 
-    - name: Stat workstation setup login hook
-      ansible.builtin.stat:
-        path: "{{ workstation_setup_profile_hook_path }}"
-      register: setup_hook_stat
+    - name: Verify the first-login setup contract
+      when: first_login_full_role | bool
+      block:
+        - name: Stat workstation setup command
+          ansible.builtin.stat:
+            path: "{{ workstation_setup_bin_path }}"
+          register: setup_command_stat
 
-    - name: Read workstation setup command
-      ansible.builtin.slurp:
-        src: "{{ workstation_setup_bin_path }}"
-      register: setup_command_raw
+        - name: Stat workstation setup login hook
+          ansible.builtin.stat:
+            path: "{{ workstation_setup_profile_hook_path }}"
+          register: setup_hook_stat
 
-    - name: Read workstation setup login hook
-      ansible.builtin.slurp:
-        src: "{{ workstation_setup_profile_hook_path }}"
-      register: setup_hook_raw
+        - name: Read workstation setup command
+          ansible.builtin.slurp:
+            src: "{{ workstation_setup_bin_path }}"
+          register: setup_command_raw
 
-    - name: Syntax-check workstation setup command
-      ansible.builtin.command:
-        cmd: "bash -n {{ workstation_setup_bin_path }}"
-      changed_when: false
+        - name: Read workstation setup login hook
+          ansible.builtin.slurp:
+            src: "{{ workstation_setup_profile_hook_path }}"
+          register: setup_hook_raw
 
-    - name: Syntax-check workstation setup login hook
-      ansible.builtin.command:
-        cmd: "bash -n {{ workstation_setup_profile_hook_path }}"
-      changed_when: false
+        - name: Syntax-check workstation setup command
+          ansible.builtin.command:
+            cmd: "bash -n {{ workstation_setup_bin_path }}"
+          changed_when: false
 
-    - name: Assert first-login setup files are installed
-      ansible.builtin.assert:
-        that:
-          - setup_command_stat.stat.exists
-          - setup_command_stat.stat.uid == workstation_uid
-          - setup_command_stat.stat.gid == workstation_gid
-          - setup_command_stat.stat.mode == "0755"
-          - setup_hook_stat.stat.exists
-          - setup_hook_stat.stat.uid == workstation_uid
-          - setup_hook_stat.stat.gid == workstation_gid
-          - setup_hook_stat.stat.mode == "0644"
+        - name: Syntax-check workstation setup login hook
+          ansible.builtin.command:
+            cmd: "bash -n {{ workstation_setup_profile_hook_path }}"
+          changed_when: false
 
-    - name: Assert first-login setup contract is local and interactive
-      ansible.builtin.assert:
-        that:
-          - (setup_command_raw.content | b64decode) is search('bw status')
-          - (setup_command_raw.content | b64decode) is search('Bitwarden is unauthenticated')
-          - (setup_command_raw.content | b64decode) is search('Bitwarden is locked')
-          - (setup_command_raw.content | b64decode) is search('Bitwarden account password')
-          - (setup_command_raw.content | b64decode) is search('bw login')
-          - (setup_command_raw.content | b64decode) is search('bw unlock --raw')
-          - (setup_command_raw.content | b64decode) is search('local_bootstrap_ready')
-          - (setup_command_raw.content | b64decode) is search('update_chezmoi_source_without_secrets')
-          - (setup_command_raw.content | b64decode) is search('install_setup_dotfiles_without_secrets')
-          - (setup_command_raw.content | b64decode) is search('git -C "\$HOME/.local/share/chezmoi" pull --ff-only')
-          - (setup_command_raw.content | b64decode) is search('dot_local/bin/executable_update-agent-tools')
-          - (setup_command_raw.content | b64decode) is search('dot_local/bin/executable_workstation-update')
-          - (setup_command_raw.content | b64decode) is search('dot_npmrc')
-          - (setup_command_raw.content | b64decode) is search('if ! local_bootstrap_ready; then')
-          - (setup_command_raw.content | b64decode) is search('ensure_bitwarden_unlocked')
-          - (setup_command_raw.content | b64decode) is search('else')
-          - (setup_command_raw.content | b64decode) is search('authenticate_gh')
-          - (setup_command_raw.content | b64decode) is search('chezmoi init --apply')
-          - (setup_command_raw.content | b64decode) is search('chezmoi update')
-          - (setup_command_raw.content | b64decode) is search('home-manager switch -b workstation-setup-backup --flake')
-          - (setup_command_raw.content | b64decode) is search('update-agent-tools')
-          - (setup_command_raw.content | b64decode) is search('nix --version')
-          - (setup_command_raw.content | b64decode) is search('home-manager --version')
-          - (setup_command_raw.content | b64decode) is search('npm --version')
-          - (setup_command_raw.content | b64decode) is search('command -v bwrap')
-          - (setup_command_raw.content | b64decode) is search('command -v codex')
-          - (setup_command_raw.content | b64decode) is search('/.local/bin/codex')
-          - (setup_command_raw.content | b64decode) is search('command -v claude')
-          - (setup_command_raw.content | b64decode) is search('/.local/bin/claude')
-          - (setup_command_raw.content | b64decode) is search('command -v pi')
-          - (setup_command_raw.content | b64decode) is search('/.local/bin/pi')
-          - (setup_command_raw.content | b64decode) is search('codex --version')
-          - (setup_command_raw.content | b64decode) is search('claude --version')
-          - (setup_command_raw.content | b64decode) is search('pi --version')
-          - (setup_command_raw.content | b64decode) is search('hermes version')
-          - (setup_command_raw.content | b64decode) is search('openclaw --version')
-          - (setup_command_raw.content | b64decode) is search('export
-            PATH="\$WORKSTATION_HOME/.local/bin:\$WORKSTATION_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin')
-          - (setup_command_raw.content | b64decode) is search('dotfiles/github-cli-token')
-          - (setup_command_raw.content | b64decode) is search('gh api user')
-          - (setup_command_raw.content | b64decode) is search('git@github.com')
-          - (setup_command_raw.content | b64decode) is search('environment healthy')
-          - (setup_command_raw.content | b64decode) is search('environment repaired and ready')
-          - not ((setup_command_raw.content | b64decode) is search('mise'))
-          - not ((setup_command_raw.content | b64decode) is search('/run/workstation-bootstrap'))
-          - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTID'))
-          - not ((setup_command_raw.content | b64decode) is search('BW_CLIENTSECRET'))
-          - not ((setup_command_raw.content | b64decode) is search('WORKSTATION_BW_'))
-          - (setup_hook_raw.content | b64decode) is search('SSH_CONNECTION')
-          - (setup_hook_raw.content | b64decode) is search('SSH_TTY')
-          - (setup_hook_raw.content | b64decode) is search('WORKSTATION_SETUP_SKIP')
-          - (setup_hook_raw.content | b64decode) is search('/.nix-profile/bin')
-          - (setup_hook_raw.content | b64decode) is search('/nix/var/nix/profiles/default/bin')
-          - (setup_hook_raw.content | b64decode) is search('/.local/bin')
-          - (setup_hook_raw.content | b64decode) is search('export PATH=')
-          - (setup_hook_raw.content | b64decode) is search('version=2')
-          - not ((setup_hook_raw.content | b64decode) is search('\\[ ! -e '))
-          - (setup_hook_raw.content | b64decode) is search('workstation-setup')
-          - (setup_hook_raw.content | b64decode) is search('workstation-update is missing or not executable')
-          - not ((setup_hook_raw.content | b64decode) is search('setsid'))
-          - not ((setup_hook_raw.content | b64decode) is search('chezmoi apply'))
-          - not ((setup_hook_raw.content | b64decode) is search('mise'))
-          - not ((setup_hook_raw.content | b64decode) is search('/run/workstation-bootstrap'))
-          - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTID'))
-          - not ((setup_hook_raw.content | b64decode) is search('BW_CLIENTSECRET'))
+        # The fixture points workstation_system_bin_owner at the test user;
+        # production installs both as root. What matters either way is that the
+        # configured owner gets an executable command and a sourced-only hook.
+        - name: Assert first-login artifacts are installed for the configured owner
+          ansible.builtin.assert:
+            that:
+              - setup_command_stat.stat.exists
+              - setup_command_stat.stat.uid == workstation_uid
+              - setup_command_stat.stat.gid == workstation_gid
+              - setup_command_stat.stat.mode == "0755"
+              - setup_hook_stat.stat.exists
+              - setup_hook_stat.stat.uid == workstation_uid
+              - setup_hook_stat.stat.gid == workstation_gid
+              - setup_hook_stat.stat.mode == "0644"
+            fail_msg: >-
+              The setup command must be executable and the login hook only
+              sourced, both owned by workstation_system_bin_owner.
+
+        # What only the rendered artifacts can show: every variable resolved,
+        # and resolved to the right value. The scripts' own text is asserted
+        # against the templates in tests/unit/test_workstation_baseline_role.py,
+        # and their runtime behavior by the scenarios in
+        # tests/regression/test_workstation_first_login_setup_contract.py.
+        - name: Assert the rendered artifacts resolved every template variable
+          ansible.builtin.assert:
+            that:
+              - not ((setup_command_raw.content | b64decode) is search('{{ "{{" }}'))
+              - not ((setup_hook_raw.content | b64decode) is search('{{ "{{" }}'))
+            fail_msg: Rendering left an unresolved template expression behind.
+
+        - name: Assert the setup command resolved its workstation identity
+          ansible.builtin.assert:
+            that:
+              - (setup_command_raw.content | b64decode) is search('WORKSTATION_HOME="' ~ workstation_home ~ '"')
+              - (setup_command_raw.content | b64decode) is search('BW_BIN="' ~ workstation_bw_bin_path ~ '"')
+              - (setup_command_raw.content | b64decode) is search('MARKER_PATH="' ~ workstation_marker ~ '"')
+              - (setup_command_raw.content | b64decode) is search('GITHUB_CLI_TOKEN_ITEM="dotfiles/github-cli-token"')
+              - (setup_command_raw.content | b64decode) is search('SETUP_VERSION="2"')
+
+        # test_workstation_first_login_setup_contract sources the hook, which
+        # covers the paths it resolves: naming the wrong setup command, the
+        # wrong marker, or a marker version the setup command does not write
+        # all fail there. The login PATH is the one thing sourcing does not
+        # check, because none of those assertions depend on it.
+        - name: Assert the login hook exports the workstation login PATH
+          ansible.builtin.assert:
+            that:
+              - (setup_hook_raw.content | b64decode) is search('export PATH="' ~ workstation_home ~ '/.local/bin:'
+                ~ workstation_home ~ '/.nix-profile/bin:/nix/var/nix/profiles/default/bin:')

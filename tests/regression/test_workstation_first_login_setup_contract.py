@@ -14,6 +14,9 @@ from bitwarden_release_boundary import bitwarden_release_boundary
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
+# The agent tools a healthy workstation must run, each of which production
+# requires to resolve from the managed bin directory.
+AGENT_TOOLS = ("codex", "claude", "pi", "opencode", "omp")
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -243,29 +246,47 @@ def _assert_no_direct_home_manager_activation(commands: str) -> None:
     )
 
 
-def _render_setup(temp_root: Path) -> subprocess.CompletedProcess[str]:
-    with bitwarden_release_boundary() as bitwarden_args:
-        command = [
+def _run_render_fixture(extra_args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
             *ANSIBLE_PLAYBOOK,
             "tests/regression/fixtures/workstation_first_login_setup_contract.yml",
-            "-e",
-            f"temp_root={temp_root}",
-            *bitwarden_args,
-        ]
-        return subprocess.run(
-            command,
-            cwd=REPO_ROOT,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
+            *extra_args,
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+
+
+def _render_setup(temp_root: Path) -> subprocess.CompletedProcess[str]:
+    """Render the first-login artifacts by running the whole baseline role."""
+    with bitwarden_release_boundary() as bitwarden_args:
+        return _run_render_fixture(
+            ["-e", f"temp_root={temp_root}", *bitwarden_args]
         )
+
+
+def _render_setup_artifacts(temp_root: Path) -> subprocess.CompletedProcess[str]:
+    """Render the first-login artifacts through the role's own task file.
+
+    Same production templates and install tasks as the full role, without the
+    unrelated baseline work or the static setup contract that
+    `test_workstation_first_login_setup_contract` already verifies. Scenarios
+    using this then exercise the rendered files, so a regression in them shows
+    up as the behavior they assert going wrong.
+    """
+    return _run_render_fixture(
+        ["-e", f"temp_root={temp_root}", "-e", "first_login_full_role=false"]
+    )
 
 
 def test_workstation_agent_harness_readiness_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="workstation-agent-readiness-") as temp_root:
         root = Path(temp_root)
-        rendered = _render_setup(root)
+        rendered = _render_setup_artifacts(root)
         assert rendered.returncode == 0, rendered.stdout
 
         home, env = _prepare_completed_workstation(root)
@@ -279,28 +300,35 @@ def test_workstation_agent_harness_readiness_contract() -> None:
         readiness_commands = (root / "commands.log").read_text(
             encoding="utf-8"
         ).splitlines()
-        assert "opencode --version" in readiness_commands
-        assert "omp --version" in readiness_commands
+        for tool in AGENT_TOOLS:
+            assert f"{tool} --version" in readiness_commands
 
+        # Each tool carries its own managed-path requirement, so displacing any
+        # one of them must fail on its own even while it stays runnable from
+        # the earlier PATH entry.
         fallback_bin = root / "fallback-bin"
-        fallback_opencode = fallback_bin / "opencode"
         fallback_bin.mkdir()
-        (home / ".local" / "bin" / "opencode").replace(fallback_opencode)
-        (root / "commands.log").write_text("", encoding="utf-8")
+        for tool in AGENT_TOOLS:
+            managed = home / ".local" / "bin" / tool
+            displaced = fallback_bin / tool
+            managed.replace(displaced)
+            (root / "commands.log").write_text("", encoding="utf-8")
 
-        unmanaged = _run_setup(
-            root, env | {"PATH": f"{fallback_bin}:{env['PATH']}"}
-        )
+            unmanaged = _run_setup(
+                root, env | {"PATH": f"{fallback_bin}:{env['PATH']}"}
+            )
 
-        assert unmanaged.returncode != 0
-        assert (
-            f"opencode must resolve from {home / '.local/bin'}" in unmanaged.stderr
-        )
+            assert unmanaged.returncode != 0
+            assert (
+                f"{tool} must resolve from {home / '.local/bin'}"
+                in unmanaged.stderr
+            )
+            displaced.replace(managed)
 
 
 def test_workstation_configuration_freshness_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="workstation-freshness-") as temp_root:
-        rendered = _render_setup(Path(temp_root))
+        rendered = _render_setup_artifacts(Path(temp_root))
         assert rendered.returncode == 0, rendered.stdout
 
         root = Path(temp_root)
@@ -778,7 +806,7 @@ def test_workstation_fresh_bootstrap_authenticates_git_before_cloning() -> None:
     Manager switches, which cannot happen before the clone.
     """
     with tempfile.TemporaryDirectory(prefix="workstation-fresh-bootstrap-") as temp_root:
-        result = _render_setup(Path(temp_root))
+        result = _render_setup_artifacts(Path(temp_root))
         assert result.returncode == 0, result.stdout
 
         root = Path(temp_root)
