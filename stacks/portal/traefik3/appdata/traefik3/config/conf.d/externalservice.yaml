@@ -37,25 +37,47 @@ http:
 
     # Lobu control plane. Deliberately has NO ForwardAuth/Authentik middleware:
     # Lobu runs its own OAuth 2.1 authorization server and ChatGPT's connector
-    # onboarding needs unauthenticated dynamic client registration. The public
-    # surface is therefore restricted by an explicit path allowlist, observed
-    # from the real discovery/registration/sign-in flows rather than guessed.
+    # onboarding needs unauthenticated dynamic client registration.
+    #
+    # The public surface is an explicit endpoint allowlist, not a namespace
+    # allowlist. Lobu mounts Better Auth at /api/auth/*, which includes
+    # organization management, member removal, password change and session
+    # revocation; a PathPrefix there would publish all of it, and would publish
+    # whatever Better Auth adds next. Only the two endpoints the OAuth sign-in
+    # and consent screens actually call are listed. Signup is unreachable here
+    # by construction, not by a deny rule.
+    #
     # Everything else — the admin SPA at `/` and the `/api/<org>/*` workspace
     # API — stays LAN-only on http://lobu.faviann.vms:8787.
     lobu:
       rule: >-
         Host(`lobu.faviann.com`) && (
-        PathPrefix(`/mcp`)
-        || PathPrefix(`/.well-known/oauth-protected-resource`)
+        Path(`/mcp`)
+        || PathPrefix(`/mcp/`)
+        || Path(`/.well-known/oauth-protected-resource`)
+        || PathPrefix(`/.well-known/oauth-protected-resource/`)
         || Path(`/.well-known/oauth-authorization-server`)
         || Path(`/.well-known/openid-configuration`)
-        || PathPrefix(`/oauth/`)
         || Path(`/auth.md`)
-        || Path(`/auth/login`)
-        || PathPrefix(`/api/auth/`)
+        || Path(`/oauth/register`)
+        || Path(`/oauth/authorize`)
+        || Path(`/oauth/authorize/consent`)
+        || Path(`/oauth/token`)
+        || Path(`/oauth/revoke`)
+        || Path(`/oauth/userinfo`)
+        || Path(`/oauth/consent`)
+        || Path(`/oauth/device`)
+        || Path(`/oauth/device_authorization`)
+        || Path(`/oauth/device/email`)
+        || Path(`/oauth/device/info`)
+        || Path(`/oauth/device/approve`)
         || PathPrefix(`/api/workers/`)
-        || PathPrefix(`/api/me/devices`)
-        || Path(`/api/health`)
+        || Path(`/api/me/devices`)
+        || Path(`/api/me/devices/mint-child-token`)
+        || Path(`/auth/login`)
+        || Path(`/api/auth-config`)
+        || Path(`/api/auth/get-session`)
+        || Path(`/api/auth/sign-in/email`)
         || PathPrefix(`/assets/`)
         || Path(`/favicon.ico`)
         || Path(`/favicon.svg`)
@@ -67,15 +89,6 @@ http:
       entryPoints: websecure
       service: lobu
       priority: 1000
-
-    # Signup is closed by LOBU_SINGLE_USER=1 in the app; this denies it at the
-    # edge as well so the public origin never carries an account-creation path.
-    # `noop` has no servers, so Traefik answers 503 without reaching Lobu.
-    lobu-signup-denied:
-      rule: "Host(`lobu.faviann.com`) && PathPrefix(`/api/auth/sign-up`)"
-      entryPoints: websecure
-      service: noop
-      priority: 1002
 
     hermes:
       rule: "Host(`hermes.local.faviann.com`)"
