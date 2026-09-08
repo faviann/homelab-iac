@@ -1,0 +1,32 @@
+---
+# Host-specific configuration for the self-hosted Lobu control plane
+# Inherits from: tier_medium, cap_docker
+
+lxc_hwaddr: "BC:24:11:14:5B:9C"
+default_domain: admin.faviann.com
+
+docker_agents_enabled: false
+traefik_kop_enabled: false
+
+# Canonical public origin for this control plane. ChatGPT and the workstation
+# `lobu daemon` both address the deployment through this one hostname.
+# faviann/dotfiles#126 consumes this value; nothing here writes ~/.config/lobu.
+lobu_public_gateway_url: "https://lobu.faviann.com"
+
+lxc_docker_env_stack_vars:
+  lobu:
+    public_gateway_url: "{{ lobu_public_gateway_url }}"
+    postgres_password: "{{ vault_lobu_postgres_password }}"
+    encryption_key: "{{ vault_lobu_encryption_key }}"
+    better_auth_secret: "{{ vault_lobu_better_auth_secret }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 308
+  hostname: lobu
+  disk: "16"
+  description: "Lobu control plane managed via Ansible"
+  tags:
+    - ansible
+    - lobu
+    - mcp

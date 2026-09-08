@@ -1,0 +1,26 @@
+---
+schema_version: 1
+kind: stack
+name: lobu
+description: Self-hosted Lobu control plane and its pgvector database
+portability:
+  tier: host-bound-app
+  owner: stack
+runtime:
+  template_inputs:
+    - stack_vars
+  host_requirements:
+    external_networks: []
+    host_directories: []
+    ownership_overrides: []
+exposure:
+  traefik: public
+  homepage_instances: []
+updates:
+  mode: images
+  track: stable
+  services:
+    postgres:
+      track: "pg18"
+    lobu:
+      track: stable
