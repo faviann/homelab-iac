@@ -266,6 +266,48 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             ],
         )
 
+    def test_artifacts_external_route_contract(self) -> None:
+        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
+        auth_config = yaml.safe_load(
+            AUTH_MIDDLEWARES_PATH.read_text(encoding="utf-8")
+        )
+        routers = config["http"]["routers"]
+
+        # The exact dict keeps local-ip-restriction off this router: artifact URLs
+        # are meant to open from outside the LAN, guarded by admin forward auth.
+        self.assertEqual(
+            routers["artifacts"],
+            {
+                "rule": "Host(`artifacts.admin.faviann.com`)",
+                "entryPoints": "websecure",
+                "service": "artifacts-workstation",
+                "priority": 1000,
+                "middlewares": ["protected-edge-auth@file"],
+            },
+        )
+        self.assertEqual(
+            config["http"]["services"]["artifacts-workstation"],
+            {
+                "loadBalancer": {
+                    "servers": [{"url": "http://workstation.faviann.vms:19082"}],
+                }
+            },
+        )
+        self.assertEqual(
+            [
+                name
+                for name, router in routers.items()
+                if "artifacts.admin.faviann.com" in router["rule"]
+            ],
+            ["artifacts"],
+        )
+        self.assertEqual(
+            auth_config["http"]["middlewares"]["protected-edge-auth"]["chain"][
+                "middlewares"
+            ],
+            ["forwardAuth-authentik"],
+        )
+
     def test_admin_source_policies_use_the_same_networks(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
         traefik_ranges = config["http"]["middlewares"]["local-ip-restriction"][
