@@ -1,8 +1,8 @@
 ---
-# The first-login artifacts: the setup command and the profile hook that runs
-# it. Kept in their own file so regression scenarios that only need these
-# rendered artifacts can reach this exact production seam without re-running
-# the whole baseline role.
+# The workstation's first-login entry point: the setup command that brings a
+# fresh account to a working environment, and the profile hook that runs it on
+# an interactive SSH login. Both are installed for the login user, so the
+# command must be executable and the hook only sourced.
 - name: Install workstation setup command
   ansible.builtin.template:
     src: workstation-setup.sh.j2
