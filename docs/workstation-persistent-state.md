@@ -24,7 +24,7 @@ This is deliberate. A bind mount hides whatever is underneath it, so mounting ov
 
 ## Pre-Deploy Migration
 
-Run these on the workstation, as the workstation user, before `site.yml --limit workstation`.
+Run these on the workstation, as the workstation user, before `./run.sh --include-controller`.
 
 ### Lobu
 
@@ -179,13 +179,12 @@ The `0700` mode in `workstation_persistent_home_links` applies to the mount poin
 
 ## Deploying
 
-The workstation is the Ansible control node, and `proxmox_skip_self` defaults to true — so a run launched here skips the workstation and reports success having changed nothing. Pass `-e proxmox_skip_self=false` to target it deliberately. Drive it from a plain SSH shell, not from inside a herdr pane.
+The workstation is the Ansible control node, and `proxmox_skip_self` defaults to true — so a run launched here skips the workstation and reports success having changed nothing. Pass `--include-controller` to target it deliberately. Drive it from a plain SSH shell, not from inside a herdr pane.
 
 **Check before applying.** This is the load-bearing step, not an optional dry run:
 
 ```bash
-./run.sh --check \
-  -e proxmox_skip_self=false --limit workstation > /tmp/ws-check.log 2>&1
+./run.sh --check --include-controller > /tmp/ws-check.log 2>&1
 rg "restart_required|failed=|unreachable=" /tmp/ws-check.log
 ```
 
@@ -198,10 +197,8 @@ Why the restart matters more than anything else: `proxmox_lxc_host_config/tasks/
 ```bash
 systemd-run --user --unit=ws-deploy --collect \
   bash -lc 'cd ~/repos/homelab-iac/<worktree> && \
-    ./run.sh \
-    -e proxmox_skip_self=false \
-    -e lxc_base_system_reboot_enabled=false \
-    --limit workstation > /tmp/ws-deploy.log 2>&1'
+    ./run.sh --include-controller -- \
+    -e lxc_base_system_reboot_enabled=false > /tmp/ws-deploy.log 2>&1'
 
 journalctl --user -u ws-deploy -f
 systemctl --user show ws-deploy -p ExecMainStatus   # 0 when it finished cleanly
@@ -340,8 +337,8 @@ ssh-keygen -R workstation && ssh-keygen -R workstation.faviann.vms
 Then deploy. Skip `--check`: it is load-bearing when an existing container might report `restart_required`, but with no container to observe it cannot tell you anything.
 
 ```bash
-./run.sh --limit workstation \
-  -e proxmox_skip_self=false -e lxc_base_system_reboot_enabled=false
+./run.sh --include-controller -- \
+  -e lxc_base_system_reboot_enabled=false
 ```
 
 `lxc_hwaddr` is pinned in `host_vars/workstation.yml`, so the container returns on the same MAC and address.
