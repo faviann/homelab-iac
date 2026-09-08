@@ -269,10 +269,11 @@ def _render_setup(temp_root: Path) -> subprocess.CompletedProcess[str]:
 def _render_setup_artifacts(temp_root: Path) -> subprocess.CompletedProcess[str]:
     """Render the first-login artifacts through the role's own task file.
 
-    Same production templates and the same install tasks as the full role, minus
-    the unrelated baseline work (packages, firewall, GitHub keys, Bitwarden CLI,
-    Nix). `test_workstation_first_login_setup_contract` still runs the whole role,
-    so the role composing this seam stays covered.
+    Same production templates and install tasks as the full role, without the
+    unrelated baseline work or the static setup contract that
+    `test_workstation_first_login_setup_contract` already verifies. Scenarios
+    using this then exercise the rendered files, so a regression in them shows
+    up as the behavior they assert going wrong.
     """
     return _run_render_fixture(
         ["-e", f"temp_root={temp_root}", "-e", "first_login_full_role=false"]

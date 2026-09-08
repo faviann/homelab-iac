@@ -362,21 +362,6 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("Install Bitwarden CLI", task_names, "missing bw CLI install task")
         self.assertIn("Install Determinate Nix", task_names, "missing Nix install task")
         self.assertIn("Enable workstation user lingering", task_names, "missing linger task")
-        self.assertIn(
-            "Install workstation first-login artifacts", task_names, "missing first-login include"
-        )
-        first_login_tasks = load_yaml(
-            REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/tasks/first_login.yml"
-        )
-        first_login_task_names = [t.get("name") for t in first_login_tasks]
-        self.assertIn(
-            "Install workstation setup command", first_login_task_names, "missing setup command task"
-        )
-        self.assertIn(
-            "Install workstation setup login hook",
-            first_login_task_names,
-            "missing setup login hook task",
-        )
         self.assertNotIn("Install mise", task_names)
         self.assertNotIn("Install workstation bootstrap script", task_names)
         self.assertNotIn("Run unattended workstation bootstrap", task_names)
@@ -420,15 +405,12 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
             task_names.index("Generate enabled locales"),
         )
 
-        rendered_tasks = yaml.safe_dump(tasks + first_login_tasks, sort_keys=True)
+        rendered_tasks = yaml.safe_dump(tasks, sort_keys=True)
         self.assertIn("origin_firewall.yml", rendered_tasks)
-        self.assertIn("first_login.yml", rendered_tasks)
         self.assertNotIn("aoe_proxy_firewall.yml", rendered_tasks)
         self.assertIn("bitwarden_cli.yml", rendered_tasks)
         self.assertIn("nix.yml", rendered_tasks)
         self.assertIn("loginctl", rendered_tasks)
-        self.assertIn("workstation-setup.sh.j2", rendered_tasks)
-        self.assertIn("workstation-setup-profile.sh.j2", rendered_tasks)
         self.assertNotIn("mise.yml", rendered_tasks)
         self.assertNotIn("bootstrap.yml", rendered_tasks)
         self.assertNotIn("workstation_bootstrap_unattended", rendered_tasks)
