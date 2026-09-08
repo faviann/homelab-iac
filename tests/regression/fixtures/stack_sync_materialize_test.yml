@@ -252,8 +252,8 @@
       ansible.builtin.assert:
         that:
           - >-
-            ansible_check_mode
-            or _prereq_dir_stats_after.results[1].stat.exists
+            _prereq_dir_stats_after.results[1].stat.exists
+            == (not ansible_check_mode)
           - >-
             ansible_check_mode
             or _prereq_dir_stats_after.results[1].stat.mode == '0755'
@@ -410,10 +410,12 @@
             | list
             | length) == 0
 
+# ansible_user_* is inherited from the earlier plays, as in the exact-artifact
+# plays below, so this play gathers nothing of its own.
 - name: Test planner applies declaration ownership by resolved destination
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
   vars:
     planner_root: "{{ temp_root }}/planner-metadata"
     lxc_docker_environment_internal:
@@ -557,7 +559,7 @@
 - name: Prepare exact repository stack file fixtures
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
   vars:
     exact_root: "{{ temp_root }}/exact-file-modes"
     exact_source_root: "{{ exact_root }}/source"
