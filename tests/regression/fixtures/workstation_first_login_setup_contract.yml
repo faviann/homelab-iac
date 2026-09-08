@@ -4,6 +4,10 @@
   connection: local
   gather_facts: false
   vars:
+    # Full-role rendering proves the baseline role composes the first-login
+    # artifacts; the narrow path reaches the same production task file for
+    # scenarios that only need the rendered artifacts.
+    first_login_full_role: true
     role_root: "{{ playbook_dir }}/../../../playbooks/roles/config/lxc_workstation_baseline"
     workstation_username: "{{ lookup('pipe', 'id -un') }}"
     workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
@@ -64,10 +68,17 @@
     - name: Include workstation baseline role with PATH mocks
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      when: first_login_full_role | bool
       block:
         - name: Include workstation baseline role
           ansible.builtin.include_role:
             name: config/lxc_workstation_baseline
+
+    - name: Install first-login artifacts through the production role seam
+      ansible.builtin.include_role:
+        name: config/lxc_workstation_baseline
+        tasks_from: first_login.yml
+      when: not (first_login_full_role | bool)
 
     - name: Stat workstation setup command
       ansible.builtin.stat:

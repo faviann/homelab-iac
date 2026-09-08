@@ -1,0 +1,20 @@
+---
+# The first-login artifacts: the setup command and the profile hook that runs
+# it. Kept in their own file so regression scenarios that only need these
+# rendered artifacts can reach this exact production seam without re-running
+# the whole baseline role.
+- name: Install workstation setup command
+  ansible.builtin.template:
+    src: workstation-setup.sh.j2
+    dest: "{{ workstation_setup_bin_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
+    mode: "0755"
+
+- name: Install workstation setup login hook
+  ansible.builtin.template:
+    src: workstation-setup-profile.sh.j2
+    dest: "{{ workstation_setup_profile_hook_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
+    mode: "0644"
