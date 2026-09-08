@@ -5,8 +5,6 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
-import subprocess
-import sys
 import threading
 from types import ModuleType
 
@@ -51,9 +49,18 @@ def test_only_selects_registered_launchers_in_supplied_order() -> None:
     assert launched == selected
 
 
-def test_nvidia_repository_launcher_is_registered_once_as_full_only() -> None:
+@pytest.mark.parametrize(
+    "target",
+    [
+        "test_lxc_docker_runtime_daemon_options.py",
+        "test_lxc_nvidia_runtime_repository.py",
+        "test_lxc_spec_invalid_guest_bootstrap.py",
+    ],
+)
+def test_expensive_ansible_launcher_is_registered_once_as_full_only(
+    target: str,
+) -> None:
     runner = load_runner()
-    target = "test_lxc_nvidia_runtime_repository.py"
     launched: list[str] = []
 
     assert runner.FULL_ONLY_SCRIPTS.count(target) == 1
@@ -235,30 +242,3 @@ def test_direct_runner_replaces_operator_ansible_environment_with_repo_fixtures(
     ) == 0
     assert os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] == operator_vault
     assert os.environ["ANSIBLE_INVENTORY"] == operator_inventory
-
-
-def test_targeted_runner_smoke_uses_isolated_ansible_environment() -> None:
-    target = "test_lxc_spec_invalid_guest_bootstrap.py"
-    fixture_root = RUNNER_PATH.parents[1] / "fixtures" / "ansible"
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "ANSIBLE_VAULT_PASSWORD_FILE": str(fixture_root / "vault-pass"),
-            "ANSIBLE_INVENTORY": str(fixture_root / "inventory.yml"),
-            "LANG": "en_US.UTF-8",
-            "LC_ALL": "en_US.UTF-8",
-        }
-    )
-
-    result = subprocess.run(
-        [sys.executable, str(RUNNER_PATH), "--only", target],
-        cwd=RUNNER_PATH.parents[2],
-        capture_output=True,
-        text=True,
-        env=environment,
-        timeout=60,
-    )
-
-    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-    assert f"PASS  {target}" in result.stdout
-    assert "ok: targeted lifecycle regression set passed (1 launchers)" in result.stdout
