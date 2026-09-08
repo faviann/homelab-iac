@@ -125,13 +125,13 @@ def run_isolated_playbook(
     return result
 
 
-def test_lxc_nvidia_runtime_repository_publication_is_retryable() -> None:
+def assert_repository_publication_is_retryable() -> None:
     result = run_isolated_playbook(PLAYBOOK, "lxc_nvidia_runtime_repository")
 
     assert_observations_completed(result, ("Assert valid repository was not rewritten",))
 
 
-def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
+def assert_apt_refresh_precedes_toolkit_install() -> None:
     result = run_isolated_playbook(
         APT_ORDER_PLAYBOOK,
         "lxc_nvidia_runtime_package_setup",
@@ -142,7 +142,7 @@ def test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install() -> None:
     )
 
 
-def test_tag_selection_miss_cannot_pass_execution_proof() -> None:
+def assert_tag_selection_miss_cannot_pass_execution_proof() -> None:
     result = run_isolated_playbook(PLAYBOOK, "fixture_nonexistent_tag")
     assert result.returncode == 0, result.stderr
     try:
@@ -152,12 +152,17 @@ def test_tag_selection_miss_cannot_pass_execution_proof() -> None:
     raise AssertionError("A tag-selection miss passed execution proof")
 
 
-if __name__ == "__main__":
+def main() -> int:
     try:
-        test_tag_selection_miss_cannot_pass_execution_proof()
-        test_lxc_nvidia_runtime_repository_publication_is_retryable()
-        test_lxc_nvidia_runtime_refreshes_apt_before_toolkit_install()
+        assert_tag_selection_miss_cannot_pass_execution_proof()
+        assert_repository_publication_is_retryable()
+        assert_apt_refresh_precedes_toolkit_install()
     except AssertionError as error:
         print(error, file=sys.stderr)
-        raise SystemExit(1) from error
+        return 1
     print("ok: NVIDIA repository regression scenarios passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

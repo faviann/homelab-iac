@@ -109,16 +109,17 @@ def run_isolated_playbook() -> subprocess.CompletedProcess[str]:
         return result
 
 
-def test_lxc_docker_runtime_declares_daemon_options_for_gpu_and_non_gpu() -> None:
+def main() -> int:
     result = run_isolated_playbook()
 
-    assert_observations_completed(result, REQUIRED_OBSERVATIONS)
+    try:
+        assert_observations_completed(result, REQUIRED_OBSERVATIONS)
+    except AssertionError as error:
+        print(error, file=sys.stderr)
+        return 1
+    print("ok: lxc_docker_runtime daemon options match the single-writer contract")
+    return 0
 
 
 if __name__ == "__main__":
-    try:
-        test_lxc_docker_runtime_declares_daemon_options_for_gpu_and_non_gpu()
-    except AssertionError as error:
-        print(error, file=sys.stderr)
-        raise SystemExit(1) from error
-    print("ok: lxc_docker_runtime daemon options match the single-writer contract")
+    raise SystemExit(main())
