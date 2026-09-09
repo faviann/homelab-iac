@@ -79,6 +79,9 @@
         - name: Include workstation baseline role
           ansible.builtin.include_role:
             name: config/lxc_workstation_baseline
+            # Exposes the role's default link declarations so the fstab assertion below
+            # is derived from the production list rather than a copy of it.
+            public: true
 
     - name: Stat persistent home root
       ansible.builtin.stat:
@@ -362,3 +365,19 @@
       loop: "{{ lobu_directories.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+    - name: Read managed bind mount declarations
+      ansible.builtin.slurp:
+        src: "{{ workstation_persistent_home_fstab_path }}"
+      register: persistent_home_fstab
+
+    - name: Assert every declared persistent home link maps its target onto its path
+      ansible.builtin.assert:
+        that:
+          - >-
+            item.target ~ ' ' ~ item.path ~ ' none bind '
+            in persistent_home_fstab.content | b64decode
+        fail_msg: "{{ item.name }} did not produce a bind mount from {{ item.target }} onto {{ item.path }}"
+      loop: "{{ workstation_persistent_home_links }}"
+      loop_control:
+        label: "{{ item.name }}"
