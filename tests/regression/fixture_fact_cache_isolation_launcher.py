@@ -23,7 +23,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TESTS = REPO_ROOT / "tests" / "regression"
-HAWSER_LAUNCHER = TESTS / "test_hawser_standard_remote_default.py"
+HAWSER_LAUNCHER = TESTS / "hawser_standard_remote_default_launcher.py"
 
 EntryState = tuple[bool, int, int, int, str]
 

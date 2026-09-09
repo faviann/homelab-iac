@@ -271,21 +271,21 @@ def test_lifecycle_runs_the_fast_path_by_default(tmp_path: Path) -> None:
     [
         (("--full",), ["--full"]),
         (
-            ("--only", "test_lxc_lifecycle_decision.py"),
-            ["--only", "test_lxc_lifecycle_decision.py"],
+            ("--only", "lxc_lifecycle_decision_launcher.py"),
+            ["--only", "lxc_lifecycle_decision_launcher.py"],
         ),
         (
             (
                 "--only",
-                "test_lxc_lifecycle_decision.py",
+                "lxc_lifecycle_decision_launcher.py",
                 "--only",
-                "test_lifecycle_run_lock.py",
+                "lifecycle_run_lock_launcher.py",
             ),
             [
                 "--only",
-                "test_lxc_lifecycle_decision.py",
+                "lxc_lifecycle_decision_launcher.py",
                 "--only",
-                "test_lifecycle_run_lock.py",
+                "lifecycle_run_lock_launcher.py",
             ],
         ),
         (("--fail-fast",), ["--fail-fast"]),
@@ -317,7 +317,7 @@ def test_lifecycle_rejects_only_combined_with_full(tmp_path: Path) -> None:
         "lifecycle",
         "--full",
         "--only",
-        "test_lxc_lifecycle_decision.py",
+        "lxc_lifecycle_decision_launcher.py",
     )
 
     assert result.returncode == 2, result.stdout

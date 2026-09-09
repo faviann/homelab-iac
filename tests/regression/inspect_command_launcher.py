@@ -25,7 +25,7 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from test_lxc_fleet_preflight import COMMON_OBSERVATION
+from lxc_fleet_preflight_launcher import COMMON_OBSERVATION
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

@@ -5,6 +5,10 @@ Thin runner only: it selects, launches, and reports the existing standalone
 launchers. Every lifecycle scenario, input, and assertion stays in the
 Ansible fixtures those launchers execute (see ADR 0007).
 
+Launchers are the `*_launcher.py` files beside this runner. They are
+standalone scripts, not pytest tests: pytest collects only `test_*.py`, so
+the two ownership models never overlap and neither needs suppression.
+
 Fast path (default) — routine agent iteration:
   the semantic lifecycle facade matrix (planning, lifecycle intent,
   persistent destructive policy, result classification, controlled
@@ -54,38 +58,38 @@ FIXTURE_ENVIRONMENT = {
 # Both fast launchers are internally parallel and fully isolated (per-run
 # temp state directories), so the fast path runs them concurrently.
 FAST_SCRIPTS = (
-    "test_lxc_lifecycle_decision.py",
-    "test_lxc_lifecycle_planning_barrier.py",
+    "lxc_lifecycle_decision_launcher.py",
+    "lxc_lifecycle_planning_barrier_launcher.py",
 )
 
 # The rest of the lifecycle set runs sequentially: the host-configuration
 # idempotence sequence and wiring regression are heavyweight, and sequential
 # execution keeps their timing and failure attribution predictable.
 FULL_ONLY_SCRIPTS = (
-    "test_lifecycle_run_lock.py",
-    "test_inspect_command.py",
-    "test_recover_command.py",
-    "test_lxc_lifecycle_invalid_state.py",
-    "test_lxc_lifecycle_guest_bootstrap_contract.py",
-    "test_lxc_spec_contract.py",
-    "test_lxc_spec_invalid_guest_bootstrap.py",
-    "test_lxc_spec_layer_merge.py",
-    "test_proxmox_lxc_provision_contract.py",
-    "test_proxmox_lxc_lifecycle_configure_check_mode_absent.py",
-    "test_proxmox_lxc_lifecycle_observation_status.py",
-    "test_lxc_manual_ssh_recovery.py",
-    "test_lxc_ssh_key_injector_identity_mismatch.py",
-    "test_lxc_fleet_preflight.py",
-    "test_proxmox_lxc_host_config_check_mode_missing_config.py",
-    "test_proxmox_lxc_host_config_observation_failure.py",
-    "test_proxmox_lxc_host_config_readiness_deadline.py",
-    "test_lxc_docker_runtime_daemon_options.py",
-    "test_lxc_nvidia_runtime_repository.py",
-    "test_lxc_lifecycle_wiring.py",
-    "test_proxmox_lxc_host_config_result.py",
-    "test_hawser_standard_remote_default.py",
-    "test_fixture_fact_cache_isolation.py",
-    "test_controller_prerequisite_fact_cache.py",
+    "lifecycle_run_lock_launcher.py",
+    "inspect_command_launcher.py",
+    "recover_command_launcher.py",
+    "lxc_lifecycle_invalid_state_launcher.py",
+    "lxc_lifecycle_guest_bootstrap_contract_launcher.py",
+    "lxc_spec_contract_launcher.py",
+    "lxc_spec_invalid_guest_bootstrap_launcher.py",
+    "lxc_spec_layer_merge_launcher.py",
+    "proxmox_lxc_provision_contract_launcher.py",
+    "proxmox_lxc_lifecycle_configure_check_mode_absent_launcher.py",
+    "proxmox_lxc_lifecycle_observation_status_launcher.py",
+    "lxc_manual_ssh_recovery_launcher.py",
+    "lxc_ssh_key_injector_identity_mismatch_launcher.py",
+    "lxc_fleet_preflight_launcher.py",
+    "proxmox_lxc_host_config_check_mode_missing_config_launcher.py",
+    "proxmox_lxc_host_config_observation_failure_launcher.py",
+    "proxmox_lxc_host_config_readiness_deadline_launcher.py",
+    "lxc_docker_runtime_daemon_options_launcher.py",
+    "lxc_nvidia_runtime_repository_launcher.py",
+    "lxc_lifecycle_wiring_launcher.py",
+    "proxmox_lxc_host_config_result_launcher.py",
+    "hawser_standard_remote_default_launcher.py",
+    "fixture_fact_cache_isolation_launcher.py",
+    "controller_prerequisite_fact_cache_launcher.py",
 )
 REGISTERED_SCRIPTS = FAST_SCRIPTS + FULL_ONLY_SCRIPTS
 
