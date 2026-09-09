@@ -104,5 +104,6 @@ vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 # makes every credential already encrypted in Lobu's database unreadable.
 vault_lobu_encryption_key: "REPLACE_WITH_BASE64_32_BYTE_KEY"
 vault_lobu_better_auth_secret: "REPLACE_WITH_BASE64_32_BYTE_KEY"
+vault_lobu_jwt_secret: "REPLACE_WITH_BASE64_32_BYTE_KEY"
 # URL-safe (hex) — this value is embedded in DATABASE_URL.
 vault_lobu_postgres_password: "REPLACE_WITH_RANDOM_HEX_DATABASE_PASSWORD"
