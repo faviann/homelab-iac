@@ -1,9 +1,11 @@
 ---
 # The complete production persistent-home declaration set is exercised end to end by
-# workstation_persistent_home_success.yml and its disabled counterpart. Check mode and
-# idempotence are per-item generic, so this fixture declares the smallest set that still
-# spans the distinctions in the production list: a top-level path, a one-level nested
-# path, the deepest nested path, and the one entry whose mode is not 0700.
+# workstation_persistent_home_success.yml and its disabled counterpart. Every entry there
+# runs the same six looped tasks, and path depth and mode do not branch, so re-declaring
+# the production list here buys no extra behavior. What the loop does share is mutable
+# state: one fstab file and the parent directories it creates. Two entries under a common
+# parent are what it takes to keep a second item reconciling against state the first one
+# already wrote; one entry cannot.
 - name: Test workstation persistent home idempotency
   hosts: localhost
   connection: local
@@ -20,26 +22,16 @@
     workstation_persistent_home_mount_state: present
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_persistent_home_links:
-      - name: claude
-        type: bind_mount
-        path: "{{ workstation_home }}/.claude"
-        target: "{{ workstation_persistent_home_root }}/.claude"
-        mode: "0700"
-      - name: lobu
-        type: bind_mount
-        path: "{{ workstation_home }}/.config/lobu"
-        target: "{{ workstation_persistent_home_root }}/.config/lobu"
-        mode: "0700"
       - name: opencode_state
         type: bind_mount
         path: "{{ workstation_home }}/.local/state/opencode"
         target: "{{ workstation_persistent_home_root }}/.local/state/opencode"
         mode: "0700"
-      - name: repos
+      - name: collie_state
         type: bind_mount
-        path: "{{ workstation_home }}/repos"
-        target: "{{ workstation_persistent_home_root }}/repos"
-        mode: "0755"
+        path: "{{ workstation_home }}/.local/state/collie"
+        target: "{{ workstation_persistent_home_root }}/.local/state/collie"
+        mode: "0700"
   tasks:
     - name: Ensure workstation home exists
       ansible.builtin.file:
