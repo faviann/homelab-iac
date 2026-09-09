@@ -34,6 +34,7 @@ services:
       DATABASE_URL: postgresql://lobu:${LOBU_POSTGRES_PASSWORD:?Set LOBU_POSTGRES_PASSWORD in .env}@postgres:5432/lobu?sslmode=disable
       ENCRYPTION_KEY: ${LOBU_ENCRYPTION_KEY:?Set LOBU_ENCRYPTION_KEY in .env}
       BETTER_AUTH_SECRET: ${LOBU_BETTER_AUTH_SECRET:?Set LOBU_BETTER_AUTH_SECRET in .env}
+      JWT_SECRET: ${LOBU_JWT_SECRET:?Set LOBU_JWT_SECRET in .env}
       # Bare origin, no path prefix. The MCP origin-trust middleware rejects
       # requests as an opaque MCP error when this does not match what the
       # client actually sees, so it must equal the public Traefik hostname.

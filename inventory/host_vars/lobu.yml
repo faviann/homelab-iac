@@ -16,6 +16,7 @@ lxc_docker_env_stack_vars:
     postgres_password: "{{ vault_lobu_postgres_password }}"
     encryption_key: "{{ vault_lobu_encryption_key }}"
     better_auth_secret: "{{ vault_lobu_better_auth_secret }}"
+    jwt_secret: "{{ vault_lobu_jwt_secret }}"
 
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
