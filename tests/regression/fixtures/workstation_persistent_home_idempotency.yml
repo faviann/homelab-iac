@@ -1,4 +1,9 @@
 ---
+# This scenario owns two things: the role plans cleanly in check mode, and a second apply
+# reports no change. Both are per-item, and neither path depth nor mode branches, so one
+# entry covers them. That each declaration reaches fstab as a bind mount from its target
+# onto its path is owned by workstation_persistent_home_success.yml, which asserts it
+# across the full production link set.
 - name: Test workstation persistent home idempotency
   hosts: localhost
   connection: local
@@ -14,6 +19,12 @@
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
     workstation_persistent_home_mount_state: present
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
+    workstation_persistent_home_links:
+      - name: opencode_state
+        type: bind_mount
+        path: "{{ workstation_home }}/.local/state/opencode"
+        target: "{{ workstation_persistent_home_root }}/.local/state/opencode"
+        mode: "0700"
   tasks:
     - name: Ensure workstation home exists
       ansible.builtin.file:
