@@ -43,7 +43,7 @@ grant. Do not expose this instance as a service to other people.
 
 ## Secrets
 
-Four vault variables, bound into the stack through
+Vault variables are bound into the stack through
 `lxc_docker_env_stack_vars.lobu` in `inventory/host_vars/lobu.yml`:
 
 | Variable | Shape | Notes |
@@ -57,8 +57,7 @@ The human account password is set through the UI and stays outside Ansible.
 
 Lobu 19.2.0 derives `JWT_SECRET` only in its local-install startup path. This
 external-Postgres deployment skips that path, so it must set `JWT_SECRET`
-explicitly for Automation window-token signing. `INSIGHTS_API_KEY` is only a
-legacy compatibility fallback.
+explicitly for Automation window-token signing.
 
 ### ENCRYPTION_KEY is long-lived state, not a rotatable secret
 
