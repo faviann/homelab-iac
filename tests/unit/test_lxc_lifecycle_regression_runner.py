@@ -52,9 +52,9 @@ def test_only_selects_registered_launchers_in_supplied_order() -> None:
 @pytest.mark.parametrize(
     "target",
     [
-        "test_lxc_docker_runtime_daemon_options.py",
-        "test_lxc_nvidia_runtime_repository.py",
-        "test_lxc_spec_invalid_guest_bootstrap.py",
+        "lxc_docker_runtime_daemon_options_launcher.py",
+        "lxc_nvidia_runtime_repository_launcher.py",
+        "lxc_spec_invalid_guest_bootstrap_launcher.py",
     ],
 )
 def test_expensive_ansible_launcher_is_registered_once_as_full_only(
@@ -242,3 +242,12 @@ def test_direct_runner_replaces_operator_ansible_environment_with_repo_fixtures(
     ) == 0
     assert os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] == operator_vault
     assert os.environ["ANSIBLE_INVENTORY"] == operator_inventory
+
+
+def test_registry_matches_the_launcher_named_files() -> None:
+    runner = load_runner()
+    launcher_files = sorted(
+        path.name for path in RUNNER_PATH.parent.glob("*_launcher.py")
+    )
+
+    assert sorted(runner.REGISTERED_SCRIPTS) == launcher_files

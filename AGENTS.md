@@ -94,7 +94,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 
 **Timing**: `uv run --locked ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
 
-For lifecycle-regression remediation, use repeatable `./validate.sh lifecycle --only <launcher.py>` for the shortest targeted loop and add `--fail-fast` when later selected launchers cannot provide useful evidence after a failure. `--only` accepts the registered filenames reported by the runner's actionable error, and cannot be combined with `--full`. A targeted operation never substitutes for the full handoff run: before handoff, always run `./validate.sh` with no arguments so every gate reports a result.
+For lifecycle-regression remediation, use repeatable `./validate.sh lifecycle --only <launcher.py>` for the shortest targeted loop and add `--fail-fast` when later selected launchers cannot provide useful evidence after a failure. `--only` accepts the registered filenames reported by the runner's actionable error, and cannot be combined with `--full`. Lifecycle launchers are the `tests/regression/*_launcher.py` files, run only by the lifecycle runner; pytest owns the `test_*.py` files under `tests/` and never collects a launcher. A targeted operation never substitutes for the full handoff run: before handoff, always run `./validate.sh` with no arguments so every gate reports a result.
 
 Run `./validate.sh` for complete deterministic handoff verification. It does not load live inventory or acquire the lifecycle lock. Route every operation that contacts managed hosts, including `--check`, through `./run.sh`.
 
