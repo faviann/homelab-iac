@@ -6,8 +6,9 @@ launchers. Every lifecycle scenario, input, and assertion stays in the
 Ansible fixtures those launchers execute (see ADR 0007).
 
 Launchers are the `*_launcher.py` files beside this runner. They are
-standalone scripts, not pytest tests: pytest collects only `test_*.py`, so
-the two ownership models never overlap and neither needs suppression.
+standalone scripts, not pytest tests: pytest's default collection patterns
+are `test_*.py` and `*_test.py`, and a `*_launcher.py` name matches neither,
+so the two ownership models never overlap and neither needs suppression.
 
 Fast path (default) — routine agent iteration:
   the semantic lifecycle facade matrix (planning, lifecycle intent,
