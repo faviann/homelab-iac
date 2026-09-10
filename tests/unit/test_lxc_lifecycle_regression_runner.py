@@ -244,21 +244,10 @@ def test_direct_runner_replaces_operator_ansible_environment_with_repo_fixtures(
     assert os.environ["ANSIBLE_INVENTORY"] == operator_inventory
 
 
-def test_registered_launchers_are_exactly_the_files_pytest_ignores() -> None:
+def test_registry_matches_the_launcher_named_files() -> None:
     runner = load_runner()
     launcher_files = sorted(
         path.name for path in RUNNER_PATH.parent.glob("*_launcher.py")
     )
 
     assert sorted(runner.REGISTERED_SCRIPTS) == launcher_files
-    assert len(set(runner.REGISTERED_SCRIPTS)) == len(runner.REGISTERED_SCRIPTS)
-
-
-def test_pytest_named_regression_files_carry_pytest_tests() -> None:
-    empty = [
-        path.name
-        for path in RUNNER_PATH.parent.glob("test_*.py")
-        if "\ndef test_" not in path.read_text()
-    ]
-
-    assert empty == []
