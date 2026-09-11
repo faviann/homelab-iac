@@ -89,7 +89,6 @@ FULL_ONLY_SCRIPTS = (
     "lxc_lifecycle_wiring_launcher.py",
     "proxmox_lxc_host_config_result_launcher.py",
     "hawser_standard_remote_default_launcher.py",
-    "fixture_fact_cache_isolation_launcher.py",
     "controller_prerequisite_fact_cache_launcher.py",
 )
 REGISTERED_SCRIPTS = FAST_SCRIPTS + FULL_ONLY_SCRIPTS
