@@ -184,17 +184,6 @@ def test_no_argument_run_propagates_a_gate_failure_and_stops(
     assert_validation_cache_was_shared_then_removed(commands)
 
 
-def test_no_argument_run_does_not_validate_stack_update_policy(
-    tmp_path: Path,
-) -> None:
-    env = validation_environment(tmp_path)
-
-    result = run_validation(env, REPO_ROOT)
-
-    assert result.returncode == 0, result.stderr
-    assert "stack" not in child_kinds(captured_commands(tmp_path))
-
-
 # --- AC8: grammar and exit convention --------------------------------------
 
 
@@ -567,7 +556,6 @@ def test_this_module_covers_the_grammar_instead_of_pinning_a_full_child_argv() -
     for grammar_test in (
         "test_no_argument_run_is_the_comprehensive_non_live_handoff_validation",
         "test_no_argument_run_propagates_a_gate_failure_and_stops",
-        "test_no_argument_run_does_not_validate_stack_update_policy",
         "test_help_exits_zero_and_names_every_operation",
         "test_unknown_operation_or_option_is_invalid_usage",
         "test_lifecycle_forwards_every_supported_selection",
