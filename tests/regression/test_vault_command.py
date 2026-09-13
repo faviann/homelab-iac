@@ -379,10 +379,7 @@ def test_check_rejects_a_passphrase_file_not_owned_by_the_current_user(
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     pass_file.write_text("pass\n", encoding="utf-8")
     pass_file.chmod(0o600)
-    stat_fixture = FAKE_FIXTURES / "stat"
-    assert stat_fixture.is_file()
-    stat_stub = fake_executable("stat", env)
-    assert stat_stub.read_bytes() == stat_fixture.read_bytes()
+    fake_executable("stat", env)
 
     result = run_vault(repo, env, "check")
 
