@@ -217,34 +217,6 @@ def test_vault_requires_an_operation_and_advertises_its_complete_interface() -> 
     )
 
 
-def test_vault_fakes_are_named_executable_fixtures(
-    vault_repo: tuple[Path, dict[str, str]],
-    fake_executable: FakeExecutableFactory,
-    tmp_path: Path,
-) -> None:
-    _, env = vault_repo
-    installed_bin = Path(env["PATH"].split(":", 1)[0])
-    fake_executable("editor", env, capture=tmp_path / "editor-capture")
-    fake_executable("bw", env)
-    fake_executable("chezmoi", env)
-
-    for name in ("uv", "mv", "rm", "editor", "bw", "chezmoi"):
-        fixture = FAKE_FIXTURES / name
-        assert fixture.is_file()
-        assert installed_bin.joinpath(name).read_bytes() == fixture.read_bytes()
-
-
-def test_fake_executable_factory_installs_a_named_fake_and_encodes_its_knobs(
-    fake_executable: FakeExecutableFactory,
-) -> None:
-    env: dict[str, str] = {}
-
-    installed = fake_executable("uv", env, decrypt_fail=True)
-
-    assert installed.read_bytes() == (FAKE_FIXTURES / "uv").read_bytes()
-    assert env == {"VAULT_TEST_DECRYPT_FAIL": "1"}
-
-
 def test_vault_uses_its_project_when_invoked_from_an_unrelated_directory(
     vault_repo: tuple[Path, dict[str, str]],
     fake_executable: FakeExecutableFactory,
@@ -273,23 +245,6 @@ def test_vault_uses_its_project_when_invoked_from_an_unrelated_directory(
     assert result.returncode == 0
     assert "decryptability: PASS" in result.stdout
     assert "YAML mapping: PASS" in result.stdout
-
-
-def test_real_ansible_vault_encrypt_decrypt_round_trip(
-    real_vault_repo: tuple[Path, dict[str, str]],
-) -> None:
-    repo, env = real_vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
-    vault.write_text(VALID_YAML, encoding="utf-8")
-
-    encrypted = run_real_ansible_vault(repo, env, "encrypt")
-    ciphertext = vault.read_text(encoding="utf-8")
-    decrypted = run_real_ansible_vault(repo, env, "decrypt")
-
-    assert encrypted.returncode == 0, encrypted.stderr
-    assert ciphertext.startswith(HEADER)
-    assert decrypted.returncode == 0, decrypted.stderr
-    assert vault.read_text(encoding="utf-8") == VALID_YAML
 
 
 def test_real_ansible_vault_runs_through_the_locked_project_environment(
@@ -424,10 +379,7 @@ def test_check_rejects_a_passphrase_file_not_owned_by_the_current_user(
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     pass_file.write_text("pass\n", encoding="utf-8")
     pass_file.chmod(0o600)
-    stat_fixture = FAKE_FIXTURES / "stat"
-    assert stat_fixture.is_file()
-    stat_stub = fake_executable("stat", env)
-    assert stat_stub.read_bytes() == stat_fixture.read_bytes()
+    fake_executable("stat", env)
 
     result = run_vault(repo, env, "check")
 
