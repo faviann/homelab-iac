@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 
 from ansible_test_helper import ansible_playbook_command
@@ -29,8 +30,12 @@ def run_playbook(
     *,
     check_mode: bool = False,
     extra_vars: tuple[str, ...] = (),
+    needs_bitwarden_release: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    with bitwarden_release_boundary() as bitwarden_args:
+    release_boundary = (
+        bitwarden_release_boundary() if needs_bitwarden_release else nullcontext([])
+    )
+    with release_boundary as bitwarden_args:
         command = [
             *ANSIBLE_PLAYBOOK,
             str(playbook),
@@ -55,13 +60,17 @@ def run_playbook(
 
 def test_workstation_persistent_home_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-success-") as temp_root:
-        success = run_playbook(SUCCESS_PLAYBOOK, temp_root)
+        success = run_playbook(
+            SUCCESS_PLAYBOOK, temp_root, needs_bitwarden_release=True
+        )
 
     success_output = f"{success.stdout}\n{success.stderr}"
     assert success.returncode == 0, success_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-disabled-") as temp_root:
-        disabled = run_playbook(DISABLED_PLAYBOOK, temp_root)
+        disabled = run_playbook(
+            DISABLED_PLAYBOOK, temp_root, needs_bitwarden_release=True
+        )
 
     disabled_output = f"{disabled.stdout}\n{disabled.stderr}"
     assert disabled.returncode == 0, disabled_output
@@ -72,13 +81,12 @@ def test_workstation_persistent_home_contract() -> None:
     conflict_output = f"{conflict.stdout}\n{conflict.stderr}"
     assert conflict.returncode != 0, conflict_output
 
-    expected_markers = [
-        "exists and is not the managed bind mount path",
-        "Move or migrate it manually",
-        ".claude",
-        ".config/lobu",
+    expected_conflicts = [
+        "/.claude exists and is not the managed bind mount path",
+        "/.config/lobu exists and is not the managed bind mount path",
     ]
-    assert all(marker in conflict_output for marker in expected_markers), conflict_output
+    assert all(conflict in conflict_output for conflict in expected_conflicts), conflict_output
+    assert conflict_output.count("Move or migrate it manually") >= 2, conflict_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-symlink-migration-") as temp_root:
         migration = run_playbook(SYMLINK_MIGRATION_PLAYBOOK, temp_root)

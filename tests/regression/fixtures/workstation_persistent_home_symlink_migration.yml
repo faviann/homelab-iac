@@ -1,3 +1,5 @@
+# Two managed symlinks separated by one absent path preserve the mixed-state
+# result-indexing boundary without traversing the production link catalogue.
 ---
 - name: Test workstation persistent home symlink migration
   hosts: localhost
@@ -25,36 +27,11 @@
         path: "{{ workstation_home }}/.codex"
         target: "{{ workstation_persistent_home_root }}/.codex"
         mode: "0700"
-      - name: agents
-        type: bind_mount
-        path: "{{ workstation_home }}/.agents"
-        target: "{{ workstation_persistent_home_root }}/.agents"
-        mode: "0700"
       - name: pi
         type: bind_mount
         path: "{{ workstation_home }}/.pi"
         target: "{{ workstation_persistent_home_root }}/.pi"
         mode: "0700"
-      - name: agent_of_empires
-        type: bind_mount
-        path: "{{ workstation_home }}/.config/agent-of-empires"
-        target: "{{ workstation_persistent_home_root }}/.config/agent-of-empires"
-        mode: "0700"
-      - name: hermes
-        type: bind_mount
-        path: "{{ workstation_home }}/.hermes"
-        target: "{{ workstation_persistent_home_root }}/.hermes"
-        mode: "0700"
-      - name: openclaw
-        type: bind_mount
-        path: "{{ workstation_home }}/.openclaw"
-        target: "{{ workstation_persistent_home_root }}/.openclaw"
-        mode: "0700"
-      - name: repos
-        type: bind_mount
-        path: "{{ workstation_home }}/repos"
-        target: "{{ workstation_persistent_home_root }}/repos"
-        mode: "0755"
   tasks:
     - name: Ensure workstation home exists
       ansible.builtin.file:
@@ -101,6 +78,11 @@
         path: "{{ workstation_home }}/.pi"
       register: pi_home_path_stat
 
+    - name: Stat fresh Codex home path
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.codex"
+      register: codex_home_path_stat
+
     - name: Assert managed symlink was migrated to managed bind-mount path
       ansible.builtin.assert:
         that:
@@ -108,4 +90,6 @@
           - not (claude_home_path_stat.stat.islnk | default(false))
           - pi_home_path_stat.stat.isdir
           - not (pi_home_path_stat.stat.islnk | default(false))
+          - codex_home_path_stat.stat.isdir
+          - not (codex_home_path_stat.stat.islnk | default(false))
         fail_msg: "Managed symlink migration to bind-mount path failed"
