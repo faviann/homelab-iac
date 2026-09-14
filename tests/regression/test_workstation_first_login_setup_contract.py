@@ -932,7 +932,10 @@ def test_workstation_first_login_setup_contract() -> None:
         (root / "commands.log").write_text("", encoding="utf-8")
         escalated = _run_setup(root, env)
         assert escalated.returncode != 0
-        assert "Bitwarden is locked" in escalated.stderr
+        assert (
+            "Bitwarden is locked. Enter your Bitwarden account password to unlock "
+            "workstation secrets for this setup run." in escalated.stderr
+        )
         assert "environment healthy" not in escalated.stdout
         assert "environment repaired and ready" not in escalated.stdout
         assert "bw unlock --raw" in (root / "commands.log").read_text(encoding="utf-8")
