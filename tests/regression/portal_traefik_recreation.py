@@ -83,7 +83,7 @@ class ComposeTransitionObservation:
 @dataclasses.dataclass(frozen=True)
 class ComposeRecreationExperiment:
     candidate: ComposeTransitionObservation
-    control: ComposeTransitionObservation | None
+    control: ComposeTransitionObservation
     tracked_compose_sha256: str
     docker_server_version: str
     evidence_directory: str
@@ -640,16 +640,11 @@ def _run_compose_recreation_arm(
 
 def run_compose_redis_replacement(
     attempt_name: str,
-    include_control: bool = False,
 ) -> ComposeRecreationExperiment:
-    """Run tracked Compose recreation and an optional uncorrected control."""
+    """Run tracked Compose recreation and its uncorrected control."""
     evidence = _evidence_directory(attempt_name)
     candidate = _run_compose_recreation_arm(evidence, "candidate", False)
-    control = (
-        _run_compose_recreation_arm(evidence, "uncorrected", True)
-        if include_control
-        else None
-    )
+    control = _run_compose_recreation_arm(evidence, "uncorrected", True)
     experiment = ComposeRecreationExperiment(
         candidate=candidate,
         control=control,
