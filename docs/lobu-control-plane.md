@@ -22,7 +22,7 @@ The workstation daemon polls outward. It is never exposed through Traefik.
 | Stack | `stacks/lobu/lobu/` — `pgvector/pgvector:pg18-trixie` + `ghcr.io/lobu-ai/lobu-app:19.2.0`, both digest-pinned |
 | Durable state | `./appdata/postgres` and `./appdata/workspaces` |
 | Public origin | `https://lobu.admin.faviann.com` → `http://lobu.faviann.vms:8787` |
-| Admin UI | `https://lobu.admin.faviann.com`, behind Authentik (`admins` group) |
+| Admin UI | `https://lobu.admin.faviann.com`, protected by Lobu's native authentication |
 
 Durable state resolves to `/conf/docker/stacks/lobu/appdata/...`, which is a
 read-write per-host subpath of the shared 256 GB volume — **not** the LXC root
@@ -109,8 +109,7 @@ bounced to `https://lobu.admin.faviann.com`.
 
 5. **Publish the routers**: `./run.sh --limit portal`. This exposes the origin
    and closes `/api/auth/sign-up` at the edge.
-6. **Sign in** at `https://lobu.admin.faviann.com`. Authentik authenticates you
-   first (members of `admins`), then Lobu's own login.
+6. **Sign in** at `https://lobu.admin.faviann.com` using Lobu's own login.
 7. **Point the workstation at this origin** — owned by `faviann/dotfiles#126`,
    not by this repository. See "Workstation boundary" below.
 8. **Add the connector in ChatGPT** against `https://lobu.admin.faviann.com/mcp`.
@@ -198,47 +197,29 @@ onboarding needs unauthenticated dynamic client registration
 authorization server; an Authentik boundary in front of the protocol endpoints
 would break both.
 
-The rule is an **endpoint** allowlist, not a namespace allowlist, and it covers
-four groups:
+The `lobu` router matches the complete canonical hostname. Lobu releases may
+add browser or API paths to OAuth, connector approval, workspace selection, or
+operation approval flows; keeping an edge-maintained endpoint allowlist made
+those authenticated flows fail through Authentik until every new path was
+discovered and added manually. Lobu's own authentication and authorization are
+therefore the authority for every non-signup path.
 
-| Group | Why |
-| --- | --- |
-| `/mcp`, `/mcp/*`, the three `/.well-known/*` discovery documents, `/auth.md` | MCP transport and OAuth discovery, including the `/.well-known/oauth-protected-resource/mcp` sub-path Lobu advertises in `WWW-Authenticate` |
-| Named `/oauth/*` endpoints — register, authorize, consent, token, revoke, userinfo, and the four device-flow paths | The OAuth 2.1 surface ChatGPT and `lobu login` actually use |
-| `/api/workers/*`, `/api/me/devices`, `/api/me/devices/mint-child-token` | The authenticated worker gateway the workstation daemon polls |
-| `/auth/login`, `/api/auth-config`, `/api/auth/get-session`, `/api/auth/sign-in/email`, `/api/organizations`, `/assets/*`, favicons, `/logo.png`, `/legal` | The browser sign-in and consent screens, including the exact workspace-list endpoint required before CLI login approval, and the metadata ChatGPT fetches during connector validation |
+One edge exclusion is deliberate and load-bearing:
 
-Two exclusions are deliberate and load-bearing:
-
-- **`/api/auth` is never exposed as a prefix.** Lobu mounts Better Auth there,
-  and that namespace also serves organization management, member removal,
-  password change and session revocation. Only the endpoints the consent flow
-  calls are listed, so signup is unreachable by construction and a future
-  upstream endpoint is not published automatically.
-- **The admin SPA at `/` and the `/api/<org>/*` workspace API are not
-  allowlisted.** They are served instead by the `lobu-admin` catch-all at
-  priority 900, which carries `protected-edge-auth@file`. Traefik evaluates the
-  higher priority first, so no MCP, OAuth or worker request ever reaches that
-  middleware; both surfaces use one public hostname and certificate, but only
-  the human admin surface passes through Authentik.
-
-The admin catch-all reuses the shared `admin-wildcard-forwardauth` provider,
-which already covers `*.admin.faviann.com`, and
-`authentik-outpost-admin-subdomains` already routes its callback — so this
-deployment adds no Lobu-specific Authentik object. The shared admin application
-restricts access to the `admins` group.
+- **`/api/auth/sign-up` is denied by the higher-priority
+  `lobu-signup-denied` router.** It resolves to the serverless `noop` service,
+  so Traefik returns 503 without contacting Lobu. The database's unique human
+  principal index independently prevents another account through any route
+  that bypasses Traefik.
 
 Note that `*.admin.faviann.com` is publicly routable. A plain DNS query from
 inside the LAN returns `10.1.0.2` because Firewalla answers intercepted queries
 with the internal address; public resolvers reached over DNS-over-HTTPS return
 the edge address, which is what ChatGPT sees.
 
-**If a flow breaks after an upgrade**, check the edge before the app: a path
-Lobu started using will show up in `/logs/traefik-access.log` on the `portal`
-LXC as an Authentik redirect for an unauthenticated client — it fell through to
-`lobu-admin` instead of matching the allowlist. Add that endpoint to the `lobu`
-rule; do not widen it to a bare prefix, and do not remove the Authentik boundary
-from `lobu-admin`.
+**If a flow breaks after an upgrade**, confirm in
+`/logs/traefik-access.log` on the `portal` LXC that the request matched
+`lobu@file`, then diagnose Lobu's native authentication or application behavior.
 
 ## Upgrades
 
@@ -250,8 +231,8 @@ the app version:
 3. `./run.sh --limit lobu -e stack_filter=lobu`.
 4. Watch `docker logs -f lobu-app` through the migration block; the entrypoint
    fails fast and loudly rather than migrating partially.
-5. Re-run the health checks above, then re-check the OAuth discovery documents.
-   An upgrade that adds a path needs an allowlist entry.
+5. Re-run the health checks above, then re-check the OAuth discovery documents
+   and the signup denial.
 
 Rolling an app version back after its migration has applied is not supported by
 the upstream migration runner.
