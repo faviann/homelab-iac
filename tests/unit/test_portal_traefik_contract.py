@@ -16,6 +16,26 @@ def load_yaml(path: Path) -> dict[str, object]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+def test_docker_provider_uses_the_read_only_socket_proxy() -> None:
+    compose = load_yaml(TRAEFIK_STACK / "compose.yaml")
+    static = load_yaml(
+        TRAEFIK_STACK / "appdata/traefik3/config/traefik.yaml"
+    )
+    services = compose["services"]
+    proxy = services["traefik-docker-socket-proxy"]
+    traefik = services["traefik"]
+    docker_provider = static["providers"]["docker"]
+
+    assert docker_provider["endpoint"] == (
+        "tcp://traefik-docker-socket-proxy:2375"
+    )
+    assert docker_provider["exposedByDefault"] is False
+    assert "traefik" in proxy["networks"]
+    assert "traefik" in traefik["networks"]
+    assert "/run/docker.sock:/var/run/docker.sock:ro" in proxy["volumes"]
+    assert not any("docker.sock" in volume for volume in traefik["volumes"])
+
+
 def test_representative_local_and_remote_routes_preserve_access_tiers() -> None:
     portal_entry = load_yaml(REPO_ROOT / "stacks/portal/portal-entry/compose.yaml")
     bazarr = load_yaml(REPO_ROOT / "stacks/servarr/bazarr/compose.yaml")
