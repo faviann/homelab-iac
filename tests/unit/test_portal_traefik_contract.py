@@ -36,6 +36,16 @@ def test_docker_provider_uses_the_read_only_socket_proxy() -> None:
     assert not any("docker.sock" in volume for volume in traefik["volumes"])
 
 
+def test_traefik_restart_waits_for_healthy_redis() -> None:
+    compose = load_yaml(TRAEFIK_STACK / "compose.yaml")
+    services = compose["services"]
+    redis_dependency = services["traefik"]["depends_on"]["redis"]
+
+    assert services["redis"]["healthcheck"]
+    assert redis_dependency["condition"] == "service_healthy"
+    assert redis_dependency["restart"] is True
+
+
 def test_representative_local_and_remote_routes_preserve_access_tiers() -> None:
     portal_entry = load_yaml(REPO_ROOT / "stacks/portal/portal-entry/compose.yaml")
     bazarr = load_yaml(REPO_ROOT / "stacks/servarr/bazarr/compose.yaml")
