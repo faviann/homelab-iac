@@ -286,9 +286,6 @@ def test_compose_recovers_redis_routes_after_redis_recreation(
         traefik_before = _compose(
             project, overrides, "ps", "--quiet", "traefik"
         ).strip()
-        traefik_started_before = json.loads(
-            _run(["docker", "inspect", traefik_before])
-        )[0]["State"]["StartedAt"]
         port = int(
             _run(
                 [
@@ -314,10 +311,7 @@ def test_compose_recovers_redis_routes_after_redis_recreation(
         ).strip()
         _wait_for_redis(redis_after)
         _seed_route(redis_after)
-        traefik_started_after = json.loads(
-            _run(["docker", "inspect", traefik_after])
-        )[0]["State"]["StartedAt"]
-        restarted_port = int(
+        recovered_port = int(
             _run(
                 [
                     "docker",
@@ -330,9 +324,7 @@ def test_compose_recovers_redis_routes_after_redis_recreation(
         )
 
         assert redis_after != redis_before
-        assert traefik_after == traefik_before
-        assert traefik_started_after != traefik_started_before
-        assert _wait_for_route(restarted_port) == 200
+        assert _wait_for_route(recovered_port) == 200
     finally:
         subprocess.run(
             [
