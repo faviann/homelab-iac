@@ -1,25 +1,31 @@
 #!/usr/bin/env python3
-"""Credential-free recreation of the Portal Traefik Redis-provider contract."""
+"""Prove Portal recovers Redis-backed routes after Redis recreation."""
 
 from __future__ import annotations
 
+import base64
+import http.client
 import json
+import os
 import shutil
+import socket
+import ssl
 import subprocess
-from datetime import datetime
+import time
+import uuid
 from pathlib import Path
 
 import pytest
-
-from portal_traefik_recreation import (
-    REMOTE_HOSTS,
-    AttemptScenario,
-    run_attempt,
-    run_compose_redis_replacement,
-)
+import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMPOSE_PATH = REPO_ROOT / "stacks/portal/traefik3/compose.yaml"
+STATIC_CONFIG_PATH = (
+    REPO_ROOT / "stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml"
+)
+DYNAMIC_CONFIG_PATH = STATIC_CONFIG_PATH.parent / "conf.d"
+ROUTE_HOST = "bazarr.local.faviann.com"
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -45,147 +51,310 @@ def require_docker() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("attempt_name", "scenario"),
-    [
-        ("01-redis-ready-before-provider", AttemptScenario.REDIS_READY),
-        (
-            "02-redis-recreated-during-start",
-            AttemptScenario.REDIS_RECREATED_DURING_START,
-        ),
-        ("03-provider-input-after-startup", AttemptScenario.INPUT_AFTER_START),
-    ],
-    ids=lambda value: value.value if isinstance(value, AttemptScenario) else value,
-)
-def test_pinned_redis_routes_survive_portal_recreation(
-    attempt_name: str,
-    scenario: AttemptScenario,
-) -> None:
-    if scenario is AttemptScenario.REDIS_RECREATED_DURING_START:
-        experiment = run_compose_redis_replacement(attempt_name)
-        observation = experiment.candidate
+def _run(command: list[str], timeout: int = 90) -> str:
+    result = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env={
+            **os.environ,
+            "CF_DNS_API_TOKEN": "<REPLACE_ME>",
+            "TRAEFIK_DASHBOARD_CREDENTIALS": "<REPLACE_ME>",
+        },
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            f"{' '.join(command)} failed\n"
+            f"stdout={result.stdout}\nstderr={result.stderr}"
+        )
+    return result.stdout
 
-        assert observation.redis_container_before != observation.redis_container_after
-        assert (
-            observation.traefik_container_before
-            == observation.traefik_container_after
-        )
-        assert observation.traefik_started_before != observation.traefik_started_after
-        assert observation.redis_healthy_at is not None
-        assert datetime.fromisoformat(observation.redis_healthy_at) <= (
-            datetime.fromisoformat(observation.traefik_started_after)
-        )
-        assert not observation.closed_watch_tree
-        assert set(observation.redis_keyspace_notifications) == set("AKE")
-        assert observation.local_route_status == 200
-        assert observation.redis_route_statuses == dict.fromkeys(REMOTE_HOSTS, 200)
-        effective = json.loads(
-            (
-                Path(experiment.evidence_directory)
-                / "candidate/compose-config.json"
-            ).read_text(encoding="utf-8")
-        )
-        assert effective["services"]["redis"]["healthcheck"]["test"] == [
-            "CMD",
-            "redis-cli",
-            "ping",
-        ]
-        assert effective["services"]["traefik"]["depends_on"] == {
-            "traefik-docker-socket-proxy": {
-                "condition": "service_started",
-                "required": True,
-            },
-            "redis": {
-                "condition": "service_healthy",
-                "restart": True,
-                "required": True,
-            },
-        }
-        control = experiment.control
-        assert control.redis_container_before != control.redis_container_after
-        assert control.traefik_container_before == control.traefik_container_after
-        assert control.traefik_started_before == control.traefik_started_after
-        assert control.local_route_status == 200
-        assert any(status != 200 for status in control.redis_route_statuses.values())
-        assert control.redis_route_statuses == dict.fromkeys(REMOTE_HOSTS, 404)
-        assert control.redis_keyspace_notifications == ""
-        control_config = json.loads(
-            (
-                Path(experiment.evidence_directory)
-                / "uncorrected/compose-config.json"
-            ).read_text(encoding="utf-8")
-        )
-        assert "healthcheck" not in control_config["services"]["redis"]
-        assert control_config["services"]["traefik"]["depends_on"] == {
-            "traefik-docker-socket-proxy": {
-                "condition": "service_started",
-                "required": True,
-            }
-        }
-        return
 
-    observation = run_attempt(attempt_name, scenario)
+def _compose(project: str, overrides: tuple[Path, ...], *args: str) -> str:
+    command = [
+        "docker",
+        "compose",
+        "--project-name",
+        project,
+        "--file",
+        str(COMPOSE_PATH),
+    ]
+    for override in overrides:
+        command.extend(("--file", str(override)))
+    return _run([*command, *args], timeout=120)
 
-    assert observation.local_route_status == 200
-    assert not observation.closed_watch_tree
-    assert observation.redis_route_statuses == {
-        "bazarr.local.faviann.com": 200,
-        "jellyfin.local.faviann.com": 200,
-        "immich.local.faviann.com": 200,
-    }
-    assert observation.traefik_container_before == observation.traefik_container_after
-    assert observation.docker_server_version
-    assert observation.tracked_config_mounts == {
-        "/etc/traefik/traefik.yaml": str(
-            REPO_ROOT
-            / "stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml"
-        ),
-        "/etc/traefik/conf.d": str(
-            REPO_ROOT / "stacks/portal/traefik3/appdata/traefik3/config/conf.d"
+
+def _wait_for_redis(container: str) -> None:
+    for _ in range(60):
+        result = subprocess.run(
+            ["docker", "exec", container, "redis-cli", "ping"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip() == "PONG":
+            return
+        time.sleep(0.25)
+    raise AssertionError("Redis did not become ready")
+
+
+def _seed_route(container: str) -> None:
+    values = {
+        "traefik/http/routers/bazarr/rule": f"Host(`{ROUTE_HOST}`)",
+        "traefik/http/routers/bazarr/service": "bazarr",
+        "traefik/http/services/bazarr/loadbalancer/servers/0/url": (
+            "http://backend:8081/ping"
         ),
     }
-    assert observation.tracked_static_config_loaded
-    assert observation.tracked_dynamic_config_loaded
-    if scenario is AttemptScenario.INPUT_AFTER_START:
-        assert observation.redis_routes_before_input == {
-            "bazarr.local.faviann.com": 404,
-            "jellyfin.local.faviann.com": 404,
-            "immich.local.faviann.com": 404,
+    for key, value in values.items():
+        _run(["docker", "exec", container, "redis-cli", "SET", key, value])
+
+
+def _wait_for_route(port: int) -> int | None:
+    deadline = time.monotonic() + 30
+    status = None
+    last_error: OSError | TimeoutError | None = None
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=2) as connection:
+                with ssl._create_unverified_context().wrap_socket(
+                    connection,
+                    server_hostname=ROUTE_HOST,
+                ) as secure_connection:
+                    secure_connection.sendall(
+                        (
+                            "GET /ping HTTP/1.1\r\n"
+                            f"Host: {ROUTE_HOST}\r\n"
+                            "Connection: close\r\n\r\n"
+                        ).encode()
+                    )
+                    response = http.client.HTTPResponse(secure_connection)
+                    response.begin()
+                    status = response.status
+        except (OSError, TimeoutError) as error:
+            last_error = error
+            status = None
+        if status == 200:
+            return status
+        time.sleep(0.25)
+    if last_error is not None:
+        raise AssertionError(f"route probe failed: {last_error!r}")
+    return status
+
+
+def _write_disposable_acme_storage(path: Path) -> None:
+    certificate = path.parent / "disposable.crt"
+    private_key = path.parent / "disposable.key"
+    result = subprocess.run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=faviann.com",
+            "-addext",
+            (
+                "subjectAltName=DNS:faviann.com,DNS:*.faviann.com,"
+                "DNS:*.admin.faviann.com,DNS:*.home.faviann.com,"
+                "DNS:*.media.faviann.com,DNS:*.public.faviann.com,"
+                "DNS:*.local.faviann.com"
+            ),
+            "-keyout",
+            str(private_key),
+            "-out",
+            str(certificate),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            f"failed to create disposable TLS certificate: {result.stderr}"
+        )
+    private_key.chmod(0o600)
+    sans = [
+        "*.faviann.com",
+        "*.admin.faviann.com",
+        "*.home.faviann.com",
+        "*.media.faviann.com",
+        "*.public.faviann.com",
+        "*.local.faviann.com",
+    ]
+    storage = {
+        "cloudflare": {
+            "Account": {
+                "Email": "placeholder@example.invalid",
+                "Registration": None,
+                "PrivateKey": base64.b64encode(private_key.read_bytes()).decode(),
+                "KeyType": "4096",
+            },
+            "Certificates": [
+                {
+                    "domain": {
+                        "main": "faviann.com",
+                        "sans": sans,
+                    },
+                    "certificate": base64.b64encode(certificate.read_bytes()).decode(),
+                    "key": base64.b64encode(private_key.read_bytes()).decode(),
+                    "Store": "default",
+                }
+            ],
         }
+    }
+    path.write_text(json.dumps(storage), encoding="utf-8")
+    path.chmod(0o600)
 
 
-def test_missing_redis_routes_still_write_complete_observation(
+def test_compose_recovers_redis_routes_after_redis_recreation(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PORTAL_TRAEFIK_EVIDENCE_DIR", str(tmp_path))
-
-    observation = run_attempt(
-        "missing-provider-input",
-        AttemptScenario.MISSING_PROVIDER_INPUT,
-        route_timeout_seconds=5,
+    compose = yaml.safe_load(COMPOSE_PATH.read_text(encoding="utf-8"))
+    traefik_image = compose["services"]["traefik"]["image"]
+    project = f"portal-traefik-recreation-{uuid.uuid4().hex[:12]}"
+    override = tmp_path / "compose.runtime.yaml"
+    redis_update = tmp_path / "compose.redis-update.yaml"
+    logs = tmp_path / "logs"
+    certificates = tmp_path / "certificates"
+    logs.mkdir()
+    certificates.mkdir()
+    _write_disposable_acme_storage(certificates / "cloudflare-acme.json")
+    override.write_text(
+        "\n".join(
+            [
+                "services:",
+                "  traefik-docker-socket-proxy:",
+                "    container_name: !reset null",
+                '    restart: "no"',
+                "  traefik:",
+                "    container_name: !reset null",
+                '    restart: "no"',
+                "    ports: !override",
+                '      - "127.0.0.1::443/tcp"',
+                "    volumes:",
+                f"      - {STATIC_CONFIG_PATH}:/etc/traefik/traefik.yaml:ro",
+                f"      - {DYNAMIC_CONFIG_PATH}:/etc/traefik/conf.d:ro",
+                f"      - {certificates}:/var/traefik/certs:rw",
+                f"      - {logs}:/logs:rw",
+                "  redis:",
+                "    container_name: !reset null",
+                '    restart: "no"',
+                "    ports: !reset []",
+                "  backend:",
+                f"    image: {traefik_image}",
+                "    command:",
+                "      - --entrypoints.backend.address=:8081",
+                "      - --ping=true",
+                "      - --ping.entrypoint=backend",
+                "    networks:",
+                "      - shared",
+                "networks:",
+                "  shared:",
+                "    external: false",
+                "",
+            ]
+        ),
+        encoding="utf-8",
     )
-    evidence = tmp_path / "missing-provider-input"
-    recorded = json.loads(
-        (evidence / "observation.json").read_text(encoding="utf-8")
+    redis_update.write_text(
+        'services:\n  redis:\n    labels:\n      issue-88.recreation: "true"\n',
+        encoding="utf-8",
     )
+    overrides = (override,)
+    updated_overrides = (override, redis_update)
 
-    assert observation.local_route_status == 200
-    assert observation.redis_route_statuses == {
-        "bazarr.local.faviann.com": 404,
-        "jellyfin.local.faviann.com": 404,
-        "immich.local.faviann.com": 404,
-    }
-    assert recorded["redis_route_statuses"] == observation.redis_route_statuses
-    assert recorded["traefik_container_before"]
-    assert recorded["traefik_container_after"]
-    assert recorded["docker_server_version"]
-    assert recorded["route_timeout_seconds"] == 5
-    assert set(recorded["images"]) == {
-        "redis",
-        "traefik",
-        "traefik-docker-socket-proxy",
-    }
-    assert all(recorded["images"].values())
-    assert isinstance(recorded["closed_watch_tree"], bool)
-    assert (evidence / "traefik.log").read_text(encoding="utf-8")
+    try:
+        _compose(
+            project,
+            overrides,
+            "up",
+            "--detach",
+            "--wait",
+            "--wait-timeout",
+            "60",
+        )
+        redis_before = _compose(project, overrides, "ps", "--quiet", "redis").strip()
+        traefik_before = _compose(
+            project, overrides, "ps", "--quiet", "traefik"
+        ).strip()
+        traefik_started_before = json.loads(
+            _run(["docker", "inspect", traefik_before])
+        )[0]["State"]["StartedAt"]
+        port = int(
+            _run(
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    '{{(index (index .NetworkSettings.Ports "443/tcp") 0).HostPort}}',
+                    traefik_before,
+                ]
+            ).strip()
+        )
+        _wait_for_redis(redis_before)
+        _seed_route(redis_before)
+        assert _wait_for_route(port) == 200
+
+        # This is the normal stack-wide reconciliation path used in production.
+        _compose(project, updated_overrides, "up", "--detach")
+        redis_after = _compose(
+            project, updated_overrides, "ps", "--quiet", "redis"
+        ).strip()
+        traefik_after = _compose(
+            project, updated_overrides, "ps", "--quiet", "traefik"
+        ).strip()
+        _wait_for_redis(redis_after)
+        _seed_route(redis_after)
+        traefik_started_after = json.loads(
+            _run(["docker", "inspect", traefik_after])
+        )[0]["State"]["StartedAt"]
+        restarted_port = int(
+            _run(
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    '{{(index (index .NetworkSettings.Ports "443/tcp") 0).HostPort}}',
+                    traefik_after,
+                ]
+            ).strip()
+        )
+
+        assert redis_after != redis_before
+        assert traefik_after == traefik_before
+        assert traefik_started_after != traefik_started_before
+        assert _wait_for_route(restarted_port) == 200
+    finally:
+        subprocess.run(
+            [
+                "docker",
+                "compose",
+                "--project-name",
+                project,
+                "--file",
+                str(COMPOSE_PATH),
+                "--file",
+                str(override),
+                "down",
+                "--volumes",
+                "--remove-orphans",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={
+                **os.environ,
+                "CF_DNS_API_TOKEN": "<REPLACE_ME>",
+                "TRAEFIK_DASHBOARD_CREDENTIALS": "<REPLACE_ME>",
+            },
+        )

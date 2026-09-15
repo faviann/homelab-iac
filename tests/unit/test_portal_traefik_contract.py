@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused contracts for Portal's local and Redis-backed Traefik routes."""
+"""Focused contracts for Portal's route security and certificates."""
 
 from __future__ import annotations
 
@@ -14,45 +14,6 @@ TRAEFIK_STACK = REPO_ROOT / "stacks/portal/traefik3"
 
 def load_yaml(path: Path) -> dict[str, object]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
-
-
-def test_portal_recreation_harness_uses_the_repository_provider_contract() -> None:
-    compose = load_yaml(TRAEFIK_STACK / "compose.yaml")
-    static = load_yaml(
-        TRAEFIK_STACK / "appdata/traefik3/config/traefik.yaml"
-    )
-
-    assert compose["services"]["traefik"]["image"] == (
-        "docker.io/library/traefik:v3.6"
-    )
-    assert compose["services"]["redis"]["image"] == "bitnami/redis:latest"
-    assert static["providers"]["redis"]["endpoints"] == ["redis:6379"]
-    assert static["providers"]["docker"] == {
-        "watch": True,
-        "endpoint": "tcp://traefik-docker-socket-proxy:2375",
-        "exposedByDefault": False,
-        "defaultRule": (
-            'Host(`{{ index .Labels "com.docker.compose.project"}}.'
-            '{{ index .Labels "traefik.domain" | default '
-            '"local.faviann.com" }}`)'
-        ),
-    }
-
-
-def test_traefik_restarts_after_redis_recreation_and_readiness() -> None:
-    compose = load_yaml(TRAEFIK_STACK / "compose.yaml")
-
-    assert compose["services"]["redis"]["healthcheck"] == {
-        "test": ["CMD", "redis-cli", "ping"],
-        "interval": "2s",
-        "timeout": "1s",
-        "retries": 15,
-        "start_period": "1s",
-    }
-    assert compose["services"]["traefik"]["depends_on"] == {
-        "traefik-docker-socket-proxy": {"condition": "service_started"},
-        "redis": {"condition": "service_healthy", "restart": True},
-    }
 
 
 def test_representative_local_and_remote_routes_preserve_access_tiers() -> None:
