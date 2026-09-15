@@ -157,7 +157,7 @@ def _write_disposable_acme_storage(path: Path) -> None:
             "rsa:2048",
             "-nodes",
             "-days",
-            "1",
+            "3650",
             "-subj",
             "/CN=faviann.com",
             "-addext",
