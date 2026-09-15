@@ -41,7 +41,11 @@ def test_traefik_restart_waits_for_healthy_redis() -> None:
     services = compose["services"]
     redis_dependency = services["traefik"]["depends_on"]["redis"]
 
-    assert services["redis"]["healthcheck"]
+    assert services["redis"]["healthcheck"]["test"] == [
+        "CMD",
+        "redis-cli",
+        "ping",
+    ]
     assert redis_dependency["condition"] == "service_healthy"
     assert redis_dependency["restart"] is True
 
