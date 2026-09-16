@@ -308,6 +308,25 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             ["forwardAuth-authentik"],
         )
 
+    def test_lobu_external_route_contract(self) -> None:
+        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
+        routers = config["http"]["routers"]
+
+        lobu_router = routers["lobu"]
+        self.assertEqual(lobu_router["rule"], "Host(`lobu.admin.faviann.com`)")
+        self.assertEqual(lobu_router["service"], "lobu")
+        self.assertNotIn("middlewares", lobu_router)
+
+        signup_denial_router = routers["lobu-signup-denied"]
+        self.assertEqual(
+            signup_denial_router["rule"],
+            "Host(`lobu.admin.faviann.com`) && PathPrefix(`/api/auth/sign-up`)",
+        )
+        self.assertEqual(signup_denial_router["service"], "noop")
+        self.assertGreater(
+            signup_denial_router["priority"], lobu_router["priority"]
+        )
+
     def test_admin_source_policies_use_the_same_networks(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
         traefik_ranges = config["http"]["middlewares"]["local-ip-restriction"][
