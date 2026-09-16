@@ -2,7 +2,7 @@
 - name: Exercise the control-node bootstrap interface
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
   become: false
   roles:
     - base/control_node_bootstrap

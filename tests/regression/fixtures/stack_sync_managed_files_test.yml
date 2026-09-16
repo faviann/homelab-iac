@@ -2,8 +2,10 @@
 - name: Test x-managed-files creates files with correct permissions
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
   vars:
+    ansible_user_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       stacks_source: "{{ temp_root }}/stacks-source"
