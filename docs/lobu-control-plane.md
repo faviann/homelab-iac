@@ -189,6 +189,9 @@ genuinely need a second human account, drop the index deliberately.
 
 ## Public exposure
 
+This routing and authentication boundary is governed by
+[ADR 0012](adr/0012-use-lobu-as-its-public-application-security-boundary.md).
+
 The Traefik router `lobu` in
 `stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml`
 carries **no ForwardAuth and no Authentik middleware**. ChatGPT's connector
