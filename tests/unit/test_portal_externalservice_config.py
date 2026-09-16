@@ -308,6 +308,41 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             ["forwardAuth-authentik"],
         )
 
+    def test_lobu_external_route_contract(self) -> None:
+        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
+        routers = config["http"]["routers"]
+
+        lobu_router = routers["lobu"]
+        self.assertEqual(lobu_router["rule"], "Host(`lobu.admin.faviann.com`)")
+        self.assertEqual(lobu_router["service"], "lobu")
+        lobu_middlewares = {
+            middleware.partition("@")[0]
+            for middleware in lobu_router.get("middlewares", [])
+        }
+        self.assertTrue(
+            lobu_middlewares.isdisjoint(
+                {"protected-edge-auth", "forwardAuth-authentik"}
+            )
+        )
+
+        signup_denial_router = routers["lobu-signup-denied"]
+        self.assertEqual(
+            signup_denial_router["rule"],
+            "Host(`lobu.admin.faviann.com`) && PathPrefix(`/api/auth/sign-up`)",
+        )
+        self.assertEqual(signup_denial_router["service"], "noop")
+        for router in (lobu_router, signup_denial_router):
+            entry_points = router["entryPoints"]
+            if isinstance(entry_points, str):
+                entry_points = [entry_points]
+            self.assertIn("websecure", entry_points)
+        self.assertGreater(
+            signup_denial_router["priority"], lobu_router["priority"]
+        )
+        self.assertEqual(
+            config["http"]["services"]["noop"]["loadBalancer"]["servers"], []
+        )
+
     def test_admin_source_policies_use_the_same_networks(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
         traefik_ranges = config["http"]["middlewares"]["local-ip-restriction"][
