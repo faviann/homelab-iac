@@ -2,7 +2,7 @@
 - name: Test discover identifies stale stack directories
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
   vars:
     docker_agents_enabled: false
     service_agents_enabled: false

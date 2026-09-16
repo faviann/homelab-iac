@@ -2,8 +2,10 @@
 - name: Test materialize rejects a prereq path that is not a directory
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
   vars:
+    ansible_user_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/wrong-type/shared"
       stacks_source: "{{ temp_root }}/wrong-type/stacks-source"
@@ -105,8 +107,10 @@
 - name: Test materialize renders templates and copies static files
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
   vars:
+    ansible_user_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       stacks_source: "{{ temp_root }}/stacks-source"
@@ -410,13 +414,14 @@
             | list
             | length) == 0
 
-# ansible_user_* is inherited from the earlier plays, as in the exact-artifact
-# plays below, so this play gathers nothing of its own.
+# Keep the explicit invoking-user identity on this isolated fixture path.
 - name: Test planner applies declaration ownership by resolved destination
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
+    ansible_user_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
     planner_root: "{{ temp_root }}/planner-metadata"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ planner_root }}/shared"
@@ -664,6 +669,8 @@
   connection: local
   gather_facts: false
   vars:
+    ansible_user_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
     exact_root: "{{ temp_root }}/exact-file-modes"
     exact_source_root: "{{ exact_root }}/source/overmind"
     exact_agent_keys_source: "{{ exact_source_root }}/overmind/agent-keys.yaml.j2"
@@ -734,6 +741,8 @@
   connection: local
   gather_facts: false
   vars:
+    ansible_user_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
     exact_root: "{{ temp_root }}/exact-file-modes"
     exact_source_root: "{{ exact_root }}/source/servarr"
     exact_beets_compose_source: "{{ exact_source_root }}/beets-flask/compose.override.yaml"
