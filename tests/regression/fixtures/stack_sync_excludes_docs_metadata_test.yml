@@ -94,11 +94,6 @@
         name: config/lxc_stack_sync
         tasks_from: discover.yml
 
-    - name: Plan source stack materialization through the role task
-      ansible.builtin.include_role:
-        name: config/lxc_stack_sync
-        tasks_from: planner.yml
-
     - name: Materialize source stacks through the role task
       ansible.builtin.include_role:
         name: config/lxc_stack_sync
