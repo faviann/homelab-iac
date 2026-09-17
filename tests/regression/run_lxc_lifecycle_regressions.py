@@ -60,8 +60,12 @@ FIXTURE_ENVIRONMENT = {
     "ANSIBLE_VAULT_PASSWORD_FILE": str(FIXTURE_ROOT / "vault-pass"),
 }
 
-# Both fast launchers are internally parallel and fully isolated (per-run
-# temp state directories), so the fast path runs them concurrently.
+# Both fast launchers are internally parallel and isolated by their own per-run
+# temp state directories, so the fast path runs them concurrently. They share
+# the run-level fact-cache namespace rather than taking private ones: that is
+# safe only because exactly one of the two writes to it (the decision launcher
+# sets its own ANSIBLE_CACHE_PLUGIN_CONNECTION). A third fast launcher that
+# inherits the run-level namespace would need pooled_environment() too.
 FAST_SCRIPTS = (
     "lxc_lifecycle_decision_launcher.py",
     "lxc_lifecycle_planning_barrier_launcher.py",

@@ -152,8 +152,14 @@ def test_serial_exclusions_are_never_scheduled_into_the_pool() -> None:
 
 def test_pool_runs_at_the_bound_and_never_above_it() -> None:
     runner = load_runner()
+    # Pinned, not read-and-trusted: 2 is the value issue #319 measured, and no
+    # other bound has evidence behind it. The assertions below only prove the
+    # pool honours whatever bound is configured, so changing it has to be a
+    # deliberate edit here too.
+    assert runner.POOL_MAX_WORKERS == 2
     bound = runner.POOL_MAX_WORKERS
     reached_bound = threading.Event()
+    gave_up = threading.Event()
     guard = threading.Lock()
     concurrency = {"active": 0, "peak": 0}
 
@@ -169,7 +175,11 @@ def test_pool_runs_at_the_bound_and_never_above_it() -> None:
                 reached_bound.set()
         # Hold the slot until the pool has been seen running at its bound, so a
         # pool that only ever ran one launcher at a time would fail this test.
-        reached_bound.wait(timeout=5)
+        # A serialized pool can never set the event, so the first launcher to
+        # time out waives the wait for the rest: the test still fails, but in
+        # seconds rather than once every pooled launcher has waited in turn.
+        if not gave_up.is_set() and not reached_bound.wait(timeout=2):
+            gave_up.set()
         with guard:
             concurrency["active"] -= 1
         return passing_result(script)
@@ -201,35 +211,42 @@ def test_full_fail_fast_stops_pool_scheduling_but_reports_in_flight_launchers(
     launched: list[str] = []
     reported: list[str] = []
     failing_script = runner.POOLED_SCRIPTS[0]
-    first_wave = set(runner.POOLED_SCRIPTS[: runner.POOL_MAX_WORKERS])
-    both_in_flight = threading.Barrier(runner.POOL_MAX_WORKERS)
+    failure_reported = threading.Event()
 
     def launch(
         script: str, environment: Mapping[str, str]
     ) -> tuple[str, int, float, str]:
         launched.append(script)
-        if script in first_wave:
-            with contextlib.suppress(threading.BrokenBarrierError):
-                both_in_flight.wait(timeout=5)
+        if script in runner.POOLED_SCRIPTS and script != failing_script:
+            # Hold every pooled sibling until the failure has been reported, so
+            # the run cannot race ahead of the stop point: only the failure can
+            # complete first, and scheduling must already have stopped by the
+            # time anything else finishes. Without this the assertions below
+            # would depend on how fast the collecting thread happens to be.
+            failure_reported.wait(timeout=10)
         return script, int(script == failing_script), 0.0, "failure"
 
     original_report = runner.report
 
     def record(result: tuple[str, int, float, str]) -> bool:
         reported.append(result[0])
-        return original_report(result)
+        outcome = original_report(result)
+        if result[0] == failing_script:
+            failure_reported.set()
+        return outcome
 
     runner.report = record
 
     assert runner.main(["--full", "--fail-fast"], launcher=launch) == 1
 
     pooled_launched = [script for script in launched if script in runner.POOLED_SCRIPTS]
-    # Both launchers of the first wave were in flight when the failure landed,
-    # so both finish and both are reported.
-    assert first_wave.issubset(reported)
-    # Scheduling stopped: only the wave in flight plus at most the candidates
-    # already dispatched before the failure was observed can have run.
-    assert len(pooled_launched) <= runner.POOL_MAX_WORKERS + 1
+    # Exactly the first wave ran: the failure plus the one sibling already in
+    # flight beside it. Every later candidate was never scheduled.
+    assert sorted(pooled_launched) == sorted(
+        runner.POOLED_SCRIPTS[: runner.POOL_MAX_WORKERS]
+    )
+    # The in-flight sibling still finished and was reported, not abandoned.
+    assert set(pooled_launched).issubset(reported)
     assert set(runner.SERIAL_ONLY_SCRIPTS).isdisjoint(launched)
     assert f"failed: {failing_script}" in capsys.readouterr().err
 
