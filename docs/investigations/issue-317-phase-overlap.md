@@ -25,6 +25,16 @@ overlap trial, and the phase times were affected by cache/host warmness and
 polling observation. The result supports a bounded follow-up implementation;
 it does not justify claiming a stable 39.5% production saving.
 
+The per-phase comparisons are also single-run observed deltas, not causal or
+repeatable speedups:
+
+- Lifecycle 600.705s versus the recorded 628.5s: **-4.42%**.
+- Lifecycle 600.705s versus the fresh isolated 637.841s: **-5.82%**.
+- Pytest 1064.220s versus the recorded 1130.4s: **-5.85%**.
+
+These negative deltas show no measured slowdown in this trial. They do not
+establish that overlap made either phase faster.
+
 The 50ms GitHub-reader termination probe was separately proven to overlap real
 lifecycle work. It ran as a supported targeted pytest node while the full
 lifecycle command was active, and passed.
@@ -154,7 +164,8 @@ not counted as a valid concurrency trial:
   it passed 1/1 in 220.243s. Summary and output are
   [`targeted-persistent-home.json`](issue-317-evidence/bootstrap-targeted/targeted-persistent-home.json)
   and [`targeted-persistent-home.log`](issue-317-evidence/bootstrap-targeted/targeted-persistent-home.log).
-- The replacement valid full overlap is retained under
+- Only after that targeted recovery passed did we run the replacement full
+  lifecycle+pytest overlap trial. It is retained under
   [`valid-overlap/`](issue-317-evidence/valid-overlap/).
 
 This distinguishes a missing controller dependency from phase interference
@@ -167,9 +178,10 @@ The historical 637.841s isolated lifecycle result and the historical
 supervisors invoked with `uv run --locked python -`; their exact output paths
 are retained below. The full-overlap supervisor started each command in its
 own process group, polled both processes, and wrote the summaries shown here.
-It did not catch SIGINT/SIGTERM, and its interruption path re-raised before
-writing a summary. Therefore the historical full-trial driver does **not**
-establish interruption safety.
+It had an `except BaseException` cleanup path, so Python SIGINT/
+`KeyboardInterrupt` could enter cleanup and then re-raise before summary
+publication; it had no explicit SIGTERM handler. Therefore the historical
+full-trial driver does **not** establish interruption safety.
 
 The later full-lifecycle reader-probe run used the then-present temporary file
 `/home/faviann/worktrees/homelab-iac/issue-317/docs/investigations/issue-317-phase-overlap-driver.py`
