@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import os
 from pathlib import Path
 import threading
 from types import ModuleType
+from typing import Mapping
 
 import pytest
 
@@ -32,19 +34,24 @@ def passing_result(script: str) -> tuple[str, int, float, str]:
     return script, 0, 0.0, ""
 
 
-def test_only_selects_registered_launchers_in_supplied_order() -> None:
-    runner = load_runner()
-    launched: list[str] = []
-
-    def launch(script: str) -> tuple[str, int, float, str]:
+def recording_launcher(launched: list[str]):
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
         launched.append(script)
         return passing_result(script)
 
+    return launch
+
+
+def test_only_selects_registered_launchers_in_supplied_order() -> None:
+    runner = load_runner()
+    launched: list[str] = []
     selected = [runner.FULL_ONLY_SCRIPTS[0], runner.FAST_SCRIPTS[1]]
 
     assert runner.main(
         [argument for script in selected for argument in ("--only", script)],
-        launcher=launch,
+        launcher=recording_launcher(launched),
     ) == 0
     assert launched == selected
 
@@ -68,8 +75,7 @@ def test_expensive_ansible_launcher_is_registered_once_as_full_only(
     assert runner.REGISTERED_SCRIPTS.count(target) == 1
 
     assert runner.main(
-        ["--only", target],
-        launcher=lambda script: launched.append(script) or passing_result(script),
+        ["--only", target], launcher=recording_launcher(launched)
     ) == 0
     assert launched == [target]
 
@@ -83,7 +89,7 @@ def test_only_and_full_are_rejected_before_launch(
     with pytest.raises(SystemExit) as error:
         runner.main(
             ["--full", "--only", runner.FAST_SCRIPTS[0]],
-            launcher=lambda script: launched.append(script) or passing_result(script),
+            launcher=recording_launcher(launched),
         )
 
     assert error.value.code == 2
@@ -98,10 +104,7 @@ def test_unknown_launcher_is_rejected_with_registered_names(
     launched: list[str] = []
 
     with pytest.raises(SystemExit) as error:
-        runner.main(
-            ["--only", "missing.py"],
-            launcher=lambda script: launched.append(script) or passing_result(script),
-        )
+        runner.main(["--only", "missing.py"], launcher=recording_launcher(launched))
 
     stderr = capsys.readouterr().err
     assert error.value.code == 2
@@ -111,11 +114,78 @@ def test_unknown_launcher_is_rejected_with_registered_names(
     assert runner.FULL_ONLY_SCRIPTS[-1] in stderr
 
 
+def test_scheduling_classes_partition_the_registry() -> None:
+    runner = load_runner()
+    classes = (
+        runner.FAST_SCRIPTS,
+        runner.POOLED_SCRIPTS,
+        runner.SERIAL_ONLY_SCRIPTS,
+    )
+
+    scheduled = [script for scheduling_class in classes for script in scheduling_class]
+
+    assert sorted(scheduled) == sorted(runner.REGISTERED_SCRIPTS)
+    assert len(set(scheduled)) == len(scheduled)
+    for script in runner.REGISTERED_SCRIPTS:
+        assert sum(script in scheduling_class for scheduling_class in classes) == 1
+
+
+def test_serial_exclusions_are_never_scheduled_into_the_pool() -> None:
+    runner = load_runner()
+    pooled: list[str] = []
+
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
+        if environment["ANSIBLE_CACHE_PLUGIN_CONNECTION"].endswith(
+            f"fact-cache-{script.removesuffix('.py')}"
+        ):
+            pooled.append(script)
+        return passing_result(script)
+
+    assert runner.main(["--full"], launcher=launch) == 0
+    assert set(runner.SERIAL_ONLY_SCRIPTS).isdisjoint(pooled)
+    assert sorted(pooled) == sorted(runner.POOLED_SCRIPTS)
+    for excluded in runner.SERIAL_ONLY_SCRIPTS:
+        assert excluded in runner.FULL_ONLY_SCRIPTS
+
+
+def test_pool_runs_at_the_bound_and_never_above_it() -> None:
+    runner = load_runner()
+    bound = runner.POOL_MAX_WORKERS
+    reached_bound = threading.Event()
+    guard = threading.Lock()
+    concurrency = {"active": 0, "peak": 0}
+
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
+        if script not in runner.POOLED_SCRIPTS:
+            return passing_result(script)
+        with guard:
+            concurrency["active"] += 1
+            concurrency["peak"] = max(concurrency["peak"], concurrency["active"])
+            if concurrency["active"] >= bound:
+                reached_bound.set()
+        # Hold the slot until the pool has been seen running at its bound, so a
+        # pool that only ever ran one launcher at a time would fail this test.
+        reached_bound.wait(timeout=5)
+        with guard:
+            concurrency["active"] -= 1
+        return passing_result(script)
+
+    assert runner.main(["--full"], launcher=launch) == 0
+    assert reached_bound.is_set()
+    assert concurrency["peak"] == bound
+
+
 def test_full_fail_fast_finishes_running_fast_launchers_without_starting_full_only() -> None:
     runner = load_runner()
     launched: list[str] = []
 
-    def launch(script: str) -> tuple[str, int, float, str]:
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
         launched.append(script)
         return script, int(script == runner.FAST_SCRIPTS[0]), 0.0, "failure"
 
@@ -124,20 +194,44 @@ def test_full_fail_fast_finishes_running_fast_launchers_without_starting_full_on
     assert not set(launched).intersection(runner.FULL_ONLY_SCRIPTS)
 
 
-def test_full_fail_fast_stops_sequential_phase_after_first_failure() -> None:
+def test_full_fail_fast_stops_pool_scheduling_but_reports_in_flight_launchers(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     runner = load_runner()
     launched: list[str] = []
-    failing_script = runner.FULL_ONLY_SCRIPTS[1]
+    reported: list[str] = []
+    failing_script = runner.POOLED_SCRIPTS[0]
+    first_wave = set(runner.POOLED_SCRIPTS[: runner.POOL_MAX_WORKERS])
+    both_in_flight = threading.Barrier(runner.POOL_MAX_WORKERS)
 
-    def launch(script: str) -> tuple[str, int, float, str]:
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
         launched.append(script)
+        if script in first_wave:
+            with contextlib.suppress(threading.BrokenBarrierError):
+                both_in_flight.wait(timeout=5)
         return script, int(script == failing_script), 0.0, "failure"
 
+    original_report = runner.report
+
+    def record(result: tuple[str, int, float, str]) -> bool:
+        reported.append(result[0])
+        return original_report(result)
+
+    runner.report = record
+
     assert runner.main(["--full", "--fail-fast"], launcher=launch) == 1
-    assert set(launched[: len(runner.FAST_SCRIPTS)]) == set(runner.FAST_SCRIPTS)
-    assert launched[len(runner.FAST_SCRIPTS) :] == list(
-        runner.FULL_ONLY_SCRIPTS[:2]
-    )
+
+    pooled_launched = [script for script in launched if script in runner.POOLED_SCRIPTS]
+    # Both launchers of the first wave were in flight when the failure landed,
+    # so both finish and both are reported.
+    assert first_wave.issubset(reported)
+    # Scheduling stopped: only the wave in flight plus at most the candidates
+    # already dispatched before the failure was observed can have run.
+    assert len(pooled_launched) <= runner.POOL_MAX_WORKERS + 1
+    assert set(runner.SERIAL_ONLY_SCRIPTS).isdisjoint(launched)
+    assert f"failed: {failing_script}" in capsys.readouterr().err
 
 
 def test_targeted_fail_fast_stops_after_first_failure() -> None:
@@ -145,7 +239,9 @@ def test_targeted_fail_fast_stops_after_first_failure() -> None:
     selected = list(runner.REGISTERED_SCRIPTS[:3])
     launched: list[str] = []
 
-    def launch(script: str) -> tuple[str, int, float, str]:
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
         launched.append(script)
         return script, int(script == selected[1]), 0.0, "failure"
 
@@ -161,7 +257,9 @@ def test_default_fast_path_starts_both_launchers_concurrently() -> None:
     both_started = threading.Barrier(len(runner.FAST_SCRIPTS))
     launched: list[str] = []
 
-    def launch(script: str) -> tuple[str, int, float, str]:
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
         launched.append(script)
         both_started.wait(timeout=2)
         return passing_result(script)
@@ -177,20 +275,91 @@ def test_full_path_without_fail_fast_aggregates_all_launcher_results(
     launched: list[str] = []
     failing_scripts = {
         runner.FAST_SCRIPTS[0],
-        runner.FULL_ONLY_SCRIPTS[1],
+        runner.POOLED_SCRIPTS[1],
     }
 
-    def launch(script: str) -> tuple[str, int, float, str]:
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
         launched.append(script)
         return script, int(script in failing_scripts), 0.0, "failure"
 
     assert runner.main(["--full"], launcher=launch) == 1
+    # Pool completion order is nondeterministic, so the run is accounted for by
+    # membership and count, not by sequence.
     assert set(launched[: len(runner.FAST_SCRIPTS)]) == set(runner.FAST_SCRIPTS)
-    assert launched[len(runner.FAST_SCRIPTS) :] == list(runner.FULL_ONLY_SCRIPTS)
+    assert sorted(launched) == sorted(runner.REGISTERED_SCRIPTS)
+    assert launched[-len(runner.SERIAL_ONLY_SCRIPTS) :] == list(
+        runner.SERIAL_ONLY_SCRIPTS
+    )
+    # The failure line stays in registration order whatever the completion order.
     assert (
-        f"failed: {runner.FAST_SCRIPTS[0]}, {runner.FULL_ONLY_SCRIPTS[1]}"
+        f"failed: {runner.FAST_SCRIPTS[0]}, {runner.POOLED_SCRIPTS[1]}"
         in capsys.readouterr().err
     )
+
+
+def test_full_path_ok_line_counts_every_registered_launcher(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = load_runner()
+
+    assert runner.main(
+        ["--full"], launcher=lambda script, environment: passing_result(script)
+    ) == 0
+    assert (
+        f"ok: full lifecycle regression set passed "
+        f"({len(runner.REGISTERED_SCRIPTS)} launchers)"
+    ) in capsys.readouterr().out
+
+
+def test_pooled_launchers_get_private_fact_cache_namespaces_serial_paths_share_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = load_runner()
+    operator_cache = "/operator-cache-that-must-not-be-written"
+    monkeypatch.setenv("ANSIBLE_CACHE_PLUGIN_CONNECTION", operator_cache)
+    namespaces: dict[str, str] = {}
+
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
+        namespaces[script] = environment["ANSIBLE_CACHE_PLUGIN_CONNECTION"]
+        # The process-global namespace is never mutated, so it cannot leak
+        # between concurrently scheduled launchers.
+        assert os.environ["ANSIBLE_CACHE_PLUGIN_CONNECTION"] == operator_cache
+        return passing_result(script)
+
+    assert runner.main(["--full"], launcher=launch) == 0
+
+    pooled = {namespaces[script] for script in runner.POOLED_SCRIPTS}
+    assert len(pooled) == len(runner.POOLED_SCRIPTS)
+    serial = {
+        namespaces[script]
+        for script in runner.FAST_SCRIPTS + runner.SERIAL_ONLY_SCRIPTS
+    }
+    assert len(serial) == 1
+    assert serial.isdisjoint(pooled)
+    assert operator_cache not in pooled | serial
+    assert os.environ["ANSIBLE_CACHE_PLUGIN_CONNECTION"] == operator_cache
+
+
+def test_per_launcher_cache_namespaces_are_removed_when_the_run_ends() -> None:
+    runner = load_runner()
+    namespaces: list[Path] = []
+
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
+        namespace = Path(environment["ANSIBLE_CACHE_PLUGIN_CONNECTION"])
+        namespace.mkdir(parents=True, exist_ok=True)
+        (namespace / "fact.json").write_text("{}")
+        namespaces.append(namespace)
+        return script, int(script == runner.POOLED_SCRIPTS[0]), 0.0, "failure"
+
+    assert runner.main(["--full", "--fail-fast"], launcher=launch) == 1
+    assert namespaces
+    assert not [namespace for namespace in namespaces if namespace.exists()]
 
 
 def test_targeted_launchers_inherit_validation_fixture_environment(
@@ -205,11 +374,14 @@ def test_targeted_launchers_inherit_validation_fixture_environment(
     monkeypatch.setenv("ANSIBLE_INVENTORY", original_inventory)
     monkeypatch.setenv("ANSIBLE_CACHE_PLUGIN_CONNECTION", original_cache_connection)
 
-    def launch(script: str) -> tuple[str, int, float, str]:
-        cache_connection = os.environ["ANSIBLE_CACHE_PLUGIN_CONNECTION"]
-        assert os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] == original_vault
-        assert os.environ["ANSIBLE_INVENTORY"] == original_inventory
-        assert cache_connection != original_cache_connection
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
+        assert environment["ANSIBLE_VAULT_PASSWORD_FILE"] == original_vault
+        assert environment["ANSIBLE_INVENTORY"] == original_inventory
+        assert environment["ANSIBLE_CACHE_PLUGIN_CONNECTION"] != (
+            original_cache_connection
+        )
         return passing_result(script)
 
     assert runner.main(
@@ -230,11 +402,15 @@ def test_direct_runner_replaces_operator_ansible_environment_with_repo_fixtures(
     monkeypatch.setenv("ANSIBLE_VAULT_PASSWORD_FILE", operator_vault)
     monkeypatch.setenv("ANSIBLE_INVENTORY", operator_inventory)
 
-    def launch(script: str) -> tuple[str, int, float, str]:
-        assert os.environ["ANSIBLE_VAULT_PASSWORD_FILE"] == str(
+    def launch(
+        script: str, environment: Mapping[str, str]
+    ) -> tuple[str, int, float, str]:
+        assert environment["ANSIBLE_VAULT_PASSWORD_FILE"] == str(
             fixture_root / "vault-pass"
         )
-        assert os.environ["ANSIBLE_INVENTORY"] == str(fixture_root / "inventory.yml")
+        assert environment["ANSIBLE_INVENTORY"] == str(
+            fixture_root / "inventory.yml"
+        )
         return passing_result(script)
 
     assert runner.main(
