@@ -1,0 +1,12 @@
+{
+  "command": [
+    "./validate.sh",
+    "tests",
+    "tests/regression/test_workstation_persistent_home.py"
+  ],
+  "returncode": 0,
+  "elapsed_seconds": 220.243,
+  "child_user_seconds": 195.228,
+  "child_system_seconds": 41.326,
+  "log": "/tmp/homelab-317/targeted-persistent-home.log"
+}

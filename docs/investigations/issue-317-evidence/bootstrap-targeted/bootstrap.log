@@ -1,0 +1,106 @@
+[0;34mℹ[0m Reconciling collections, external roles, and the controller SSH key...
+
+PLAY [Bootstrap Ansible control node] ******************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Determine control node home directory] *****
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Determine project root directory] **********
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Derive control node paths] *****************
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Ensure SSH directory exists] ***************
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Ensure Ansible data directory exists] ******
+changed: [localhost]
+
+TASK [base/control_node_bootstrap : Ensure Ansible local temp directory exists] ***
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Ensure collection install directory exists] ***
+changed: [localhost]
+
+TASK [base/control_node_bootstrap : Check collection requirements file] ********
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Fail when collection requirements file is missing] ***
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Install required Ansible collections] ******
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Include control node SSH tasks] ************
+included: /home/faviann/worktrees/homelab-iac/issue-317/playbooks/roles/base/control_node_bootstrap/tasks/ssh_key.yml for localhost
+
+TASK [base/control_node_bootstrap : Check if SSH key already exists] ***********
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Check if old RSA key exists (to warn about migration)] ***
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Detect key type of existing key] ***********
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Warn if RSA key exists and needs manual migration] ***
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Generate control node SSH key pair] ********
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Ensure control node SSH public key permissions] ***
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Show location of generated public key] *****
+ok: [localhost] => {
+    "msg": "Control node SSH public key available at /home/faviann/.ansible/ssh/proxmox_lxc.pub"
+}
+
+TASK [base/control_node_bootstrap : Verify vault password file presence] *******
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Fail when vault password file is missing] ***
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Check if vault.yml exists] *****************
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Check if vault.yml is encrypted] ***********
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Warn if vault.yml doesn't exist] ***********
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Warn if vault.yml is not encrypted] ********
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Install required system packages] **********
+skipping: [localhost]
+
+TASK [base/control_node_bootstrap : Check external role requirements file] *****
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Read external role requirements] ***********
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Read installed external role metadata] *****
+ok: [localhost] => (item={'name': 'geerlingguy.docker', 'version': '7.9.0'})
+
+TASK [base/control_node_bootstrap : Initialize external role reconciliation decision] ***
+ok: [localhost]
+
+TASK [base/control_node_bootstrap : Detect external role version drift] ********
+ok: [localhost] => (item=geerlingguy.docker)
+
+TASK [base/control_node_bootstrap : Reconcile external Ansible role versions] ***
+changed: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=23   changed=3    unreachable=0    failed=0    skipped=9    rescued=0    ignored=0   
+
+[0;32m✓[0m Controller artifacts reconciled

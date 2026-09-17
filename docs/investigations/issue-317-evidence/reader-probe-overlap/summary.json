@@ -1,0 +1,53 @@
+{
+  "repository_root": "/home/faviann/worktrees/homelab-iac/issue-317",
+  "phases": {
+    "lifecycle": {
+      "command": [
+        "./validate.sh",
+        "lifecycle",
+        "--full"
+      ],
+      "log": "/tmp/homelab-317/reader-probe-overlap/lifecycle.log",
+      "started_at": "2026-09-17T13:26:09.214697+00:00",
+      "finished_at": "2026-09-17T13:37:02.550090+00:00",
+      "elapsed_seconds": 653.335,
+      "returncode": 0,
+      "launch_error": null
+    },
+    "github-reader-probe": {
+      "command": [
+        "./validate.sh",
+        "tests",
+        "tests/unit/test_stack_update_policy_snapshot.py::test_github_reader_times_out_safely_and_terminates_gh"
+      ],
+      "log": "/tmp/homelab-317/reader-probe-overlap/github-reader-probe.log",
+      "started_at": "2026-09-17T13:26:19.925407+00:00",
+      "finished_at": "2026-09-17T13:26:22.916696+00:00",
+      "elapsed_seconds": 2.991,
+      "returncode": 0,
+      "launch_error": null
+    }
+  },
+  "failure_phase": null,
+  "interrupted_signal": null,
+  "cleanup_actions": [],
+  "all_started_children_awaited": true,
+  "remaining_process_groups": [],
+  "supervisor_errors": [],
+  "sampling": {
+    "path": "/tmp/homelab-317/reader-probe-overlap/samples.csv",
+    "interval_seconds": 1,
+    "fields": [
+      "timestamp",
+      "load1",
+      "load5",
+      "load15",
+      "mem_available_kib",
+      "swap_free_kib",
+      "validation_process_count",
+      "validation_tree_rss_mib",
+      "docker_running_count"
+    ]
+  },
+  "cleanup_scope": "process groups started by this driver only; fixture-created sessions, temporary roots, caches, and Docker resources are outside the evidence boundary"
+}

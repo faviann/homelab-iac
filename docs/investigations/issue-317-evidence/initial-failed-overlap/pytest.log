@@ -1,0 +1,225 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/faviann/worktrees/homelab-iac/issue-317
+configfile: pyproject.toml
+testpaths: tests
+collected 815 items
+
+tests/regression/test_ansible_test_helper.py .............               [  1%]
+tests/regression/test_beets_flask_stack_contract.py .                    [  1%]
+tests/regression/test_control_node_dependencies.py .......               [  2%]
+tests/regression/test_discover_stale_stacks.py .                         [  2%]
+tests/regression/test_image_update_renovate_adapter_real.py .            [  2%]
+tests/regression/test_lifecycle_prerequisite_layers.py .....             [  3%]
+tests/regression/test_lxc_github_keys.py .                               [  3%]
+tests/regression/test_managed_files_created.py .                         [  3%]
+tests/regression/test_materialize_templates.py .                         [  3%]
+tests/regression/test_missing_cap_docker_fails_clearly.py .              [  3%]
+tests/regression/test_overmind_postgres_backup.py .....                  [  4%]
+tests/regression/test_portal_traefik_redis_recreation.py .               [  4%]
+tests/regression/test_quarantine_stops_and_moves.py .                    [  4%]
+tests/regression/test_sandbox_multiprocessing_primitives.py ssss         [  5%]
+tests/regression/test_setup_command.py ..................                [  7%]
+tests/regression/test_ssh_pubkey_resolver.py .                           [  7%]
+tests/regression/test_stack_sync_excludes_docs_metadata.py .             [  7%]
+tests/regression/test_stack_sync_missing_required_stack_vars.py .        [  7%]
+tests/regression/test_stack_sync_reconciliation_boundary.py .            [  7%]
+tests/regression/test_stack_sync_reconciliation_missing_source_boundary.py . [  8%]
+                                                                         [  8%]
+tests/regression/test_stack_sync_start.py .                              [  8%]
+tests/regression/test_validate_command.py .............................. [ 11%]
+............................                                             [ 15%]
+tests/regression/test_vault_command.py ................................. [ 19%]
+........................................................................ [ 28%]
+......................................................                   [ 34%]
+tests/regression/test_workstation_baseline_github_keys.py ..             [ 35%]
+tests/regression/test_workstation_first_login_setup_contract.py ....     [ 35%]
+tests/regression/test_workstation_origin_firewall_idempotency.py .       [ 35%]
+tests/regression/test_workstation_origin_firewall_resolution.py .        [ 35%]
+tests/regression/test_workstation_persistent_home.py F                   [ 35%]
+tests/unit/test_authentik_auth_flow_blueprints.py .                      [ 36%]
+tests/unit/test_authentik_blueprint_idempotency.py ..................... [ 38%]
+.                                                                        [ 38%]
+tests/unit/test_authentik_blueprint_sync_navidrome.py .....              [ 39%]
+tests/unit/test_compose_env_filter.py ..                                 [ 39%]
+tests/unit/test_dockhand_inventory.py .                                  [ 39%]
+tests/unit/test_image_update_renovate_adapter.py ....................... [ 42%]
+............                                                             [ 44%]
+tests/unit/test_jellystat_secret_contract.py ..                          [ 44%]
+tests/unit/test_lifecycle_observation_callback.py ......                 [ 45%]
+tests/unit/test_lifecycle_observation_report.py ........................ [ 47%]
+..                                                                       [ 48%]
+tests/unit/test_lxc_docker_runtime_role.py .                             [ 48%]
+tests/unit/test_lxc_fleet_preflight_contract.py ..                       [ 48%]
+tests/unit/test_lxc_lifecycle_regression_runner.py ..............        [ 50%]
+tests/unit/test_lxc_release_probe_shared_task.py .                       [ 50%]
+tests/unit/test_masked_inventory.py ...                                  [ 50%]
+tests/unit/test_navidrome_reconciler.py ......                           [ 51%]
+tests/unit/test_oidc_manifest.py ....................................... [ 56%]
+...................                                                      [ 58%]
+tests/unit/test_overmind_contract.py .......                             [ 59%]
+tests/unit/test_portal_externalservice_config.py ......                  [ 60%]
+tests/unit/test_portal_traefik_contract.py .....                         [ 60%]
+tests/unit/test_proxmox_bootstrap_api_loading.py .........               [ 61%]
+tests/unit/test_proxmox_pct.py .............................             [ 65%]
+tests/unit/test_servarr_beets_flask_contract.py ........                 [ 66%]
+tests/unit/test_stack_update_policy_command.py ......................... [ 69%]
+...................................................................      [ 77%]
+tests/unit/test_stack_update_policy_selection.py ................        [ 79%]
+tests/unit/test_stack_update_policy_snapshot.py ........................ [ 82%]
+........................................................................ [ 91%]
+.....................................                                    [ 96%]
+tests/unit/test_vault_token.py ....                                      [ 96%]
+tests/unit/test_workstation_artifacts_stack_contract.py ........         [ 97%]
+tests/unit/test_workstation_baseline_role.py .......                     [ 98%]
+tests/unit/test_workstation_inventory.py ...                             [ 98%]
+tests/unit/test_workstation_mcp_auth_proxy_contract.py ..........        [100%]
+
+=================================== FAILURES ===================================
+__________________ test_workstation_persistent_home_contract ___________________
+
+    def test_workstation_persistent_home_contract() -> None:
+        with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-success-") as temp_root:
+            success = run_playbook(
+                SUCCESS_PLAYBOOK, temp_root, needs_bitwarden_release=True
+            )
+    
+        success_output = f"{success.stdout}\n{success.stderr}"
+>       assert success.returncode == 0, success_output
+E       AssertionError: 
+E         PLAY [Test workstation persistent home success path] ***************************
+E         
+E         TASK [Ensure writable test directories exist] **********************************
+E         changed: [localhost] => (item=/tmp/workstation-persistent-home-success-b3g4vstn/bin)
+E         changed: [localhost] => (item=/tmp/workstation-persistent-home-success-b3g4vstn/etc/profile.d)
+E         
+E         TASK [Place mock curl on PATH] *************************************************
+E         changed: [localhost]
+E         
+E         TASK [Ensure workstation home exists] ******************************************
+E         changed: [localhost]
+E         
+E         TASK [Create existing workstation persistent parent with loose mode] ***********
+E         changed: [localhost]
+E         
+E         TASK [Include workstation baseline role] ***************************************
+E         included: config/lxc_workstation_baseline for localhost
+E         
+E         TASK [config/lxc_workstation_baseline : Validating arguments against arg spec 'main' - Configure the workstation login and package baseline inside an LXC] ***
+E         ok: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Assert workstation baseline inputs are present] ***
+E         ok: [localhost] => {
+E             "changed": false,
+E             "msg": "All assertions passed"
+E         }
+E         
+E         TASK [config/lxc_workstation_baseline : Install workstation baseline packages] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Enable the en_US.UTF-8 locale entry] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Generate enabled locales] **************
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Set system default locale] *************
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Configure workstation origin firewall] ***
+E         included: /home/faviann/worktrees/homelab-iac/issue-317/playbooks/roles/config/lxc_workstation_baseline/tasks/origin_firewall.yml for localhost
+E         
+E         TASK [config/lxc_workstation_baseline : Assert workstation origin firewall inputs are valid] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Set workstation origin firewall allowlist host] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Assert workstation origin firewall host exists in inventory] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Derive workstation origin firewall allowlist endpoint] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Resolve workstation origin firewall allowlist address] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Assert workstation origin firewall host resolution succeeded] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Collect workstation origin firewall IPv4 allowlist] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Assert workstation origin firewall allowlist resolved] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Install workstation origin firewall package] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Ensure workstation origin firewall include directory exists] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Deploy workstation origin firewall rules] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Validate workstation origin firewall ruleset] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Deploy workstation origin firewall service] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Enable workstation origin firewall service] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Flush workstation origin firewall handlers] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Stat workstation origin firewall unit file] ***
+E         ok: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Stop workstation origin firewall service when disabled] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Remove live workstation origin firewall table when disabled] ***
+E         ok: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Remove workstation origin firewall artifacts when disabled] ***
+E         ok: [localhost] => (item=/tmp/workstation-persistent-home-success-b3g4vstn/etc/systemd/system/workstation-origin-firewall.service)
+E         ok: [localhost] => (item=/tmp/workstation-persistent-home-success-b3g4vstn/etc/nftables.d/workstation-origin-firewall.nft)
+E         
+E         TASK [config/lxc_workstation_baseline : Stat legacy AoE LAN proxy firewall unit file] ***
+E         ok: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Stop legacy AoE LAN proxy firewall service] ***
+E         skipping: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Remove legacy AoE LAN proxy firewall table] ***
+E         ok: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Remove legacy AoE LAN proxy firewall rules] ***
+E         ok: [localhost] => (item=/tmp/workstation-persistent-home-success-b3g4vstn/etc/systemd/system/workstation-aoe-proxy-firewall.service)
+E         ok: [localhost] => (item=/tmp/workstation-persistent-home-success-b3g4vstn/etc/nftables.d/workstation-aoe-proxy.nft)
+E         
+E         TASK [config/lxc_workstation_baseline : Reload systemd after workstation origin firewall cleanup] ***
+E         ok: [localhost]
+E         
+E         TASK [config/lxc_workstation_baseline : Configure workstation persistent home mounts] ***
+E         
+E         [WARNING]: daemon-reload failed, but target is a chroot or systemd is offline. Continuing. Error was: 1 / Reload daemon failed: Access denied
+E         [WARNING]: Error loading plugin 'ansible.posix.mount': No module named 'ansible_collections.ansible.posix'
+E         [ERROR]: couldn't resolve module/action 'ansible.posix.mount'. This often indicates a misspelling, missing collection, or incorrect module path.
+E         Origin: /home/faviann/worktrees/homelab-iac/issue-317/playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml:124:3
+E         
+E         122   loop: "{{ workstation_persistent_home_links }}"
+E         123
+E         124 - name: Mount workstation persistent home bind mounts
+E               ^ column 3
+E         
+E         
+E       assert 4 == 0
+E        +  where 4 = CompletedProcess(args=['uv', 'run', '--locked', 'ansible-playbook', '/home/faviann/worktrees/homelab-iac/issue-317/tes...ation_persistent_home_links }}"\n123\n124 - name: Mount workstation persistent home bind mounts\n      ^ column 3\n\n').returncode
+
+tests/regression/test_workstation_persistent_home.py:68: AssertionError
+=========================== short test summary info ============================
+FAILED tests/regression/test_workstation_persistent_home.py::test_workstation_persistent_home_contract
+============= 1 failed, 810 passed, 4 skipped in 850.52s (0:14:10) =============

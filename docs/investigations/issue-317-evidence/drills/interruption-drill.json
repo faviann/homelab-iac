@@ -1,0 +1,20 @@
+{
+  "interrupted_signal": "SIGTERM",
+  "returncodes": {
+    "first": 143,
+    "second": 143
+  },
+  "termination_actions": [
+    {
+      "phase": "first",
+      "signal": "SIGTERM"
+    },
+    {
+      "phase": "second",
+      "signal": "SIGTERM"
+    }
+  ],
+  "all_children_awaited": true,
+  "remaining_process_groups": [],
+  "cleanup_scope": "driver-started child process groups only"
+}

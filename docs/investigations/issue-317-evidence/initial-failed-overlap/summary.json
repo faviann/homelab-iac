@@ -1,0 +1,30 @@
+{
+  "experiment": "lifecycle-plus-pytest-concurrent",
+  "returncodes": {
+    "lifecycle": 0,
+    "pytest": 1
+  },
+  "phase_elapsed_seconds": {
+    "lifecycle": 591.141,
+    "pytest": 853.618
+  },
+  "combined_elapsed_seconds": 853.619,
+  "failure_seen": false,
+  "termination_actions": [],
+  "logs": {
+    "lifecycle": "/tmp/homelab-317/concurrent/lifecycle.log",
+    "pytest": "/tmp/homelab-317/concurrent/pytest.log"
+  },
+  "samples": "/tmp/homelab-317/concurrent/samples.csv",
+  "commands": {
+    "lifecycle": [
+      "./validate.sh",
+      "lifecycle",
+      "--full"
+    ],
+    "pytest": [
+      "./validate.sh",
+      "tests"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "phase": "lifecycle-isolated",
+  "returncode": 0,
+  "elapsed_seconds": 637.841,
+  "child_user_seconds": 809.151,
+  "child_system_seconds": 266.411,
+  "child_max_rss_kib": 78544,
+  "child_voluntary_context_switches": 653596,
+  "child_involuntary_context_switches": 122254,
+  "child_fs_inputs": 512,
+  "child_fs_outputs": 700539,
+  "log": "/tmp/homelab-317/isolated-lifecycle/phase.log",
+  "samples": "/tmp/homelab-317/isolated-lifecycle/samples.csv",
+  "command": [
+    "./validate.sh",
+    "lifecycle",
+    "--full"
+  ]
+}

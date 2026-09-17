@@ -1,0 +1,18 @@
+{
+  "interrupted_signal": null,
+  "failure_phase": "failing-child",
+  "returncodes": {
+    "failing-child": 7,
+    "failure-sibling": 143
+  },
+  "termination_actions": [
+    {
+      "phase": "failure-sibling",
+      "signal": "SIGTERM"
+    }
+  ],
+  "all_children_awaited": true,
+  "remaining_process_groups": [],
+  "cleanup_scope": "driver-started child process groups only",
+  "driver_scenario": "failure"
+}

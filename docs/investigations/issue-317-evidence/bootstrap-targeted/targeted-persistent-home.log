@@ -1,0 +1,9 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/faviann/worktrees/homelab-iac/issue-317
+configfile: pyproject.toml
+collected 1 item
+
+tests/regression/test_workstation_persistent_home.py .                   [100%]
+
+======================== 1 passed in 219.66s (0:03:39) =========================
