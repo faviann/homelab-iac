@@ -82,8 +82,8 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `./run.sh --check` | Dry run |
 | `./validate.sh lifecycle` | Fast lifecycle feedback (~1.5 min) — semantic lifecycle facade matrix + targeted planning barrier, controlled observations only. Run while iterating on LXC lifecycle changes |
 | `./validate.sh lifecycle --only <launcher.py>` | Target one registered lifecycle launcher in the same credential-free fixture environment. Repeat `--only` to run several launchers in the supplied order |
-| `./validate.sh lifecycle --full --fail-fast` | Remediation pass — finish the concurrent fast launchers, then stop scheduling after the first observed failure |
-| `./validate.sh lifecycle --full` | Full lifecycle regression set (~6 min) — fast path plus host-config idempotence, real role-composition wiring, fleet preflight, and contract seams. Prefer `./validate.sh` for handoff verification |
+| `./validate.sh lifecycle --full --fail-fast` | Remediation pass — finish the concurrent fast launchers, then stop scheduling after the first observed failure. Launchers already in flight in the bounded pool still finish and are reported |
+| `./validate.sh lifecycle --full` | Full lifecycle regression set (~6.5 min) — fast path plus host-config idempotence, real role-composition wiring, fleet preflight, and contract seams. Most full-only launchers run through a bounded pool (2 at a time), so results report in completion order, not registration order. Prefer `./validate.sh` for handoff verification |
 | `./validate.sh lint` | Targeted repo-wide lint feedback (production profile). Prefer `./validate.sh` for handoff verification |
 | `./validate.sh tests [<target>...]` | Run the test suite, optionally restricted to targets inside `tests/` (a path, optionally with a `::` node-id suffix). Targets outside the test tree are invalid usage |
 | `./validate.sh stack <path>` | Validate one repo-managed stack's update policy — schema-versioned JSON on stdout, diagnostics on stderr. Not part of the no-argument handoff run |
