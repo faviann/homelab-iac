@@ -1,5 +1,6 @@
 {
   "interrupted_signal": "SIGTERM",
+  "failure_phase": null,
   "returncodes": {
     "first": 143,
     "second": 143
@@ -16,5 +17,6 @@
   ],
   "all_children_awaited": true,
   "remaining_process_groups": [],
-  "cleanup_scope": "driver-started child process groups only"
+  "cleanup_scope": "driver-started child process groups only",
+  "driver_scenario": "interrupt"
 }

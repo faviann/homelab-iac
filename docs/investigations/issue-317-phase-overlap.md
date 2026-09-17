@@ -35,10 +35,13 @@ The baseline was retained rather than recreated solely for this experiment:
 
 - #316 recorded lifecycle `--full` at 628.5s and pytest at 1130.4s on this
   revision.
-- #307 recorded a successful no-argument `./validate.sh` handoff on this
-  revision: lint passed, all 25 lifecycle launchers passed, and pytest reported
-  811 passed / 4 skipped. Its whole pytest process took 1241.65s in that
-  separate run.
+- The retained #307 report at
+  [`2c90e1e`](https://github.com/faviann/homelab-iac/blob/2c90e1e68edf21a1b0dbc45f77823b10474a187c/docs/investigations/issue-307-materialization-fixture-cost.md)
+  records a successful no-argument `./validate.sh` handoff on this revision:
+  lint passed, all 25 lifecycle launchers passed, and pytest reported 811
+  passed / 4 skipped. Its whole pytest process took 1241.65s in that separate
+  run. This report reuses that retained evidence; it is not a fresh
+  no-argument run.
 - #316 recorded the complete no-argument baseline as 1845.3s, including
   86.4s lint. Keeping lint serial, the overlap result projects to 86.4s +
   1064.221s = 1150.621s, or 37.6% below that historical full-handoff time.
@@ -50,6 +53,7 @@ results and interference remained attributable.
 
 Source records: [#316 handoff](https://github.com/faviann/homelab-iac/issues/316#issuecomment-5707335022),
 [#307 handoff](https://github.com/faviann/homelab-iac/issues/307#issuecomment-5707451352),
+[the retained #307 report](https://github.com/faviann/homelab-iac/blob/2c90e1e68edf21a1b0dbc45f77823b10474a187c/docs/investigations/issue-307-materialization-fixture-cost.md),
 and the original [#317 publication](https://github.com/faviann/homelab-iac/issues/317#issuecomment-5714931851).
 
 The original execution paths, before evidence was copied into this report,
@@ -64,7 +68,7 @@ were:
 | Bootstrap | `/tmp/homelab-317-bootstrap.log` |
 | Persistent-home recovery | `/tmp/homelab-317/targeted-persistent-home.json`, `targeted-persistent-home.log` |
 | Failure drill | `/tmp/homelab-317/failure-drill/summary.json` |
-| Interruption drill | `/tmp/homelab-317/interruption-drill/summary.json` |
+| Interruption drill | `/tmp/homelab-317/interrupt-drill/summary.json` |
 
 The corresponding retained copies are under
 [`issue-317-evidence/`](issue-317-evidence/), with the same summaries and raw
@@ -137,6 +141,12 @@ not counted as a valid concurrency trial:
 - Original pytest log: [`initial-failed-overlap/pytest.log`](issue-317-evidence/initial-failed-overlap/pytest.log)
 - Lifecycle still passed; pytest returned 1 because `ansible.posix.mount` was
   unavailable in the clean controller environment.
+- Preserve the original summary verbatim even though its `failure_seen` field
+  is `false`. The original polling loop could observe the last child as
+  already exited in the `while` condition, skip the loop body, and then record
+  final return codes in `finally` without updating that flag. The named final
+  return codes and the retained pytest failure log are authoritative; this is
+  an instrumentation defect, not evidence that the pytest phase passed.
 - The declared recovery was `./setup.sh bootstrap`; its retained output is
   [`bootstrap-targeted/bootstrap.log`](issue-317-evidence/bootstrap-targeted/bootstrap.log).
 - The supported targeted recovery command was
