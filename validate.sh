@@ -188,12 +188,6 @@ run_handoff() {
             pid="$pytest_pid"
         fi
         phase_is_running "$pid" || return 1
-        if [[ "$reason" != interrupted ]]; then
-            for _ in {1..100}; do
-                phase_is_running "$pid" || return 1
-                sleep 0.01
-            done
-        fi
         if [[ "$name" == lifecycle ]]; then
             lifecycle_supervision="$reason"
         else

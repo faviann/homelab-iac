@@ -85,6 +85,7 @@ def handoff_environment(
     pytest_status: int = 0,
     wait_phase: str = "none",
     interrupt_during_startup: bool = False,
+    pytest_completes_before_failure: bool = False,
 ) -> dict[str, str]:
     bin_dir = tmp_path / "handoff-bin"
     bin_dir.mkdir()
@@ -120,6 +121,7 @@ def record(kind: str) -> None:
                     "pid": os.getpid(),
                     "pgid": os.getpgid(0),
                     "cache": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
+                    "time": time.monotonic(),
                 }
             )
             + "\n"
@@ -150,21 +152,19 @@ if os.environ.get("VALIDATE_TEST_WAIT_PHASE") in {phase, "both"}:
 status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
 record("done")
 print(f"fake-{phase}-output", flush=True)
-if status != 0:
-    time.sleep(0.05)
 raise SystemExit(status)
 ''',
         encoding="utf-8",
     )
     fake_uv.chmod(0o755)
 
-    if interrupt_during_startup:
+    if interrupt_during_startup or pytest_completes_before_failure:
         real_setsid = shutil.which("setsid")
         assert real_setsid is not None
         fake_setsid = bin_dir / "setsid"
         marker = shlex.quote(str(state_dir / "setsid.started"))
-        fake_setsid.write_text(
-            f'''#!/usr/bin/env bash
+        if interrupt_during_startup:
+            script = f'''#!/usr/bin/env bash
 set -euo pipefail
 marker={marker}
 if [[ "$*" == *pytest* ]]; then
@@ -174,9 +174,30 @@ if [[ "$*" == *pytest* ]]; then
     sleep 1
 fi
 exec {shlex.quote(real_setsid)} "$@"
-''',
-            encoding="utf-8",
-        )
+'''
+        else:
+            completed_marker = shlex.quote(str(state_dir / "pytest.completed"))
+            script = f'''#!/usr/bin/env bash
+set -euo pipefail
+completed_marker={completed_marker}
+if [[ "$*" == *pytest* ]]; then
+    parent_pid="$(ps -o ppid= -p "$$" | tr -d ' ')"
+    kill -STOP "$parent_pid"
+    {shlex.quote(real_setsid)} --wait "$@" &
+    child_pid="$!"
+    if wait "$child_pid"; then
+        child_status=0
+    else
+        child_status="$?"
+    fi
+    touch "$completed_marker"
+    {{ sleep 0.1; kill -CONT "$parent_pid"; }} >/dev/null 2>&1 &
+    disown
+    exit "$child_status"
+fi
+exec {shlex.quote(real_setsid)} "$@"
+'''
+        fake_setsid.write_text(script, encoding="utf-8")
         fake_setsid.chmod(0o755)
 
     env = os.environ.copy()
@@ -403,6 +424,16 @@ def test_lifecycle_failure_terminates_and_reports_the_pytest_sibling(
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
     assert "validate.sh: pytest terminated after lifecycle failure (exit 143)" in result.stderr
     assert "validate.sh: pytest failed" not in result.stderr
+    events = handoff_events(tmp_path)
+    lifecycle_done = next(
+        event for event in events if event["phase"] == "lifecycle" and event["kind"] == "done"
+    )
+    pytest_signal = next(
+        event
+        for event in events
+        if event["phase"] == "pytest" and event["kind"] == "signal:15"
+    )
+    assert float(pytest_signal["time"]) - float(lifecycle_done["time"]) < 0.5
     assert_handoff_process_groups_gone(tmp_path)
 
 
@@ -417,6 +448,16 @@ def test_pytest_failure_terminates_and_reports_the_lifecycle_sibling(
     assert "validate.sh: lifecycle terminated after pytest failure (exit 143)" in result.stderr
     assert "validate.sh: lifecycle failed" not in result.stderr
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
+    events = handoff_events(tmp_path)
+    pytest_done = next(
+        event for event in events if event["phase"] == "pytest" and event["kind"] == "done"
+    )
+    lifecycle_signal = next(
+        event
+        for event in events
+        if event["phase"] == "lifecycle" and event["kind"] == "signal:15"
+    )
+    assert float(lifecycle_signal["time"]) - float(pytest_done["time"]) < 0.5
     assert_handoff_process_groups_gone(tmp_path)
 
 
@@ -427,6 +468,7 @@ def test_handoff_preserves_both_organic_failures_observed_before_cleanup(
         tmp_path,
         lifecycle_status=41,
         pytest_status=43,
+        pytest_completes_before_failure=True,
     )
 
     result = run_validation(env, REPO_ROOT)
@@ -435,6 +477,7 @@ def test_handoff_preserves_both_organic_failures_observed_before_cleanup(
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
     assert "terminated after" not in result.stderr
+    assert (tmp_path / "handoff-state/pytest.completed").exists()
     assert_handoff_process_groups_gone(tmp_path)
 
 
