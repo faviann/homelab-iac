@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -12,6 +13,9 @@ from pathlib import Path
 
 import pytest
 
+
+# This module covers signal cleanup, timed supervision, and checkout boundaries.
+pytestmark = pytest.mark.serial
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = REPO_ROOT / "validate.sh"
@@ -49,13 +53,30 @@ if any(item.endswith("run_lxc_lifecycle_regressions.py") for item in sys.argv):
     phase = "lifecycle"
 elif "pytest" in sys.argv:
     phase = "pytest"
+pytest_lane = "serial"
+if phase == "pytest" and "-m" in sys.argv:
+    marker_index = sys.argv.index("-m")
+    if (
+        marker_index + 1 < len(sys.argv)
+        and sys.argv[marker_index + 1] == "not serial"
+    ):
+        pytest_lane = "parallel"
 if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
     if phase:
         state = Path(state_dir)
         (state / f"{phase}.started").write_text(str(os.getpgid(0)))
         while not (state / "release").exists():
             time.sleep(0.01)
-        status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
+        status_name = (
+            f"VALIDATE_TEST_{pytest_lane.upper()}_STATUS"
+            if phase == "pytest"
+            else f"VALIDATE_TEST_{phase.upper()}_STATUS"
+        )
+        status = int(
+            os.environ.get(
+                status_name, os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"]
+            )
+        )
         if status == 0 or (
             phase == "pytest"
             and os.environ["VALIDATE_TEST_LIFECYCLE_STATUS"] != "0"
@@ -65,6 +86,11 @@ if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
         raise SystemExit(status)
 if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
     raise SystemExit(41)
+if phase == "pytest":
+    status_name = f"VALIDATE_TEST_{pytest_lane.upper()}_STATUS"
+    raise SystemExit(
+        int(os.environ.get(status_name, os.environ["VALIDATE_TEST_PYTEST_STATUS"]))
+    )
 """,
         encoding="utf-8",
     )
@@ -72,6 +98,8 @@ if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
 
     env = os.environ.copy()
     env.pop("HOMELAB_IAC_LIFECYCLE_WRAPPER", None)
+    env.pop("VALIDATE_TESTS_SERIAL", None)
+    env.pop("VALIDATE_JUNIT_REPORT_DIR", None)
     env.update(
         {
             "ANSIBLE_INVENTORY": operator_sentinel(
@@ -84,6 +112,9 @@ if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
             "PATH": f"{bin_dir}:{env['PATH']}",
             "VALIDATE_TEST_CAPTURE": str(tmp_path / "commands.json"),
             "VALIDATE_TEST_FAIL_LINT": "1" if fail_lint else "0",
+            "VALIDATE_TEST_PYTEST_STATUS": "0",
+            "VALIDATE_TEST_SERIAL_STATUS": "0",
+            "VALIDATE_TEST_PARALLEL_STATUS": "0",
         }
     )
     return env
@@ -103,6 +134,8 @@ def handoff_environment(
             "VALIDATE_TEST_HANDOFF_STATE": str(state_dir),
             "VALIDATE_TEST_LIFECYCLE_STATUS": str(lifecycle_status),
             "VALIDATE_TEST_PYTEST_STATUS": str(pytest_status),
+            "VALIDATE_TEST_SERIAL_STATUS": str(pytest_status),
+            "VALIDATE_TEST_PARALLEL_STATUS": str(pytest_status),
         }
     )
     return env
@@ -219,6 +252,7 @@ def test_no_argument_run_is_the_comprehensive_non_live_handoff_validation(
     kinds = child_kinds(commands)
     assert kinds[0] == "lint"
     assert set(kinds[1:]) == {"lifecycle", "tests"}
+    assert kinds.count("tests") == 2
     lifecycle_command = next(
         command for command in commands if child_kind(command["argv"]) == "lifecycle"
     )
@@ -446,8 +480,21 @@ def test_tests_runs_the_whole_suite_without_a_target(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["tests"]
-    assert child_options(commands[0]["argv"], "pytest") == []
+    assert child_kinds(commands) == ["tests", "tests"]
+    assert child_options(commands[0]["argv"], "pytest") == [
+        "-n",
+        "0",
+        "-m",
+        "serial",
+    ]
+    assert child_options(commands[1]["argv"], "pytest") == [
+        "-n",
+        "2",
+        "--dist=worksteal",
+        "--max-worker-restart=0",
+        "-m",
+        "not serial",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -465,8 +512,128 @@ def test_tests_forwards_an_in_tree_target(tmp_path: Path, target: str) -> None:
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["tests"]
-    assert child_options(commands[0]["argv"], "pytest") == [target]
+    assert child_kinds(commands) == ["tests", "tests"]
+    assert child_options(commands[0]["argv"], "pytest") == [
+        "-n",
+        "0",
+        "-m",
+        "serial",
+        target,
+    ]
+    assert child_options(commands[1]["argv"], "pytest") == [
+        "-n",
+        "2",
+        "--dist=worksteal",
+        "--max-worker-restart=0",
+        "-m",
+        "not serial",
+        target,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("lane", "status", "expected_calls"),
+    [("serial", 41, 1), ("parallel", 43, 2)],
+)
+def test_tests_preserves_lane_failure_status_and_stops_after_serial_failure(
+    tmp_path: Path, lane: str, status: int, expected_calls: int
+) -> None:
+    env = validation_environment(tmp_path)
+    env[f"VALIDATE_TEST_{lane.upper()}_STATUS"] = str(status)
+
+    result = run_validation(env, REPO_ROOT, "tests")
+
+    commands = captured_commands(tmp_path)
+    assert result.returncode == status
+    assert child_kinds(commands) == ["tests"] * expected_calls
+    if lane == "serial":
+        assert child_options(commands[0]["argv"], "pytest")[-2:] == ["-m", "serial"]
+    else:
+        assert child_options(commands[1]["argv"], "pytest")[-2:] == [
+            "-m",
+            "not serial",
+        ]
+
+
+@pytest.mark.parametrize(
+    ("serial_status", "parallel_status", "expected_status"),
+    [(5, 0, 0), (0, 5, 0), (5, 5, 5)],
+)
+def test_tests_accepts_one_empty_lane_but_preserves_an_empty_suite(
+    tmp_path: Path,
+    serial_status: int,
+    parallel_status: int,
+    expected_status: int,
+) -> None:
+    env = validation_environment(tmp_path)
+    env["VALIDATE_TEST_SERIAL_STATUS"] = str(serial_status)
+    env["VALIDATE_TEST_PARALLEL_STATUS"] = str(parallel_status)
+
+    result = run_validation(env, REPO_ROOT, "tests")
+
+    assert result.returncode == expected_status
+    assert child_kinds(captured_commands(tmp_path)) == ["tests", "tests"]
+
+
+def test_serial_and_parallel_markers_partition_the_complete_collected_suite(
+    tmp_path: Path,
+) -> None:
+    env = validation_environment(tmp_path)
+    env["ANSIBLE_INVENTORY"] = FIXTURE_INVENTORY
+    env["ANSIBLE_VAULT_PASSWORD_FILE"] = FIXTURE_VAULT_PASSWORD_FILE
+    real_uv = shutil.which("uv")
+    assert real_uv is not None
+
+    def collect(*arguments: str) -> list[str]:
+        result = subprocess.run(
+            [real_uv, "run", "--locked", "pytest", "--collect-only", "-q", *arguments],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+        return [
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith("tests/") and "::" in line
+        ]
+
+    all_items = collect()
+    serial_items = collect("-m", "serial")
+    parallel_items = collect("-m", "not serial")
+    all_ids = set(all_items)
+    serial_ids = set(serial_items)
+    parallel_ids = set(parallel_items)
+
+    assert all_items
+    assert len(all_items) == len(all_ids)
+    assert len(serial_items) == len(serial_ids)
+    assert len(parallel_items) == len(parallel_ids)
+    assert serial_ids.isdisjoint(parallel_ids)
+    assert serial_ids | parallel_ids == all_ids
+    serial_modules = (
+        "tests/regression/test_lifecycle_prerequisite_layers.py::",
+        "tests/regression/test_validate_command.py::",
+        "tests/regression/test_vault_command.py::",
+        "tests/regression/test_image_update_renovate_adapter_real.py::",
+        "tests/regression/test_overmind_postgres_backup.py::",
+        "tests/regression/test_portal_traefik_redis_recreation.py::",
+        "tests/unit/test_lxc_lifecycle_regression_runner.py::",
+        "tests/unit/test_proxmox_pct.py::",
+        "tests/unit/test_stack_update_policy_snapshot.py::",
+    )
+    for module in serial_modules:
+        assert any(item.startswith(module) for item in serial_ids), module
+        assert not any(item.startswith(module) for item in parallel_ids), module
+    for module in (
+        "tests/regression/test_materialize_templates.py::",
+        "tests/regression/test_workstation_persistent_home.py::",
+    ):
+        module_items = [item for item in all_ids if item.startswith(module)]
+        assert len(module_items) == 1
+        assert module_items[0] in parallel_ids
 
 
 @pytest.mark.parametrize("target", ["validate.sh", "../outside/test_x.py"])

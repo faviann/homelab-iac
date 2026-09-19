@@ -10,6 +10,12 @@ import time
 import unittest
 from pathlib import Path
 
+import pytest
+
+
+# Short process timeout assertions are sensitive to worker contention.
+pytestmark = pytest.mark.serial
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO_ROOT / "library" / "proxmox_pct.py"

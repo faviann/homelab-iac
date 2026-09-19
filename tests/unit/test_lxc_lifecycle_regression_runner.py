@@ -12,6 +12,9 @@ from typing import Mapping
 import pytest
 
 
+# These thread scheduling checks use short coordination deadlines.
+pytestmark = pytest.mark.serial
+
 RUNNER_PATH = (
     Path(__file__).resolve().parents[1]
     / "regression"

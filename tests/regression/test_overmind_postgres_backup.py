@@ -14,6 +14,9 @@ from pathlib import Path
 import pytest
 
 
+# This regression uses the shared Docker daemon.
+pytestmark = pytest.mark.serial
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKUP_SCRIPT = REPO_ROOT / "playbooks/roles/config/lxc_docker_environment/files/overmind-postgres-backup"
 FRESHNESS_SCRIPT = (
