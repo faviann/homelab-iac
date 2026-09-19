@@ -136,10 +136,7 @@ export ANSIBLE_VAULT_PASSWORD_FILE="$PROJECT_ROOT/tests/fixtures/ansible/vault-p
 
 # Isolate non-live validation from the operator's live fact cache (issue #89).
 VALIDATION_CACHE_DIR="$(mktemp -d)"
-cleanup_validation() {
-    rm -rf -- "$VALIDATION_CACHE_DIR"
-}
-trap cleanup_validation EXIT
+trap 'rm -rf -- "$VALIDATION_CACHE_DIR"' EXIT
 export ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR"
 
 run_handoff() {
@@ -199,11 +196,7 @@ run_handoff() {
     fi
     trap - INT TERM
     if [[ -n "$lifecycle_status" ]]; then
-        if ((handoff_signal != 0)); then
-            printf 'validate.sh: lifecycle interrupted by signal (exit %s)\n' \
-                "$lifecycle_status" >&2
-            cat "$lifecycle_log" >&2
-        elif ((lifecycle_status == 0)); then
+        if ((lifecycle_status == 0)); then
             printf 'validate.sh: lifecycle passed\n'
             cat "$lifecycle_log"
         else
@@ -213,11 +206,7 @@ run_handoff() {
         fi
     fi
     if [[ -n "$pytest_status" ]]; then
-        if ((handoff_signal != 0)); then
-            printf 'validate.sh: pytest interrupted by signal (exit %s)\n' \
-                "$pytest_status" >&2
-            cat "$pytest_log" >&2
-        elif ((pytest_status == 0)); then
+        if ((pytest_status == 0)); then
             printf 'validate.sh: pytest passed\n'
             cat "$pytest_log"
         else

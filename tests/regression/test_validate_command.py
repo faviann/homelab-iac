@@ -82,6 +82,8 @@ def handoff_environment(
     lifecycle_status: int = 0,
     pytest_status: int = 0,
     wait_for_phases: bool = False,
+    blocked_phase: str = "",
+    block_lint: bool = False,
 ) -> dict[str, str]:
     bin_dir = tmp_path / "handoff-bin"
     bin_dir.mkdir()
@@ -105,6 +107,13 @@ elif "pytest" in sys.argv:
 
 
 if phase == "lint":
+    if os.environ.get("VALIDATE_TEST_BLOCK_LINT") == "1":
+        (state / "lint.started").touch()
+        deadline = time.monotonic() + 10
+        while not (state / "lint.release").exists():
+            if time.monotonic() >= deadline:
+                raise SystemExit(88)
+            time.sleep(0.01)
     (state / "lint.done").touch()
     raise SystemExit(0)
 
@@ -112,7 +121,10 @@ if phase == "lint":
     f"{os.getpgid(0)}\n{os.environ['ANSIBLE_CACHE_PLUGIN_CONNECTION']}\n",
     encoding="utf-8",
 )
-if os.environ.get("VALIDATE_TEST_WAIT_PHASES") == "1":
+if (
+    os.environ.get("VALIDATE_TEST_WAIT_PHASES") == "1"
+    or os.environ.get("VALIDATE_TEST_BLOCKED_PHASE") == phase
+):
     deadline = time.monotonic() + 10
     while not (state / "release").exists():
         if time.monotonic() >= deadline:
@@ -121,6 +133,7 @@ if os.environ.get("VALIDATE_TEST_WAIT_PHASES") == "1":
 
 status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
 print(f"fake-{phase}-output", flush=True)
+(state / f"{phase}.done").touch()
 raise SystemExit(status)
 ''',
         encoding="utf-8",
@@ -140,6 +153,8 @@ raise SystemExit(status)
             "VALIDATE_TEST_LIFECYCLE_STATUS": str(lifecycle_status),
             "VALIDATE_TEST_PYTEST_STATUS": str(pytest_status),
             "VALIDATE_TEST_WAIT_PHASES": "1" if wait_for_phases else "0",
+            "VALIDATE_TEST_BLOCKED_PHASE": blocked_phase,
+            "VALIDATE_TEST_BLOCK_LINT": "1" if block_lint else "0",
         }
     )
     return env
@@ -287,7 +302,7 @@ def test_no_argument_run_is_the_comprehensive_non_live_handoff_validation(
 def test_no_argument_handoff_overlaps_only_after_lint(
     tmp_path: Path,
 ) -> None:
-    env = handoff_environment(tmp_path, wait_for_phases=True)
+    env = handoff_environment(tmp_path, wait_for_phases=True, block_lint=True)
     process = subprocess.Popen(
         [str(RUNNER)],
         cwd=REPO_ROOT,
@@ -298,6 +313,11 @@ def test_no_argument_handoff_overlaps_only_after_lint(
         start_new_session=True,
     )
     try:
+        wait_for_handoff_marker(tmp_path, "lint.started")
+        assert not (tmp_path / "handoff-state/lint.done").exists()
+        assert not (tmp_path / "handoff-state/lifecycle.started").exists()
+        assert not (tmp_path / "handoff-state/pytest.started").exists()
+        (tmp_path / "handoff-state/lint.release").touch()
         wait_for_handoff_marker(tmp_path, "lint.done")
         wait_for_handoff_marker(tmp_path, "lifecycle.started")
         wait_for_handoff_marker(tmp_path, "pytest.started")
@@ -320,28 +340,64 @@ def test_no_argument_handoff_overlaps_only_after_lint(
             process.wait(timeout=5)
 
 
+def run_blocked_handoff(
+    tmp_path: Path,
+    *,
+    blocked_phase: str,
+    lifecycle_status: int = 0,
+    pytest_status: int = 0,
+) -> tuple[int, str, str]:
+    env = handoff_environment(
+        tmp_path,
+        lifecycle_status=lifecycle_status,
+        pytest_status=pytest_status,
+        blocked_phase=blocked_phase,
+    )
+    process = subprocess.Popen(
+        [str(RUNNER)],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        wait_for_handoff_marker(tmp_path, "lifecycle.started")
+        wait_for_handoff_marker(tmp_path, "pytest.started")
+        completing_phase = "pytest" if blocked_phase == "lifecycle" else "lifecycle"
+        wait_for_handoff_marker(tmp_path, f"{completing_phase}.done")
+        assert not (tmp_path / f"handoff-state/{blocked_phase}.done").exists()
+        (tmp_path / "handoff-state/release").touch()
+        wait_for_handoff_marker(tmp_path, f"{blocked_phase}.done")
+        stdout, stderr = process.communicate(timeout=10)
+        return process.returncode, stdout, stderr
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+
+
 def test_lifecycle_failure_does_not_stop_the_pytest_sibling(
     tmp_path: Path,
 ) -> None:
-    env = handoff_environment(tmp_path, lifecycle_status=41)
-
-    result = run_validation(env, REPO_ROOT)
-
-    assert result.returncode == 41
-    assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
-    assert "validate.sh: pytest passed" in result.stdout
+    returncode, stdout, stderr = run_blocked_handoff(
+        tmp_path, lifecycle_status=41, blocked_phase="pytest"
+    )
+    assert returncode == 41, stderr
+    assert "validate.sh: lifecycle failed (exit 41)" in stderr
+    assert "validate.sh: pytest passed" in stdout
 
 
 def test_pytest_failure_does_not_stop_the_lifecycle_sibling(
     tmp_path: Path,
 ) -> None:
-    env = handoff_environment(tmp_path, pytest_status=43)
-
-    result = run_validation(env, REPO_ROOT)
-
-    assert result.returncode == 43
-    assert "validate.sh: lifecycle passed" in result.stdout
-    assert "validate.sh: pytest failed (exit 43)" in result.stderr
+    returncode, stdout, stderr = run_blocked_handoff(
+        tmp_path, pytest_status=43, blocked_phase="lifecycle"
+    )
+    assert returncode == 43, stdout
+    assert "validate.sh: lifecycle passed" in stdout
+    assert "validate.sh: pytest failed (exit 43)" in stderr
 
 
 def test_handoff_reports_both_natural_failures(
