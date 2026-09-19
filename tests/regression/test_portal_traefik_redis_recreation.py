@@ -19,6 +19,9 @@ import pytest
 import yaml
 
 
+# This regression uses the shared Docker daemon and fixed Compose resources.
+pytestmark = pytest.mark.serial
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = REPO_ROOT / "stacks/portal/traefik3/compose.yaml"
 STATIC_CONFIG_PATH = (

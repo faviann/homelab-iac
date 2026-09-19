@@ -8,6 +8,9 @@ import pytest
 import yaml
 
 
+# These cases exercise the fixed site.yml sentinel in the checkout.
+pytestmark = pytest.mark.serial
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTROLLER_LAYER = Path("playbooks/controller-prerequisites.yml")
 PROXMOX_HOST_LAYER = Path("playbooks/proxmox-host-prerequisites.yml")

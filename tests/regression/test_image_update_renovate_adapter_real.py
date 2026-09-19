@@ -6,6 +6,12 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
+
+# The real pinned Renovate run uses Docker, network, and package caches.
+pytestmark = pytest.mark.serial
+
 
 ROOT = Path(__file__).resolve().parents[2]
 

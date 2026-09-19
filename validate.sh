@@ -166,7 +166,8 @@ run_handoff() {
         >"$VALIDATION_CACHE_DIR/lifecycle.log" 2>&1 &
     lifecycle_pid="$!"
     ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR/pytest-cache" \
-        setsid --wait env --default-signal=INT,QUIT uv run --locked pytest \
+        setsid --wait env --default-signal=INT,QUIT bash \
+        tests/run_pytest.sh \
         >"$VALIDATION_CACHE_DIR/pytest.log" 2>&1 &
     pytest_pid="$!"
 
@@ -210,7 +211,7 @@ case "$operation" in
             ${lifecycle_arguments[@]+"${lifecycle_arguments[@]}"}
         ;;
     tests)
-        uv run --locked pytest ${test_targets[@]+"${test_targets[@]}"}
+        bash tests/run_pytest.sh ${test_targets[@]+"${test_targets[@]}"}
         ;;
     stack)
         uv run --locked python -B -m stack_update_policy validate \

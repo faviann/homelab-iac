@@ -13,8 +13,12 @@ from pathlib import Path
 import pytest
 
 
+# This module covers signal cleanup, timed supervision, and checkout boundaries.
+pytestmark = pytest.mark.serial
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = REPO_ROOT / "validate.sh"
+PYTEST_RUNNER = REPO_ROOT / "tests" / "run_pytest.sh"
 FIXTURE_INVENTORY = str(REPO_ROOT / "tests/fixtures/ansible/inventory.yml")
 FIXTURE_VAULT_PASSWORD_FILE = str(REPO_ROOT / "tests/fixtures/ansible/vault-pass")
 OPERATOR_MARKER = "operator-secret-marker-4f2b"
@@ -65,6 +69,8 @@ if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
         raise SystemExit(status)
 if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
     raise SystemExit(41)
+if phase == "pytest":
+    raise SystemExit(int(os.environ["VALIDATE_TEST_PYTEST_STATUS"]))
 """,
         encoding="utf-8",
     )
@@ -84,6 +90,7 @@ if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
             "PATH": f"{bin_dir}:{env['PATH']}",
             "VALIDATE_TEST_CAPTURE": str(tmp_path / "commands.json"),
             "VALIDATE_TEST_FAIL_LINT": "1" if fail_lint else "0",
+            "VALIDATE_TEST_PYTEST_STATUS": "0",
         }
     )
     return env
@@ -446,8 +453,7 @@ def test_tests_runs_the_whole_suite_without_a_target(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["tests"]
-    assert child_options(commands[0]["argv"], "pytest") == []
+    assert set(child_kinds(commands)) == {"tests"}
 
 
 @pytest.mark.parametrize(
@@ -465,8 +471,66 @@ def test_tests_forwards_an_in_tree_target(tmp_path: Path, target: str) -> None:
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["tests"]
-    assert child_options(commands[0]["argv"], "pytest") == [target]
+    assert set(child_kinds(commands)) == {"tests"}
+    assert all(target in command["argv"] for command in commands)
+
+
+@pytest.mark.parametrize("pytest_status", [2, 3, 5])
+def test_tests_preserves_exceptional_and_empty_statuses(
+    tmp_path: Path, pytest_status: int
+) -> None:
+    env = validation_environment(tmp_path)
+    env["VALIDATE_TEST_PYTEST_STATUS"] = str(pytest_status)
+
+    result = run_validation(env, REPO_ROOT, "tests")
+
+    assert result.returncode == pytest_status
+
+
+def test_real_pytest_runner_continues_after_serial_item_failure(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pytest.ini").write_text(
+        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n",
+        encoding="utf-8",
+    )
+    serial_test = tmp_path / "test_serial_failure.py"
+    serial_test.write_text(
+        "import pytest\n\n"
+        "pytestmark = pytest.mark.serial\n\n"
+        "def test_serial_failure():\n"
+        "    assert False, 'intentional serial failure for runner regression'\n",
+        encoding="utf-8",
+    )
+    parallel_marker = tmp_path / "parallel-item-ran"
+    parallel_test = tmp_path / "test_parallel_probe.py"
+    parallel_test.write_text(
+        "import os\nfrom pathlib import Path\n\n"
+        "def test_parallel_probe_runs():\n"
+        "    assert os.environ.get('PYTEST_XDIST_WORKER')\n"
+        "    worker_count = int(os.environ['PYTEST_XDIST_WORKER_COUNT'])\n"
+        "    assert 1 <= worker_count <= 2, worker_count\n"
+        "    Path(os.environ['PYTEST_RUNNER_PARALLEL_MARKER']).write_text(\n"
+        "        'ran', encoding='utf-8'\n"
+        "    )\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTEST_RUNNER_PARALLEL_MARKER"] = str(parallel_marker)
+
+    result = subprocess.run(
+        ["bash", str(PYTEST_RUNNER), str(serial_test), str(parallel_test)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    output = f"{result.stdout}\n{result.stderr}"
+
+    assert result.returncode == 1, output
+    assert "intentional serial failure for runner regression" in output
+    assert parallel_marker.read_text(encoding="utf-8") == "ran"
 
 
 @pytest.mark.parametrize("target", ["validate.sh", "../outside/test_x.py"])
