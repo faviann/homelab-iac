@@ -168,7 +168,7 @@ def assert_handoff_process_groups_gone(tmp_path: Path) -> None:
         deadline = time.monotonic() + 2
         while True:
             try:
-                os.killpg(pgid, signal.SIGCONT)
+                os.killpg(pgid, 0)
             except ProcessLookupError:
                 break
             if time.monotonic() >= deadline:
