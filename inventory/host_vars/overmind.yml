@@ -13,6 +13,16 @@ lxc_docker_env_host_directories:
     owner: "999"
     group: "999"
     mode: "0700"
+  # CLIProxyAPI's OAuth credential store. The shared volume is mounted at
+  # /shared in every LXC, so a 0755 directory of 0644 token files is readable
+  # fleet-wide by any process running as the docker user. Root-owned 0700 keeps
+  # non-root processes in other containers out. Declared here rather than in the
+  # stack's x-prereq-dirs because that creates 0755 and does not correct the
+  # mode of an existing directory; this is enforced on every run.
+  - path: /conf/docker/stacks/cliproxy/appdata/auth
+    owner: "0"
+    group: "0"
+    mode: "0700"
 
 proxmox_lxc_host_directories:
   - path: /tank/overmind
@@ -36,6 +46,10 @@ lxc_docker_env_stack_vars:
     postgres_admin_password: "{{ vault_overmind_postgres_password }}"
     memsrv_password: "{{ vault_overmind_memsrv_password }}"
     agent_key: "{{ vault_overmind_homelab_dev_agent_key }}"
+  cliproxy:
+    client_api_key: "{{ vault_overmind_cliproxy_api_key }}"
+    # bcrypt hash of the management password, never the password itself
+    management_key_hash: "{{ vault_overmind_cliproxy_management_key_hash }}"
 
 overmind_postgres_backup_enabled: true
 overmind_postgres_backup:

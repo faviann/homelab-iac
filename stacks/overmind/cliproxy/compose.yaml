@@ -1,0 +1,61 @@
+---
+name: cliproxy
+
+x-managed-files:
+  # config.yaml carries the client API key and the management key hash, so it
+  # must not land at the default 0644.
+  - path: ./appdata/config/config.yaml
+    mode: "0600"
+
+services:
+  cliproxy:
+    image: eceasy/cli-proxy-api:v7.3.8@sha256:6c2c8a7904799bd29a3f7f92a598555d8321b6a5682000b87af4495c5704fa72
+    container_name: cliproxy
+    restart: unless-stopped
+    # Point at the mounted directory rather than the image's default
+    # /CLIProxyAPI/config.yaml, so the config can live behind a directory mount.
+    # umask 077 so the credential JSON the app writes lands at 0600 rather than
+    # the 0644 that os.Create plus the default umask produces. Those files hold
+    # provider refresh tokens, and the shared volume is mounted in every LXC.
+    # exec keeps the app as PID 1 for signal handling.
+    command: ["sh", "-c", "umask 077; exec ./CLIProxyAPI -config /conf/config.yaml"]
+    environment:
+      # The app never reads this. It exists so Compose has a value that changes
+      # when config.yaml changes, which is what makes the container recreate
+      # and pick the new file up. See .env.j2.
+      CLIPROXY_CONFIG_FINGERPRINT: ${CLIPROXY_CONFIG_FINGERPRINT:?Set CLIPROXY_CONFIG_FINGERPRINT in .env}
+      # The management panel is downloaded from GitHub on first access, not
+      # shipped in the image. Upstream stores it in <config dir>/static unless
+      # told otherwise, and this config dir is mounted read-only, so the
+      # download fails with "mkdir /conf/static: read-only file system" and
+      # /management.html returns 404. Point it at the auth dir instead, which
+      # is already writable and persistent, and where the app already keeps its
+      # own logs/ directory.
+      MANAGEMENT_STATIC_PATH: /root/.cli-proxy-api/static
+    volumes:
+      # A DIRECTORY mount, not a single file. Ansible renders config.yaml by
+      # atomic rename, which swaps the inode; a single-file bind mount stays
+      # attached to the old inode, so the running process would keep reading
+      # the previous config forever while the host file looked current. With
+      # the directory mounted, the container resolves the name on each open and
+      # sees the rendered file.
+      # Read-only: Ansible owns this file. The app would otherwise rewrite it,
+      # since the control panel persists config edits here. A panel config edit
+      # fails loudly instead of silently reverting on the next deploy.
+      - ./appdata/config:/conf:ro
+      # OAuth credentials the service writes for itself. Never in Git.
+      # The directory is created root-owned at 0700 by
+      # lxc_docker_env_host_directories in inventory/host_vars/overmind.yml,
+      # not by x-prereq-dirs, because x-prereq-dirs creates 0755 and will not
+      # correct the mode of a directory that already exists.
+      - ./appdata/auth:/root/.cli-proxy-api
+    ports:
+      # Reachable on the LAN because Traefik runs on the portal LXC and has to
+      # reach it. The LAN is the trust boundary for this service.
+      - "8317:8317"
+      # Provider OAuth loopback callbacks, bound to the LXC's loopback so they
+      # are invisible to the network. Unused when browser login works; they let
+      # an SSH tunnel complete a login without redeploying.
+      - "127.0.0.1:1455:1455"
+      - "127.0.0.1:54545:54545"
+      - "127.0.0.1:51121:51121"

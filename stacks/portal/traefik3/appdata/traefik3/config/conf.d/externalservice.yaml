@@ -66,6 +66,19 @@ http:
       service: noop
       priority: 1002
 
+    # Shared AI provider proxy. Both the management panel and the agent API
+    # live on the same port, so one LAN-restricted router covers both. The
+    # service is also reachable directly at overmind.faviann.vms:8317, which
+    # this router does not and cannot prevent; see
+    # docs/adr/0013-share-one-ai-provider-credential-pool.md.
+    cliproxy:
+      rule: "Host(`cliproxy.local.faviann.com`)"
+      entryPoints: websecure
+      service: cliproxy
+      priority: 1000
+      middlewares:
+        - local-ip-restriction
+
     hermes:
       rule: "Host(`hermes.local.faviann.com`)"
       entryPoints: websecure
@@ -203,6 +216,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://lobu.faviann.vms:8787"
+    cliproxy:
+      loadBalancer:
+        servers:
+          - url: "http://overmind.faviann.vms:8317"
     collie-workstation:
       loadBalancer:
         servers:
