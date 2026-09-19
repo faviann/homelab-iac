@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -10,11 +11,16 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+STACK_ROOT = REPO_ROOT / "stacks/servarr/beets-flask"
 
 
 def load_yaml(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as handle:
         return yaml.safe_load(handle) or {}
+
+
+def compose_variable_references(path: Path) -> set[str]:
+    return set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)", path.read_text(encoding="utf-8")))
 
 
 class ServarrBeetsFlaskContractTests(unittest.TestCase):
@@ -48,7 +54,7 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertEqual(beets_script["mode"], "0755")
 
     def test_beets_vgmdb_requirement_is_compatible_with_beets_flask_image(self) -> None:
-        requirements_path = REPO_ROOT / "stacks/servarr/beets-flask/appdata/requirements.txt"
+        requirements_path = STACK_ROOT / "appdata/requirements.txt"
         requirements = requirements_path.read_text(encoding="utf-8").splitlines()
 
         self.assertIn("beets-vgmdb==1.3.2", requirements)
@@ -56,18 +62,18 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn("python3-discogs-client==2.8", requirements)
 
     def test_beets_config_uses_installed_vgmdb_plugin_module_name(self) -> None:
-        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+        beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
 
         self.assertIn("VGMplug", beets_config["plugins"])
         self.assertNotIn("vgmdb", beets_config["plugins"])
 
     def test_replaygain_uses_available_ffmpeg_backend(self) -> None:
-        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+        beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
 
         self.assertEqual(beets_config["replaygain"]["backend"], "ffmpeg")
 
     def test_game_soundtracks_route_by_exact_vgmdb_genre(self) -> None:
-        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+        beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
         paths = beets_config["paths"]
 
         self.assertEqual(
@@ -77,7 +83,7 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertNotIn("albumtype:soundtrack albumtype2:game", paths)
 
     def test_discogs_video_game_music_style_routes_to_game_soundtracks(self) -> None:
-        beets_config = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/appdata/beets/config.yaml.j2")
+        beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
         paths = beets_config["paths"]
 
         self.assertEqual(
@@ -90,7 +96,7 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         )
 
     def test_beets_flask_startup_hook_is_executable_and_patches_vgmplug(self) -> None:
-        compose_override = load_yaml(REPO_ROOT / "stacks/servarr/beets-flask/compose.override.yaml")
+        compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
         managed_files = compose_override["x-managed-files"]
 
         startup_hook = next(
@@ -100,7 +106,7 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         )
         self.assertEqual(startup_hook["mode"], "0755")
 
-        startup_script = (REPO_ROOT / "stacks/servarr/beets-flask/appdata/startup.sh").read_text(
+        startup_script = (STACK_ROOT / "appdata/startup.sh").read_text(
             encoding="utf-8"
         )
         self.assertIn("python -m pip install -r /config/requirements.txt", startup_script)
@@ -108,6 +114,48 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn("from beets.autotag.distance import Distance, string_dist", startup_script)
         self.assertIn('self._log.setLevel("ERROR")', startup_script)
         self.assertIn("import beetsplug.VGMplug", startup_script)
+
+    def test_compose_reads_every_runtime_value_from_the_env_template(self) -> None:
+        emitted = set(
+            re.findall(
+                r"^([A-Z_][A-Z0-9_]*)=",
+                (STACK_ROOT / ".env.j2").read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        )
+        referenced = compose_variable_references(
+            STACK_ROOT / "compose.yaml"
+        ) | compose_variable_references(STACK_ROOT / "compose.override.yaml")
+
+        self.assertLessEqual(referenced, emitted)
+
+        environment = load_yaml(STACK_ROOT / "compose.yaml")["services"]["beets-flask"]["environment"]
+        self.assertEqual(
+            sorted(environment),
+            sorted(compose_variable_references(STACK_ROOT / "compose.yaml")),
+        )
+        for value in environment.values():
+            self.assertRegex(value, r"^\$\{[A-Z_][A-Z0-9_]*:\?[^}]*\}$")
+
+    def test_gui_inbox_and_terminal_target_the_declared_prereq_dir(self) -> None:
+        compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
+        gui_config = load_yaml(STACK_ROOT / "appdata/beets-flask/config.yaml")["gui"]
+        ingest_dir = "/data/media/_ingest/music"
+
+        self.assertIn(ingest_dir, compose_override["x-prereq-dirs"])
+        self.assertEqual(gui_config["terminal"]["start_path"], ingest_dir)
+
+        soundtrack_inbox = gui_config["inbox"]["folders"]["SoundtrackInbox"]
+        self.assertEqual(soundtrack_inbox["path"], ingest_dir)
+        self.assertEqual(soundtrack_inbox["autotag"], "preview")
+
+    def test_appdata_is_mounted_as_the_container_config_dir(self) -> None:
+        compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
+
+        self.assertIn(
+            "./appdata:/config",
+            compose_override["services"]["beets-flask"]["volumes"],
+        )
 
 
 if __name__ == "__main__":
