@@ -1,0 +1,23 @@
+---
+schema_version: 1
+kind: stack
+name: cliproxy
+description: Shared AI provider proxy for homelab agents
+portability:
+  tier: host-bound-app
+  owner: stack
+runtime:
+  template_inputs:
+    - stack_vars
+  host_requirements:
+    external_networks: []
+    host_directories: []
+    ownership_overrides: []
+exposure:
+  # File-routed through the portal Traefik static config and restricted to the
+  # LAN by the local-ip-restriction middleware, not by Authentik ForwardAuth.
+  traefik: public
+  homepage_instances: []
+updates:
+  mode: images
+  track: "7.3"

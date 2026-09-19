@@ -1,0 +1,37 @@
+---
+name: cliproxy
+
+x-prereq-dirs:
+  - ./appdata/auth
+
+x-managed-files:
+  # config.yaml carries the client API key and the management key hash, so it
+  # must not land at the default 0644.
+  - path: ./config.yaml
+    mode: "0600"
+
+services:
+  cliproxy:
+    image: eceasy/cli-proxy-api:v7.3.8@sha256:6c2c8a7904799bd29a3f7f92a598555d8321b6a5682000b87af4495c5704fa72
+    container_name: cliproxy
+    restart: unless-stopped
+    volumes:
+      # Read-only on purpose. Ansible owns this file; the app would otherwise
+      # rewrite it (plaintext management keys are hashed back into it, and the
+      # control panel persists edits here), which both defeats the ownership
+      # split and risks a stale inode when a single-file bind mount is replaced
+      # by rename. A panel config edit fails loudly instead of silently
+      # reverting on the next deploy.
+      - ./config.yaml:/CLIProxyAPI/config.yaml:ro
+      # OAuth credentials the service writes for itself. Never in Git.
+      - ./appdata/auth:/root/.cli-proxy-api
+    ports:
+      # Reachable on the LAN because Traefik runs on the portal LXC and has to
+      # reach it. The LAN is the trust boundary for this service.
+      - "8317:8317"
+      # Provider OAuth loopback callbacks, bound to the LXC's loopback so they
+      # are invisible to the network. Unused when browser login works; they let
+      # an SSH tunnel complete a login without redeploying.
+      - "127.0.0.1:1455:1455"
+      - "127.0.0.1:54545:54545"
+      - "127.0.0.1:51121:51121"

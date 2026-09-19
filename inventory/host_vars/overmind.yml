@@ -36,6 +36,10 @@ lxc_docker_env_stack_vars:
     postgres_admin_password: "{{ vault_overmind_postgres_password }}"
     memsrv_password: "{{ vault_overmind_memsrv_password }}"
     agent_key: "{{ vault_overmind_homelab_dev_agent_key }}"
+  cliproxy:
+    client_api_key: "{{ vault_overmind_cliproxy_api_key }}"
+    # bcrypt hash of the management password, never the password itself
+    management_key_hash: "{{ vault_overmind_cliproxy_management_key_hash }}"
 
 overmind_postgres_backup_enabled: true
 overmind_postgres_backup:

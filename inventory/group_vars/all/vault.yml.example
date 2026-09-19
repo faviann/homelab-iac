@@ -99,6 +99,15 @@ vault_overmind_memsrv_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
 vault_overmind_homelab_dev_agent_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
 vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 
+# CLIProxyAPI stack on overmind.
+#   vault_overmind_cliproxy_api_key            client key every consuming agent presents
+#   vault_overmind_cliproxy_management_key_hash bcrypt hash of the management password.
+#                                              Store the HASH here; log into the panel
+#                                              with the plaintext you hashed.
+#                                              See stacks/overmind/cliproxy/README.md
+vault_overmind_cliproxy_api_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
+vault_overmind_cliproxy_management_key_hash: "REPLACE_WITH_BCRYPT_HASH"
+
 # Lobu control plane
 # ENCRYPTION_KEY is long-lived state, not a rotatable secret: replacing it
 # makes every credential already encrypted in Lobu's database unreadable.

@@ -1,0 +1,33 @@
+---
+# Rendered by Ansible from inventory/host_vars/overmind.yml. Edits made in the
+# management control panel are NOT persisted here and are lost; change settings
+# in this template and redeploy. Provider accounts are the exception: they live
+# in auth-dir and are managed entirely through the panel.
+
+host: ""
+port: 8317
+
+# Explicit rather than relying on ~ expansion, and matched to the bind mount.
+auth-dir: "/root/.cli-proxy-api"
+
+# Client authentication. Every consuming agent presents this key.
+api-keys:
+  - {{ stack_vars.client_api_key | quote }}
+
+remote-management:
+  # The panel is reached through Traefik, not localhost, so remote access is
+  # required for browser management and OAuth login to work at all.
+  allow-remote: true
+  # A bcrypt hash, not plaintext. The server rewrites a plaintext value into
+  # this file at startup, which would make every deploy report changed and
+  # would fight the read-only mount.
+  secret-key: {{ stack_vars.management_key_hash | quote }}
+  # The panel is the OAuth login surface; disabling it removes browser login.
+  disable-control-panel: false
+  # Keep the panel asset fixed for the life of the pinned image instead of
+  # pulling new panel builds from GitHub in the background.
+  disable-auto-update-panel: true
+
+debug: false
+logging-to-file: false
+usage-statistics-enabled: false
