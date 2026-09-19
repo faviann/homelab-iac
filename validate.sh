@@ -158,22 +158,10 @@ run_handoff() {
     lifecycle_log="$HANDOFF_TEMP_DIR/lifecycle.log"
     pytest_log="$HANDOFF_TEMP_DIR/pytest.log"
 
-    reap_phase_group() {
-        local pid="$1"
-        [[ -n "$pid" ]] || return 0
-        kill -KILL -- "-$pid" 2>/dev/null || true
-        for _ in {1..20}; do
-            kill -0 -- "-$pid" 2>/dev/null || return 0
-            sleep 0.05
-        done
-    }
-
     cleanup_phase() {
         local pid="$1"
         [[ -n "$pid" ]] || return 0
-        kill -TERM "$pid" 2>/dev/null || true
         kill -TERM -- "-$pid" 2>/dev/null || true
-        reap_phase_group "$pid"
     }
 
     handle_handoff_signal() {
