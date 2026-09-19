@@ -437,6 +437,25 @@ def test_handoff_preserves_both_organic_failures_observed_before_cleanup(
     try:
         wait_for_handoff_marker(tmp_path, "lifecycle.started")
         wait_for_handoff_marker(tmp_path, "pytest.started")
+        start_events = [
+            event
+            for event in handoff_events(tmp_path)
+            if event["phase"] in {"lifecycle", "pytest"}
+            and event["kind"] == "start"
+        ]
+        for event in start_events:
+            process_info = subprocess.run(
+                ["ps", "-o", "pid=,pgid=,ppid=", "-p", str(event["pid"])],
+                capture_output=True,
+                text=True,
+            )
+            assert process_info.returncode == 0
+            pid, pgid, ppid = process_info.stdout.split()
+            assert (int(pid), int(pgid), int(ppid)) == (
+                event["pid"],
+                event["pgid"],
+                process.pid,
+            )
         os.kill(process.pid, signal.SIGSTOP)
         wait_for_process_stopped(process)
         (tmp_path / "handoff-state/release").touch()
@@ -456,8 +475,7 @@ def test_handoff_preserves_both_organic_failures_observed_before_cleanup(
                 unfinished = []
                 for event in completed_events:
                     result = subprocess.run(
-                        ["ps", "-o", "stat=", "-p", str(event["pid"])],
-                        check=True,
+                        ["ps", "-o", "stat=", "-p", str(event["pgid"])],
                         capture_output=True,
                         text=True,
                     )
