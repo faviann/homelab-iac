@@ -1,0 +1,85 @@
+---
+- name: Test the real beets-flask sources through the production planner
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    beets_stacks_source: "{{ repo_root }}/stacks/servarr"
+    docker_uid: 1000
+    docker_gid: 1000
+    default_domain: admin.example.invalid
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      stacks_source: "{{ beets_stacks_source }}"
+      shared_owner: 1000
+      shared_group: 1000
+      docker_uid: 1000
+      docker_gid: 1000
+    lxc_docker_env_stack_vars:
+      beets-flask:
+        acoustid_apikey: "acoustid-pa$$"
+        discogs_token: "discogs-pa$$"
+    lxc_docker_env_desired_top_level_stack_dirs: []
+    _per_host_stack_metadata_files:
+      files: []
+    _per_host_dirs:
+      files: []
+  tasks:
+    - name: Supply the real beets-flask source inputs to the planner
+      ansible.builtin.set_fact:
+        _per_host_j2_files:
+          files:
+            - path: "{{ beets_stacks_source }}/beets-flask/.env.j2"
+            - path: "{{ beets_stacks_source }}/beets-flask/appdata/beets/config.yaml.j2"
+        _per_host_static_files:
+          files:
+            - path: "{{ beets_stacks_source }}/beets-flask/compose.yaml"
+            - path: "{{ beets_stacks_source }}/beets-flask/compose.override.yaml"
+
+    - name: Plan the real beets-flask sources
+      ansible.builtin.include_tasks: "{{ repo_root }}/playbooks/roles/config/lxc_stack_sync/tasks/planner.yml"
+
+    - name: Evaluate each planned beets-flask template with its planned context
+      ansible.builtin.set_fact:
+        _beets_rendered: >-
+          {{
+            (_beets_rendered | default({}))
+            | combine({item.relative_path: lookup('template', item.source_path)})
+          }}
+      vars:
+        stack_name: "{{ item.stack_name }}"
+        stack_vars: "{{ lxc_docker_env_stack_vars[item.stack_name] | default({}) }}"
+      loop: "{{ lxc_stack_sync_manifest_plan.files_to_render }}"
+      loop_control:
+        label: "{{ item.relative_path }}"
+
+    - name: Assert the planner classifies the real beets-flask sources
+      ansible.builtin.assert:
+        that:
+          - lxc_stack_sync_manifest_plan.templated_outputs == expected_templated_outputs
+          - >-
+            (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)
+            == ['beets-flask/compose.yaml', 'beets-flask/compose.override.yaml']
+          - >-
+            (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)
+            == ['/data/media/_ingest/music']
+        fail_msg: "Planner did not classify the real beets-flask sources as expected"
+      vars:
+        expected_templated_outputs:
+          - beets-flask/.env
+          - beets-flask/appdata/beets/config.yaml
+
+    - name: Assert the rendered beets-flask templates resolve the domain and escape by destination
+      ansible.builtin.assert:
+        that:
+          - "'USER_ID=1000' in rendered_env"
+          - "'GROUP_ID=1000' in rendered_env"
+          - "'HOMEPAGE_FQDN=beets-flask.admin.example.invalid' in rendered_env"
+          - "'ACOUSTID_APIKEY=acoustid-pa$$$$' in rendered_env"
+          - "'DISCOGS_TOKEN=discogs-pa$$$$' in rendered_env"
+          - "'apikey: \"acoustid-pa$$\"' in rendered_beets_config"
+          - "'user_token: \"discogs-pa$$\"' in rendered_beets_config"
+        fail_msg: "Rendered beets-flask templates did not match the expected contract"
+      vars:
+        rendered_env: "{{ _beets_rendered['beets-flask/.env'] }}"
+        rendered_beets_config: "{{ _beets_rendered['beets-flask/appdata/beets/config.yaml'] }}"

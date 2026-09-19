@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test for the beets-flask stack render contract."""
+"""Regression test for the beets-flask stack planner and template contract."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from ansible_test_helper import ansible_playbook_command
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "stack_sync_beets_flask_materialize_test.yml"
+PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "stack_sync_beets_flask_planner_test.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
 
 
@@ -40,11 +40,11 @@ def main() -> int:
     output = f"{proc.stdout}\n{proc.stderr}"
 
     if proc.returncode != 0:
-        print("beets-flask materialize playbook failed unexpectedly", file=sys.stderr)
+        print("beets-flask planner playbook failed unexpectedly", file=sys.stderr)
         print(output, file=sys.stderr)
         return 1
 
-    print("ok: beets-flask stack renders expected contract")
+    print("ok: beets-flask planner and templates match expected contract")
     return 0
 
 
