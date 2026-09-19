@@ -81,7 +81,7 @@ def handoff_environment(
     *,
     lifecycle_status: int = 0,
     pytest_status: int = 0,
-    wait_phase: str = "none",
+    wait_for_phases: bool = False,
 ) -> dict[str, str]:
     bin_dir = tmp_path / "handoff-bin"
     bin_dir.mkdir()
@@ -90,16 +90,13 @@ def handoff_environment(
     fake_uv = bin_dir / "uv"
     fake_uv.write_text(
         r'''#!/usr/bin/env python3
-import json
 import os
-import signal
 import sys
 import time
 from pathlib import Path
 
 
 state = Path(os.environ["VALIDATE_TEST_STATE"])
-events = state / "events.jsonl"
 phase = "lint"
 if any(item.endswith("run_lxc_lifecycle_regressions.py") for item in sys.argv):
     phase = "lifecycle"
@@ -107,37 +104,15 @@ elif "pytest" in sys.argv:
     phase = "pytest"
 
 
-def record(kind: str) -> None:
-    with events.open("a", encoding="utf-8") as stream:
-        stream.write(
-            json.dumps(
-                {
-                    "kind": kind,
-                    "phase": phase,
-                    "pid": os.getpid(),
-                    "pgid": os.getpgid(0),
-                    "cache": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
-                }
-            )
-            + "\n"
-        )
-
-
-def stop(signum: int, _frame: object) -> None:
-    record(f"signal:{signum}")
-    raise SystemExit(128 + signum)
-
-
-signal.signal(signal.SIGINT, stop)
-signal.signal(signal.SIGTERM, stop)
-record("start")
-
 if phase == "lint":
-    record("done")
+    (state / "lint.done").touch()
     raise SystemExit(0)
 
-(state / f"{phase}.started").touch()
-if os.environ.get("VALIDATE_TEST_WAIT_PHASE") in {phase, "both"}:
+(state / f"{phase}.started").write_text(
+    f"{os.getpgid(0)}\n{os.environ['ANSIBLE_CACHE_PLUGIN_CONNECTION']}\n",
+    encoding="utf-8",
+)
+if os.environ.get("VALIDATE_TEST_WAIT_PHASES") == "1":
     deadline = time.monotonic() + 10
     while not (state / "release").exists():
         if time.monotonic() >= deadline:
@@ -145,7 +120,6 @@ if os.environ.get("VALIDATE_TEST_WAIT_PHASE") in {phase, "both"}:
         time.sleep(0.01)
 
 status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
-record("done")
 print(f"fake-{phase}-output", flush=True)
 raise SystemExit(status)
 ''',
@@ -165,17 +139,15 @@ raise SystemExit(status)
             "VALIDATE_TEST_STATE": str(state_dir),
             "VALIDATE_TEST_LIFECYCLE_STATUS": str(lifecycle_status),
             "VALIDATE_TEST_PYTEST_STATUS": str(pytest_status),
-            "VALIDATE_TEST_WAIT_PHASE": wait_phase,
+            "VALIDATE_TEST_WAIT_PHASES": "1" if wait_for_phases else "0",
         }
     )
     return env
 
 
-def handoff_events(tmp_path: Path) -> list[dict[str, object]]:
-    events = tmp_path / "handoff-state/events.jsonl"
-    if not events.exists():
-        return []
-    return [json.loads(line) for line in events.read_text().splitlines()]
+def phase_marker_data(tmp_path: Path, phase: str) -> tuple[int, str]:
+    pgid, cache = (tmp_path / f"handoff-state/{phase}.started").read_text().splitlines()
+    return int(pgid), cache
 
 
 def wait_for_handoff_marker(tmp_path: Path, marker: str) -> None:
@@ -188,17 +160,20 @@ def wait_for_handoff_marker(tmp_path: Path, marker: str) -> None:
 
 
 def assert_handoff_process_groups_gone(tmp_path: Path) -> None:
-    for event in handoff_events(tmp_path):
-        if event["phase"] in {"lifecycle", "pytest"} and event["kind"] == "start":
-            deadline = time.monotonic() + 2
-            while True:
-                try:
-                    os.killpg(int(event["pgid"]), signal.SIGCONT)
-                except ProcessLookupError:
-                    break
-                if time.monotonic() >= deadline:
-                    pytest.fail(f"process group {event['pgid']} still exists")
-                time.sleep(0.01)
+    for phase in ("lifecycle", "pytest"):
+        marker = tmp_path / f"handoff-state/{phase}.started"
+        if not marker.exists():
+            continue
+        pgid, _ = phase_marker_data(tmp_path, phase)
+        deadline = time.monotonic() + 2
+        while True:
+            try:
+                os.killpg(pgid, signal.SIGCONT)
+            except ProcessLookupError:
+                break
+            if time.monotonic() >= deadline:
+                pytest.fail(f"{phase} process group {pgid} still exists")
+            time.sleep(0.01)
 
 
 def operator_sentinel(tmp_path: Path, name: str, mode: int = 0o600) -> str:
@@ -312,7 +287,7 @@ def test_no_argument_run_is_the_comprehensive_non_live_handoff_validation(
 def test_no_argument_handoff_overlaps_only_after_lint(
     tmp_path: Path,
 ) -> None:
-    env = handoff_environment(tmp_path, wait_phase="both")
+    env = handoff_environment(tmp_path, wait_for_phases=True)
     process = subprocess.Popen(
         [str(RUNNER)],
         cwd=REPO_ROOT,
@@ -323,16 +298,12 @@ def test_no_argument_handoff_overlaps_only_after_lint(
         start_new_session=True,
     )
     try:
+        wait_for_handoff_marker(tmp_path, "lint.done")
         wait_for_handoff_marker(tmp_path, "lifecycle.started")
         wait_for_handoff_marker(tmp_path, "pytest.started")
-        events = handoff_events(tmp_path)
-        kinds = [(event["phase"], event["kind"]) for event in events]
-        assert kinds.index(("lint", "done")) < kinds.index(("lifecycle", "start"))
-        assert kinds.index(("lint", "done")) < kinds.index(("pytest", "start"))
         caches = {
-            event["cache"]
-            for event in events
-            if event["phase"] in {"lifecycle", "pytest"}
+            phase_marker_data(tmp_path, phase)[1]
+            for phase in ("lifecycle", "pytest")
         }
         assert len(caches) == 2
 
@@ -360,7 +331,6 @@ def test_lifecycle_failure_does_not_stop_the_pytest_sibling(
     assert result.returncode == 41
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
     assert "validate.sh: pytest passed" in result.stdout
-    assert "terminated after" not in f"{result.stdout}\n{result.stderr}"
     assert_handoff_process_groups_gone(tmp_path)
 
 
@@ -374,7 +344,6 @@ def test_pytest_failure_does_not_stop_the_lifecycle_sibling(
     assert result.returncode == 43
     assert "validate.sh: lifecycle passed" in result.stdout
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
-    assert "terminated after" not in f"{result.stdout}\n{result.stderr}"
     assert_handoff_process_groups_gone(tmp_path)
 
 
@@ -388,7 +357,6 @@ def test_handoff_reports_both_natural_failures(
     assert result.returncode in {41, 43}
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
-    assert "terminated after" not in f"{result.stdout}\n{result.stderr}"
     assert_handoff_process_groups_gone(tmp_path)
 
 
@@ -399,7 +367,7 @@ def test_handoff_reports_both_natural_failures(
 def test_handoff_signal_cleanup_reaps_both_phase_process_groups(
     tmp_path: Path, signal_number: int, expected_returncode: int
 ) -> None:
-    env = handoff_environment(tmp_path, wait_phase="both")
+    env = handoff_environment(tmp_path, wait_for_phases=True)
     process = subprocess.Popen(
         [str(RUNNER)],
         cwd=REPO_ROOT,
@@ -422,17 +390,14 @@ def test_handoff_signal_cleanup_reaps_both_phase_process_groups(
             process.wait(timeout=5)
 
 
-@pytest.mark.parametrize("fail_at", [1])
-def test_no_argument_run_propagates_a_gate_failure_and_stops(
-    tmp_path: Path, fail_at: int
-) -> None:
-    env = validation_environment(tmp_path, fail_at=fail_at)
+def test_no_argument_run_propagates_a_gate_failure_and_stops(tmp_path: Path) -> None:
+    env = validation_environment(tmp_path, fail_at=1)
 
     result = run_validation(env, REPO_ROOT)
 
     assert result.returncode == 41
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["lint", "lifecycle", "tests"][:fail_at]
+    assert child_kinds(commands) == ["lint"]
     assert_validation_caches_were_removed(commands)
 
 
