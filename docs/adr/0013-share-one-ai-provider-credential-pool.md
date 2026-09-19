@@ -20,4 +20,14 @@ the LXCs already share one unfirewalled bridge, so an attacker positioned to
 abuse the direct port can already reach every other service on it. Fronting the
 proxy with Authentik ForwardAuth was rejected separately: the management panel
 and the agent API share a port, so edge authentication that works for a browser
-breaks every non-interactive client.
+breaks every non-interactive client, and a path-scoped exception list would fail
+open and unnoticed as the panel grows new paths across releases.
+
+That acceptance is provisional. It holds only while the bridge is flat, and is
+expected to be retired by host-level segmentation: Proxmox firewall rules
+declared per guest alongside the rest of its provisioning, restricting 8317 to
+the Traefik origin. An in-guest nftables rule modelled on
+`workstation_origin_firewall` would close the same gap sooner, but it is
+deliberately not built here, because rules enforced inside the guest are
+disarmed by whatever compromises the guest, and because host-level segmentation
+supersedes that role rather than extending it.
