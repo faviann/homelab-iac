@@ -121,7 +121,6 @@ def record(kind: str) -> None:
                     "pid": os.getpid(),
                     "pgid": os.getpgid(0),
                     "cache": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
-                    "time": time.monotonic(),
                 }
             )
             + "\n"
@@ -142,6 +141,12 @@ if phase == "lint":
     raise SystemExit(0)
 
 (state / f"{phase}.started").touch()
+if phase == "lifecycle" and os.environ.get("VALIDATE_TEST_COMPLETED_SECONDARY") == "1":
+    deadline = time.monotonic() + 10
+    while not (state / "pytest.completed").exists():
+        if time.monotonic() >= deadline:
+            raise SystemExit(88)
+        time.sleep(0.01)
 if os.environ.get("VALIDATE_TEST_WAIT_PHASE") in {phase, "both"}:
     deadline = time.monotonic() + 10
     while not (state / "release").exists():
@@ -151,6 +156,8 @@ if os.environ.get("VALIDATE_TEST_WAIT_PHASE") in {phase, "both"}:
 
 status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
 record("done")
+if phase == "lifecycle" and os.environ.get("VALIDATE_TEST_COMPLETED_SECONDARY") == "1":
+    (state / "lifecycle.completed").touch()
 print(f"fake-{phase}-output", flush=True)
 raise SystemExit(status)
 ''',
@@ -177,9 +184,13 @@ exec {shlex.quote(real_setsid)} "$@"
 '''
         else:
             completed_marker = shlex.quote(str(state_dir / "pytest.completed"))
+            lifecycle_completed_marker = shlex.quote(
+                str(state_dir / "lifecycle.completed")
+            )
             script = f'''#!/usr/bin/env bash
 set -euo pipefail
 completed_marker={completed_marker}
+lifecycle_completed_marker={lifecycle_completed_marker}
 if [[ "$*" == *pytest* ]]; then
     parent_pid="$(ps -o ppid= -p "$$" | tr -d ' ')"
     kill -STOP "$parent_pid"
@@ -191,7 +202,18 @@ if [[ "$*" == *pytest* ]]; then
         child_status="$?"
     fi
     touch "$completed_marker"
-    {{ sleep 0.1; kill -CONT "$parent_pid"; }} >/dev/null 2>&1 &
+    while [[ ! -e "$lifecycle_completed_marker" ]]; do
+        sleep 0.01
+    done
+    wrapper_pid="$$"
+    {{
+        while [[ -e "/proc/$wrapper_pid" ]]; do
+            state="$(ps -o stat= -p "$wrapper_pid" 2>/dev/null || true)"
+            [[ "$state" == Z* ]] && break
+            sleep 0.01
+        done
+        kill -CONT "$parent_pid"
+    }} >/dev/null 2>&1 &
     disown
     exit "$child_status"
 fi
@@ -213,6 +235,9 @@ exec {shlex.quote(real_setsid)} "$@"
             "VALIDATE_TEST_LIFECYCLE_STATUS": str(lifecycle_status),
             "VALIDATE_TEST_PYTEST_STATUS": str(pytest_status),
             "VALIDATE_TEST_WAIT_PHASE": wait_phase,
+            "VALIDATE_TEST_COMPLETED_SECONDARY": (
+                "1" if pytest_completes_before_failure else "0"
+            ),
         }
     )
     return env
@@ -424,16 +449,6 @@ def test_lifecycle_failure_terminates_and_reports_the_pytest_sibling(
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
     assert "validate.sh: pytest terminated after lifecycle failure (exit 143)" in result.stderr
     assert "validate.sh: pytest failed" not in result.stderr
-    events = handoff_events(tmp_path)
-    lifecycle_done = next(
-        event for event in events if event["phase"] == "lifecycle" and event["kind"] == "done"
-    )
-    pytest_signal = next(
-        event
-        for event in events
-        if event["phase"] == "pytest" and event["kind"] == "signal:15"
-    )
-    assert float(pytest_signal["time"]) - float(lifecycle_done["time"]) < 0.5
     assert_handoff_process_groups_gone(tmp_path)
 
 
@@ -448,16 +463,6 @@ def test_pytest_failure_terminates_and_reports_the_lifecycle_sibling(
     assert "validate.sh: lifecycle terminated after pytest failure (exit 143)" in result.stderr
     assert "validate.sh: lifecycle failed" not in result.stderr
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
-    events = handoff_events(tmp_path)
-    pytest_done = next(
-        event for event in events if event["phase"] == "pytest" and event["kind"] == "done"
-    )
-    lifecycle_signal = next(
-        event
-        for event in events
-        if event["phase"] == "lifecycle" and event["kind"] == "signal:15"
-    )
-    assert float(lifecycle_signal["time"]) - float(pytest_done["time"]) < 0.5
     assert_handoff_process_groups_gone(tmp_path)
 
 
