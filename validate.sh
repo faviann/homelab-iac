@@ -30,10 +30,6 @@ Options:
   --only <launcher.py>        Run only this registered launcher (repeatable)
   --fail-fast                 Stop the lifecycle set after the first failure
   --help                      Show this help
-
-Environment:
-  VALIDATE_TESTS_SERIAL=1      Run all pytest items in one process
-  VALIDATE_JUNIT_REPORT_DIR    Write lane-specific JUnit XML reports there
 EOF
 }
 

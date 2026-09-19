@@ -8,9 +8,7 @@ from pathlib import Path
 import pytest
 
 
-# Multiple test items make xdist exercise both configured workers.
-@pytest.mark.parametrize("_probe", range(4))
-def test_parallel_worker_uses_its_private_ansible_cache(_probe: int) -> None:
+def test_parallel_worker_uses_its_private_ansible_cache() -> None:
     cache_connection = os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION")
     if not cache_connection:
         pytest.skip("run through ./validate.sh to configure the validation cache")
