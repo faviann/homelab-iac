@@ -635,6 +635,7 @@ def test_real_pytest_runner_continues_after_serial_item_failure(
     env = os.environ.copy()
     env["PYTEST_RUNNER_PARALLEL_MARKER"] = str(parallel_marker)
     env["VALIDATE_JUNIT_REPORT_DIR"] = str(report_dir)
+    env["VALIDATE_TESTS_SERIAL"] = "0"
 
     try:
         result = subprocess.run(
