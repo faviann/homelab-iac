@@ -10,6 +10,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 
@@ -19,6 +20,7 @@ pytestmark = pytest.mark.serial
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = REPO_ROOT / "validate.sh"
+PYTEST_RUNNER = REPO_ROOT / "tests" / "run_pytest.sh"
 FIXTURE_INVENTORY = str(REPO_ROOT / "tests/fixtures/ansible/inventory.yml")
 FIXTURE_VAULT_PASSWORD_FILE = str(REPO_ROOT / "tests/fixtures/ansible/vault-pass")
 OPERATOR_MARKER = "operator-secret-marker-4f2b"
@@ -532,27 +534,58 @@ def test_tests_forwards_an_in_tree_target(tmp_path: Path, target: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("lane", "status", "expected_calls"),
-    [("serial", 41, 1), ("parallel", 43, 2)],
+    ("serial_status", "parallel_status", "expected_status", "expected_calls"),
+    [
+        (2, 0, 2, 1),
+        (3, 0, 3, 1),
+        (0, 2, 2, 2),
+        (0, 3, 3, 2),
+        (1, 3, 3, 2),
+    ],
 )
-def test_tests_preserves_lane_failure_status_and_stops_after_serial_failure(
-    tmp_path: Path, lane: str, status: int, expected_calls: int
+def test_tests_preserves_interrupt_and_internal_error_statuses(
+    tmp_path: Path,
+    serial_status: int,
+    parallel_status: int,
+    expected_status: int,
+    expected_calls: int,
 ) -> None:
     env = validation_environment(tmp_path)
-    env[f"VALIDATE_TEST_{lane.upper()}_STATUS"] = str(status)
+    env["VALIDATE_TEST_SERIAL_STATUS"] = str(serial_status)
+    env["VALIDATE_TEST_PARALLEL_STATUS"] = str(parallel_status)
 
     result = run_validation(env, REPO_ROOT, "tests")
 
     commands = captured_commands(tmp_path)
-    assert result.returncode == status
+    assert result.returncode == expected_status
     assert child_kinds(commands) == ["tests"] * expected_calls
-    if lane == "serial":
-        assert child_options(commands[0]["argv"], "pytest")[-2:] == ["-m", "serial"]
+    if expected_calls == 1:
+        assert child_options(commands[0]["argv"], "pytest")[-2:] == [
+            "-m",
+            "serial",
+        ]
     else:
         assert child_options(commands[1]["argv"], "pytest")[-2:] == [
             "-m",
             "not serial",
         ]
+
+
+@pytest.mark.parametrize(
+    ("serial_status", "parallel_status"),
+    [(1, 0), (0, 1), (1, 1), (1, 5), (5, 1)],
+)
+def test_tests_aggregates_ordinary_lane_failures_without_losing_coverage(
+    tmp_path: Path, serial_status: int, parallel_status: int
+) -> None:
+    env = validation_environment(tmp_path)
+    env["VALIDATE_TEST_SERIAL_STATUS"] = str(serial_status)
+    env["VALIDATE_TEST_PARALLEL_STATUS"] = str(parallel_status)
+
+    result = run_validation(env, REPO_ROOT, "tests")
+
+    assert result.returncode == 1
+    assert child_kinds(captured_commands(tmp_path)) == ["tests", "tests"]
 
 
 @pytest.mark.parametrize(
@@ -573,6 +606,69 @@ def test_tests_accepts_one_empty_lane_but_preserves_an_empty_suite(
 
     assert result.returncode == expected_status
     assert child_kinds(captured_commands(tmp_path)) == ["tests", "tests"]
+
+
+def test_real_pytest_runner_continues_after_serial_item_failure(
+    tmp_path: Path,
+) -> None:
+    fixture_root = REPO_ROOT / "tests" / f"_pytest_runner_{tmp_path.name}"
+    fixture_root.mkdir()
+    serial_test = fixture_root / "test_serial_failure.py"
+    parallel_test = fixture_root / "test_parallel_probe.py"
+    serial_test.write_text(
+        "import pytest\n\n"
+        "pytestmark = pytest.mark.serial\n\n"
+        "def test_serial_failure():\n"
+        "    assert False, 'intentional serial failure for runner regression'\n",
+        encoding="utf-8",
+    )
+    parallel_test.write_text(
+        "import os\nfrom pathlib import Path\n\n"
+        "def test_parallel_probe_runs():\n"
+        "    Path(os.environ['PYTEST_RUNNER_PARALLEL_MARKER']).write_text(\n"
+        "        'ran', encoding='utf-8'\n"
+        "    )\n",
+        encoding="utf-8",
+    )
+    parallel_marker = tmp_path / "parallel-item-ran"
+    report_dir = tmp_path / "junit"
+    env = os.environ.copy()
+    env["PYTEST_RUNNER_PARALLEL_MARKER"] = str(parallel_marker)
+    env["VALIDATE_JUNIT_REPORT_DIR"] = str(report_dir)
+
+    try:
+        result = subprocess.run(
+            ["bash", str(PYTEST_RUNNER), str(serial_test), str(parallel_test)],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        output = f"{result.stdout}\n{result.stderr}"
+
+        assert result.returncode == 1, output
+        assert "created: 2/2 workers" in output, output
+        assert parallel_marker.is_file(), output
+        assert parallel_marker.read_text(encoding="utf-8") == "ran"
+
+        serial_cases = list(
+            ElementTree.parse(report_dir / "serial.xml").getroot().iter("testcase")
+        )
+        parallel_cases = list(
+            ElementTree.parse(report_dir / "parallel.xml").getroot().iter("testcase")
+        )
+        assert len(serial_cases) == 1
+        assert serial_cases[0].get("name") == "test_serial_failure"
+        assert serial_cases[0].find("failure") is not None
+        assert len(parallel_cases) == 1
+        assert parallel_cases[0].get("name") == "test_parallel_probe_runs"
+        assert all(
+            parallel_cases[0].find(status) is None
+            for status in ("failure", "error", "skipped")
+        )
+    finally:
+        shutil.rmtree(fixture_root, ignore_errors=True)
 
 
 def test_serial_and_parallel_markers_partition_the_complete_collected_suite(
