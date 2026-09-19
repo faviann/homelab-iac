@@ -7,7 +7,7 @@ x-prereq-dirs:
 x-managed-files:
   # config.yaml carries the client API key and the management key hash, so it
   # must not land at the default 0644.
-  - path: ./config.yaml
+  - path: ./appdata/config/config.yaml
     mode: "0600"
 
 services:
@@ -15,14 +15,25 @@ services:
     image: eceasy/cli-proxy-api:v7.3.8@sha256:6c2c8a7904799bd29a3f7f92a598555d8321b6a5682000b87af4495c5704fa72
     container_name: cliproxy
     restart: unless-stopped
+    # Point at the mounted directory rather than the image's default
+    # /CLIProxyAPI/config.yaml, so the config can live behind a directory mount.
+    command: ["./CLIProxyAPI", "-config", "/conf/config.yaml"]
+    environment:
+      # The app never reads this. It exists so Compose has a value that changes
+      # when config.yaml changes, which is what makes the container recreate
+      # and pick the new file up. See .env.j2.
+      CLIPROXY_CONFIG_FINGERPRINT: ${CLIPROXY_CONFIG_FINGERPRINT:?Set CLIPROXY_CONFIG_FINGERPRINT in .env}
     volumes:
-      # Read-only on purpose. Ansible owns this file; the app would otherwise
-      # rewrite it (plaintext management keys are hashed back into it, and the
-      # control panel persists edits here), which both defeats the ownership
-      # split and risks a stale inode when a single-file bind mount is replaced
-      # by rename. A panel config edit fails loudly instead of silently
-      # reverting on the next deploy.
-      - ./config.yaml:/CLIProxyAPI/config.yaml:ro
+      # A DIRECTORY mount, not a single file. Ansible renders config.yaml by
+      # atomic rename, which swaps the inode; a single-file bind mount stays
+      # attached to the old inode, so the running process would keep reading
+      # the previous config forever while the host file looked current. With
+      # the directory mounted, the container resolves the name on each open and
+      # sees the rendered file.
+      # Read-only: Ansible owns this file. The app would otherwise rewrite it,
+      # since the control panel persists config edits here. A panel config edit
+      # fails loudly instead of silently reverting on the next deploy.
+      - ./appdata/config:/conf:ro
       # OAuth credentials the service writes for itself. Never in Git.
       - ./appdata/auth:/root/.cli-proxy-api
     ports:

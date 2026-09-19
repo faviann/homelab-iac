@@ -10,13 +10,32 @@ Read this before changing anything.
 
 | Thing | Owner | Where | In Git? |
 | --- | --- | --- | --- |
-| Port, `auth-dir`, client key, management key, logging | Ansible | `config.yaml.j2` | yes (secrets from vault) |
-| Provider OAuth accounts | the service | `./appdata/auth/*.json` | **no** |
+| Port, `auth-dir`, client key, management key, logging | Ansible | `appdata/config/config.yaml.j2` | yes (secrets from vault) |
+| Provider OAuth accounts | the service | `appdata/auth/*.json` | no |
 
-`config.yaml` is rendered from `config.yaml.j2` on every deploy and mounted
-**read-only**. Settings you change in the management panel do not persist — the
-panel reports a write failure rather than accepting the edit and silently losing
-it on the next `./run.sh`. To change a setting, edit the template and redeploy.
+`config.yaml` is rendered on every deploy and mounted read-only. Settings you
+change in the management panel do not persist. The panel reports a write failure
+rather than accepting the edit and silently losing it on the next `./run.sh`. To
+change a setting, edit the template and redeploy.
+
+### Why the config directory is mounted, not the file
+
+Ansible renders by atomic rename, which gives the file a new inode. A
+single-file bind mount stays attached to the old inode, so the container would
+keep reading the previous config forever while the host file looked current.
+Mounting the directory and passing `-config /conf/config.yaml` makes the
+container resolve the name on each open.
+
+That alone is not enough. Compose cannot see inside a bind mount, so a changed
+config produces no reason to recreate the container, and the app does not
+hot-reload on atomic replacement (tested: a key added to the config was still
+rejected, with no reload entry in the log). `.env.j2` therefore renders
+`CLIPROXY_CONFIG_FINGERPRINT`, a hash of the rendered config, into the service
+environment. The app never reads it. Its only job is to change when the config
+changes, so Compose recreates the container and the new config takes effect.
+
+Without it, rotating `vault_overmind_cliproxy_api_key` would report success
+while the running proxy kept accepting the old key and rejecting the new one.
 
 Adding, re-authenticating, and removing provider accounts is the exception: that
 is entirely a panel operation, writes only to `auth-dir`, and Ansible never
