@@ -16,9 +16,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-# Vault command tests use shared /dev/shm paths and signal cleanup.
-pytestmark = pytest.mark.serial
-
 sys.path.insert(0, str(Path(__file__).parent))
 import vault_test_harness
 from vault_test_harness import run_vault_tty
