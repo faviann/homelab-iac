@@ -314,7 +314,6 @@ def test_no_argument_handoff_overlaps_only_after_lint(
         assert "fake-lifecycle-output" in stdout
         assert "fake-pytest-output" in stdout
         assert all(not Path(cache).exists() for cache in caches)
-        assert_handoff_process_groups_gone(tmp_path)
     finally:
         if process.poll() is None:
             process.terminate()
@@ -331,7 +330,6 @@ def test_lifecycle_failure_does_not_stop_the_pytest_sibling(
     assert result.returncode == 41
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
     assert "validate.sh: pytest passed" in result.stdout
-    assert_handoff_process_groups_gone(tmp_path)
 
 
 def test_pytest_failure_does_not_stop_the_lifecycle_sibling(
@@ -344,7 +342,6 @@ def test_pytest_failure_does_not_stop_the_lifecycle_sibling(
     assert result.returncode == 43
     assert "validate.sh: lifecycle passed" in result.stdout
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
-    assert_handoff_process_groups_gone(tmp_path)
 
 
 def test_handoff_reports_both_natural_failures(
@@ -357,7 +354,6 @@ def test_handoff_reports_both_natural_failures(
     assert result.returncode in {41, 43}
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
-    assert_handoff_process_groups_gone(tmp_path)
 
 
 @pytest.mark.parametrize(

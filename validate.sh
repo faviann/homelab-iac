@@ -136,27 +136,21 @@ export ANSIBLE_VAULT_PASSWORD_FILE="$PROJECT_ROOT/tests/fixtures/ansible/vault-p
 
 # Isolate non-live validation from the operator's live fact cache (issue #89).
 VALIDATION_CACHE_DIR="$(mktemp -d)"
-HANDOFF_TEMP_DIR=""
 cleanup_validation() {
     rm -rf -- "$VALIDATION_CACHE_DIR"
-    if [[ -n "$HANDOFF_TEMP_DIR" ]]; then
-        rm -rf -- "$HANDOFF_TEMP_DIR"
-    fi
 }
 trap cleanup_validation EXIT
 export ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR"
 
 run_handoff() {
     local lifecycle_cache pytest_cache lifecycle_log pytest_log
-    local phase phase_log wait_status
     local handoff_signal=0 lifecycle_pid="" pytest_pid=""
     local lifecycle_status="" pytest_status=""
 
-    HANDOFF_TEMP_DIR="$(mktemp -d)"
-    lifecycle_cache="$HANDOFF_TEMP_DIR/lifecycle-cache"
-    pytest_cache="$HANDOFF_TEMP_DIR/pytest-cache"
-    lifecycle_log="$HANDOFF_TEMP_DIR/lifecycle.log"
-    pytest_log="$HANDOFF_TEMP_DIR/pytest.log"
+    lifecycle_cache="$VALIDATION_CACHE_DIR/lifecycle-cache"
+    pytest_cache="$VALIDATION_CACHE_DIR/pytest-cache"
+    lifecycle_log="$VALIDATION_CACHE_DIR/lifecycle.log"
+    pytest_log="$VALIDATION_CACHE_DIR/pytest.log"
 
     cleanup_phase() {
         local pid="$1"
@@ -204,27 +198,34 @@ run_handoff() {
         fi
     fi
     trap - INT TERM
-    for phase in lifecycle pytest; do
-        if [[ "$phase" == lifecycle ]]; then
-            phase_log="$lifecycle_log"
-            wait_status="$lifecycle_status"
-        else
-            phase_log="$pytest_log"
-            wait_status="$pytest_status"
-        fi
-        [[ -n "$wait_status" ]] || continue
+    if [[ -n "$lifecycle_status" ]]; then
         if ((handoff_signal != 0)); then
-            printf 'validate.sh: %s interrupted by signal (exit %s)\n' \
-                "$phase" "$wait_status" >&2
-            cat "$phase_log" >&2
-        elif ((wait_status == 0)); then
-            printf 'validate.sh: %s passed\n' "$phase"
-            cat "$phase_log"
+            printf 'validate.sh: lifecycle interrupted by signal (exit %s)\n' \
+                "$lifecycle_status" >&2
+            cat "$lifecycle_log" >&2
+        elif ((lifecycle_status == 0)); then
+            printf 'validate.sh: lifecycle passed\n'
+            cat "$lifecycle_log"
         else
-            printf 'validate.sh: %s failed (exit %s)\n' "$phase" "$wait_status" >&2
-            cat "$phase_log" >&2
+            printf 'validate.sh: lifecycle failed (exit %s)\n' \
+                "$lifecycle_status" >&2
+            cat "$lifecycle_log" >&2
         fi
-    done
+    fi
+    if [[ -n "$pytest_status" ]]; then
+        if ((handoff_signal != 0)); then
+            printf 'validate.sh: pytest interrupted by signal (exit %s)\n' \
+                "$pytest_status" >&2
+            cat "$pytest_log" >&2
+        elif ((pytest_status == 0)); then
+            printf 'validate.sh: pytest passed\n'
+            cat "$pytest_log"
+        else
+            printf 'validate.sh: pytest failed (exit %s)\n' \
+                "$pytest_status" >&2
+            cat "$pytest_log" >&2
+        fi
+    fi
 
     if ((handoff_signal != 0)); then
         return $((128 + handoff_signal))
