@@ -17,23 +17,16 @@
     lxc_docker_env_desired_top_level_stack_dirs: []
     lxc_docker_env_stale_top_level_stack_dirs: []
     _lxc_docker_env_reconciliation:
-      source_exists: false
       discovered_stacks: []
-      stale_stacks: []
       managed_assets:
         changed_results: "{{ lxc_stack_sync_managed_assets.changed_results | default([]) }}"
       materialized:
         changed_results: []
-        created_dirs: []
-        updated_dirs: []
       quarantined:
         changed_results: []
         stacks: []
       started:
         changed_results: []
-        created_networks: []
-        started_stacks: []
-        unchanged_stacks: []
         skipped_stacks: []
     lxc_stack_sync_manifest_plan:
       templated_outputs: []
@@ -49,12 +42,7 @@
     lxc_docker_env_deployment_report:
       changed: false
       discovered_stacks: []
-      created_dirs: []
-      updated_dirs: []
-      created_networks: []
       quarantined_stacks: []
-      started_stacks: []
-      unchanged_stacks: []
       skipped_stacks: []
 
 - name: Check if per-host stacks source exists
@@ -301,9 +289,7 @@
         (_lxc_docker_env_reconciliation | default({}))
         | combine(
             {
-              'source_exists': (lxc_stack_sync_source_exists | default(false)),
-              'discovered_stacks': (lxc_docker_env_desired_top_level_stack_dirs | default([])),
-              'stale_stacks': (lxc_docker_env_stale_top_level_stack_dirs | default([]))
+              'discovered_stacks': (lxc_docker_env_desired_top_level_stack_dirs | default([]))
             },
             recursive=True
           )

@@ -1,5 +1,25 @@
 # lxc_stack_sync
 
+## Deployment report
+
+`lxc_docker_env_deployment_report` is initialized before stack-source discovery,
+then published after reconciliation with exactly these fields:
+
+| Field | Diagnostic use |
+|-------|----------------|
+| `changed` | Indicates whether managed assets, materialization, quarantine, or network/stack startup reported a change; a converged apply reports `false`. |
+| `discovered_stacks` | Lists the desired stacks selected for reconciliation, after any `stack_filter`, so an operator can verify the run's scope. |
+| `quarantined_stacks` | Identifies stale stacks moved into quarantine for operator investigation or recovery. |
+| `skipped_stacks` | Identifies discovered Compose projects whose startup was skipped, including command skips in check mode or projects outside the selected scope. |
+
+The initial shape is `changed: false` with empty lists for the other fields,
+including when the per-host source is absent. Failures continue to surface as
+Ansible task failures; this report does not catch them or replace their diagnostics.
+
+Directory creation versus modification and network/startup classifications are
+not published. Prerequisite directory observations remain necessary to reject
+non-directory paths and preserve metadata on existing directories.
+
 ## ComposeManifestPlanner Contract
 
 `tasks/planner.yml` turns discovered per-host stack sources into one execution plan published as `lxc_stack_sync_manifest_plan`.

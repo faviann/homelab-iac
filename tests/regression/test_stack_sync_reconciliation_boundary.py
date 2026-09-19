@@ -34,7 +34,7 @@ def main() -> int:
         print(output, file=sys.stderr)
         return 1
 
-    print("ok: stack sync role publishes a stable deployment report")
+    print("ok: stack sync reconciles stacks and publishes a compact, idempotent deployment report")
     return 0
 
 

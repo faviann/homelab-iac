@@ -66,13 +66,6 @@
     - name: Plan desired stack materialization inputs
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/planner.yml"
 
-    - name: Check which per-host stack directories already exist
-      ansible.builtin.stat:
-        path: "{{ item }}"
-      loop: "{{ lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([]) }}"
-      register: _stack_sync_stack_dir_stats
-      when: (lxc_stack_sync_manifest_plan.stack_dirs_to_create | default([])) | length > 0
-
     - name: Create per-host stack directories
       ansible.builtin.file:
         path: "{{ item }}"
