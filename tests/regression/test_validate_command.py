@@ -133,7 +133,6 @@ if (
 
 status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
 print(f"fake-{phase}-output", flush=True)
-(state / f"{phase}.done").touch()
 raise SystemExit(status)
 ''',
         encoding="utf-8",
@@ -365,11 +364,28 @@ def run_blocked_handoff(
     try:
         wait_for_handoff_marker(tmp_path, "lifecycle.started")
         wait_for_handoff_marker(tmp_path, "pytest.started")
-        completing_phase = "pytest" if blocked_phase == "lifecycle" else "lifecycle"
-        wait_for_handoff_marker(tmp_path, f"{completing_phase}.done")
-        assert not (tmp_path / f"handoff-state/{blocked_phase}.done").exists()
+        failing_phase = "pytest" if blocked_phase == "lifecycle" else "lifecycle"
+        failing_pgid, _ = phase_marker_data(tmp_path, failing_phase)
+        blocked_pgid, _ = phase_marker_data(tmp_path, blocked_phase)
+        deadline = time.monotonic() + 5
+        while True:
+            failing_state = subprocess.run(
+                ["ps", "-o", "stat=", "-p", str(failing_pgid)],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            try:
+                os.killpg(blocked_pgid, 0)
+            except ProcessLookupError as error:
+                raise AssertionError(
+                    f"{blocked_phase} process group ended before release"
+                ) from error
+            if not failing_state or failing_state.startswith("Z"):
+                break
+            if time.monotonic() >= deadline:
+                raise AssertionError(f"{failing_phase} did not finish before release")
+            time.sleep(0.01)
         (tmp_path / "handoff-state/release").touch()
-        wait_for_handoff_marker(tmp_path, f"{blocked_phase}.done")
         stdout, stderr = process.communicate(timeout=10)
         return process.returncode, stdout, stderr
     finally:
