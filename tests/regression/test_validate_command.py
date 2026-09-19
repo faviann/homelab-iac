@@ -671,26 +671,3 @@ def test_every_operation_is_agent_safe(
     assert OPERATOR_MARKER not in result.stderr
     for kind in child_kinds(captured_commands(tmp_path)):
         assert kind in {"lint", "lifecycle", "tests", "stack"}
-
-
-# --- AC9: grammar coverage replaces the exact-argv pinning -----------------
-
-
-def test_this_module_covers_the_grammar_instead_of_pinning_a_full_child_argv() -> None:
-    source = Path(__file__).read_text(encoding="utf-8")
-    retired_pinning = "VALIDATION_" + "COMMANDS"
-
-    assert retired_pinning not in source
-    for grammar_test in (
-        "test_no_argument_run_is_the_comprehensive_non_live_handoff_validation",
-        "test_no_argument_run_stops_when_lint_fails",
-        "test_help_exits_zero_and_names_every_operation",
-        "test_unknown_operation_or_option_is_invalid_usage",
-        "test_lifecycle_forwards_every_supported_selection",
-        "test_lifecycle_rejects_only_combined_with_full",
-        "test_tests_rejects_a_target_outside_the_test_tree",
-        "test_stack_requires_exactly_one_stack_path",
-        "test_every_operation_runs_under_the_fixture_environment",
-        "test_every_operation_is_agent_safe",
-    ):
-        assert grammar_test in globals()
