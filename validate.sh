@@ -12,7 +12,7 @@ Usage: ./validate.sh [operation] [options]
 
 With no operation, run the comprehensive non-live handoff validation:
 repo-wide lint, the full lifecycle regression set, and the whole test suite,
-stopping at the first failure.
+reporting both lifecycle and test results when either one fails.
 
 Operations:
   lint                        Run repo-wide production-profile lint only
@@ -140,85 +140,52 @@ trap 'rm -rf -- "$VALIDATION_CACHE_DIR"' EXIT
 export ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR"
 
 run_handoff() {
-    local lifecycle_cache pytest_cache lifecycle_log pytest_log
-    local handoff_signal=0 lifecycle_pid="" pytest_pid=""
-    local lifecycle_status="" pytest_status=""
+    local lifecycle_pid="" pytest_pid="" lifecycle_status=0 pytest_status=0
 
-    lifecycle_cache="$VALIDATION_CACHE_DIR/lifecycle-cache"
-    pytest_cache="$VALIDATION_CACHE_DIR/pytest-cache"
-    lifecycle_log="$VALIDATION_CACHE_DIR/lifecycle.log"
-    pytest_log="$VALIDATION_CACHE_DIR/pytest.log"
-
-    cleanup_phase() {
-        local pid="$1"
-        [[ -n "$pid" ]] || return 0
-        kill -TERM -- "-$pid" 2>/dev/null || true
+    interrupt_handoff() {
+        trap - INT TERM
+        [[ -z "$lifecycle_pid" ]] ||
+            kill -TERM -- "-$lifecycle_pid" 2>/dev/null || true
+        [[ -z "$pytest_pid" ]] ||
+            kill -TERM -- "-$pytest_pid" 2>/dev/null || true
+        [[ -z "$lifecycle_pid" ]] || wait "$lifecycle_pid" 2>/dev/null || true
+        [[ -z "$pytest_pid" ]] || wait "$pytest_pid" 2>/dev/null || true
+        exit "$1"
     }
 
-    handle_handoff_signal() {
-        handoff_signal="$1"
-        cleanup_phase "$lifecycle_pid"
-        cleanup_phase "$pytest_pid"
-    }
+    trap 'interrupt_handoff 130' INT
+    trap 'interrupt_handoff 143' TERM
 
-    trap 'handle_handoff_signal 2' INT
-    trap 'handle_handoff_signal 15' TERM
+    ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR/lifecycle-cache" \
+        setsid --wait env --default-signal=INT,QUIT uv run --locked python \
+        tests/regression/run_lxc_lifecycle_regressions.py --full \
+        >"$VALIDATION_CACHE_DIR/lifecycle.log" 2>&1 &
+    lifecycle_pid="$!"
+    ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR/pytest-cache" \
+        setsid --wait env --default-signal=INT,QUIT uv run --locked pytest \
+        >"$VALIDATION_CACHE_DIR/pytest.log" 2>&1 &
+    pytest_pid="$!"
 
-    if ((handoff_signal == 0)); then
-        ANSIBLE_CACHE_PLUGIN_CONNECTION="$lifecycle_cache" setsid --wait \
-            env --default-signal=INT,QUIT uv run --locked python \
-            tests/regression/run_lxc_lifecycle_regressions.py --full \
-            >"$lifecycle_log" 2>&1 &
-        lifecycle_pid="$!"
-        ((handoff_signal == 0)) || cleanup_phase "$lifecycle_pid"
-    fi
-    if ((handoff_signal == 0)); then
-        ANSIBLE_CACHE_PLUGIN_CONNECTION="$pytest_cache" setsid --wait \
-            env --default-signal=INT,QUIT uv run --locked pytest \
-            >"$pytest_log" 2>&1 &
-        pytest_pid="$!"
-        ((handoff_signal == 0)) || cleanup_phase "$pytest_pid"
-    fi
-
-    if [[ -n "$lifecycle_pid" ]]; then
-        if wait "$lifecycle_pid"; then
-            lifecycle_status=0
-        else
-            lifecycle_status="$?"
-        fi
-    fi
-    if [[ -n "$pytest_pid" ]]; then
-        if wait "$pytest_pid"; then
-            pytest_status=0
-        else
-            pytest_status="$?"
-        fi
-    fi
+    wait "$lifecycle_pid" || lifecycle_status="$?"
+    wait "$pytest_pid" || pytest_status="$?"
     trap - INT TERM
-    if [[ -n "$lifecycle_status" ]]; then
-        if ((lifecycle_status == 0)); then
-            printf 'validate.sh: lifecycle passed\n'
-            cat "$lifecycle_log"
-        else
-            printf 'validate.sh: lifecycle failed (exit %s)\n' \
-                "$lifecycle_status" >&2
-            cat "$lifecycle_log" >&2
-        fi
+
+    if ((lifecycle_status == 0)); then
+        printf 'validate.sh: lifecycle passed\n'
+        cat "$VALIDATION_CACHE_DIR/lifecycle.log"
+    else
+        printf 'validate.sh: lifecycle failed (exit %s)\n' \
+            "$lifecycle_status" >&2
+        cat "$VALIDATION_CACHE_DIR/lifecycle.log" >&2
     fi
-    if [[ -n "$pytest_status" ]]; then
-        if ((pytest_status == 0)); then
-            printf 'validate.sh: pytest passed\n'
-            cat "$pytest_log"
-        else
-            printf 'validate.sh: pytest failed (exit %s)\n' \
-                "$pytest_status" >&2
-            cat "$pytest_log" >&2
-        fi
+    if ((pytest_status == 0)); then
+        printf 'validate.sh: pytest passed\n'
+        cat "$VALIDATION_CACHE_DIR/pytest.log"
+    else
+        printf 'validate.sh: pytest failed (exit %s)\n' "$pytest_status" >&2
+        cat "$VALIDATION_CACHE_DIR/pytest.log" >&2
     fi
 
-    if ((handoff_signal != 0)); then
-        return $((128 + handoff_signal))
-    fi
     if ((lifecycle_status != 0)); then
         return "$lifecycle_status"
     fi
