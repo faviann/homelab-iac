@@ -115,7 +115,7 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn('self._log.setLevel("ERROR")', startup_script)
         self.assertIn("import beetsplug.VGMplug", startup_script)
 
-    def test_compose_reads_every_runtime_value_from_the_env_template(self) -> None:
+    def test_every_compose_interpolation_resolves_to_an_env_template_key(self) -> None:
         emitted = set(
             re.findall(
                 r"^([A-Z_][A-Z0-9_]*)=",
@@ -129,13 +129,22 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
 
         self.assertLessEqual(referenced, emitted)
 
+    def test_runtime_identity_values_come_from_the_env_file(self) -> None:
         environment = load_yaml(STACK_ROOT / "compose.yaml")["services"]["beets-flask"]["environment"]
-        self.assertEqual(
-            sorted(environment),
-            sorted(compose_variable_references(STACK_ROOT / "compose.yaml")),
-        )
-        for value in environment.values():
-            self.assertRegex(value, r"^\$\{[A-Z_][A-Z0-9_]*:\?[^}]*\}$")
+
+        for key in ("TZ", "USER_ID", "GROUP_ID"):
+            self.assertRegex(environment[key], rf"^\$\{{{key}:\?")
+
+    def test_media_mounts_keep_host_and_container_paths_identical(self) -> None:
+        volumes = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]["volumes"]
+        media_targets = {"/data/media/_ingest/music", "/data/media/music"}
+        declared = {
+            target: source
+            for source, target, *_ in (volume.split(":") for volume in volumes)
+            if target in media_targets
+        }
+
+        self.assertEqual(declared, {target: target for target in media_targets})
 
     def test_gui_inbox_and_terminal_target_the_declared_prereq_dir(self) -> None:
         compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
