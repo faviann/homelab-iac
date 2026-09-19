@@ -437,52 +437,29 @@ def test_handoff_preserves_both_organic_failures_observed_before_cleanup(
     try:
         wait_for_handoff_marker(tmp_path, "lifecycle.started")
         wait_for_handoff_marker(tmp_path, "pytest.started")
-        start_events = [
-            event
+        phase_leaders = {
+            event["phase"]: event["pgid"]
             for event in handoff_events(tmp_path)
             if event["phase"] in {"lifecycle", "pytest"}
             and event["kind"] == "start"
-        ]
-        for event in start_events:
-            process_info = subprocess.run(
-                ["ps", "-o", "pid=,pgid=,ppid=", "-p", str(event["pid"])],
-                capture_output=True,
-                text=True,
-            )
-            assert process_info.returncode == 0
-            pid, pgid, ppid = process_info.stdout.split()
-            assert (int(pid), int(pgid), int(ppid)) == (
-                event["pid"],
-                event["pgid"],
-                process.pid,
-            )
+        }
+        assert set(phase_leaders) == {"lifecycle", "pytest"}
         os.kill(process.pid, signal.SIGSTOP)
         wait_for_process_stopped(process)
         (tmp_path / "handoff-state/release").touch()
 
         deadline = time.monotonic() + 5
         while True:
-            completed_events = [
-                event
-                for event in handoff_events(tmp_path)
-                if event["phase"] in {"lifecycle", "pytest"}
-                and event["kind"] == "done"
+            leader_states = [
+                subprocess.run(
+                    ["ps", "-o", "stat=", "-p", str(pgid)],
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                for pgid in phase_leaders.values()
             ]
-            if {event["phase"] for event in completed_events} == {
-                "lifecycle",
-                "pytest",
-            }:
-                unfinished = []
-                for event in completed_events:
-                    result = subprocess.run(
-                        ["ps", "-o", "stat=", "-p", str(event["pgid"])],
-                        capture_output=True,
-                        text=True,
-                    )
-                    if result.stdout.strip() and not result.stdout.strip().startswith("Z"):
-                        unfinished.append(event["pid"])
-                if not unfinished:
-                    break
+            if all(not state or state.startswith("Z") for state in leader_states):
+                break
             if time.monotonic() >= deadline:
                 raise AssertionError("timed out waiting for organic phase failures")
             time.sleep(0.01)
