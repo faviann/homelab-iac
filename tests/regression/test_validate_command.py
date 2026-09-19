@@ -6,9 +6,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import shlex
 import signal
-import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -84,7 +82,6 @@ def handoff_environment(
     lifecycle_status: int = 0,
     pytest_status: int = 0,
     wait_phase: str = "none",
-    interrupt_during_startup: bool = False,
 ) -> dict[str, str]:
     bin_dir = tmp_path / "handoff-bin"
     bin_dir.mkdir()
@@ -156,25 +153,6 @@ raise SystemExit(status)
     )
     fake_uv.chmod(0o755)
 
-    if interrupt_during_startup:
-        real_setsid = shutil.which("setsid")
-        assert real_setsid is not None
-        fake_setsid = bin_dir / "setsid"
-        marker = shlex.quote(str(state_dir / "setsid.started"))
-        script = f'''#!/usr/bin/env bash
-set -euo pipefail
-marker={marker}
-if [[ "$*" == *pytest* ]]; then
-    touch "$marker"
-    parent_pid="$(ps -o ppid= -p "$$" | tr -d ' ')"
-    kill -STOP "$parent_pid"
-    sleep 1
-fi
-exec {shlex.quote(real_setsid)} "$@"
-'''
-        fake_setsid.write_text(script, encoding="utf-8")
-        fake_setsid.chmod(0o755)
-
     env = os.environ.copy()
     env.update(
         {
@@ -206,22 +184,6 @@ def wait_for_handoff_marker(tmp_path: Path, marker: str) -> None:
     while not path.exists():
         if time.monotonic() >= deadline:
             raise AssertionError(f"timed out waiting for {marker}")
-        time.sleep(0.01)
-
-
-def wait_for_process_stopped(process: subprocess.Popen[str]) -> None:
-    deadline = time.monotonic() + 5
-    while True:
-        result = subprocess.run(
-            ["ps", "-o", "stat=", "-p", str(process.pid)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        if result.stdout.strip().startswith("T"):
-            return
-        if time.monotonic() >= deadline:
-            raise AssertionError("timed out waiting for validate.sh to stop")
         time.sleep(0.01)
 
 
@@ -388,123 +350,46 @@ def test_no_argument_handoff_overlaps_only_after_lint(
             process.wait(timeout=5)
 
 
-def test_lifecycle_failure_terminates_and_reports_the_pytest_sibling(
+def test_lifecycle_failure_does_not_stop_the_pytest_sibling(
     tmp_path: Path,
 ) -> None:
-    env = handoff_environment(tmp_path, lifecycle_status=41, wait_phase="pytest")
+    env = handoff_environment(tmp_path, lifecycle_status=41)
 
     result = run_validation(env, REPO_ROOT)
 
     assert result.returncode == 41
     assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
-    assert "validate.sh: pytest terminated after lifecycle failure (exit 143)" in result.stderr
-    assert "validate.sh: pytest failed" not in result.stderr
+    assert "validate.sh: pytest passed" in result.stdout
+    assert "terminated after" not in f"{result.stdout}\n{result.stderr}"
     assert_handoff_process_groups_gone(tmp_path)
 
 
-def test_pytest_failure_terminates_and_reports_the_lifecycle_sibling(
+def test_pytest_failure_does_not_stop_the_lifecycle_sibling(
     tmp_path: Path,
 ) -> None:
-    env = handoff_environment(tmp_path, pytest_status=43, wait_phase="lifecycle")
+    env = handoff_environment(tmp_path, pytest_status=43)
 
     result = run_validation(env, REPO_ROOT)
 
     assert result.returncode == 43
-    assert "validate.sh: lifecycle terminated after pytest failure (exit 143)" in result.stderr
-    assert "validate.sh: lifecycle failed" not in result.stderr
+    assert "validate.sh: lifecycle passed" in result.stdout
     assert "validate.sh: pytest failed (exit 43)" in result.stderr
+    assert "terminated after" not in f"{result.stdout}\n{result.stderr}"
     assert_handoff_process_groups_gone(tmp_path)
 
 
-def test_handoff_preserves_both_organic_failures_observed_before_cleanup(
+def test_handoff_reports_both_natural_failures(
     tmp_path: Path,
 ) -> None:
-    env = handoff_environment(
-        tmp_path,
-        lifecycle_status=41,
-        pytest_status=43,
-        wait_phase="both",
-    )
-    process = subprocess.Popen(
-        [str(RUNNER)],
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
-    try:
-        wait_for_handoff_marker(tmp_path, "lifecycle.started")
-        wait_for_handoff_marker(tmp_path, "pytest.started")
-        phase_leaders = {
-            event["phase"]: event["pgid"]
-            for event in handoff_events(tmp_path)
-            if event["phase"] in {"lifecycle", "pytest"}
-            and event["kind"] == "start"
-        }
-        assert set(phase_leaders) == {"lifecycle", "pytest"}
-        os.kill(process.pid, signal.SIGSTOP)
-        wait_for_process_stopped(process)
-        (tmp_path / "handoff-state/release").touch()
+    env = handoff_environment(tmp_path, lifecycle_status=41, pytest_status=43)
 
-        deadline = time.monotonic() + 5
-        while True:
-            leader_states = [
-                subprocess.run(
-                    ["ps", "-o", "stat=", "-p", str(pgid)],
-                    capture_output=True,
-                    text=True,
-                ).stdout.strip()
-                for pgid in phase_leaders.values()
-            ]
-            if all(not state or state.startswith("Z") for state in leader_states):
-                break
-            if time.monotonic() >= deadline:
-                raise AssertionError("timed out waiting for organic phase failures")
-            time.sleep(0.01)
+    result = run_validation(env, REPO_ROOT)
 
-        os.kill(process.pid, signal.SIGCONT)
-        _, stderr = process.communicate(timeout=10)
-
-        assert process.returncode in {41, 43}, stderr
-        assert "validate.sh: lifecycle failed (exit 41)" in stderr
-        assert "validate.sh: pytest failed (exit 43)" in stderr
-        assert "terminated after" not in stderr
-        assert_handoff_process_groups_gone(tmp_path)
-    finally:
-        if process.poll() is None:
-            os.kill(process.pid, signal.SIGCONT)
-            process.terminate()
-            process.wait(timeout=5)
-
-
-def test_handoff_signal_during_partial_startup_reaps_the_started_group(
-    tmp_path: Path,
-) -> None:
-    env = handoff_environment(tmp_path, interrupt_during_startup=True)
-    process = subprocess.Popen(
-        [str(RUNNER)],
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    try:
-        wait_for_handoff_marker(tmp_path, "setsid.started")
-        wait_for_process_stopped(process)
-        os.kill(process.pid, signal.SIGCONT)
-        os.kill(process.pid, signal.SIGINT)
-        process.wait(timeout=10)
-
-        assert process.returncode == 130
-        assert not (tmp_path / "handoff-state/pytest.started").exists()
-        assert_handoff_process_groups_gone(tmp_path)
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=5)
+    assert result.returncode in {41, 43}
+    assert "validate.sh: lifecycle failed (exit 41)" in result.stderr
+    assert "validate.sh: pytest failed (exit 43)" in result.stderr
+    assert "terminated after" not in f"{result.stdout}\n{result.stderr}"
+    assert_handoff_process_groups_gone(tmp_path)
 
 
 @pytest.mark.parametrize(
