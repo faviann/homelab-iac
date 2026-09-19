@@ -147,6 +147,35 @@ The compose file publishes those ports on the LXC's loopback only, so the
 tunnel reaches them and the network does not. Retry the login with the tunnel
 up, then close it.
 
+### Credential file permissions
+
+The shared volume is mounted at `/shared` in every LXC, so anything on it is
+reachable from every other container in the fleet. Upstream writes credential
+JSON with `os.Create`, which lands at 0644 under the default umask, and those
+files hold provider refresh tokens.
+
+Two things keep them out of reach of other containers:
+
+- `lxc_docker_env_host_directories` in `inventory/host_vars/overmind.yml` holds
+  `appdata/auth` at root-owned 0700, enforced on every run
+- the container starts with `umask 077`, so new logins and token refreshes write
+  0600 (verify with `grep Umask /proc/1/status` inside the container; a
+  `docker exec` shell shows 0022 and tells you nothing)
+
+This blocks any process running as the docker user in another LXC, which is the
+realistic compromise path. It does **not** block root in another LXC: every LXC
+shares the same idmap, so container root there can still bypass the mode. Only
+removing the fleet-wide `/shared` mount fixes that, and it is not specific to
+this stack. Every repo-managed `.env` on the shared volume is 0644 today.
+
+A deployment created before this change has 0644 credential files. The 0700
+directory already hides them, but to correct them in place:
+
+```bash
+ssh -l root -i ~/.ansible/ssh/proxmox_lxc overmind \
+  'chmod 600 /shared/overmind/stacks/cliproxy/appdata/auth/*.json'
+```
+
 Credentials land in `./appdata/auth/` on the shared volume and survive container
 and LXC recreation. Losing them costs a re-login, not data — there is no backup
 timer and none is warranted.

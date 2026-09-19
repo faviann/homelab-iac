@@ -1,9 +1,6 @@
 ---
 name: cliproxy
 
-x-prereq-dirs:
-  - ./appdata/auth
-
 x-managed-files:
   # config.yaml carries the client API key and the management key hash, so it
   # must not land at the default 0644.
@@ -17,7 +14,11 @@ services:
     restart: unless-stopped
     # Point at the mounted directory rather than the image's default
     # /CLIProxyAPI/config.yaml, so the config can live behind a directory mount.
-    command: ["./CLIProxyAPI", "-config", "/conf/config.yaml"]
+    # umask 077 so the credential JSON the app writes lands at 0600 rather than
+    # the 0644 that os.Create plus the default umask produces. Those files hold
+    # provider refresh tokens, and the shared volume is mounted in every LXC.
+    # exec keeps the app as PID 1 for signal handling.
+    command: ["sh", "-c", "umask 077; exec ./CLIProxyAPI -config /conf/config.yaml"]
     environment:
       # The app never reads this. It exists so Compose has a value that changes
       # when config.yaml changes, which is what makes the container recreate
@@ -43,6 +44,10 @@ services:
       # fails loudly instead of silently reverting on the next deploy.
       - ./appdata/config:/conf:ro
       # OAuth credentials the service writes for itself. Never in Git.
+      # The directory is created root-owned at 0700 by
+      # lxc_docker_env_host_directories in inventory/host_vars/overmind.yml,
+      # not by x-prereq-dirs, because x-prereq-dirs creates 0755 and will not
+      # correct the mode of a directory that already exists.
       - ./appdata/auth:/root/.cli-proxy-api
     ports:
       # Reachable on the LAN because Traefik runs on the portal LXC and has to
