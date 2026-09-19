@@ -13,7 +13,7 @@ if ((serial_status != 0 && serial_status != 1 && serial_status != 5)); then
 fi
 
 parallel_status=0
-uv run --locked pytest -n 2 \
+uv run --locked pytest -n 4 \
     --dist=worksteal --max-worker-restart=0 -m "not serial" "$@" \
     || parallel_status="$?"
 if ((parallel_status != 0 && parallel_status != 1 && parallel_status != 5)); then

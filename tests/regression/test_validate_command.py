@@ -509,7 +509,7 @@ def test_real_pytest_runner_continues_after_serial_item_failure(
         "def test_parallel_probe_runs():\n"
         "    assert os.environ.get('PYTEST_XDIST_WORKER')\n"
         "    worker_count = int(os.environ['PYTEST_XDIST_WORKER_COUNT'])\n"
-        "    assert 1 <= worker_count <= 2, worker_count\n"
+        "    assert 1 <= worker_count <= 4, worker_count\n"
         "    Path(os.environ['PYTEST_RUNNER_PARALLEL_MARKER']).write_text(\n"
         "        'ran', encoding='utf-8'\n"
         "    )\n",
