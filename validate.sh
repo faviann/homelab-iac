@@ -143,14 +143,18 @@ run_handoff() {
     local lifecycle_pid="" pytest_pid="" lifecycle_status=0 pytest_status=0
 
     interrupt_handoff() {
+        local latest_pid="$!" signal_status="$1"
         trap - INT TERM
-        [[ -z "$lifecycle_pid" ]] ||
-            kill -TERM -- "-$lifecycle_pid" 2>/dev/null || true
-        [[ -z "$pytest_pid" ]] ||
-            kill -TERM -- "-$pytest_pid" 2>/dev/null || true
+        [[ -z "$lifecycle_pid" ]] || kill -TERM -- "$lifecycle_pid" 2>/dev/null || true
+        [[ -z "$lifecycle_pid" ]] || kill -TERM -- "-$lifecycle_pid" 2>/dev/null || true
+        [[ -z "$pytest_pid" ]] || kill -TERM -- "$pytest_pid" 2>/dev/null || true
+        [[ -z "$pytest_pid" ]] || kill -TERM -- "-$pytest_pid" 2>/dev/null || true
+        [[ -z "$latest_pid" ]] || kill -TERM -- "$latest_pid" 2>/dev/null || true
+        [[ -z "$latest_pid" ]] || kill -TERM -- "-$latest_pid" 2>/dev/null || true
         [[ -z "$lifecycle_pid" ]] || wait "$lifecycle_pid" 2>/dev/null || true
         [[ -z "$pytest_pid" ]] || wait "$pytest_pid" 2>/dev/null || true
-        exit "$1"
+        [[ -z "$latest_pid" ]] || wait "$latest_pid" 2>/dev/null || true
+        exit "$signal_status"
     }
 
     trap 'interrupt_handoff 130' INT

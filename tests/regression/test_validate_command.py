@@ -299,6 +299,54 @@ def test_handoff_signal_cleans_up_started_process_groups_before_returning(
             process.wait(timeout=5)
 
 
+def test_handoff_signal_during_phase_launch_reaps_started_process_group(
+    tmp_path: Path,
+) -> None:
+    env = handoff_environment(tmp_path)
+    startup_pgid = tmp_path / "handoff-state/startup.pgid"
+    bash_env = tmp_path / "interrupt-phase-launch.sh"
+    bash_env.write_text(
+        f"""set -T
+launch_parent=$BASHPID
+trap '
+if [[ "$BASH_COMMAND" == lifecycle_pid=* ]]; then
+    trap - DEBUG
+    while ! kill -0 -- "-$!" 2>/dev/null; do :; done
+    printf "%s\\n" "$!" >"{startup_pgid}"
+    kill -TERM "$launch_parent"
+fi
+' DEBUG
+""",
+        encoding="utf-8",
+    )
+    env["BASH_ENV"] = str(bash_env)
+    process = subprocess.Popen(
+        [str(RUNNER)],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    pgid = None
+    try:
+        process.wait(timeout=10)
+        pgid = int(startup_pgid.read_text())
+
+        assert process.returncode == 143
+        with pytest.raises(ProcessLookupError):
+            os.killpg(pgid, 0)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        if pgid is not None:
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+
 def test_no_argument_run_stops_when_lint_fails(tmp_path: Path) -> None:
     env = validation_environment(tmp_path, fail_lint=True)
 
