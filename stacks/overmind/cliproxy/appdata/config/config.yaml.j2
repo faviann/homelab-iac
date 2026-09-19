@@ -24,8 +24,10 @@ remote-management:
   secret-key: {{ stack_vars.management_key_hash | quote }}
   # The panel is the OAuth login surface; disabling it removes browser login.
   disable-control-panel: false
-  # Keep the panel asset fixed for the life of the pinned image instead of
-  # pulling new panel builds from GitHub in the background.
+  # The panel asset is downloaded from GitHub on first access and cached under
+  # MANAGEMENT_STATIC_PATH; it is not part of the pinned image. This only stops
+  # the periodic background refresh, so a cached panel stays put. A missing
+  # panel is still downloaded on next access.
   disable-auto-update-panel: true
 
 debug: false

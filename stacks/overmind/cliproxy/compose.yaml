@@ -23,6 +23,14 @@ services:
       # when config.yaml changes, which is what makes the container recreate
       # and pick the new file up. See .env.j2.
       CLIPROXY_CONFIG_FINGERPRINT: ${CLIPROXY_CONFIG_FINGERPRINT:?Set CLIPROXY_CONFIG_FINGERPRINT in .env}
+      # The management panel is downloaded from GitHub on first access, not
+      # shipped in the image. Upstream stores it in <config dir>/static unless
+      # told otherwise, and this config dir is mounted read-only, so the
+      # download fails with "mkdir /conf/static: read-only file system" and
+      # /management.html returns 404. Point it at the auth dir instead, which
+      # is already writable and persistent, and where the app already keeps its
+      # own logs/ directory.
+      MANAGEMENT_STATIC_PATH: /root/.cli-proxy-api/static
     volumes:
       # A DIRECTORY mount, not a single file. Ansible renders config.yaml by
       # atomic rename, which swaps the inode; a single-file bind mount stays

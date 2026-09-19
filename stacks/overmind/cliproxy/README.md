@@ -37,6 +37,29 @@ changes, so Compose recreates the container and the new config takes effect.
 Without it, rotating `vault_overmind_cliproxy_api_key` would report success
 while the running proxy kept accepting the old key and rejecting the new one.
 
+### The management panel is downloaded, not shipped
+
+The panel asset is not part of the pinned image. Upstream fetches
+`management.html` from GitHub on first access and caches it under
+`MANAGEMENT_STATIC_PATH`, which this stack points at
+`appdata/auth/static/`. Left at its default it would land in the config
+directory, which is mounted read-only, and the download fails with
+`mkdir /conf/static: read-only file system` while `/management.html`
+returns 404.
+
+`disable-auto-update-panel: true` only stops the periodic background refresh.
+It does not pin the panel to the image, and a missing panel is still fetched on
+next access. Deleting `appdata/auth/static/` is therefore a safe way to force a
+fresh panel download.
+
+After any deploy that changes the config path, the mount layout, or the image,
+check the panel actually loads. No offline test covers it, because the failure
+only appears at runtime:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://cliproxy.local.faviann.com/management.html
+```
+
 Adding, re-authenticating, and removing provider accounts is the exception: that
 is entirely a panel operation, writes only to `auth-dir`, and Ansible never
 touches those files. No commit, no vault edit, no redeploy.
