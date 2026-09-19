@@ -64,8 +64,11 @@ Adding, re-authenticating, and removing provider accounts is the exception: that
 is entirely a panel operation, writes only to `auth-dir`, and Ansible never
 touches those files. No commit, no vault edit, no redeploy.
 
-`auth-dir` is set explicitly. It defaults to `~/.cli-proxy-api`, which is not
-where the bind mount lands, so leaving it unset loses every account on restart.
+`auth-dir` is set explicitly even though it is redundant today. The image runs
+as root with `HOME=/root`, so the default `~/.cli-proxy-api` already resolves to
+the bind mount. Stating the path keeps the mount and the config in visible
+agreement, and the contract survives a future change to the container user or
+`HOME` rather than silently relocating the credential store.
 
 ## Where it runs and how clients reach it
 
