@@ -245,12 +245,6 @@
           - _prereq_dir_stats_after.results[0].stat.mode == '0700'
           - _prereq_dir_stats_after.results[0].stat.uid == ansible_user_uid
           - _prereq_dir_stats_after.results[0].stat.gid == ansible_user_gid
-          - >-
-            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/uploads')
-            not in (_lxc_docker_env_reconciliation.materialized.created_dirs | default([]))
-          - >-
-            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/uploads')
-            not in (_lxc_docker_env_reconciliation.materialized.updated_dirs | default([]))
 
     - name: Verify missing prereq creation behavior
       ansible.builtin.assert:
@@ -267,12 +261,6 @@
           - >-
             ansible_check_mode
             or _prereq_dir_stats_after.results[1].stat.gid == ansible_user_gid
-          - >-
-            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/downloads')
-            in (_lxc_docker_env_reconciliation.materialized.created_dirs | default([]))
-          - >-
-            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/downloads')
-            not in (_lxc_docker_env_reconciliation.materialized.updated_dirs | default([]))
           - >-
             (_lxc_docker_env_reconciliation.materialized.changed_results | default([])
             | selectattr('path', 'defined')

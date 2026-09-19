@@ -56,12 +56,25 @@
         mode: "0755"
         content: |
           #!/bin/sh
-          echo "$*" >> "{{ temp_root }}/docker-calls.log"
+          printf '%s | %s\n' "$PWD" "$*" >> "{{ temp_root }}/docker-calls.log"
           case "$1 $2" in
-            "compose up")
-              echo "Started" >&2
+            "network create")
+              if [ -e "{{ temp_root }}/proxy-network" ]; then
+                echo "network already exists" >&2
+                exit 1
+              fi
+              touch "{{ temp_root }}/proxy-network"
               ;;
-            *)
+            "compose up")
+              if [ -e "{{ temp_root }}/myapp-running" ]; then
+                echo "Running" >&2
+              else
+                touch "{{ temp_root }}/myapp-running"
+                echo "Started" >&2
+              fi
+              ;;
+            "image prune")
+              echo "Total reclaimed space: 0B"
               ;;
           esac
           exit 0
@@ -78,21 +91,92 @@
         src: "{{ temp_root }}/docker-calls.log"
       register: _docker_log
 
-    - name: Assert final deployment report is populated from the reconciler boundary
+    - name: Assert deployment report has exactly the supported fields and outcomes
       ansible.builtin.assert:
         that:
-          - lxc_docker_env_deployment_report.changed
-          - lxc_docker_env_deployment_report.discovered_stacks == ['myapp']
-          - lxc_docker_env_deployment_report.quarantined_stacks == ['stale-app']
-          - lxc_docker_env_deployment_report.created_networks == ['proxy']
-          - lxc_docker_env_deployment_report.started_stacks == ['myapp']
-          - lxc_docker_env_deployment_report.skipped_stacks == []
+          - lxc_docker_env_deployment_report == expected_report
         fail_msg: "Final deployment report did not reflect the expected reconciliation outcome"
+      vars:
+        expected_report:
+          changed: true
+          discovered_stacks: [myapp]
+          quarantined_stacks: [stale-app]
+          skipped_stacks: []
 
     - name: Assert docker commands covered quarantine and startup
       ansible.builtin.assert:
         that:
-          - "'compose down --remove-orphans' in (_docker_log.content | b64decode)"
+          - >-
+            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/stale-app | compose down --remove-orphans')
+            in (_docker_log.content | b64decode)
           - "'network create proxy' in (_docker_log.content | b64decode)"
-          - "'compose up -d' in (_docker_log.content | b64decode)"
+          - >-
+            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp | compose up -d')
+            in (_docker_log.content | b64decode)
         fail_msg: "Expected docker quarantine/start commands were not issued"
+
+    - name: Read quarantined compose file
+      ansible.builtin.slurp:
+        src: >-
+          {{ lxc_docker_environment_internal.stale_stack_quarantine_root
+          }}/stale-app-{{ ansible_date_time.iso8601_basic_short }}/compose.yaml
+      register: _quarantined_compose
+
+    - name: Check original stale stack location
+      ansible.builtin.stat:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app"
+      register: _stale_stack
+
+    - name: Assert quarantine moved the stale stack and preserved its contents
+      ansible.builtin.assert:
+        that:
+          - not _stale_stack.stat.exists
+          - (_quarantined_compose.content | b64decode | from_yaml).services.old.image == 'old:latest'
+
+    - name: Reconcile again with the same desired and converged Docker state
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include stack sync main tasks for the second apply
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+
+    - name: Assert converged second apply reports no change or repeated quarantine
+      ansible.builtin.assert:
+        that:
+          - lxc_docker_env_deployment_report == expected_report
+      vars:
+        expected_report:
+          changed: false
+          discovered_stacks: [myapp]
+          quarantined_stacks: []
+          skipped_stacks: []
+
+    - name: Read Docker calls before check mode
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/docker-calls.log"
+      register: _docker_log_before_check
+
+    - name: Reconcile converged stacks in check mode
+      check_mode: true
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include stack sync main tasks in check mode
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+
+    - name: Read Docker calls after check mode
+      ansible.builtin.slurp:
+        src: "{{ temp_root }}/docker-calls.log"
+      register: _docker_log_after_check
+
+    - name: Assert check mode reports skipped stack commands without running Docker
+      ansible.builtin.assert:
+        that:
+          - lxc_docker_env_deployment_report == expected_report
+          - _docker_log_after_check.content == _docker_log_before_check.content
+      vars:
+        expected_report:
+          changed: false
+          discovered_stacks: [myapp]
+          quarantined_stacks: []
+          skipped_stacks: [myapp]

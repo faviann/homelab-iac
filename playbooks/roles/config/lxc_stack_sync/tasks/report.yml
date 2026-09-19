@@ -18,10 +18,5 @@
           | length > 0
         }}
       discovered_stacks: "{{ _lxc_docker_env_reconciliation.discovered_stacks | default([]) }}"
-      created_dirs: "{{ _lxc_docker_env_reconciliation.materialized.created_dirs | default([]) }}"
-      updated_dirs: "{{ _lxc_docker_env_reconciliation.materialized.updated_dirs | default([]) }}"
-      created_networks: "{{ _lxc_docker_env_reconciliation.started.created_networks | default([]) }}"
       quarantined_stacks: "{{ _lxc_docker_env_reconciliation.quarantined.stacks | default([]) }}"
-      started_stacks: "{{ _lxc_docker_env_reconciliation.started.started_stacks | default([]) }}"
-      unchanged_stacks: "{{ _lxc_docker_env_reconciliation.started.unchanged_stacks | default([]) }}"
       skipped_stacks: "{{ _lxc_docker_env_reconciliation.started.skipped_stacks | default([]) }}"

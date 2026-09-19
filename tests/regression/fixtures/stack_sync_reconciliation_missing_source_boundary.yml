@@ -3,12 +3,19 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  environment:
+    PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
   vars:
     docker_agents_enabled: false
     service_agents_enabled: false
     lxc_stack_sync_managed_assets:
       changed_results: []
     lxc_stack_sync_deploy_exclude_regex: "^[^/]+/(README(\\..*)?|docs($|/.*)|stack\\.ya?ml|metadata\\.(ya?ml|json))$"
+    empty_deployment_report:
+      changed: false
+      discovered_stacks: []
+      quarantined_stacks: []
+      skipped_stacks: []
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       root_docker_conf_path: "{{ temp_root }}/shared"
@@ -21,6 +28,19 @@
       docker_uid: 1000
       docker_gid: 1000
   tasks:
+    - name: Place mock Docker for missing-source reconciliation
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/docker"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          if [ "$*" = "image prune -af" ]; then
+            echo "Total reclaimed space: 0B"
+            exit 0
+          fi
+          echo "Unexpected Docker invocation: $*" >&2
+          exit 1
+
     - name: Create deployed stacks root with unmanaged rogue stack
       ansible.builtin.file:
         path: "{{ item }}"
@@ -30,5 +50,48 @@
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/rogue"
 
-    - name: Include stack sync main
+    - name: Seed a previous deployment report to verify initialization clears old results
+      ansible.builtin.set_fact:
+        lxc_docker_env_deployment_report:
+          changed: true
+          discovered_stacks: [previous-stack]
+          quarantined_stacks: [previous-stale-stack]
+          skipped_stacks: [previous-skipped-stack]
+
+    - name: Reject missing source before mutating unmanaged deployed stacks
+      block:
+        - name: Include stack sync main with an unmanaged stack present
+          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+
+        - name: Fail if discovery accepted an unmanaged deployed stack without source
+          ansible.builtin.fail:
+            msg: Expected the missing-source guardrail to reject the rogue stack
+      rescue:
+        - name: Assert missing-source guardrail leaves the full empty report initialized
+          ansible.builtin.assert:
+            that:
+              - "'Missing per-host stack source directory' in ansible_failed_result.msg"
+              - "'unmanaged deployed stack directories still exist' in ansible_failed_result.msg"
+              - "'rogue' in ansible_failed_result.msg"
+              - lxc_docker_env_deployment_report == empty_deployment_report
+
+    - name: Check the unmanaged stack remains at its original location
+      ansible.builtin.stat:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/rogue"
+      register: _rogue_stack
+
+    - name: Assert guardrail preserved the unmanaged stack
+      ansible.builtin.assert:
+        that: _rogue_stack.stat.isdir
+
+    - name: Remove the fixture unmanaged stack to allow missing-source reconciliation
+      ansible.builtin.file:
+        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/rogue"
+        state: absent
+
+    - name: Include stack sync main without source or unmanaged deployed stacks
       ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+
+    - name: Assert skipped materialization still publishes the full empty report
+      ansible.builtin.assert:
+        that: lxc_docker_env_deployment_report == empty_deployment_report
