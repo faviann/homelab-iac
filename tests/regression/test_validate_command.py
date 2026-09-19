@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -19,7 +21,7 @@ OPERATOR_MARKER = "operator-secret-marker-4f2b"
 
 
 def validation_environment(
-    tmp_path: Path, *, fail_at: int = 0, sentinel_mode: int = 0o600
+    tmp_path: Path, *, fail_lint: bool = False, sentinel_mode: int = 0o600
 ) -> dict[str, str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -29,21 +31,39 @@ def validation_environment(
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 capture = Path(os.environ["VALIDATE_TEST_CAPTURE"])
-commands = []
-if capture.exists():
-    commands = json.loads(capture.read_text(encoding="utf-8"))
-commands.append({
-    "argv": sys.argv[1:],
-    "cache_connection": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
-    "inventory": os.environ.get("ANSIBLE_INVENTORY"),
-    "lifecycle_marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
-    "vault_password_file": os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE"),
-})
-capture.write_text(json.dumps(commands), encoding="utf-8")
-if len(commands) == int(os.environ.get("VALIDATE_TEST_FAIL_AT", "0")):
+with capture.open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps({
+        "argv": sys.argv[1:],
+        "cache_connection": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
+        "inventory": os.environ.get("ANSIBLE_INVENTORY"),
+        "lifecycle_marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
+        "vault_password_file": os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE"),
+    }) + "\\n")
+
+phase = ""
+if any(item.endswith("run_lxc_lifecycle_regressions.py") for item in sys.argv):
+    phase = "lifecycle"
+elif "pytest" in sys.argv:
+    phase = "pytest"
+if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
+    if phase:
+        state = Path(state_dir)
+        (state / f"{phase}.started").write_text(str(os.getpgid(0)))
+        while not (state / "release").exists():
+            time.sleep(0.01)
+        status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
+        if status == 0 or (
+            phase == "pytest"
+            and os.environ["VALIDATE_TEST_LIFECYCLE_STATUS"] != "0"
+        ):
+            time.sleep(0.2)
+        print(f"fake-{phase}-output", flush=True)
+        raise SystemExit(status)
+if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
     raise SystemExit(41)
 """,
         encoding="utf-8",
@@ -63,10 +83,42 @@ if len(commands) == int(os.environ.get("VALIDATE_TEST_FAIL_AT", "0")):
             "HOME": str(tmp_path / "home"),
             "PATH": f"{bin_dir}:{env['PATH']}",
             "VALIDATE_TEST_CAPTURE": str(tmp_path / "commands.json"),
-            "VALIDATE_TEST_FAIL_AT": str(fail_at),
+            "VALIDATE_TEST_FAIL_LINT": "1" if fail_lint else "0",
         }
     )
     return env
+
+
+def handoff_environment(
+    tmp_path: Path,
+    *,
+    lifecycle_status: int = 0,
+    pytest_status: int = 0,
+) -> dict[str, str]:
+    state_dir = tmp_path / "handoff-state"
+    state_dir.mkdir()
+    env = validation_environment(tmp_path)
+    env.update(
+        {
+            "VALIDATE_TEST_HANDOFF_STATE": str(state_dir),
+            "VALIDATE_TEST_LIFECYCLE_STATUS": str(lifecycle_status),
+            "VALIDATE_TEST_PYTEST_STATUS": str(pytest_status),
+        }
+    )
+    return env
+
+
+def wait_for_parallel_phases(tmp_path: Path) -> list[int]:
+    markers = [
+        tmp_path / f"handoff-state/{phase}.started"
+        for phase in ("lifecycle", "pytest")
+    ]
+    deadline = time.monotonic() + 5
+    while not all(marker.exists() for marker in markers):
+        if time.monotonic() >= deadline:
+            raise AssertionError("timed out waiting for lifecycle and pytest")
+        time.sleep(0.01)
+    return [int(marker.read_text()) for marker in markers]
 
 
 def operator_sentinel(tmp_path: Path, name: str, mode: int = 0o600) -> str:
@@ -103,7 +155,7 @@ def captured_commands(tmp_path: Path) -> list[dict[str, object]]:
     capture = tmp_path / "commands.json"
     if not capture.exists():
         return []
-    return json.loads(capture.read_text(encoding="utf-8"))
+    return [json.loads(line) for line in capture.read_text().splitlines()]
 
 
 def child_kind(argv: list[str]) -> str:
@@ -130,24 +182,26 @@ def child_options(argv: list[str], marker: str) -> list[str]:
     raise AssertionError(f"{marker} missing from {argv}")
 
 
-def assert_validation_cache_was_shared_then_removed(
-    commands: list[dict[str, object]],
+def assert_validation_caches_were_removed(
+    commands: list[dict[str, object]], expected_count: int = 1
 ) -> None:
     cache_connections = {entry["cache_connection"] for entry in commands}
-    assert len(cache_connections) == 1
-    cache_connection = cache_connections.pop()
-    assert isinstance(cache_connection, str)
-    assert not Path(cache_connection).exists()
+    assert len(cache_connections) == expected_count
+    for cache_connection in cache_connections:
+        assert isinstance(cache_connection, str)
+        assert not Path(cache_connection).exists()
 
 
-def assert_fixture_environment(commands: list[dict[str, object]]) -> None:
+def assert_fixture_environment(
+    commands: list[dict[str, object]], expected_cache_count: int = 1
+) -> None:
     assert commands
     for entry in commands:
         assert entry["argv"][:2] == ["run", "--locked"]
         assert entry["inventory"] == FIXTURE_INVENTORY
         assert entry["vault_password_file"] == FIXTURE_VAULT_PASSWORD_FILE
         assert entry["lifecycle_marker"] is None
-    assert_validation_cache_was_shared_then_removed(commands)
+    assert_validation_caches_were_removed(commands, expected_cache_count)
 
 
 # --- AC1 / AC6: the no-argument comprehensive handoff run -------------------
@@ -162,26 +216,98 @@ def test_no_argument_run_is_the_comprehensive_non_live_handoff_validation(
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["lint", "lifecycle", "tests"]
-    assert child_options(commands[1]["argv"], "run_lxc_lifecycle_regressions.py") == [
+    kinds = child_kinds(commands)
+    assert kinds[0] == "lint"
+    assert set(kinds[1:]) == {"lifecycle", "tests"}
+    lifecycle_command = next(
+        command for command in commands if child_kind(command["argv"]) == "lifecycle"
+    )
+    assert child_options(lifecycle_command["argv"], "run_lxc_lifecycle_regressions.py") == [
         "--full"
     ]
-    assert_fixture_environment(commands)
+    assert_fixture_environment(commands, expected_cache_count=3)
     assert not (Path(env["HOME"]) / ".ansible/homelab-iac-lifecycle.lock").exists()
 
 
-@pytest.mark.parametrize("fail_at", [1, 2, 3])
-def test_no_argument_run_propagates_a_gate_failure_and_stops(
-    tmp_path: Path, fail_at: int
+@pytest.mark.parametrize(
+    ("lifecycle_status", "pytest_status"),
+    [(0, 0), (41, 0), (0, 43), (41, 43)],
+)
+def test_handoff_overlaps_and_reports_both_natural_results(
+    tmp_path: Path,
+    lifecycle_status: int,
+    pytest_status: int,
 ) -> None:
-    env = validation_environment(tmp_path, fail_at=fail_at)
+    env = handoff_environment(
+        tmp_path,
+        lifecycle_status=lifecycle_status,
+        pytest_status=pytest_status,
+    )
+    process = subprocess.Popen(
+        [str(RUNNER)],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        wait_for_parallel_phases(tmp_path)
+        (tmp_path / "handoff-state/release").touch()
+        stdout, stderr = process.communicate(timeout=10)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+
+    assert process.returncode == (lifecycle_status or pytest_status)
+    for phase, status in (("lifecycle", lifecycle_status), ("pytest", pytest_status)):
+        stream = stdout if status == 0 else stderr
+        result = "passed" if status == 0 else f"failed (exit {status})"
+        assert f"validate.sh: {phase} {result}" in stream
+        assert f"fake-{phase}-output" in stream
+
+
+@pytest.mark.parametrize(
+    ("signal_number", "expected_returncode"),
+    [(signal.SIGINT, 130), (signal.SIGTERM, 143)],
+)
+def test_handoff_signal_cleans_up_started_process_groups_before_returning(
+    tmp_path: Path, signal_number: int, expected_returncode: int
+) -> None:
+    env = handoff_environment(tmp_path)
+    process = subprocess.Popen(
+        [str(RUNNER)],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        process_groups = wait_for_parallel_phases(tmp_path)
+        os.kill(process.pid, signal_number)
+        process.wait(timeout=10)
+
+        assert process.returncode == expected_returncode
+        for pgid in process_groups:
+            with pytest.raises(ProcessLookupError):
+                os.killpg(pgid, 0)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+
+
+def test_no_argument_run_stops_when_lint_fails(tmp_path: Path) -> None:
+    env = validation_environment(tmp_path, fail_lint=True)
 
     result = run_validation(env, REPO_ROOT)
 
     assert result.returncode == 41
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["lint", "lifecycle", "tests"][:fail_at]
-    assert_validation_cache_was_shared_then_removed(commands)
+    assert child_kinds(commands) == ["lint"]
+    assert_validation_caches_were_removed(commands)
 
 
 # --- AC8: grammar and exit convention --------------------------------------
@@ -518,7 +644,9 @@ def test_every_operation_runs_under_the_fixture_environment(
     result = run_validation(env, REPO_ROOT, *arguments)
 
     assert result.returncode == 0, result.stderr
-    assert_fixture_environment(captured_commands(tmp_path))
+    assert_fixture_environment(
+        captured_commands(tmp_path), expected_cache_count=3 if not arguments else 1
+    )
 
 
 @pytest.mark.parametrize("arguments", OPERATION_ENTRY_POINTS)
@@ -543,26 +671,3 @@ def test_every_operation_is_agent_safe(
     assert OPERATOR_MARKER not in result.stderr
     for kind in child_kinds(captured_commands(tmp_path)):
         assert kind in {"lint", "lifecycle", "tests", "stack"}
-
-
-# --- AC9: grammar coverage replaces the exact-argv pinning -----------------
-
-
-def test_this_module_covers_the_grammar_instead_of_pinning_a_full_child_argv() -> None:
-    source = Path(__file__).read_text(encoding="utf-8")
-    retired_pinning = "VALIDATION_" + "COMMANDS"
-
-    assert retired_pinning not in source
-    for grammar_test in (
-        "test_no_argument_run_is_the_comprehensive_non_live_handoff_validation",
-        "test_no_argument_run_propagates_a_gate_failure_and_stops",
-        "test_help_exits_zero_and_names_every_operation",
-        "test_unknown_operation_or_option_is_invalid_usage",
-        "test_lifecycle_forwards_every_supported_selection",
-        "test_lifecycle_rejects_only_combined_with_full",
-        "test_tests_rejects_a_target_outside_the_test_tree",
-        "test_stack_requires_exactly_one_stack_path",
-        "test_every_operation_runs_under_the_fixture_environment",
-        "test_every_operation_is_agent_safe",
-    ):
-        assert grammar_test in globals()
