@@ -99,12 +99,13 @@ if phase == "pytest":
 def handoff_environment(
     tmp_path: Path,
     *,
+    fail_lint: bool = False,
     lifecycle_status: int = 0,
     pytest_status: int = 0,
 ) -> dict[str, str]:
     state_dir = tmp_path / "handoff-state"
     state_dir.mkdir()
-    env = validation_environment(tmp_path)
+    env = validation_environment(tmp_path, fail_lint=fail_lint)
     env.update(
         {
             "VALIDATE_TEST_HANDOFF_STATE": str(state_dir),
@@ -223,9 +224,7 @@ def test_no_argument_run_is_the_comprehensive_non_live_handoff_validation(
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    kinds = child_kinds(commands)
-    assert kinds[0] == "lint"
-    assert set(kinds[1:]) == {"lifecycle", "tests"}
+    assert set(child_kinds(commands)) == {"lint", "lifecycle", "tests"}
     lifecycle_command = next(
         command for command in commands if child_kind(command["argv"]) == "lifecycle"
     )
@@ -307,14 +306,29 @@ def test_handoff_signal_cleans_up_started_process_groups_before_returning(
 
 
 def test_no_argument_run_stops_when_lint_fails(tmp_path: Path) -> None:
-    env = validation_environment(tmp_path, fail_lint=True)
+    env = handoff_environment(tmp_path, fail_lint=True)
+    process = subprocess.Popen(
+        [str(RUNNER)],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        process_groups = wait_for_parallel_phases(tmp_path)
+        process.wait(timeout=10)
 
-    result = run_validation(env, REPO_ROOT)
-
-    assert result.returncode == 41
-    commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["lint"]
-    assert_validation_caches_were_removed(commands)
+        assert process.returncode == 41
+        assert not (tmp_path / "handoff-state/release").exists()
+        for pgid in process_groups:
+            with pytest.raises(ProcessLookupError):
+                os.killpg(pgid, 0)
+        assert_validation_caches_were_removed(captured_commands(tmp_path), 3)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
 
 
 # --- AC8: grammar and exit convention --------------------------------------
