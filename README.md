@@ -96,8 +96,9 @@ Collections are pinned in `collections/requirements.yml` and external roles in
 before Ansible starts, so `./run.sh provision` never waits on the Docker role
 and `./inspect.sh credentials` never waits on a collection at all. That holds
 because `scripts/live_dependencies.py` records what each playbook reaches; it
-breaks if a playbook gains a dependency nobody added to that table. The safer
-rule: update the table in the same change that adds the consumption.
+does not infer new consumption. When a live playbook begins consuming a
+collection or external role, update its `LIVE_OPERATIONS` row in the same
+change. An existing installation can otherwise mask a stale row.
 
 Reconciliation installs into the repository-owned `collections/` and
 `.ansible/roles/` paths configured in `ansible.cfg`. SSH-consuming operations
@@ -386,9 +387,9 @@ Builds the effective LXC specs from tier and capability group variables, ensures
 ### Module not found
 
 - Verify collections installed: `uv run --locked ansible-galaxy collection list | grep proxmox`
-- A live command reinstalls what it consumes on its own, so a persistent failure
-  means the module's collection is missing from that playbook's row in
-  `scripts/live_dependencies.py`
+- Live commands reconcile only dependencies listed in their `LIVE_OPERATIONS`
+  row. For a missing module, verify that its collection is both exactly pinned
+  and listed for the playbook; an existing installation can mask a stale row.
 
 ### Python import errors
 
