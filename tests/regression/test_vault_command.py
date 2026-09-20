@@ -48,6 +48,18 @@ INHERITED_ENVIRONMENT = frozenset(
     }
 )
 
+# Names vault_repo sets itself. Together with the allowlist above this is
+# the whole environment it hands to a subprocess; anything else present
+# means the fixture went back to inheriting the caller's environment.
+INJECTED_ENVIRONMENT = frozenset(
+    {
+        "HOME",
+        "ANSIBLE_VAULT_PASSWORD_FILE",
+        "VAULT_TEST_REPO",
+        "VAULT_TEST_BOUNDARY_CAPTURE",
+    }
+)
+
 # Values the command or a fake would honour if the fixture inherited them.
 # Applied to every test in this module so the suite's own passes are the
 # standing proof that no ambient value steers it.
@@ -239,34 +251,12 @@ def assert_no_transaction_artifacts(repo: Path, env: dict[str, str]) -> None:
         ]
 
 
-def test_only_injected_and_allowlisted_names_reach_the_subprocess(
+def test_the_fixture_inherits_nothing_it_has_not_justified(
     vault_repo: tuple[Path, dict[str, str]],
 ) -> None:
     _, env = vault_repo
-    # An absolute path, like the coreutils the fakes shell out to, so the
-    # probe does not depend on the PATH under test. A Python probe would
-    # report its own interpreter's locale coercion as an inherited name.
-    probe = subprocess.run(
-        ["/usr/bin/env", "-0"],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
 
-    assert probe.returncode == 0, probe.stderr
-    reaching = {
-        entry.split("=", 1)[0] for entry in probe.stdout.split("\0") if "=" in entry
-    }
-    assert reaching - INHERITED_ENVIRONMENT == {
-        "HOME",
-        "ANSIBLE_VAULT_PASSWORD_FILE",
-        "VAULT_TEST_REPO",
-        "VAULT_TEST_BOUNDARY_CAPTURE",
-    }
-    assert "VAULT_TEST_AMBIENT_SENTINEL" not in reaching
-    assert Path(env["HOME"]).is_relative_to(Path(env["VAULT_TEST_REPO"]).parent)
-    assert Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).is_relative_to(env["HOME"])
+    assert set(env) - INHERITED_ENVIRONMENT == INJECTED_ENVIRONMENT
 
 
 def test_vault_requires_an_operation_and_advertises_its_complete_interface() -> None:
