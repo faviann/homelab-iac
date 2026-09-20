@@ -70,17 +70,7 @@ if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
     elif (
         os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv
     ):
-        lanes = [
-            Path(state_dir) / "lifecycle.started",
-            Path(state_dir) / "pytest.started",
-        ]
-        deadline = time.monotonic() + 30
-        while not all(lane.exists() for lane in lanes):
-            if time.monotonic() >= deadline:
-                raise SystemExit(
-                    "fake uv: lifecycle and pytest never recorded a start "
-                    "within 30s, so the failing lint cannot abort them"
-                )
+        while not (Path(state_dir) / "lint-release").exists():
             time.sleep(0.01)
         raise SystemExit(41)
 if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
@@ -333,6 +323,7 @@ def test_no_argument_run_stops_when_lint_fails(tmp_path: Path) -> None:
     )
     try:
         process_groups = wait_for_parallel_phases(tmp_path)
+        (tmp_path / "handoff-state/lint-release").touch()
         process.wait(timeout=10)
 
         assert process.returncode == 41
