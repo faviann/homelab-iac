@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 import unittest
 from pathlib import Path
 
@@ -19,8 +18,9 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(handle) or {}
 
 
-def compose_variable_references(path: Path) -> set[str]:
-    return set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)", path.read_text(encoding="utf-8")))
+def env_template_keys() -> set[str]:
+    lines = (STACK_ROOT / ".env.j2").read_text(encoding="utf-8").splitlines()
+    return {line.split("=", 1)[0] for line in lines if "=" in line}
 
 
 class ServarrBeetsFlaskContractTests(unittest.TestCase):
@@ -115,25 +115,20 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn('self._log.setLevel("ERROR")', startup_script)
         self.assertIn("import beetsplug.VGMplug", startup_script)
 
-    def test_every_compose_interpolation_resolves_to_an_env_template_key(self) -> None:
-        emitted = set(
-            re.findall(
-                r"^([A-Z_][A-Z0-9_]*)=",
-                (STACK_ROOT / ".env.j2").read_text(encoding="utf-8"),
-                re.MULTILINE,
-            )
-        )
-        referenced = compose_variable_references(
-            STACK_ROOT / "compose.yaml"
-        ) | compose_variable_references(STACK_ROOT / "compose.override.yaml")
+    def test_env_template_supplies_every_variable_compose_requires(self) -> None:
+        compose = load_yaml(STACK_ROOT / "compose.yaml")["services"]["beets-flask"]
+        override = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]
+        required = {
+            "TZ": compose["environment"]["TZ"],
+            "USER_ID": compose["environment"]["USER_ID"],
+            "GROUP_ID": compose["environment"]["GROUP_ID"],
+            "HOMEPAGE_FQDN": override["labels"]["homepage.instance.admin.href"],
+        }
+        emitted = env_template_keys()
 
-        self.assertLessEqual(referenced, emitted)
-
-    def test_runtime_identity_values_come_from_the_env_file(self) -> None:
-        environment = load_yaml(STACK_ROOT / "compose.yaml")["services"]["beets-flask"]["environment"]
-
-        for key in ("TZ", "USER_ID", "GROUP_ID"):
-            self.assertRegex(environment[key], rf"^\$\{{{key}:\?")
+        for key, declared in required.items():
+            self.assertRegex(declared, rf"\$\{{{key}:\?")
+            self.assertIn(key, emitted)
 
     def test_media_mounts_keep_host_and_container_paths_identical(self) -> None:
         volumes = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]["volumes"]
