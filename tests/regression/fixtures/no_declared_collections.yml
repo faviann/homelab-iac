@@ -1,4 +1,0 @@
----
-# Credential-free launchers supply their own collection tree, so nothing is
-# pinned here and live reconciliation has nothing to install.
-collections: []

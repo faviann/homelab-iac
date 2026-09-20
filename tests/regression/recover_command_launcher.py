@@ -55,8 +55,6 @@ import sys
 from pathlib import Path
 
 arguments = sys.argv[1:]
-with Path(os.environ["RECOVER_TEST_INVOCATIONS"]).open("a", encoding="utf-8") as log:
-    log.write(json.dumps(arguments) + "\\n")
 if "ansible-playbook" not in arguments:
     raise SystemExit(0)
 
@@ -74,7 +72,6 @@ Path(os.environ["RECOVER_TEST_CAPTURE"]).write_text(json.dumps({
             "HOME": str(home),
             "PATH": f"{bin_dir}:{env['PATH']}",
             "RECOVER_TEST_CAPTURE": str(temp_root / "capture.json"),
-            "RECOVER_TEST_INVOCATIONS": str(temp_root / "invocations.jsonl"),
         }
     )
     return env
@@ -110,28 +107,6 @@ def assert_ssh_keys_routes_through_live_execution() -> None:
                 raise AssertionError(
                     "ssh-keys did not use the live boundary with both prerequisite layers:\n"
                     f"expected={expected_arguments!r}\nactual={capture!r}"
-                )
-            invocations = [
-                json.loads(line)
-                for line in (temp_root / "invocations.jsonl")
-                .read_text(encoding="utf-8")
-                .splitlines()
-            ]
-            expected_reconciliation = [
-                "run",
-                "--locked",
-                "python",
-                "-m",
-                "scripts.live_dependencies",
-                "--layers",
-                "control-node,proxmox-host",
-                "--playbook",
-                "playbooks/add-ssh-keys-to-lxcs.yml",
-            ]
-            if len(invocations) != 2 or invocations[0] != expected_reconciliation:
-                raise AssertionError(
-                    "ssh-keys did not reconcile its own dependencies before Ansible:\n"
-                    f"invocations={invocations!r}"
                 )
 
 

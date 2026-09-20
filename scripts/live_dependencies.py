@@ -17,16 +17,16 @@ is a hard dependency of `community.docker` and travels with it.
 `community.crypto` is declared but consumed by nothing, so no operation claims
 it; under ADR 0011 that is the intended outcome, not an oversight.
 
-Path resolution. Relative paths resolve against the project root. The
-declaration files default to `collections/requirements.yml` and
-`requirements/roles.yml` and are overridable through
-`HOMELAB_IAC_COLLECTION_REQUIREMENTS` and `HOMELAB_IAC_ROLE_REQUIREMENTS`. The
-collection install path is the first entry of `ANSIBLE_COLLECTIONS_PATH` when
-set, else `collections_path` from `ansible.cfg`; the role install path is the
-last entry of `ANSIBLE_ROLES_PATH` when set, else the last entry of
-`roles_path`. Those four environment variables are the supported contract the
-credential-free regression launchers point at their own fixtures, so live
-reconciliation never reaches the network during validation.
+Path resolution. Relative paths resolve against the project root.
+`collections/requirements.yml` and `requirements/roles.yml` are the only
+declaration files, and a consumed dependency they do not pin is an error rather
+than a no-op, so a registry typo or a deleted pin surfaces here instead of as a
+missing module inside Ansible. The collection install path is the first entry of
+`ANSIBLE_COLLECTIONS_PATH` when set, else `collections_path` from `ansible.cfg`;
+the role install path is the last entry of `ANSIBLE_ROLES_PATH` when set, else
+the last entry of `roles_path`. Each dependency is installed by name at its own
+pin, never through the whole declaration file, so one operation's install can
+never be blocked by a role or collection it does not consume.
 """
 
 from __future__ import annotations
@@ -44,6 +44,8 @@ from pathlib import Path
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+COLLECTION_REQUIREMENTS = Path("collections/requirements.yml")
+ROLE_REQUIREMENTS = Path("requirements/roles.yml")
 
 
 @dataclass(frozen=True)
@@ -161,22 +163,6 @@ def role_install_path(project_root: Path, config: configparser.ConfigParser) -> 
     return _resolve(project_root, entries[-1])
 
 
-def collection_requirements_path(project_root: Path) -> Path:
-    return _resolve(
-        project_root,
-        os.environ.get(
-            "HOMELAB_IAC_COLLECTION_REQUIREMENTS", "collections/requirements.yml"
-        ),
-    )
-
-
-def role_requirements_path(project_root: Path) -> Path:
-    return _resolve(
-        project_root,
-        os.environ.get("HOMELAB_IAC_ROLE_REQUIREMENTS", "requirements/roles.yml"),
-    )
-
-
 def _declared_versions(path: Path, key: str) -> dict[str, str]:
     try:
         document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -227,6 +213,18 @@ def _run_galaxy(
         )
 
 
+def _declared_version(
+    declared: dict[str, str], requirements: Path, playbook: str, kind: str, name: str
+) -> str:
+    version = declared.get(name)
+    if version is None:
+        raise DependencyReconciliationError(
+            f"Live playbook '{playbook}' consumes Ansible {kind} {name}, "
+            f"which {requirements} does not pin."
+        )
+    return version
+
+
 def _reconcile_collections(
     project_root: Path,
     config: configparser.ConfigParser,
@@ -235,11 +233,14 @@ def _reconcile_collections(
 ) -> None:
     if not names:
         return
-    declared = _declared_versions(collection_requirements_path(project_root), "collections")
+    requirements = project_root / COLLECTION_REQUIREMENTS
+    declared = _declared_versions(requirements, "collections")
     install_path = collection_install_path(project_root, config)
     for name in names:
-        version = declared.get(name)
-        if version is None or _installed_collection_version(install_path, name) == version:
+        version = _declared_version(
+            declared, requirements, playbook, "collection", name
+        )
+        if _installed_collection_version(install_path, name) == version:
             continue
         _run_galaxy(
             project_root,
@@ -270,18 +271,18 @@ def _reconcile_roles(
 ) -> None:
     if not names:
         return
-    requirements = role_requirements_path(project_root)
+    requirements = project_root / ROLE_REQUIREMENTS
     declared = _declared_versions(requirements, "roles")
     roles_path = role_install_path(project_root, config)
     for name in names:
-        version = declared.get(name)
-        if version is None or _installed_role_version(roles_path, name) == version:
+        version = _declared_version(declared, requirements, playbook, "role", name)
+        if _installed_role_version(roles_path, name) == version:
             continue
         _run_galaxy(
             project_root,
             playbook,
             f"Ansible role {name} {version}",
-            ["role", "install", "--force", "-r", str(requirements), "-p", str(roles_path)],
+            ["role", "install", "--force", f"{name},{version}", "-p", str(roles_path)],
         )
         installed = _installed_role_version(roles_path, name)
         if installed != version:

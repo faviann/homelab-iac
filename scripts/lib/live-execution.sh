@@ -131,14 +131,6 @@ run_live_playbook() {
     local playbook="$3"
     shift 3
 
-    local reconcile_status=0
-    (
-        cd "$LIVE_EXECUTION_PROJECT_ROOT" &&
-            exec uv run --locked python -m scripts.live_dependencies \
-                --layers "$prerequisite_layers" --playbook "$playbook"
-    ) || reconcile_status=$?
-    ((reconcile_status == 0)) || return "$reconcile_status"
-
     mkdir -p "$(dirname "$LIVE_EXECUTION_LOCK_FILE")" "$LIVE_EXECUTION_HOLDER_DIR"
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"
     if ! acquire_live_metadata_lock "$live_execution_metadata_lock_fd"; then
@@ -179,13 +171,19 @@ run_live_playbook() {
     export "$LIVE_EXECUTION_WRAPPER_MARKER=1"
     cd "$LIVE_EXECUTION_PROJECT_ROOT"
 
-    echo "Running Ansible playbook through uv: $playbook"
-    echo "────────────────────────────────────────"
+    # Reconciling under the held lock keeps contention fail-fast: a caller that
+    # cannot run must not spend a download first.
     local status=0
-    (
-        write_live_holder_record "$holder_file" "$BASHPID" "$$"
-        exec uv run --locked ansible-playbook "$playbook" "$@"
-    ) || status=1
+    uv run --locked python -m scripts.live_dependencies \
+        --layers "$prerequisite_layers" --playbook "$playbook" || status=$?
+    if ((status == 0)); then
+        echo "Running Ansible playbook through uv: $playbook"
+        echo "────────────────────────────────────────"
+        (
+            write_live_holder_record "$holder_file" "$BASHPID" "$$"
+            exec uv run --locked ansible-playbook "$playbook" "$@"
+        ) || status=1
+    fi
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"
     if ! flock --exclusive \
         --wait "$LIVE_EXECUTION_METADATA_LOCK_WAIT_SECONDS" \

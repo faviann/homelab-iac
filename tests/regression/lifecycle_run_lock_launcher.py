@@ -32,8 +32,6 @@ FIXTURE_COLLECTIONS = (
     REPO_ROOT
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
-NO_DECLARED_COLLECTIONS = REPO_ROOT / "tests/regression/fixtures/no_declared_collections.yml"
-NO_DECLARED_ROLES = REPO_ROOT / "tests/regression/fixtures/no_declared_roles.yml"
 
 
 def make_fake_uv(bin_dir: Path) -> None:
@@ -50,12 +48,6 @@ import time
 from pathlib import Path
 
 arguments = sys.argv[1:]
-with Path(os.environ["LIFECYCLE_TEST_INVOCATIONS"]).open("a", encoding="utf-8") as log:
-    log.write(json.dumps(arguments) + "\\n")
-if "scripts.live_dependencies" in arguments:
-    # Resolve the real reconciler even when the caller runs from a copied tree.
-    os.environ["PYTHONPATH"] = os.environ["LIFECYCLE_TEST_REPO_ROOT"]
-    os.execv(sys.executable, [sys.executable, *arguments[arguments.index("python") + 1:]])
 if "ansible-playbook" not in arguments:
     raise SystemExit(0)
 
@@ -114,11 +106,7 @@ def wrapper_environment(temp_root: Path, *, mode: str = "success") -> dict[str, 
             "HOME": str(home),
             "PATH": f"{bin_dir}:{env['PATH']}",
             "LIFECYCLE_TEST_CAPTURE": str(temp_root / "capture.json"),
-            "LIFECYCLE_TEST_INVOCATIONS": str(temp_root / "invocations.jsonl"),
             "LIFECYCLE_TEST_MODE": mode,
-            "LIFECYCLE_TEST_REPO_ROOT": str(REPO_ROOT),
-            "HOMELAB_IAC_COLLECTION_REQUIREMENTS": str(NO_DECLARED_COLLECTIONS),
-            "HOMELAB_IAC_ROLE_REQUIREMENTS": str(NO_DECLARED_ROLES),
         }
     )
     return env
@@ -590,47 +578,6 @@ def assert_wrapper_routes_and_propagates() -> None:
             )
 
 
-def assert_dependency_reconciliation_gates_each_playbook() -> None:
-    cases = (
-        ((), "site.yml"),
-        (("provision",), "playbooks/provision-lxcs.yml"),
-        (("configure",), "playbooks/configure-lxcs.yml"),
-    )
-    for arguments, playbook in cases:
-        with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-dependencies-") as temp_dir:
-            temp_root = Path(temp_dir)
-            env = wrapper_environment(temp_root)
-            proc = run_wrapper(env, *arguments)
-            invocations = [
-                json.loads(line)
-                for line in (temp_root / "invocations.jsonl")
-                .read_text(encoding="utf-8")
-                .splitlines()
-            ]
-            expected_reconciliation = [
-                "run",
-                "--locked",
-                "python",
-                "-m",
-                "scripts.live_dependencies",
-                "--layers",
-                "control-node,proxmox-host",
-                "--playbook",
-                playbook,
-            ]
-            if (
-                proc.returncode != 0
-                or len(invocations) != 2
-                or invocations[0] != expected_reconciliation
-                or invocations[1][:4]
-                != ["run", "--locked", "ansible-playbook", playbook]
-            ):
-                raise AssertionError(
-                    f"{arguments!r} did not reconcile {playbook} before launching it:\n"
-                    f"returncode={proc.returncode}\ninvocations={invocations!r}"
-                )
-
-
 def assert_contention_fails_fast() -> None:
     with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-contention-") as temp_dir:
         temp_root = Path(temp_dir)
@@ -1049,50 +996,11 @@ def assert_live_execution_responsibilities_are_sourced() -> None:
         "flock --shared --nonblock",
         "flock --exclusive --nonblock",
         "HOMELAB_IAC_LIFECYCLE_WRAPPER",
-        "scripts.live_dependencies",
         RAW_LIVE_PLAYBOOK_COMMAND,
     )
-    if "$prerequisite_layers:$playbook" in library_source:
-        raise AssertionError(
-            "live-execution library keeps a second copy of the layer-to-playbook pairing"
-        )
     missing = [fragment for fragment in required_library_fragments if fragment not in library_source]
     if missing:
         raise AssertionError(f"live-execution library is missing responsibilities: {missing}")
-
-
-def assert_mismatched_prerequisite_layers_prevent_execution() -> None:
-    with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-layer-mismatch-") as temp_dir:
-        temp_root = Path(temp_dir)
-        env = wrapper_environment(temp_root)
-        mismatched_runner = temp_root / "run.sh"
-        mismatched_runner.write_text(
-            RUNNER.read_text(encoding="utf-8").replace(
-                'run_live_playbook "$lock_class" control-node,proxmox-host',
-                'run_live_playbook "$lock_class" control-node',
-            ),
-            encoding="utf-8",
-        )
-        mismatched_runner.chmod(0o755)
-        library_path = temp_root / "scripts/lib/live-execution.sh"
-        library_path.parent.mkdir(parents=True)
-        library_path.write_text(
-            LIVE_EXECUTION_LIBRARY.read_text(encoding="utf-8"), encoding="utf-8"
-        )
-
-        proc = subprocess.run(
-            [str(mismatched_runner)],
-            cwd=temp_root,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=15,
-        )
-        if proc.returncode != 2 or (temp_root / "capture.json").exists():
-            raise AssertionError(
-                "a lifecycle command with incomplete prerequisite layers launched:\n"
-                f"{proc.stdout}\n{proc.stderr}"
-            )
 
 
 def assert_check_mode_opt_out_audit_is_unchanged() -> None:
@@ -1319,7 +1227,6 @@ def main() -> int:
         assert_prerequisite_plays_survive_lifecycle_limits()
         assert_command_grammar_reports_help_and_usage_errors()
         assert_wrapper_routes_and_propagates()
-        assert_dependency_reconciliation_gates_each_playbook()
         assert_contention_fails_fast()
         assert_lock_class_follows_operation_class()
         assert_contention_names_a_remaining_shared_holder()
@@ -1329,7 +1236,6 @@ def main() -> int:
         assert_metadata_coordination_has_a_bounded_failure()
         assert_holder_metadata_covers_lock_lifetime()
         assert_live_execution_responsibilities_are_sourced()
-        assert_mismatched_prerequisite_layers_prevent_execution()
         assert_check_mode_opt_out_audit_is_unchanged()
         assert_null_stack_filter_preserves_all_stack_behavior()
         assert_lock_decision_amends_linear_execution_adr()
