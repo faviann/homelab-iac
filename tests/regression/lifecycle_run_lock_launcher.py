@@ -1042,7 +1042,6 @@ def assert_check_mode_opt_out_audit_is_unchanged() -> None:
         ("playbooks/roles/config/lxc_workstation_baseline/tasks/origin_firewall.yml", "Resolve workstation origin firewall allowlist address"),
         ("playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml", "Inspect existing mount status for persistent home paths"),
         ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/ssh_access.yml", "Test if SSH key authentication already works"),
-        ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Check if pct command is available"),
         ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Verify pct command works"),
         ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Check installed lxc-pve version"),
         ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Assert lxc-pve meets nested Docker minimum"),
