@@ -54,8 +54,12 @@ import os
 import sys
 from pathlib import Path
 
+arguments = sys.argv[1:]
+if "ansible-playbook" not in arguments:
+    raise SystemExit(0)
+
 Path(os.environ["RECOVER_TEST_CAPTURE"]).write_text(json.dumps({
-    "argv": sys.argv[1:],
+    "argv": arguments,
     "marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
 }), encoding="utf-8")
 """,

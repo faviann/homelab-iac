@@ -38,25 +38,21 @@ case "${1:-}" in
         ;;
     credentials)
         playbook="playbooks/validate-credentials.yml"
-        prerequisite_layers="control-node"
         supports_limit=false
         shift
         ;;
     connectivity)
         playbook="playbooks/lab-connectivity.yml"
-        prerequisite_layers="control-node"
         supports_limit=true
         shift
         ;;
     containers)
         playbook="playbooks/proxmox_api_check.yml"
-        prerequisite_layers="control-node"
         supports_limit=false
         shift
         ;;
     plan)
         playbook="playbooks/validate-infrastructure.yml"
-        prerequisite_layers="control-node,proxmox-host"
         supports_limit=true
         requires_check_mode=true
         shift
@@ -124,4 +120,4 @@ fi
 $requires_check_mode && arguments+=("--check")
 arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
 
-run_live_playbook shared "$prerequisite_layers" "$playbook" "${arguments[@]}"
+run_live_playbook shared "$playbook" "${arguments[@]}"

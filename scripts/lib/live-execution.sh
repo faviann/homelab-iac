@@ -127,27 +127,8 @@ report_live_lock_holder() {
 
 run_live_playbook() {
     local lock_class="$1"
-    local prerequisite_layers="$2"
-    local playbook="$3"
-    shift 3
-
-    case "$prerequisite_layers:$playbook" in
-        control-node,proxmox-host:site.yml|\
-        control-node,proxmox-host:playbooks/provision-lxcs.yml|\
-        control-node,proxmox-host:playbooks/configure-lxcs.yml|\
-        control-node,proxmox-host:playbooks/validate-infrastructure.yml|\
-        control-node,proxmox-host:playbooks/add-ssh-keys-to-lxcs.yml|\
-        control-node:playbooks/validate-credentials.yml|\
-        control-node:playbooks/lab-connectivity.yml|\
-        control-node:playbooks/proxmox_api_check.yml)
-            ;;
-        *)
-            echo \
-                "Unsupported prerequisite layers '$prerequisite_layers' for live playbook '$playbook'" \
-                >&2
-            return 2
-            ;;
-    esac
+    local playbook="$2"
+    shift 2
 
     mkdir -p "$(dirname "$LIVE_EXECUTION_LOCK_FILE")" "$LIVE_EXECUTION_HOLDER_DIR"
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"
@@ -189,13 +170,19 @@ run_live_playbook() {
     export "$LIVE_EXECUTION_WRAPPER_MARKER=1"
     cd "$LIVE_EXECUTION_PROJECT_ROOT"
 
-    echo "Running Ansible playbook through uv: $playbook"
-    echo "────────────────────────────────────────"
+    # Reconciling under the held lock keeps contention fail-fast: a caller that
+    # cannot run must not spend a download first.
     local status=0
-    (
-        write_live_holder_record "$holder_file" "$BASHPID" "$$"
-        exec uv run --locked ansible-playbook "$playbook" "$@"
-    ) || status=1
+    uv run --locked python -m scripts.live_dependencies \
+        --playbook "$playbook" || status=$?
+    if ((status == 0)); then
+        echo "Running Ansible playbook through uv: $playbook"
+        echo "────────────────────────────────────────"
+        (
+            write_live_holder_record "$holder_file" "$BASHPID" "$$"
+            exec uv run --locked ansible-playbook "$playbook" "$@"
+        ) || status=1
+    fi
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"
     if ! flock --exclusive \
         --wait "$LIVE_EXECUTION_METADATA_LOCK_WAIT_SECONDS" \

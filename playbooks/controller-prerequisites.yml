@@ -13,11 +13,7 @@
     # of the target host and cache it, so the next SSH play tries to run the
     # controller's venv python inside the container. Pin it so no discovery runs.
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
-    control_node_project_root: "{{ playbook_dir | dirname }}"
     control_node_uv_virtualenv: "{{ [playbook_dir | dirname, '.venv'] | path_join }}"
-    control_node_collection_install_path: "{{ [playbook_dir | dirname, 'collections'] | path_join }}"
-    control_node_collection_requirements: >-
-      {{ [playbook_dir | dirname, 'collections', 'requirements.yml'] | path_join }}
   tags:
     - control_node_prerequisites
   tasks:
@@ -36,53 +32,10 @@
       register: control_node_virtualenv_stat
       run_once: true
 
-    - name: Read required Ansible collection versions
-      ansible.builtin.include_vars:
-        file: "{{ control_node_collection_requirements }}"
-        name: control_node_dependency_requirements
-      run_once: true
-
-    - name: Read installed Ansible collection manifests
-      ansible.builtin.slurp:
-        src: >-
-          {{
-            [
-              control_node_collection_install_path,
-              'ansible_collections',
-              item.name | replace('.', '/'),
-              'MANIFEST.json'
-            ] | path_join
-          }}
-      loop: "{{ control_node_dependency_requirements.collections }}"
-      register: control_node_collection_manifests
-      failed_when: false
-      run_once: true
-
     - name: Assert uv-managed control node virtual environment is present
       ansible.builtin.assert:
         that:
           - control_node_virtualenv_stat.stat.exists
         fail_msg: >-
           Bootstrap prerequisite {{ control_node_uv_virtualenv }} is missing. Run `./setup.sh sync`.
-      run_once: true
-
-    - name: Assert installed Ansible collection versions match requirements
-      ansible.builtin.assert:
-        that:
-          - control_node_installed_collection_version == item.item.version | string
-        fail_msg: >-
-          Ansible collection {{ item.item.name }} version drift:
-          expected {{ item.item.version }}, installed {{ control_node_installed_collection_version }}.
-          Run `./setup.sh bootstrap`.
-        quiet: true
-      vars:
-        control_node_installed_collection_version: >-
-          {{
-            ((item.content | b64decode | from_json).collection_info.version | string)
-            if item.content is defined
-            else 'missing'
-          }}
-      loop: "{{ control_node_collection_manifests.results }}"
-      loop_control:
-        label: "{{ item.item.name }}"
       run_once: true

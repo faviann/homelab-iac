@@ -47,9 +47,13 @@ import sys
 import time
 from pathlib import Path
 
+arguments = sys.argv[1:]
+if "ansible-playbook" not in arguments:
+    raise SystemExit(0)
+
 capture = Path(os.environ["LIFECYCLE_TEST_CAPTURE"])
 capture.write_text(json.dumps({
-    "argv": sys.argv[1:],
+    "argv": arguments,
     "marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
     "pid": os.getpid(),
 }), encoding="utf-8")
@@ -984,54 +988,19 @@ def assert_live_execution_responsibilities_are_sourced() -> None:
     present = [fragment for fragment in forbidden_runner_fragments if fragment in runner_source]
     if present:
         raise AssertionError(f"run.sh retains live-execution responsibilities: {present}")
-    if 'run_live_playbook "$lock_class" control-node,proxmox-host' not in runner_source:
-        raise AssertionError("run.sh must select the L1 and L3 prerequisite layers")
+    if 'run_live_playbook "$lock_class" "$playbook"' not in runner_source:
+        raise AssertionError("run.sh must delegate its selected playbook to live execution")
 
     library_source = LIVE_EXECUTION_LIBRARY.read_text(encoding="utf-8")
     required_library_fragments = (
         "flock --shared --nonblock",
         "flock --exclusive --nonblock",
         "HOMELAB_IAC_LIFECYCLE_WRAPPER",
-        "control-node,proxmox-host",
         RAW_LIVE_PLAYBOOK_COMMAND,
     )
     missing = [fragment for fragment in required_library_fragments if fragment not in library_source]
     if missing:
         raise AssertionError(f"live-execution library is missing responsibilities: {missing}")
-
-
-def assert_mismatched_prerequisite_layers_prevent_execution() -> None:
-    with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-layer-mismatch-") as temp_dir:
-        temp_root = Path(temp_dir)
-        env = wrapper_environment(temp_root)
-        mismatched_runner = temp_root / "run.sh"
-        mismatched_runner.write_text(
-            RUNNER.read_text(encoding="utf-8").replace(
-                'run_live_playbook "$lock_class" control-node,proxmox-host',
-                'run_live_playbook "$lock_class" control-node',
-            ),
-            encoding="utf-8",
-        )
-        mismatched_runner.chmod(0o755)
-        library_path = temp_root / "scripts/lib/live-execution.sh"
-        library_path.parent.mkdir(parents=True)
-        library_path.write_text(
-            LIVE_EXECUTION_LIBRARY.read_text(encoding="utf-8"), encoding="utf-8"
-        )
-
-        proc = subprocess.run(
-            [str(mismatched_runner)],
-            cwd=temp_root,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=15,
-        )
-        if proc.returncode != 2 or (temp_root / "capture.json").exists():
-            raise AssertionError(
-                "a lifecycle command with incomplete prerequisite layers launched:\n"
-                f"{proc.stdout}\n{proc.stderr}"
-            )
 
 
 def assert_check_mode_opt_out_audit_is_unchanged() -> None:
@@ -1266,7 +1235,6 @@ def main() -> int:
         assert_metadata_coordination_has_a_bounded_failure()
         assert_holder_metadata_covers_lock_lifetime()
         assert_live_execution_responsibilities_are_sourced()
-        assert_mismatched_prerequisite_layers_prevent_execution()
         assert_check_mode_opt_out_audit_is_unchanged()
         assert_null_stack_filter_preserves_all_stack_behavior()
         assert_lock_decision_amends_linear_execution_adr()

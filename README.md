@@ -31,13 +31,18 @@ run on their own, non-interactively:
 
 ```bash
 ./setup.sh sync       # locked dependency synchronization only
-./setup.sh bootstrap  # collections, external roles, controller SSH key
+./setup.sh bootstrap  # every declared collection and role, plus the controller SSH key
 ```
+
+Bootstrap is not prerequisite sequencing for collections or external roles:
+`./run.sh`, `./inspect.sh`, and `./recover.sh` install and verify what they
+consume. A new controller may still need `./setup.sh bootstrap` once to create
+`~/.ansible/ssh/proxmox_lxc` before managed-host operations.
 
 **After setup, validate your credentials:**
 
 ```bash
-uv run --locked ansible-playbook playbooks/validate-credentials.yml
+./inspect.sh credentials
 ```
 
 **Manual setup:** See [detailed instructions below](#first-time-setup).
@@ -69,7 +74,7 @@ This repository manages **LXC containers only**. Virtual machines (VMs/KVM) are 
 
 ### Required System Packages (Install First)
 
-Before running bootstrap, install these packages:
+Before running any repository command, install these packages:
 
 ```bash
 sudo apt update
@@ -85,7 +90,22 @@ sudo apt install -y python3 curl sshpass
 
 Python dependencies are declared in `pyproject.toml` and locked in `uv.lock`.
 Run `./setup.sh` for the guided path, or `./setup.sh sync` if the workstation is already prepared.
-Collections and external roles are prepared by `./setup.sh bootstrap`.
+
+Collections are pinned in `collections/requirements.yml` and external roles in
+`requirements/roles.yml`. Each live command reconciles the subset it consumes
+before Ansible starts, so `./run.sh provision` never waits on the Docker role
+and `./inspect.sh credentials` never waits on a collection at all. That holds
+because `scripts/live_dependencies.py` records what each playbook reaches; it
+does not infer new consumption. When a live playbook begins consuming a
+collection or external role, update its `LIVE_OPERATIONS` row in the same
+change. An existing installation can otherwise mask a stale row.
+
+Reconciliation installs into the repository-owned `collections/` and
+`.ansible/roles/` paths configured in `ansible.cfg`. SSH-consuming operations
+also create the repository's configured `.ansible/cp/` directory before
+Ansible starts. They do not create the controller SSH key; if
+`~/.ansible/ssh/proxmox_lxc` is absent, run `./setup.sh bootstrap` before a
+managed-host operation.
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
@@ -143,13 +163,16 @@ If you prefer manual setup or need to troubleshoot:
    ./setup.sh sync
    ```
 
-4. **Run bootstrap:**
+4. **Create the controller SSH key:**
 
    ```bash
    ./setup.sh bootstrap
    ```
 
-   This creates SSH keys and installs collections and external roles.
+   Live commands install the collections and roles they consume by themselves,
+   but they only verify controller identity, never create it. On a new
+   controller, run bootstrap once so `~/.ansible/ssh/proxmox_lxc` exists before
+   the first managed-host operation.
 
    When you run lifecycle playbooks from the `workstation` LXC itself, they exclude that host by
    default. To manage it intentionally, run:
@@ -178,7 +201,7 @@ If you prefer manual setup or need to troubleshoot:
 6. **Validate credentials:**
 
    ```bash
-   uv run --locked ansible-playbook playbooks/validate-credentials.yml
+   ./inspect.sh credentials
    ```
 
 ### After Setup
@@ -186,9 +209,8 @@ If you prefer manual setup or need to troubleshoot:
 Test connectivity:
 
 ```bash
-uv run --locked ansible-playbook playbooks/validate-credentials.yml
-# Or test full site validation
-./run.sh --tags validation
+./inspect.sh credentials
+./inspect.sh connectivity
 ```
 
 ## Usage
@@ -364,8 +386,10 @@ Builds the effective LXC specs from tier and capability group variables, ensures
 
 ### Module not found
 
-- Verify collections installed: `ansible-galaxy collection list | grep proxmox`
-- Re-run `./setup.sh bootstrap` to reinstall collections after updating dependency files
+- Verify collections installed: `uv run --locked ansible-galaxy collection list | grep proxmox`
+- Live commands reconcile only dependencies listed in their `LIVE_OPERATIONS`
+  row. For a missing module, verify that its collection is both exactly pinned
+  and listed for the playbook; an existing installation can mask a stale row.
 
 ### Python import errors
 
