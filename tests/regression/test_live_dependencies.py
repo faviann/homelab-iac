@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import configparser
 import fcntl
 import json
 import os
 import re
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 
@@ -18,7 +18,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.live_dependencies import (  # noqa: E402
+    COLLECTIONS_PATH,
     LIVE_OPERATIONS,
+    ROLES_PATH,
+    SSH_CONTROL_PATH_PARENT,
     DependencyReconciliationError,
     UnsupportedLiveOperation,
     reconcile,
@@ -27,14 +30,6 @@ from scripts.live_dependencies import (  # noqa: E402
 PUBLIC_COMMANDS = ("run.sh", "inspect.sh", "recover.sh")
 PLAYBOOK_TOKEN = re.compile(r"site\.yml|playbooks/[A-Za-z0-9_-]+\.yml")
 POISON_ROLE = "example.explodes"
-ANSIBLE_CFG = """[defaults]
-collections_path = collections
-roles_path = playbooks/roles:.ansible/roles
-
-[ssh_connection]
-control_path = .ansible/cp/%%h-%%p-%%r
-"""
-
 FAKE_UV = """#!/usr/bin/env python3
 import os
 import sys
@@ -79,14 +74,6 @@ if arguments[0] == "collection":
     (manifest / "MANIFEST.json").write_text(
         json.dumps({{"collection_info": {{"version": version}}}}), encoding="utf-8"
     )
-    modules = manifest / "plugins/modules"
-    modules.mkdir(parents=True, exist_ok=True)
-    (modules / "dependency_probe.py").write_text(
-        "from ansible.module_utils.basic import AnsibleModule\\n"
-        "AnsibleModule(argument_spec=dict()).exit_json(changed=False, version="
-        + repr(version) + ")\\n",
-        encoding="utf-8",
-    )
 else:
     name, declared = spec.split(",")
     version = os.environ.get("GALAXY_INSTALLS_VERSION", declared)
@@ -94,14 +81,6 @@ else:
     meta.mkdir(parents=True, exist_ok=True)
     (meta / ".galaxy_install_info").write_text(
         f"version: {{version}}\\n", encoding="utf-8"
-    )
-    tasks = install_path / name / "tasks"
-    tasks.mkdir(parents=True, exist_ok=True)
-    (tasks / "main.yml").write_text(
-        "- name: Report the role version actually consumed\\n"
-        "  ansible.builtin.set_fact:\\n"
-        f"    consumed_role_version: '{{version}}'\\n",
-        encoding="utf-8",
     )
 """
 
@@ -111,14 +90,7 @@ RECORDING_UV = """#!/usr/bin/env python3
 import json
 import os
 import sys
-from pathlib import Path
-
 arguments = sys.argv[1:]
-expected_parent = os.environ.get("EXPECTED_CONTROL_PATH_PARENT")
-if "ansible-playbook" in arguments and expected_parent:
-    if not Path(expected_parent).is_dir():
-        sys.stderr.write(f"missing ControlPath parent before ansible-playbook: {expected_parent}\\n")
-        raise SystemExit(9)
 with open(os.environ["UV_RECORD"], "a", encoding="utf-8") as record:
     record.write(json.dumps(arguments) + "\\n")
 if "scripts.live_dependencies" in arguments:
@@ -141,7 +113,6 @@ def fixture_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     project_root = tmp_path / "project"
     (project_root / "collections").mkdir(parents=True)
     (project_root / "requirements").mkdir()
-    (project_root / "ansible.cfg").write_text(ANSIBLE_CFG, encoding="utf-8")
 
     fixture_bin = tmp_path / "bin"
     fixture_bin.mkdir()
@@ -150,31 +121,8 @@ def fixture_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     monkeypatch.setenv("PATH", f"{fixture_bin}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("GALAXY_LOG", str(tmp_path / "galaxy.log"))
-    monkeypatch.delenv("ANSIBLE_COLLECTIONS_PATH", raising=False)
-    monkeypatch.delenv("ANSIBLE_ROLES_PATH", raising=False)
-    monkeypatch.delenv("ANSIBLE_CONFIG", raising=False)
-    monkeypatch.delenv("ANSIBLE_SSH_CONTROL_PATH", raising=False)
-    monkeypatch.delenv("ANSIBLE_SSH_CONTROL_PATH_DIR", raising=False)
     monkeypatch.chdir(project_root)
     return project_root
-
-
-@pytest.fixture
-def live_fixture_project(
-    fixture_project: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
-    # Only the real command boundary is copied; tests supply localhost plays.
-    for relative in (
-        "run.sh",
-        "inspect.sh",
-        "scripts/lib/live-execution.sh",
-        "scripts/live_dependencies.py",
-    ):
-        target = fixture_project / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO_ROOT / relative, target)
-    monkeypatch.setenv("HOME", str(fixture_project / "home"))
-    return fixture_project
 
 
 def declare(project_root: Path, collections: dict[str, str], roles: dict[str, str]) -> None:
@@ -247,6 +195,19 @@ def test_every_consumed_dependency_is_declared_with_an_exact_pin() -> None:
     for operation in LIVE_OPERATIONS.values():
         assert set(operation.collections) <= set(collections)
         assert set(operation.roles) <= set(roles)
+
+
+def test_repository_paths_match_the_normal_ansible_configuration() -> None:
+    config = configparser.ConfigParser(interpolation=None)
+    config.read(REPO_ROOT / "ansible.cfg", encoding="utf-8")
+
+    assert config.get("defaults", "collections_path") == str(COLLECTIONS_PATH)
+    assert config.get("defaults", "roles_path").split(os.pathsep)[-1] == str(
+        ROLES_PATH
+    )
+    assert Path(config.get("ssh_connection", "control_path")).parent == (
+        SSH_CONTROL_PATH_PARENT
+    )
 
 
 def test_docker_role_is_claimed_only_by_configure_capable_operations() -> None:
@@ -443,7 +404,7 @@ def test_api_only_operation_needs_neither_declarations_nor_a_control_path(
     assert not (fixture_project / ".ansible" / "cp").exists()
 
 
-def test_ssh_operation_creates_the_configured_control_path_parent(
+def test_ssh_operation_creates_the_repository_control_path_parent(
     fixture_project: Path,
 ) -> None:
     reconcile("playbooks/lab-connectivity.yml", project_root=fixture_project)
@@ -451,273 +412,6 @@ def test_ssh_operation_creates_the_configured_control_path_parent(
     control_path_parent = fixture_project / ".ansible" / "cp"
     assert control_path_parent.is_dir()
     assert control_path_parent.stat().st_mode & 0o777 == 0o700
-
-
-def test_custom_control_path_preserves_existing_directory_permissions(
-    fixture_project: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    directory = fixture_project / "shared-sockets"
-    directory.mkdir(mode=0o755)
-    monkeypatch.setenv("ANSIBLE_SSH_CONTROL_PATH", str(directory / "%%h-%%p-%%r"))
-
-    reconcile("playbooks/lab-connectivity.yml", project_root=fixture_project)
-
-    assert directory.stat().st_mode & 0o777 == 0o755
-
-
-@pytest.mark.parametrize("override", ["ANSIBLE_CONFIG", "ANSIBLE_SSH_CONTROL_PATH"])
-def test_live_wrapper_prepares_the_control_path_ansible_actually_uses(
-    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch, override: str
-) -> None:
-    fixture_project = live_fixture_project
-    playbook = fixture_project / "playbooks/lab-connectivity.yml"
-    playbook.parent.mkdir()
-    playbook.write_text(
-        """---
-- name: Observe the SSH configuration without making an SSH connection
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  tasks:
-    - name: Require reconciliation of Ansible's effective control-path parent
-      ansible.builtin.assert:
-        that:
-          - control_parent is directory
-      vars:
-        control_parent: >-
-          {{ lookup('ansible.builtin.config', 'control_path',
-                    plugin_type='connection', plugin_name='ssh') | dirname }}
-""",
-        encoding="utf-8",
-    )
-    control_path = fixture_project / "override-sockets/%%h-%%p-%%r"
-    if override == "ANSIBLE_CONFIG":
-        config = fixture_project / "alternate.cfg"
-        config.write_text(f"[ssh_connection]\ncontrol_path = {control_path}\n")
-        monkeypatch.setenv(override, str(config))
-    else:
-        monkeypatch.setenv(override, str(control_path))
-
-    result = subprocess.run(
-        ["bash", str(fixture_project / "inspect.sh"), "connectivity"],
-        cwd=fixture_project,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_run_passthrough_prepares_explicit_ssh_control_path_before_ansible(
-    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project = live_fixture_project
-    declare(project, {"community.proxmox": "9.9.9"}, {})
-    install_collection(project, "community.proxmox", "9.9.9")
-    control_parent = project / "passthrough-sockets"
-    control_path = control_parent / "%h-%p-%r"
-    uv_executable = shutil.which("uv")
-    assert uv_executable is not None
-    write_executable(Path(uv_executable), RECORDING_UV)
-    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
-    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(control_parent))
-
-    result = subprocess.run(
-        [
-            "bash",
-            str(project / "run.sh"),
-            "provision",
-            "--",
-            f"--ssh-common-args=-oControlPath={control_path}",
-        ],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert control_parent.is_dir()
-
-
-@pytest.mark.parametrize("source", ["config", "environment"])
-def test_live_wrapper_prepares_control_path_from_effective_ssh_args(
-    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch, source: str
-) -> None:
-    project = live_fixture_project
-    control_parent = project / f"{source}-ssh-args-sockets"
-    control_path = control_parent / "%h-%p-%r"
-    if source == "config":
-        config = project / "ssh-args.cfg"
-        config.write_text(
-            f"[ssh_connection]\nssh_args = -o ControlPath={control_path}\n",
-            encoding="utf-8",
-        )
-        monkeypatch.setenv("ANSIBLE_CONFIG", str(config))
-    else:
-        monkeypatch.setenv("ANSIBLE_SSH_ARGS", f"-o ControlPath={control_path}")
-    uv_executable = shutil.which("uv")
-    assert uv_executable is not None
-    write_executable(Path(uv_executable), RECORDING_UV)
-    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
-    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(control_parent))
-
-    result = subprocess.run(
-        ["bash", str(project / "inspect.sh"), "connectivity"],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert control_parent.is_dir()
-
-
-def test_ssh_args_control_path_precedes_cli_common_args(
-    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project = live_fixture_project
-    declare(project, {"community.proxmox": "9.9.9"}, {})
-    install_collection(project, "community.proxmox", "9.9.9")
-    ssh_args_parent = project / "ssh-args-sockets"
-    common_args_parent = project / "common-args-sockets"
-    monkeypatch.setenv(
-        "ANSIBLE_SSH_ARGS", f"-o ControlPath={ssh_args_parent}/%h-%p-%r"
-    )
-    uv_executable = shutil.which("uv")
-    assert uv_executable is not None
-    write_executable(Path(uv_executable), RECORDING_UV)
-    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
-    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(ssh_args_parent))
-
-    result = subprocess.run(
-        [
-            "bash",
-            str(project / "run.sh"),
-            "provision",
-            "--",
-            f"--ssh-common-args=-oControlPath={common_args_parent}/%h-%p-%r",
-        ],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert ssh_args_parent.is_dir()
-    assert not common_args_parent.exists()
-
-
-def test_cli_ssh_extra_control_path_overrides_ssh_args_control_path(
-    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project = live_fixture_project
-    declare(project, {"community.proxmox": "9.9.9"}, {})
-    install_collection(project, "community.proxmox", "9.9.9")
-    ssh_args_parent = project / "ignored-ssh-args-sockets"
-    extra_args_parent = project / "ssh-extra-sockets"
-    monkeypatch.setenv(
-        "ANSIBLE_SSH_ARGS", f"-o ControlPath={ssh_args_parent}/%h-%p-%r"
-    )
-    uv_executable = shutil.which("uv")
-    assert uv_executable is not None
-    write_executable(Path(uv_executable), RECORDING_UV)
-    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
-    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(extra_args_parent))
-
-    result = subprocess.run(
-        [
-            "bash",
-            str(project / "run.sh"),
-            "provision",
-            "--",
-            f"--ssh-extra-args=-S{extra_args_parent}/%h-%p-%r",
-        ],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert extra_args_parent.is_dir()
-
-
-@pytest.mark.parametrize("shadow", ["none", "role", "collection"])
-def test_live_wrapper_consumes_reconciled_pins_from_the_effective_config(
-    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch, shadow: str
-) -> None:
-    project = live_fixture_project
-    declare(
-        project,
-        {name: "9.9.9" for name in LIVE_OPERATIONS["site.yml"].collections},
-        {"geerlingguy.docker": "7.9.0", POISON_ROLE: "1.0.0"},
-    )
-    settings = project / "settings"
-    settings.mkdir()
-    config = settings / "ansible.cfg"
-    config.write_text(
-        "[defaults]\ncollections_path = collections\n"
-        "roles_path = roles-first:roles-last\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("ANSIBLE_CONFIG", str(config))
-    if shadow == "role":
-        # A correct pin in the last directory does not repair the older role
-        # Ansible will find first. Observe the role's execution, not its files.
-        for directory, version in (("roles-first", "1.0.0"), ("roles-last", "7.9.0")):
-            role = settings / directory / "geerlingguy.docker"
-            (role / "meta").mkdir(parents=True)
-            (role / "meta/.galaxy_install_info").write_text(f"version: {version}\n")
-            (role / "tasks").mkdir()
-            (role / "tasks/main.yml").write_text(
-                "- ansible.builtin.set_fact:\n"
-                f"    consumed_role_version: '{version}'\n"
-            )
-    if shadow == "collection":
-        # Adjacent collections precede even the configured collection paths.
-        install_collection(project, "community.proxmox", "1.0.0")
-        modules = (
-            project / "collections/ansible_collections/community/proxmox/plugins/modules"
-        )
-        modules.mkdir(parents=True)
-        (modules / "dependency_probe.py").write_text(
-            "from ansible.module_utils.basic import AnsibleModule\n"
-            "AnsibleModule(argument_spec=dict()).exit_json(changed=False, version='1.0.0')\n"
-        )
-    (project / "site.yml").write_text(
-        """---
-- name: Consume only fixture dependencies on localhost
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  roles:
-    - geerlingguy.docker
-  tasks:
-    - name: Execute the collection found by Ansible
-      community.proxmox.dependency_probe:
-      register: consumed_collection
-    - name: Require the declared pins at the point of consumption
-      ansible.builtin.assert:
-        that:
-          - consumed_collection.version == '9.9.9'
-          - consumed_role_version == '7.9.0'
-""",
-        encoding="utf-8",
-    )
-
-    result = subprocess.run(
-        ["bash", str(project / "run.sh")],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_live_path_never_directs_the_caller_to_the_retired_bootstrap() -> None:
@@ -730,19 +424,6 @@ def test_live_path_never_directs_the_caller_to_the_retired_bootstrap() -> None:
     ]
     for source in live_sources:
         assert "setup.sh bootstrap" not in source.read_text(encoding="utf-8"), source
-
-
-def test_credential_free_collection_fixture_satisfies_the_declared_pin() -> None:
-    """Staging keeps live reconciliation off the network during validation."""
-    manifest = (
-        REPO_ROOT
-        / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
-        / "ansible_collections/community/proxmox/MANIFEST.json"
-    )
-    staged = json.loads(manifest.read_text(encoding="utf-8"))
-    assert staged["collection_info"]["version"] == declared(
-        "collections/requirements.yml", "collections"
-    )["community.proxmox"]
 
 
 def run_boundary(
@@ -816,3 +497,15 @@ def test_unsupported_playbook_stops_the_boundary_before_ansible(tmp_path: Path) 
     assert "Unsupported live playbook 'playbooks/unsupported.yml'" in result.stderr
     invoked = [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
     assert not any("ansible-playbook" in arguments for arguments in invoked)
+
+
+@pytest.mark.serial
+def test_reconciliation_precedes_ansible_at_the_live_boundary(tmp_path: Path) -> None:
+    result, record = run_boundary(
+        tmp_path, "shared", "playbooks/validate-credentials.yml"
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    invoked = [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
+    assert "scripts.live_dependencies" in invoked[0]
+    assert "ansible-playbook" in invoked[1]

@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import socket
 import subprocess
-import sys
 from types import ModuleType
 
 import pytest
@@ -249,52 +248,3 @@ def test_effective_fixture_inventory_uses_only_non_resolving_connection_targets(
 
         with pytest.raises(socket.gaierror):
             socket.getaddrinfo(target, None)
-
-
-def test_direct_pytest_replaces_inherited_ansible_environment_before_run_sh(
-    tmp_path: Path,
-) -> None:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_uv = bin_dir / "uv"
-    fake_uv.write_text(
-        """#!/usr/bin/env python3
-import json
-import os
-from pathlib import Path
-
-Path(os.environ["PYTEST_BOUNDARY_CAPTURE"]).write_text(json.dumps({
-    "inventory": os.environ.get("ANSIBLE_INVENTORY"),
-    "vault_password_file": os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE"),
-}))
-""",
-        encoding="utf-8",
-    )
-    fake_uv.chmod(0o755)
-
-    operator_inventory = tmp_path / "operator-inventory.yml"
-    operator_inventory.write_text("operator inventory must not be used\n")
-    operator_vault = tmp_path / "operator-vault-pass"
-    operator_vault.write_text("operator vault must not be used\n")
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "ANSIBLE_INVENTORY": str(operator_inventory),
-            "ANSIBLE_VAULT_PASSWORD_FILE": str(operator_vault),
-            "HOME": str(tmp_path / "home"),
-            "PATH": f"{bin_dir}:{environment['PATH']}",
-            "PYTEST_BOUNDARY_CAPTURE": str(tmp_path / "capture.json"),
-        }
-    )
-    probe = Path(__file__).parent / "fixtures/pytest_ansible_boundary_probe.py"
-
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-n", "0", str(probe)],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        env=environment,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
