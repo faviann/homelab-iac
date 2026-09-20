@@ -628,15 +628,18 @@ def test_configure_replaces_only_credentials_through_a_tty_transaction(
     assert list(repo.rglob("*backup*")) == []
 
 
-def test_configure_preserves_comments_and_document_marker(
+def test_configure_preserves_untouched_yaml_presentation(
     vault_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = vault_repo
     vault = repo / "inventory/group_vars/all/vault.yml"
-    annotated = """---
+    long_value = "long-token-" + "x" * 96
+    original_line = f"vault_long_value: {long_value}"
+    annotated = f"""---
 # operator note: rotate quarterly
 unrelated_scalar: keep-me  # inline comment
 quoted_scalar: "keep-me"
+{original_line}
 """
     vault.write_text(HEADER + annotated, encoding="utf-8")
 
@@ -650,23 +653,6 @@ quoted_scalar: "keep-me"
     assert "# operator note: rotate quarterly" in plaintext
     assert "unrelated_scalar: keep-me  # inline comment" in plaintext
     assert 'quoted_scalar: "keep-me"' in plaintext.splitlines()
-
-
-def test_configure_does_not_reformat_a_long_untouched_scalar(
-    vault_repo: tuple[Path, dict[str, str]],
-) -> None:
-    repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
-    long_value = "long-token-" + "x" * 96
-    original_line = f"vault_long_value: {long_value}"
-    vault.write_text(HEADER + original_line + "\n", encoding="utf-8")
-
-    returncode, output = run_vault_tty(
-        repo, env, configure_interactions(), "configure"
-    )
-
-    assert returncode == 0, output
-    plaintext = vault.read_text(encoding="utf-8").removeprefix(HEADER)
     assert len(original_line) > 80
     assert original_line in plaintext.splitlines()
 
@@ -1323,15 +1309,18 @@ def test_set_replaces_an_existing_key_in_place(
     assert mapping["unrelated_scalar"] == "keep-me"
 
 
-def test_set_preserves_comments_and_document_marker(
+def test_set_preserves_untouched_yaml_presentation(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
     vault = repo / "inventory/group_vars/all/vault.yml"
-    annotated = """---
+    long_value = "long-token-" + "x" * 96
+    original_line = f"vault_long_value: {long_value}"
+    annotated = f"""---
 # operator note: rotate quarterly
 unrelated_scalar: keep-me  # inline comment
 quoted_scalar: "keep-me"
+{original_line}
 """
     vault.write_text(HEADER + annotated, encoding="utf-8")
     source = write_source(tmp_path / "secret")
@@ -1346,24 +1335,6 @@ quoted_scalar: "keep-me"
     assert "# operator note: rotate quarterly" in plaintext
     assert "unrelated_scalar: keep-me  # inline comment" in plaintext
     assert 'quoted_scalar: "keep-me"' in plaintext.splitlines()
-
-
-def test_set_does_not_reformat_a_long_untouched_scalar(
-    vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
-) -> None:
-    repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
-    long_value = "long-token-" + "x" * 96
-    original_line = f"vault_long_value: {long_value}"
-    vault.write_text(HEADER + original_line + "\n", encoding="utf-8")
-    source = write_source(tmp_path / "secret")
-
-    result = run_vault(
-        repo, env, "set", "vault_transferred", "--from-file", str(source), "--create"
-    )
-
-    assert result.returncode == 0, result.stderr
-    plaintext = vault.read_text(encoding="utf-8").removeprefix(HEADER)
     assert len(original_line) > 80
     assert original_line in plaintext.splitlines()
 
