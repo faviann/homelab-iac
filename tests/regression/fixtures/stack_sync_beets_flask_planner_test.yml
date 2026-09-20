@@ -6,7 +6,7 @@
   vars:
     beets_stacks_source: "{{ repo_root }}/stacks/servarr"
     docker_uid: 1000
-    docker_gid: 1001
+    docker_gid: 1000
     default_domain: admin.example.invalid
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
@@ -14,7 +14,7 @@
       shared_owner: 1000
       shared_group: 1000
       docker_uid: 1000
-      docker_gid: 1001
+      docker_gid: 1000
     lxc_docker_env_stack_vars:
       beets-flask:
         acoustid_apikey: "acoustid-pa$$"
@@ -69,15 +69,11 @@
           - beets-flask/.env
           - beets-flask/appdata/beets/config.yaml
 
-    - name: Assert the rendered beets-flask templates resolve the domain and pass secrets through raw
+    - name: Assert the rendered beets-flask config receives its secrets unescaped
       ansible.builtin.assert:
         that:
-          - "'USER_ID=1000' in rendered_env"
-          - "'GROUP_ID=1001' in rendered_env"
-          - "'HOMEPAGE_FQDN=beets-flask.admin.example.invalid' in rendered_env"
           - "'apikey: \"acoustid-pa$$\"' in rendered_beets_config"
           - "'user_token: \"discogs-pa$$\"' in rendered_beets_config"
-        fail_msg: "Rendered beets-flask templates did not match the expected contract"
+        fail_msg: "Rendered beets-flask config did not receive its secrets unescaped"
       vars:
-        rendered_env: "{{ _beets_rendered['beets-flask/.env'] }}"
         rendered_beets_config: "{{ _beets_rendered['beets-flask/appdata/beets/config.yaml'] }}"

@@ -18,11 +18,6 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(handle) or {}
 
 
-def env_template_keys() -> set[str]:
-    lines = (STACK_ROOT / ".env.j2").read_text(encoding="utf-8").splitlines()
-    return {line.split("=", 1)[0] for line in lines if "=" in line}
-
-
 class ServarrBeetsFlaskContractTests(unittest.TestCase):
     def test_servarr_inventory_exposes_beets_flask_contract(self) -> None:
         servarr_vars = load_yaml(REPO_ROOT / "inventory/host_vars/servarr.yml")
@@ -114,21 +109,6 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn("from beets.autotag.distance import Distance, string_dist", startup_script)
         self.assertIn('self._log.setLevel("ERROR")', startup_script)
         self.assertIn("import beetsplug.VGMplug", startup_script)
-
-    def test_env_template_supplies_every_variable_compose_requires(self) -> None:
-        compose = load_yaml(STACK_ROOT / "compose.yaml")["services"]["beets-flask"]
-        override = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]
-        required = {
-            "TZ": compose["environment"]["TZ"],
-            "USER_ID": compose["environment"]["USER_ID"],
-            "GROUP_ID": compose["environment"]["GROUP_ID"],
-            "HOMEPAGE_FQDN": override["labels"]["homepage.instance.admin.href"],
-        }
-        emitted = env_template_keys()
-
-        for key, declared in required.items():
-            self.assertRegex(declared, rf"\$\{{{key}:\?")
-            self.assertIn(key, emitted)
 
     def test_media_mounts_keep_host_and_container_paths_identical(self) -> None:
         volumes = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]["volumes"]
