@@ -34,9 +34,10 @@ run on their own, non-interactively:
 ./setup.sh bootstrap  # every declared collection and role, plus the controller SSH key
 ```
 
-Neither is prerequisite sequencing. `./run.sh`, `./inspect.sh`, and
-`./recover.sh` install and verify the collections and external roles they
-consume on their own; `bootstrap` just does all of them eagerly in one pass.
+Bootstrap is not prerequisite sequencing for collections or external roles:
+`./run.sh`, `./inspect.sh`, and `./recover.sh` install and verify what they
+consume. A new controller may still need `./setup.sh bootstrap` once to create
+`~/.ansible/ssh/proxmox_lxc` before managed-host operations.
 
 **After setup, validate your credentials:**
 
@@ -101,7 +102,9 @@ rule: update the table in the same change that adds the consumption.
 Reconciliation installs into the repository-owned `collections/` and
 `.ansible/roles/` paths configured in `ansible.cfg`. SSH-consuming operations
 also create the repository's configured `.ansible/cp/` directory before
-Ansible starts.
+Ansible starts. They do not create the controller SSH key; if
+`~/.ansible/ssh/proxmox_lxc` is absent, run `./setup.sh bootstrap` before a
+managed-host operation.
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
@@ -166,8 +169,9 @@ If you prefer manual setup or need to troubleshoot:
    ```
 
    Live commands install the collections and roles they consume by themselves,
-   but they only verify controller identity, never create it. Run this once so
-   `~/.ansible/ssh/proxmox_lxc` exists before the first managed-host operation.
+   but they only verify controller identity, never create it. On a new
+   controller, run bootstrap once so `~/.ansible/ssh/proxmox_lxc` exists before
+   the first managed-host operation.
 
    When you run lifecycle playbooks from the `workstation` LXC itself, they exclude that host by
    default. To manage it intentionally, run:
