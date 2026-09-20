@@ -49,17 +49,24 @@ with capture.open("a", encoding="utf-8") as stream:
     }) + "\\n")
 
 phase = ""
-if any(item.endswith("run_lxc_lifecycle_regressions.py") for item in sys.argv):
+if "ansible-lint" in sys.argv:
+    phase = "lint"
+elif any(item.endswith("run_lxc_lifecycle_regressions.py") for item in sys.argv):
     phase = "lifecycle"
 elif "pytest" in sys.argv:
     phase = "pytest"
+lint_fails = phase == "lint" and os.environ["VALIDATE_TEST_FAIL_LINT"] == "1"
 if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
     if phase:
         state = Path(state_dir)
         (state / f"{phase}.started").write_text(str(os.getpgid(0)))
-        while not (state / "release").exists():
+        release = "lint-release" if lint_fails else "release"
+        while not (state / release).exists():
             time.sleep(0.01)
-        status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
+        if phase == "lint":
+            status = 41 if lint_fails else 0
+        else:
+            status = int(os.environ[f"VALIDATE_TEST_{phase.upper()}_STATUS"])
         if status == 0 or (
             phase == "pytest"
             and os.environ["VALIDATE_TEST_LIFECYCLE_STATUS"] != "0"
@@ -67,13 +74,7 @@ if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
             time.sleep(0.2)
         print(f"fake-{phase}-output", flush=True)
         raise SystemExit(status)
-    elif (
-        os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv
-    ):
-        while not (Path(state_dir) / "lint-release").exists():
-            time.sleep(0.01)
-        raise SystemExit(41)
-if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
+if lint_fails:
     raise SystemExit(41)
 if phase == "pytest":
     raise SystemExit(int(os.environ["VALIDATE_TEST_PYTEST_STATUS"]))
@@ -122,15 +123,15 @@ def handoff_environment(
     return env
 
 
-def wait_for_parallel_phases(tmp_path: Path) -> list[int]:
+def wait_for_handoff_children(tmp_path: Path) -> list[int]:
     markers = [
         tmp_path / f"handoff-state/{phase}.started"
-        for phase in ("lifecycle", "pytest")
+        for phase in ("lint", "lifecycle", "pytest")
     ]
     deadline = time.monotonic() + 5
     while not all(marker.exists() for marker in markers):
         if time.monotonic() >= deadline:
-            raise AssertionError("timed out waiting for lifecycle and pytest")
+            raise AssertionError("timed out waiting for handoff children")
         time.sleep(0.01)
     return [int(marker.read_text()) for marker in markers]
 
@@ -264,7 +265,7 @@ def test_handoff_overlaps_and_reports_both_natural_results(
         text=True,
     )
     try:
-        wait_for_parallel_phases(tmp_path)
+        wait_for_handoff_children(tmp_path)
         (tmp_path / "handoff-state/release").touch()
         stdout, stderr = process.communicate(timeout=10)
     finally:
@@ -297,7 +298,7 @@ def test_handoff_signal_cleans_up_started_process_groups_before_returning(
         start_new_session=True,
     )
     try:
-        process_groups = wait_for_parallel_phases(tmp_path)
+        process_groups = wait_for_handoff_children(tmp_path)
         os.kill(process.pid, signal_number)
         process.wait(timeout=10)
 
@@ -322,7 +323,7 @@ def test_no_argument_run_stops_when_lint_fails(tmp_path: Path) -> None:
         start_new_session=True,
     )
     try:
-        process_groups = wait_for_parallel_phases(tmp_path)
+        process_groups = wait_for_handoff_children(tmp_path)
         (tmp_path / "handoff-state/lint-release").touch()
         process.wait(timeout=10)
 
