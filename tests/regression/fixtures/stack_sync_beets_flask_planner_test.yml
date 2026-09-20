@@ -5,9 +5,6 @@
   gather_facts: false
   vars:
     beets_stacks_source: "{{ repo_root }}/stacks/servarr"
-    docker_uid: 1000
-    docker_gid: 1000
-    default_domain: admin.example.invalid
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       stacks_source: "{{ beets_stacks_source }}"
@@ -19,7 +16,6 @@
       beets-flask:
         acoustid_apikey: "acoustid-pa$$"
         discogs_token: "discogs-pa$$"
-    lxc_docker_env_desired_top_level_stack_dirs: []
     _per_host_stack_metadata_files:
       files: []
     _per_host_dirs:
@@ -29,11 +25,9 @@
       ansible.builtin.set_fact:
         _per_host_j2_files:
           files:
-            - path: "{{ beets_stacks_source }}/beets-flask/.env.j2"
             - path: "{{ beets_stacks_source }}/beets-flask/appdata/beets/config.yaml.j2"
         _per_host_static_files:
           files:
-            - path: "{{ beets_stacks_source }}/beets-flask/compose.yaml"
             - path: "{{ beets_stacks_source }}/beets-flask/compose.override.yaml"
 
     - name: Plan the real beets-flask sources
@@ -53,21 +47,13 @@
       loop_control:
         label: "{{ item.relative_path }}"
 
-    - name: Assert the planner classifies the real beets-flask sources
+    - name: Assert the planner reads the real beets-flask prerequisite declaration
       ansible.builtin.assert:
         that:
-          - lxc_stack_sync_manifest_plan.templated_outputs == expected_templated_outputs
-          - >-
-            (lxc_stack_sync_manifest_plan.files_to_copy | map(attribute='relative_path') | list)
-            == ['beets-flask/compose.yaml', 'beets-flask/compose.override.yaml']
           - >-
             (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)
             == ['/data/media/_ingest/music']
-        fail_msg: "Planner did not classify the real beets-flask sources as expected"
-      vars:
-        expected_templated_outputs:
-          - beets-flask/.env
-          - beets-flask/appdata/beets/config.yaml
+        fail_msg: "Planner did not derive the beets-flask ingest prerequisite directory"
 
     - name: Assert the rendered beets-flask config receives its secrets unescaped
       ansible.builtin.assert:

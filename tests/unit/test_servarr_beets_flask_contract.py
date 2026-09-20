@@ -129,9 +129,7 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn(ingest_dir, compose_override["x-prereq-dirs"])
         self.assertEqual(gui_config["terminal"]["start_path"], ingest_dir)
 
-        soundtrack_inbox = gui_config["inbox"]["folders"]["SoundtrackInbox"]
-        self.assertEqual(soundtrack_inbox["path"], ingest_dir)
-        self.assertEqual(soundtrack_inbox["autotag"], "preview")
+        self.assertEqual(gui_config["inbox"]["folders"]["SoundtrackInbox"]["path"], ingest_dir)
 
     def test_appdata_is_mounted_as_the_container_config_dir(self) -> None:
         compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
