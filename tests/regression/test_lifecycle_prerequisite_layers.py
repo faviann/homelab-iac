@@ -182,16 +182,12 @@ def test_future_live_playbook_needs_l1_but_no_matrix_entry() -> None:
 
 def test_current_entrypoints_exclude_nonignored_untracked_playbooks() -> None:
     relative = Path("playbooks/_untracked_entrypoint_test.yml")
-    untracked = REPO_ROOT / relative
-    assert not untracked.exists()
-    try:
-        untracked.write_text("---\n- hosts: future_targets\n", encoding="utf-8")
-        ignored = subprocess.run(
-            ["git", "check-ignore", "--quiet", str(relative)],
-            cwd=REPO_ROOT,
-            check=False,
-        )
-        assert ignored.returncode == 1
-        assert relative not in current_entrypoints()
-    finally:
-        untracked.unlink(missing_ok=True)
+    # The path is deliberately never created: repo-wide lint runs concurrently
+    # with this suite and would discover the file.
+    ignored = subprocess.run(
+        ["git", "check-ignore", "--quiet", str(relative)],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    assert ignored.returncode == 1
+    assert relative not in current_entrypoints()
