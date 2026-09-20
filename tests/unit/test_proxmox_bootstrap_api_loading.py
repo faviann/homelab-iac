@@ -86,6 +86,11 @@ def test_disabled_api_validation_does_not_invoke_the_api_module(
     puts its stub, so the stub stays resolvable however
     ANSIBLE_COLLECTIONS_PATH is set. This case therefore proves the task is
     not executed; it cannot prove the collection goes unresolved.
+
+    The fixture also disables pct validation and marks SSH not ready, so this
+    same run doubles as proof that the validation summary reports unrun
+    checks as `not checked` with no success marker, and prints no SSH line at
+    all.
     """
     command, env = api_validation
     result = subprocess.run(
@@ -93,6 +98,11 @@ def test_disabled_api_validation_does_not_invoke_the_api_module(
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "controlled API invocation" not in result.stdout
+    assert "API access: not checked" in result.stdout, result.stdout
+    assert "✓ API access" not in result.stdout, result.stdout
+    assert "pct command: not checked" in result.stdout, result.stdout
+    assert "✓ pct command" not in result.stdout, result.stdout
+    assert "SSH access" not in result.stdout, result.stdout
 
 
 def test_task_listing_advertises_api_task_exactly_once(
