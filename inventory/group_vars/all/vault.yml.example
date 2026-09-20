@@ -13,7 +13,7 @@
 #   3. Encrypt with: uv run --locked ansible-vault encrypt inventory/group_vars/all/vault.yml
 #
 # To update credentials later:
-#   Run ./configure-vault.sh for guided reconfiguration
+#   Run ./vault.sh configure for guided reconfiguration
 #
 # To create a Proxmox API token:
 #   1. Log into Proxmox web interface
