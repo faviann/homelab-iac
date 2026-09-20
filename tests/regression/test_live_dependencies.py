@@ -7,6 +7,7 @@ import json
 import os
 import re
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -78,6 +79,14 @@ if arguments[0] == "collection":
     (manifest / "MANIFEST.json").write_text(
         json.dumps({{"collection_info": {{"version": version}}}}), encoding="utf-8"
     )
+    modules = manifest / "plugins/modules"
+    modules.mkdir(parents=True, exist_ok=True)
+    (modules / "dependency_probe.py").write_text(
+        "from ansible.module_utils.basic import AnsibleModule\\n"
+        "AnsibleModule(argument_spec=dict()).exit_json(changed=False, version="
+        + repr(version) + ")\\n",
+        encoding="utf-8",
+    )
 else:
     name, declared = spec.split(",")
     version = os.environ.get("GALAXY_INSTALLS_VERSION", declared)
@@ -85,6 +94,14 @@ else:
     meta.mkdir(parents=True, exist_ok=True)
     (meta / ".galaxy_install_info").write_text(
         f"version: {{version}}\\n", encoding="utf-8"
+    )
+    tasks = install_path / name / "tasks"
+    tasks.mkdir(parents=True, exist_ok=True)
+    (tasks / "main.yml").write_text(
+        "- name: Report the role version actually consumed\\n"
+        "  ansible.builtin.set_fact:\\n"
+        f"    consumed_role_version: '{{version}}'\\n",
+        encoding="utf-8",
     )
 """
 
@@ -129,7 +146,29 @@ def fixture_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("GALAXY_LOG", str(tmp_path / "galaxy.log"))
     monkeypatch.delenv("ANSIBLE_COLLECTIONS_PATH", raising=False)
     monkeypatch.delenv("ANSIBLE_ROLES_PATH", raising=False)
+    monkeypatch.delenv("ANSIBLE_CONFIG", raising=False)
+    monkeypatch.delenv("ANSIBLE_SSH_CONTROL_PATH", raising=False)
+    monkeypatch.delenv("ANSIBLE_SSH_CONTROL_PATH_DIR", raising=False)
+    monkeypatch.chdir(project_root)
     return project_root
+
+
+@pytest.fixture
+def live_fixture_project(
+    fixture_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    # Only the real command boundary is copied; tests supply localhost plays.
+    for relative in (
+        "run.sh",
+        "inspect.sh",
+        "scripts/lib/live-execution.sh",
+        "scripts/live_dependencies.py",
+    ):
+        target = fixture_project / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO_ROOT / relative, target)
+    monkeypatch.setenv("HOME", str(fixture_project / "home"))
+    return fixture_project
 
 
 def declare(project_root: Path, collections: dict[str, str], roles: dict[str, str]) -> None:
@@ -418,6 +457,138 @@ def test_ssh_operation_creates_the_configured_control_path_parent(
     control_path_parent = fixture_project / ".ansible" / "cp"
     assert control_path_parent.is_dir()
     assert control_path_parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_custom_control_path_preserves_existing_directory_permissions(
+    fixture_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = fixture_project / "shared-sockets"
+    directory.mkdir(mode=0o755)
+    monkeypatch.setenv("ANSIBLE_SSH_CONTROL_PATH", str(directory / "%%h-%%p-%%r"))
+
+    reconcile(
+        "control-node", "playbooks/lab-connectivity.yml", project_root=fixture_project
+    )
+
+    assert directory.stat().st_mode & 0o777 == 0o755
+
+
+@pytest.mark.parametrize("override", ["ANSIBLE_CONFIG", "ANSIBLE_SSH_CONTROL_PATH"])
+def test_live_wrapper_prepares_the_control_path_ansible_actually_uses(
+    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch, override: str
+) -> None:
+    fixture_project = live_fixture_project
+    playbook = fixture_project / "playbooks/lab-connectivity.yml"
+    playbook.parent.mkdir()
+    playbook.write_text(
+        """---
+- name: Observe the SSH configuration without making an SSH connection
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Require reconciliation of Ansible's effective control-path parent
+      ansible.builtin.assert:
+        that:
+          - control_parent is directory
+      vars:
+        control_parent: >-
+          {{ lookup('ansible.builtin.config', 'control_path',
+                    plugin_type='connection', plugin_name='ssh') | dirname }}
+""",
+        encoding="utf-8",
+    )
+    control_path = fixture_project / "override-sockets/%%h-%%p-%%r"
+    if override == "ANSIBLE_CONFIG":
+        config = fixture_project / "alternate.cfg"
+        config.write_text(f"[ssh_connection]\ncontrol_path = {control_path}\n")
+        monkeypatch.setenv(override, str(config))
+    else:
+        monkeypatch.setenv(override, str(control_path))
+
+    result = subprocess.run(
+        ["bash", str(fixture_project / "inspect.sh"), "connectivity"],
+        cwd=fixture_project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("shadow", ["none", "role", "collection"])
+def test_live_wrapper_consumes_reconciled_pins_from_the_effective_config(
+    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch, shadow: str
+) -> None:
+    project = live_fixture_project
+    declare(
+        project,
+        {name: "9.9.9" for name in LIVE_OPERATIONS["site.yml"].collections},
+        {"geerlingguy.docker": "7.9.0", POISON_ROLE: "1.0.0"},
+    )
+    settings = project / "settings"
+    settings.mkdir()
+    config = settings / "ansible.cfg"
+    config.write_text(
+        "[defaults]\ncollections_path = collections\n"
+        "roles_path = roles-first:roles-last\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ANSIBLE_CONFIG", str(config))
+    if shadow == "role":
+        # A correct pin in the last directory does not repair the older role
+        # Ansible will find first. Observe the role's execution, not its files.
+        for directory, version in (("roles-first", "1.0.0"), ("roles-last", "7.9.0")):
+            role = settings / directory / "geerlingguy.docker"
+            (role / "meta").mkdir(parents=True)
+            (role / "meta/.galaxy_install_info").write_text(f"version: {version}\n")
+            (role / "tasks").mkdir()
+            (role / "tasks/main.yml").write_text(
+                "- ansible.builtin.set_fact:\n"
+                f"    consumed_role_version: '{version}'\n"
+            )
+    if shadow == "collection":
+        # Adjacent collections precede even the configured collection paths.
+        install_collection(project, "community.proxmox", "1.0.0")
+        modules = (
+            project / "collections/ansible_collections/community/proxmox/plugins/modules"
+        )
+        modules.mkdir(parents=True)
+        (modules / "dependency_probe.py").write_text(
+            "from ansible.module_utils.basic import AnsibleModule\n"
+            "AnsibleModule(argument_spec=dict()).exit_json(changed=False, version='1.0.0')\n"
+        )
+    (project / "site.yml").write_text(
+        """---
+- name: Consume only fixture dependencies on localhost
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - geerlingguy.docker
+  tasks:
+    - name: Execute the collection found by Ansible
+      community.proxmox.dependency_probe:
+      register: consumed_collection
+    - name: Require the declared pins at the point of consumption
+      ansible.builtin.assert:
+        that:
+          - consumed_collection.version == '9.9.9'
+          - consumed_role_version == '7.9.0'
+""",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(project / "run.sh")],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_live_path_never_directs_the_caller_to_the_retired_bootstrap() -> None:

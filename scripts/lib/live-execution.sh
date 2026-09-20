@@ -173,6 +173,8 @@ run_live_playbook() {
 
     # Reconciling under the held lock keeps contention fail-fast: a caller that
     # cannot run must not spend a download first.
+    # Both processes must inherit this same cwd and Ansible environment: the
+    # reconciler reads Ansible's effective config, including ANSIBLE_CONFIG.
     local status=0
     uv run --locked python -m scripts.live_dependencies \
         --layers "$prerequisite_layers" --playbook "$playbook" || status=$?

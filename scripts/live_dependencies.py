@@ -17,30 +17,35 @@ is a hard dependency of `community.docker` and travels with it.
 `community.crypto` is declared but consumed by nothing, so no operation claims
 it; under ADR 0011 that is the intended outcome, not an oversight.
 
-Path resolution. Relative paths resolve against the project root.
+Path resolution uses Ansible's effective configuration in the same working
+directory and environment as the following playbook process. This includes
+`ANSIBLE_CONFIG`, environment overrides, and Ansible's relative-path expansion.
 `collections/requirements.yml` and `requirements/roles.yml` are the only
 declaration files, and a consumed dependency they do not pin is an error rather
 than a no-op, so a registry typo or a deleted pin surfaces here instead of as a
-missing module inside Ansible. The collection install path is the first entry of
-`ANSIBLE_COLLECTIONS_PATH` when set, else `collections_path` from `ansible.cfg`;
-the role install path is the last entry of `ANSIBLE_ROLES_PATH` when set, else
-the last entry of `roles_path`. Each dependency is installed by name at its own
-pin, never through the whole declaration file, so one operation's install can
-never be blocked by a role or collection it does not consume.
+missing module inside Ansible. An adjacent collection or role takes precedence
+over configured paths. Existing roles are reconciled in search order; an absent
+role is installed in the last configured directory (normally `.ansible/roles`).
+Otherwise collections are installed in the first configured directory, ahead
+of later configured paths and Python's collection search paths. Each dependency
+is installed by name at its own pin, never through the whole declaration file,
+so one operation's install can never be blocked by a role or collection it does
+not consume.
 """
 
 from __future__ import annotations
 
 import argparse
-import configparser
 import fcntl
 import json
-import os
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from ansible.config.manager import ConfigManager
+from ansible.plugins.connection.ssh import DOCUMENTATION as SSH_DOCUMENTATION
+from ansible.utils.path import unfrackpath
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -133,34 +138,27 @@ def select_operation(layers: str, playbook: str) -> LiveOperation:
     return operation
 
 
-def _resolve(project_root: Path, value: str) -> Path:
-    candidate = Path(value).expanduser()
-    return candidate if candidate.is_absolute() else project_root / candidate
+def collection_install_path(
+    project_root: Path, config: ConfigManager, playbook: str, name: str
+) -> Path:
+    adjacent = (project_root / playbook).parent / "collections"
+    namespace, collection = name.split(".", 1)
+    if (adjacent / "ansible_collections" / namespace / collection).exists():
+        return adjacent
+    configured = Path(config.get_config_value("COLLECTIONS_PATHS")[0])
+    # Ansible accepts either a collection root or its ansible_collections child.
+    return configured.parent if configured.name == "ansible_collections" else configured
 
 
-def _entries(value: str) -> list[str]:
-    return [entry for entry in value.split(os.pathsep) if entry]
-
-
-def _ansible_config(project_root: Path) -> configparser.ConfigParser:
-    # control_path escapes percent signs for Ansible, not for configparser.
-    config = configparser.ConfigParser(interpolation=None)
-    config.read(project_root / "ansible.cfg", encoding="utf-8")
-    return config
-
-
-def collection_install_path(project_root: Path, config: configparser.ConfigParser) -> Path:
-    entries = _entries(os.environ.get("ANSIBLE_COLLECTIONS_PATH", "")) or _entries(
-        config.get("defaults", "collections_path", fallback="collections")
+def role_install_path(
+    project_root: Path, config: ConfigManager, playbook: str, name: str
+) -> Path:
+    configured = [Path(entry) for entry in config.get_config_value("DEFAULT_ROLES_PATH")]
+    adjacent = (project_root / playbook).parent / "roles"
+    return next(
+        (path for path in [adjacent, *configured] if (path / name).exists()),
+        configured[-1],
     )
-    return _resolve(project_root, entries[0])
-
-
-def role_install_path(project_root: Path, config: configparser.ConfigParser) -> Path:
-    entries = _entries(os.environ.get("ANSIBLE_ROLES_PATH", "")) or _entries(
-        config.get("defaults", "roles_path", fallback=".ansible/roles")
-    )
-    return _resolve(project_root, entries[-1])
 
 
 def _declared_versions(path: Path, key: str) -> dict[str, str]:
@@ -227,7 +225,7 @@ def _declared_version(
 
 def _reconcile_collections(
     project_root: Path,
-    config: configparser.ConfigParser,
+    config: ConfigManager,
     playbook: str,
     names: tuple[str, ...],
 ) -> None:
@@ -235,11 +233,11 @@ def _reconcile_collections(
         return
     requirements = project_root / COLLECTION_REQUIREMENTS
     declared = _declared_versions(requirements, "collections")
-    install_path = collection_install_path(project_root, config)
     for name in names:
         version = _declared_version(
             declared, requirements, playbook, "collection", name
         )
+        install_path = collection_install_path(project_root, config, playbook, name)
         if _installed_collection_version(install_path, name) == version:
             continue
         _run_galaxy(
@@ -265,7 +263,7 @@ def _reconcile_collections(
 
 def _reconcile_roles(
     project_root: Path,
-    config: configparser.ConfigParser,
+    config: ConfigManager,
     playbook: str,
     names: tuple[str, ...],
 ) -> None:
@@ -273,9 +271,9 @@ def _reconcile_roles(
         return
     requirements = project_root / ROLE_REQUIREMENTS
     declared = _declared_versions(requirements, "roles")
-    roles_path = role_install_path(project_root, config)
     for name in names:
         version = _declared_version(declared, requirements, playbook, "role", name)
+        roles_path = role_install_path(project_root, config, playbook, name)
         if _installed_role_version(roles_path, name) == version:
             continue
         _run_galaxy(
@@ -292,16 +290,25 @@ def _reconcile_roles(
             )
 
 
-def _ensure_control_path_parent(
-    project_root: Path, config: configparser.ConfigParser, playbook: str
-) -> None:
-    control_path = config.get("ssh_connection", "control_path", fallback="").strip()
-    if not control_path:
-        return
-    parent = _resolve(project_root, control_path).parent
+def _ensure_control_path_parent(config: ConfigManager, playbook: str) -> None:
+    config.initialize_plugin_configuration_definitions(
+        "connection", "ssh", yaml.safe_load(SSH_DOCUMENTATION)["options"]
+    )
+    directory = unfrackpath(
+        config.get_config_value(
+            "control_path_dir", plugin_type="connection", plugin_name="ssh"
+        )
+    )
+    control_path = config.get_config_value(
+        "control_path", plugin_type="connection", plugin_name="ssh"
+    )
+    parent = (
+        Path(control_path % {"directory": directory}).expanduser().parent
+        if control_path
+        else Path(directory)
+    )
     try:
-        parent.mkdir(parents=True, exist_ok=True)
-        parent.chmod(0o700)
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     except OSError as error:
         raise DependencyReconciliationError(
             f"Live playbook '{playbook}' consumes the SSH control path {control_path}, "
@@ -311,7 +318,7 @@ def _ensure_control_path_parent(
 
 def reconcile(layers: str, playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
     operation = select_operation(layers, playbook)
-    config = _ansible_config(project_root)
+    config = ConfigManager()
     lock_path = project_root / ".ansible" / "dependencies.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a", encoding="utf-8") as lock_file:
@@ -319,7 +326,7 @@ def reconcile(layers: str, playbook: str, *, project_root: Path = PROJECT_ROOT) 
         _reconcile_collections(project_root, config, playbook, operation.collections)
         _reconcile_roles(project_root, config, playbook, operation.roles)
         if operation.uses_ssh:
-            _ensure_control_path_parent(project_root, config, playbook)
+            _ensure_control_path_parent(config, playbook)
 
 
 def main(argv: list[str] | None = None) -> int:

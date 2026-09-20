@@ -98,6 +98,13 @@ because `scripts/live_dependencies.py` records what each playbook reaches; it
 breaks if a playbook gains a dependency nobody added to that table. The safer
 rule: update the table in the same change that adds the consumption.
 
+Reconciliation and the following playbook use Ansible's effective configuration
+in the same working directory and environment, including `ANSIBLE_CONFIG`,
+collection/role path overrides, and SSH control-path overrides. Relative
+configuration paths use Ansible's own resolution rules. Reconciliation repairs
+the copy that takes precedence when an adjacent collection or an earlier role
+directory would otherwise shadow the installed pin.
+
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
 **Note**: This repository now automatically handles restricted feature flags (like `keyctl=1`) by applying them via `pct` commands directly on the Proxmox host after API-based provisioning. The automation will prompt for the Proxmox root password on first run to configure SSH access, then all subsequent operations are passwordless.
