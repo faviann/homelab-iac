@@ -18,16 +18,21 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(handle) or {}
 
 
-def beets_flask_bind_mounts() -> set[tuple[str, str]]:
-    """Source and target of each declared bind mount, in either Compose spelling."""
+def beets_flask_bind_mounts() -> list[tuple[str, str]]:
+    """Source and target of each declared bind mount, in either Compose spelling.
+
+    Keeps every declaration, so conflicting mounts to one target stay visible.
+    """
     service = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]
-    mounts = set()
+    mounts = []
     for volume in service["volumes"]:
         if isinstance(volume, dict):
-            mounts.add((volume["source"], volume["target"]))
+            if volume.get("type") != "bind":
+                continue
+            mounts.append((volume["source"], volume["target"]))
         else:
             source, target, *_ = volume.split(":")
-            mounts.add((source, target))
+            mounts.append((source, target))
     return mounts
 
 
@@ -124,14 +129,14 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn("import beetsplug.VGMplug", startup_script)
 
     def test_media_mounts_keep_host_and_container_paths_identical(self) -> None:
-        media_targets = {"/data/media/_ingest/music", "/data/media/music"}
-        declared = {
-            target: source
+        media_targets = ["/data/media/_ingest/music", "/data/media/music"]
+        declared = sorted(
+            (target, source)
             for source, target in beets_flask_bind_mounts()
             if target in media_targets
-        }
+        )
 
-        self.assertEqual(declared, {target: target for target in media_targets})
+        self.assertEqual(declared, [(target, target) for target in media_targets])
 
     def test_gui_inbox_and_terminal_target_the_declared_prereq_dir(self) -> None:
         compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
@@ -144,7 +149,9 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertEqual(gui_config["inbox"]["folders"]["SoundtrackInbox"]["path"], ingest_dir)
 
     def test_appdata_is_mounted_as_the_container_config_dir(self) -> None:
-        self.assertIn(("./appdata", "/config"), beets_flask_bind_mounts())
+        declared = [mount for mount in beets_flask_bind_mounts() if mount[1] == "/config"]
+
+        self.assertEqual(declared, [("./appdata", "/config")])
 
 
 if __name__ == "__main__":
