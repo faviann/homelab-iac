@@ -636,6 +636,7 @@ def test_configure_preserves_comments_and_document_marker(
     annotated = """---
 # operator note: rotate quarterly
 unrelated_scalar: keep-me  # inline comment
+quoted_scalar: "keep-me"
 """
     vault.write_text(HEADER + annotated, encoding="utf-8")
 
@@ -648,6 +649,7 @@ unrelated_scalar: keep-me  # inline comment
     assert plaintext.startswith("---\n")
     assert "# operator note: rotate quarterly" in plaintext
     assert "unrelated_scalar: keep-me  # inline comment" in plaintext
+    assert 'quoted_scalar: "keep-me"' in plaintext.splitlines()
 
 
 def test_configure_does_not_reformat_a_long_untouched_scalar(
@@ -1329,6 +1331,7 @@ def test_set_preserves_comments_and_document_marker(
     annotated = """---
 # operator note: rotate quarterly
 unrelated_scalar: keep-me  # inline comment
+quoted_scalar: "keep-me"
 """
     vault.write_text(HEADER + annotated, encoding="utf-8")
     source = write_source(tmp_path / "secret")
@@ -1342,6 +1345,7 @@ unrelated_scalar: keep-me  # inline comment
     assert plaintext.startswith("---\n")
     assert "# operator note: rotate quarterly" in plaintext
     assert "unrelated_scalar: keep-me  # inline comment" in plaintext
+    assert 'quoted_scalar: "keep-me"' in plaintext.splitlines()
 
 
 def test_set_does_not_reformat_a_long_untouched_scalar(
