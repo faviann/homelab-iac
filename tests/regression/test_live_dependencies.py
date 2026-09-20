@@ -255,13 +255,12 @@ def test_docker_role_is_claimed_only_by_configure_capable_operations() -> None:
         assert operation.uses_ssh is False
 
 
-def test_unsupported_pair_is_rejected_before_any_reconciliation(
+def test_unsupported_playbook_is_rejected_before_any_reconciliation(
     fixture_project: Path,
 ) -> None:
     with pytest.raises(UnsupportedLiveOperation) as failure:
-        reconcile("control-node", "site.yml", project_root=fixture_project)
-    assert "Unsupported prerequisite layers 'control-node'" in str(failure.value)
-    assert "site.yml" in str(failure.value)
+        reconcile("playbooks/unsupported.yml", project_root=fixture_project)
+    assert "Unsupported live playbook 'playbooks/unsupported.yml'" in str(failure.value)
     assert not galaxy_ran()
 
 
@@ -271,7 +270,6 @@ def test_missing_consumed_collection_is_installed_at_the_declared_version(
     declare(fixture_project, {"community.proxmox": "2.0.0"}, {})
 
     reconcile(
-        "control-node,proxmox-host",
         "playbooks/provision-lxcs.yml",
         project_root=fixture_project,
     )
@@ -286,7 +284,6 @@ def test_drifting_consumed_collection_is_returned_to_the_declared_version(
     install_collection(fixture_project, "community.proxmox", "1.6.0")
 
     reconcile(
-        "control-node,proxmox-host",
         "playbooks/provision-lxcs.yml",
         project_root=fixture_project,
     )
@@ -299,7 +296,6 @@ def test_matching_consumed_collection_costs_no_install(fixture_project: Path) ->
     install_collection(fixture_project, "community.proxmox", "2.0.0")
 
     reconcile(
-        "control-node,proxmox-host",
         "playbooks/provision-lxcs.yml",
         project_root=fixture_project,
     )
@@ -315,7 +311,6 @@ def test_install_that_leaves_the_wrong_version_fails_naming_the_playbook(
 
     with pytest.raises(DependencyReconciliationError) as failure:
         reconcile(
-            "control-node,proxmox-host",
             "playbooks/provision-lxcs.yml",
             project_root=fixture_project,
         )
@@ -334,7 +329,6 @@ def test_failing_installer_fails_naming_the_playbook(
 
     with pytest.raises(DependencyReconciliationError) as failure:
         reconcile(
-            "control-node,proxmox-host",
             "playbooks/provision-lxcs.yml",
             project_root=fixture_project,
         )
@@ -350,7 +344,6 @@ def test_consumed_but_undeclared_collection_fails_clearly(
 
     with pytest.raises(DependencyReconciliationError) as failure:
         reconcile(
-            "control-node,proxmox-host",
             "playbooks/provision-lxcs.yml",
             project_root=fixture_project,
         )
@@ -372,7 +365,7 @@ def test_consumed_but_undeclared_role_fails_clearly(fixture_project: Path) -> No
         install_collection(fixture_project, name, "1.0.0")
 
     with pytest.raises(DependencyReconciliationError) as failure:
-        reconcile("control-node,proxmox-host", "site.yml", project_root=fixture_project)
+        reconcile("site.yml", project_root=fixture_project)
 
     message = str(failure.value)
     assert "site.yml" in message
@@ -391,7 +384,7 @@ def test_consumed_external_role_is_reconciled_and_verified(
     for name in LIVE_OPERATIONS["site.yml"].collections:
         install_collection(fixture_project, name, "9.9.9")
 
-    reconcile("control-node,proxmox-host", "site.yml", project_root=fixture_project)
+    reconcile("site.yml", project_root=fixture_project)
 
     assert installed_role(fixture_project, "geerlingguy.docker") == "7.9.0"
 
@@ -408,7 +401,7 @@ def test_unconsumed_role_never_participates_in_a_configure_run(
     for name in LIVE_OPERATIONS["site.yml"].collections:
         install_collection(fixture_project, name, "9.9.9")
 
-    reconcile("control-node,proxmox-host", "site.yml", project_root=fixture_project)
+    reconcile("site.yml", project_root=fixture_project)
 
     assert installed_role(fixture_project, "geerlingguy.docker") == "7.9.0"
     assert installed_role(fixture_project, POISON_ROLE) is None
@@ -427,7 +420,6 @@ def test_unconsumed_collection_drift_does_not_block_the_operation(
     install_collection(fixture_project, "community.crypto", "0.0.1")
 
     reconcile(
-        "control-node,proxmox-host",
         "playbooks/provision-lxcs.yml",
         project_root=fixture_project,
     )
@@ -439,9 +431,7 @@ def test_unconsumed_collection_drift_does_not_block_the_operation(
 def test_api_only_operation_needs_neither_declarations_nor_a_control_path(
     fixture_project: Path,
 ) -> None:
-    reconcile(
-        "control-node", "playbooks/proxmox_api_check.yml", project_root=fixture_project
-    )
+    reconcile("playbooks/proxmox_api_check.yml", project_root=fixture_project)
 
     assert not galaxy_ran()
     assert not (fixture_project / ".ansible" / "cp").exists()
@@ -450,9 +440,7 @@ def test_api_only_operation_needs_neither_declarations_nor_a_control_path(
 def test_ssh_operation_creates_the_configured_control_path_parent(
     fixture_project: Path,
 ) -> None:
-    reconcile(
-        "control-node", "playbooks/lab-connectivity.yml", project_root=fixture_project
-    )
+    reconcile("playbooks/lab-connectivity.yml", project_root=fixture_project)
 
     control_path_parent = fixture_project / ".ansible" / "cp"
     assert control_path_parent.is_dir()
@@ -466,9 +454,7 @@ def test_custom_control_path_preserves_existing_directory_permissions(
     directory.mkdir(mode=0o755)
     monkeypatch.setenv("ANSIBLE_SSH_CONTROL_PATH", str(directory / "%%h-%%p-%%r"))
 
-    reconcile(
-        "control-node", "playbooks/lab-connectivity.yml", project_root=fixture_project
-    )
+    reconcile("playbooks/lab-connectivity.yml", project_root=fixture_project)
 
     assert directory.stat().st_mode & 0o777 == 0o755
 
@@ -670,7 +656,6 @@ def test_lock_contention_short_circuits_before_any_reconciliation(
     result, record = run_boundary(
         tmp_path,
         "exclusive",
-        "control-node,proxmox-host",
         "site.yml",
         hold_lock=True,
     )
@@ -681,15 +666,10 @@ def test_lock_contention_short_circuits_before_any_reconciliation(
 
 
 @pytest.mark.serial
-def test_unsupported_pair_stops_the_boundary_before_ansible(tmp_path: Path) -> None:
-    result, record = run_boundary(
-        tmp_path, "shared", "control-node", "playbooks/configure-lxcs.yml"
-    )
+def test_unsupported_playbook_stops_the_boundary_before_ansible(tmp_path: Path) -> None:
+    result, record = run_boundary(tmp_path, "shared", "playbooks/unsupported.yml")
 
     assert result.returncode == 2
-    assert (
-        "Unsupported prerequisite layers 'control-node' for live playbook "
-        "'playbooks/configure-lxcs.yml'" in result.stderr
-    )
+    assert "Unsupported live playbook 'playbooks/unsupported.yml'" in result.stderr
     invoked = [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
     assert not any("ansible-playbook" in arguments for arguments in invoked)

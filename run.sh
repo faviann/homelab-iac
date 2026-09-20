@@ -194,4 +194,4 @@ if [[ -n "$stack_name" ]]; then
 else
     arguments+=('--extra-vars={"stack_filter":null}')
 fi
-run_live_playbook "$lock_class" control-node,proxmox-host "$playbook" "${arguments[@]}"
+run_live_playbook "$lock_class" "$playbook" "${arguments[@]}"

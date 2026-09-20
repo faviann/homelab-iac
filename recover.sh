@@ -72,6 +72,5 @@ arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
 
 run_live_playbook \
     exclusive \
-    control-node,proxmox-host \
     playbooks/add-ssh-keys-to-lxcs.yml \
     "${arguments[@]}"

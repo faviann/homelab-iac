@@ -127,9 +127,8 @@ report_live_lock_holder() {
 
 run_live_playbook() {
     local lock_class="$1"
-    local prerequisite_layers="$2"
-    local playbook="$3"
-    shift 3
+    local playbook="$2"
+    shift 2
 
     mkdir -p "$(dirname "$LIVE_EXECUTION_LOCK_FILE")" "$LIVE_EXECUTION_HOLDER_DIR"
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"
@@ -177,7 +176,7 @@ run_live_playbook() {
     # reconciler reads Ansible's effective config, including ANSIBLE_CONFIG.
     local status=0
     uv run --locked python -m scripts.live_dependencies \
-        --layers "$prerequisite_layers" --playbook "$playbook" || status=$?
+        --playbook "$playbook" || status=$?
     if ((status == 0)); then
         echo "Running Ansible playbook through uv: $playbook"
         echo "────────────────────────────────────────"

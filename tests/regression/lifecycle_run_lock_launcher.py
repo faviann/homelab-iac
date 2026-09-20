@@ -988,8 +988,8 @@ def assert_live_execution_responsibilities_are_sourced() -> None:
     present = [fragment for fragment in forbidden_runner_fragments if fragment in runner_source]
     if present:
         raise AssertionError(f"run.sh retains live-execution responsibilities: {present}")
-    if 'run_live_playbook "$lock_class" control-node,proxmox-host' not in runner_source:
-        raise AssertionError("run.sh must select the L1 and L3 prerequisite layers")
+    if 'run_live_playbook "$lock_class" "$playbook"' not in runner_source:
+        raise AssertionError("run.sh must delegate its selected playbook to live execution")
 
     library_source = LIVE_EXECUTION_LIBRARY.read_text(encoding="utf-8")
     required_library_fragments = (

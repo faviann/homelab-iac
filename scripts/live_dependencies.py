@@ -1,8 +1,8 @@
 """Reconcile the worktree dependencies one live playbook semantically consumes.
 
-`LIVE_OPERATIONS` is the single table pairing a supported `(prerequisite
-layers, playbook)` invocation with the collections, external roles, and runtime
-directories that invocation actually reaches. The shared live boundary in
+`LIVE_OPERATIONS` is the single table pairing each supported playbook with the
+collections, external roles, and runtime directories that invocation actually
+reaches. The shared live boundary in
 `scripts/lib/live-execution.sh` consults it instead of carrying a second copy of
 the pairing knowledge, so a declared-but-unconsumed dependency never blocks an
 unrelated operation.
@@ -55,14 +55,13 @@ ROLE_REQUIREMENTS = Path("requirements/roles.yml")
 
 @dataclass(frozen=True)
 class LiveOperation:
-    prerequisite_layers: str
     collections: tuple[str, ...]
     roles: tuple[str, ...]
     uses_ssh: bool
 
 
 class UnsupportedLiveOperation(Exception):
-    """The caller asked for a `(layers, playbook)` pair the registry rejects."""
+    """The caller asked for a playbook the live-operation registry rejects."""
 
 
 class DependencyReconciliationError(Exception):
@@ -79,49 +78,41 @@ CONFIGURE_ROLES = ("geerlingguy.docker",)
 
 LIVE_OPERATIONS: dict[str, LiveOperation] = {
     "site.yml": LiveOperation(
-        prerequisite_layers="control-node,proxmox-host",
         collections=CONFIGURE_COLLECTIONS,
         roles=CONFIGURE_ROLES,
         uses_ssh=True,
     ),
     "playbooks/provision-lxcs.yml": LiveOperation(
-        prerequisite_layers="control-node,proxmox-host",
         collections=("community.proxmox",),
         roles=(),
         uses_ssh=True,
     ),
     "playbooks/configure-lxcs.yml": LiveOperation(
-        prerequisite_layers="control-node,proxmox-host",
         collections=CONFIGURE_COLLECTIONS,
         roles=CONFIGURE_ROLES,
         uses_ssh=True,
     ),
     "playbooks/validate-infrastructure.yml": LiveOperation(
-        prerequisite_layers="control-node,proxmox-host",
         collections=("community.proxmox",),
         roles=(),
         uses_ssh=True,
     ),
     "playbooks/add-ssh-keys-to-lxcs.yml": LiveOperation(
-        prerequisite_layers="control-node,proxmox-host",
         collections=(),
         roles=(),
         uses_ssh=True,
     ),
     "playbooks/validate-credentials.yml": LiveOperation(
-        prerequisite_layers="control-node",
         collections=(),
         roles=(),
         uses_ssh=False,
     ),
     "playbooks/lab-connectivity.yml": LiveOperation(
-        prerequisite_layers="control-node",
         collections=(),
         roles=(),
         uses_ssh=True,
     ),
     "playbooks/proxmox_api_check.yml": LiveOperation(
-        prerequisite_layers="control-node",
         collections=(),
         roles=(),
         uses_ssh=False,
@@ -129,12 +120,10 @@ LIVE_OPERATIONS: dict[str, LiveOperation] = {
 }
 
 
-def select_operation(layers: str, playbook: str) -> LiveOperation:
+def select_operation(playbook: str) -> LiveOperation:
     operation = LIVE_OPERATIONS.get(playbook)
-    if operation is None or operation.prerequisite_layers != layers:
-        raise UnsupportedLiveOperation(
-            f"Unsupported prerequisite layers '{layers}' for live playbook '{playbook}'"
-        )
+    if operation is None:
+        raise UnsupportedLiveOperation(f"Unsupported live playbook '{playbook}'")
     return operation
 
 
@@ -316,8 +305,8 @@ def _ensure_control_path_parent(config: ConfigManager, playbook: str) -> None:
         ) from error
 
 
-def reconcile(layers: str, playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
-    operation = select_operation(layers, playbook)
+def reconcile(playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
+    operation = select_operation(playbook)
     config = ConfigManager()
     lock_path = project_root / ".ansible" / "dependencies.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -331,11 +320,10 @@ def reconcile(layers: str, playbook: str, *, project_root: Path = PROJECT_ROOT) 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.live_dependencies")
-    parser.add_argument("--layers", required=True)
     parser.add_argument("--playbook", required=True)
     arguments = parser.parse_args(argv)
     try:
-        reconcile(arguments.layers, arguments.playbook)
+        reconcile(arguments.playbook)
     except UnsupportedLiveOperation as error:
         print(error, file=sys.stderr)
         return 2
