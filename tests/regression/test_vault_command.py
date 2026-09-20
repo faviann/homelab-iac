@@ -35,6 +35,46 @@ unrelated_mapping:
 """
 
 
+# Names the fixture lets through from whoever ran the suite. Every other
+# ambient name is absent from the subprocess environment, so an environment
+# read added to vault.sh or to a fake fails visibly here instead of silently
+# picking up the caller's value. Each entry needs a reason a test demonstrates.
+INHERITED_ENVIRONMENT = frozenset(
+    {
+        # Resolves the interpreter behind the fake executables, the coreutils
+        # vault.sh calls, and `uv` for the real-tool cases. The fixture
+        # prepends its own fake directory rather than replacing the value.
+        "PATH",
+    }
+)
+
+# Values the command or a fake would honour if the fixture inherited them.
+# Applied to every test in this module so the suite's own passes are the
+# standing proof that no ambient value steers it.
+HOSTILE_AMBIENT_ENVIRONMENT = {
+    # bw reports an unlocked session whenever this is exported, which is how
+    # an operator's live session once made the locked-session knob inert.
+    "BW_SESSION": "ambient-session-token",
+    # vault.sh resolves ${VISUAL:-${EDITOR:-vi}}, so either outranks the
+    # editor fake the fixture injects.
+    "VISUAL": "/ambient/visual-editor",
+    "EDITOR": "/ambient/editor",
+    # vault.sh reads these to locate the passphrase file and the staged home.
+    "ANSIBLE_VAULT_PASSWORD_FILE": "/ambient/vault-pass",
+    "HOME": "/ambient/home",
+    "PWD": "/ambient/pwd",
+    # Stands in for the next environment read someone adds: neither injected
+    # by the fixture nor on the allowlist, so it must not reach a subprocess.
+    "VAULT_TEST_AMBIENT_SENTINEL": "leaked",
+}
+
+
+@pytest.fixture(autouse=True)
+def hostile_ambient_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name, value in HOSTILE_AMBIENT_ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
+
+
 FakeExecutableFactory = Callable[..., Path]
 FAKE_KNOB_ENV: dict[str, dict[str, str]] = {
     "uv": {
@@ -106,7 +146,9 @@ def vault_repo(
     (home / ".ansible").mkdir(parents=True)
     shutil.copy2(RUNNER, repo / "vault.sh")
 
-    env = os.environ.copy()
+    env = {
+        name: os.environ[name] for name in INHERITED_ENVIRONMENT if name in os.environ
+    }
     env.update(
         {
             "HOME": str(home),
@@ -116,11 +158,6 @@ def vault_repo(
             "VAULT_TEST_BOUNDARY_CAPTURE": str(tmp_path / "boundaries.jsonl"),
         }
     )
-    # Ambient values for anything the command or its fakes consult would
-    # outrank the fixture's injection, so drop them: BW_SESSION is how bw
-    # reports an unlocked session, and VISUAL wins over the injected EDITOR.
-    for inherited in ("BW_SESSION", "VISUAL", "EDITOR"):
-        env.pop(inherited, None)
     for name in ("uv", "mv", "rm"):
         fake_executable(name, env)
     return repo, env
@@ -200,6 +237,36 @@ def assert_no_transaction_artifacts(repo: Path, env: dict[str, str]) -> None:
             or ".tmp." in path.name
             or path.name.startswith("homelab-vault.")
         ]
+
+
+def test_only_injected_and_allowlisted_names_reach_the_subprocess(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    _, env = vault_repo
+    # An absolute path, like the coreutils the fakes shell out to, so the
+    # probe does not depend on the PATH under test. A Python probe would
+    # report its own interpreter's locale coercion as an inherited name.
+    probe = subprocess.run(
+        ["/usr/bin/env", "-0"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert probe.returncode == 0, probe.stderr
+    reaching = {
+        entry.split("=", 1)[0] for entry in probe.stdout.split("\0") if "=" in entry
+    }
+    assert reaching - INHERITED_ENVIRONMENT == {
+        "HOME",
+        "ANSIBLE_VAULT_PASSWORD_FILE",
+        "VAULT_TEST_REPO",
+        "VAULT_TEST_BOUNDARY_CAPTURE",
+    }
+    assert "VAULT_TEST_AMBIENT_SENTINEL" not in reaching
+    assert Path(env["HOME"]).is_relative_to(Path(env["VAULT_TEST_REPO"]).parent)
+    assert Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).is_relative_to(env["HOME"])
 
 
 def test_vault_requires_an_operation_and_advertises_its_complete_interface() -> None:
