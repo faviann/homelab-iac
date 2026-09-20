@@ -414,6 +414,37 @@ def test_ssh_operation_creates_the_repository_control_path_parent(
     assert control_path_parent.stat().st_mode & 0o777 == 0o700
 
 
+def test_dependency_free_ssh_operation_does_not_wait_for_dependency_lock(
+    fixture_project: Path,
+) -> None:
+    lock_path = fixture_project / ".ansible/dependencies.lock"
+    lock_path.parent.mkdir(parents=True)
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import sys; from pathlib import Path; "
+            "from scripts.live_dependencies import reconcile; "
+            "reconcile('playbooks/lab-connectivity.yml', "
+            "project_root=Path(sys.argv[1]))"
+        ),
+        str(fixture_project),
+    ]
+
+    with lock_path.open("a", encoding="utf-8") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (fixture_project / ".ansible/cp").is_dir()
+
+
 def test_live_path_never_directs_the_caller_to_the_retired_bootstrap() -> None:
     live_sources = [
         REPO_ROOT / "scripts" / "live_dependencies.py",

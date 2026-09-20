@@ -216,16 +216,17 @@ def _ensure_ssh_control_path_parent(project_root: Path, playbook: str) -> None:
 
 def reconcile(playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
     operation = select_operation(playbook)
-    lock_path = project_root / ".ansible/dependencies.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a", encoding="utf-8") as lock_file:
+    if operation.collections or operation.roles:
+        lock_path = project_root / ".ansible/dependencies.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
         # Read-only live operations share the lifecycle lock and may otherwise
         # run ansible-galaxy concurrently against the same worktree paths.
-        fcntl.flock(lock_file, fcntl.LOCK_EX)
-        _reconcile_collections(project_root, playbook, operation.collections)
-        _reconcile_roles(project_root, playbook, operation.roles)
-        if operation.uses_ssh:
-            _ensure_ssh_control_path_parent(project_root, playbook)
+        with lock_path.open("a", encoding="utf-8") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            _reconcile_collections(project_root, playbook, operation.collections)
+            _reconcile_roles(project_root, playbook, operation.roles)
+    if operation.uses_ssh:
+        _ensure_ssh_control_path_parent(project_root, playbook)
 
 
 def main(argv: list[str] | None = None) -> int:
