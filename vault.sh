@@ -281,14 +281,18 @@ transfer_source_into_plaintext() {
 import sys
 from pathlib import Path
 
-import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 vault_path = Path(sys.argv[1])
 value_path = Path(sys.argv[2])
 key, mode, strip = sys.argv[3], sys.argv[4], sys.argv[5]
+yaml = YAML(typ="rt")
+yaml.preserve_quotes = True
 try:
-    document = yaml.safe_load(vault_path.read_text(encoding="utf-8"))
-except yaml.YAMLError:
+    plaintext = vault_path.read_text(encoding="utf-8")
+    document = yaml.load(plaintext)
+except (OSError, YAMLError):
     raise SystemExit(1)
 if document is None:
     document = {}
@@ -303,7 +307,10 @@ except (OSError, UnicodeDecodeError):
 if strip == "1":
     value = value.removesuffix("\n")
 document[key] = value
-vault_path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+lines = plaintext.splitlines()
+yaml.explicit_start = bool(lines) and lines[0].strip() == "---"
+with vault_path.open("w", encoding="utf-8") as stream:
+    yaml.dump(document, stream)
 PY
 }
 
@@ -345,13 +352,17 @@ run_mutation() {
 import sys
 from pathlib import Path
 
-import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 vault_path = Path(sys.argv[1])
 credentials = Path(sys.argv[2]).read_text(encoding="utf-8").splitlines()
+yaml = YAML(typ="rt")
+yaml.preserve_quotes = True
 try:
-    value = yaml.safe_load(vault_path.read_text(encoding="utf-8"))
-except yaml.YAMLError:
+    plaintext = vault_path.read_text(encoding="utf-8")
+    value = yaml.load(plaintext)
+except (OSError, YAMLError):
     raise SystemExit(1)
 if value is None:
     value = {}
@@ -367,7 +378,10 @@ for key, credential in zip(
     strict=True,
 ):
     value[key] = credential
-vault_path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+lines = plaintext.splitlines()
+yaml.explicit_start = bool(lines) and lines[0].strip() == "---"
+with vault_path.open("w", encoding="utf-8") as stream:
+    yaml.dump(value, stream)
 PY
         then
             cleanup_transaction || true

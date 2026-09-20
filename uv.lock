@@ -850,6 +850,7 @@ dependencies = [
     { name = "proxmoxer" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "ruamel-yaml" },
     { name = "yamllint" },
 ]
 
@@ -868,6 +869,7 @@ requires-dist = [
     { name = "proxmoxer", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "requests", specifier = ">=1.1" },
+    { name = "ruamel-yaml", specifier = ">=0.19.1" },
     { name = "yamllint", specifier = ">=1.32.0" },
 ]
 
