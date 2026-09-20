@@ -319,15 +319,17 @@ def test_no_argument_run_stops_when_lint_fails(tmp_path: Path) -> None:
         cwd=REPO_ROOT,
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
         start_new_session=True,
     )
     try:
         process_groups = wait_for_handoff_children(tmp_path)
         (tmp_path / "handoff-state/lint-release").touch()
-        process.wait(timeout=10)
+        _, stderr = process.communicate(timeout=10)
 
         assert process.returncode == 41
+        assert "fake-lint-output" in stderr
         assert not (tmp_path / "handoff-state/release").exists()
         for pgid in process_groups:
             with pytest.raises(ProcessLookupError):
