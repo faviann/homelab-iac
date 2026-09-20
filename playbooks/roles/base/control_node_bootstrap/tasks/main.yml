@@ -106,7 +106,7 @@
 - name: Warn if vault.yml doesn't exist
   ansible.builtin.debug:
     msg: >-
-      WARNING: vault.yml not found. Run ./setup.sh or ./configure-vault.sh to configure Proxmox API credentials.
+      WARNING: vault.yml not found. Run ./setup.sh or ./vault.sh configure to configure Proxmox API credentials.
       The playbooks will fail without valid API credentials.
   when: not control_node_vault_file_stat.stat.exists
 
