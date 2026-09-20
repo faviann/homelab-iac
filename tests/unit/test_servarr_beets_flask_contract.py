@@ -18,6 +18,19 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(handle) or {}
 
 
+def beets_flask_bind_mounts() -> set[tuple[str, str]]:
+    """Source and target of each declared bind mount, in either Compose spelling."""
+    service = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]
+    mounts = set()
+    for volume in service["volumes"]:
+        if isinstance(volume, dict):
+            mounts.add((volume["source"], volume["target"]))
+        else:
+            source, target, *_ = volume.split(":")
+            mounts.add((source, target))
+    return mounts
+
+
 class ServarrBeetsFlaskContractTests(unittest.TestCase):
     def test_servarr_inventory_exposes_beets_flask_contract(self) -> None:
         servarr_vars = load_yaml(REPO_ROOT / "inventory/host_vars/servarr.yml")
@@ -111,11 +124,10 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertIn("import beetsplug.VGMplug", startup_script)
 
     def test_media_mounts_keep_host_and_container_paths_identical(self) -> None:
-        volumes = load_yaml(STACK_ROOT / "compose.override.yaml")["services"]["beets-flask"]["volumes"]
         media_targets = {"/data/media/_ingest/music", "/data/media/music"}
         declared = {
             target: source
-            for source, target, *_ in (volume.split(":") for volume in volumes)
+            for source, target in beets_flask_bind_mounts()
             if target in media_targets
         }
 
@@ -132,12 +144,7 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         self.assertEqual(gui_config["inbox"]["folders"]["SoundtrackInbox"]["path"], ingest_dir)
 
     def test_appdata_is_mounted_as_the_container_config_dir(self) -> None:
-        compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
-
-        self.assertIn(
-            "./appdata:/config",
-            compose_override["services"]["beets-flask"]["volumes"],
-        )
+        self.assertIn(("./appdata", "/config"), beets_flask_bind_mounts())
 
 
 if __name__ == "__main__":
