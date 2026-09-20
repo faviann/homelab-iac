@@ -89,12 +89,14 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `./validate.sh stack <path>` | Validate one repo-managed stack's update policy — schema-versioned JSON on stdout, diagnostics on stderr. Not part of the no-argument handoff run |
 | `./setup.sh` | Guided fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
 | `./setup.sh sync` | Synchronize the locked controller environment only (non-interactive; no OS packages, no managed host) |
-| `./setup.sh bootstrap` | Reconcile collections, external roles, and the controller SSH key — the way to restore collections and roles after a clean install (non-interactive; creates the key when absent, never replaces an existing one) |
+| `./setup.sh bootstrap` | Reconcile every declared collection and external role plus the controller SSH key, eagerly and in one pass (non-interactive; creates the key when absent, never replaces an existing one). Optional — no live command requires it first |
 | `ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 
 **Timing**: `uv run --locked ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
 
 For lifecycle-regression remediation, use repeatable `./validate.sh lifecycle --only <launcher.py>` for the shortest targeted loop and add `--fail-fast` when later selected launchers cannot provide useful evidence after a failure. `--only` accepts the registered filenames reported by the runner's actionable error, and cannot be combined with `--full`. Lifecycle launchers are the `tests/regression/*_launcher.py` files, run only by the lifecycle runner; pytest owns the `test_*.py` files under `tests/` and never collects a launcher. A targeted operation never substitutes for the full handoff run: before handoff, always run `./validate.sh` with no arguments so every gate reports a result.
+
+**Live dependencies**: `./run.sh`, live `./inspect.sh`, and `./recover.sh` reconcile their own worktree dependencies. Before invoking Ansible, the shared boundary runs `scripts/live_dependencies.py`, which installs and verifies only the collections and external roles the selected playbook consumes and creates the configured SSH control-path parent. That works because `LIVE_OPERATIONS` in that module records what each playbook reaches; it breaks when a playbook starts consuming a collection nobody added to its row, and Ansible then fails on a missing module. The safer rule: change the registry row in the same commit that changes what a playbook consumes, and never reintroduce a check over the whole declaration file — a collection one operation does not consume must never block it.
 
 Run `./validate.sh` for complete deterministic handoff verification. It does not load live inventory or acquire the lifecycle lock. Route every operation that contacts managed hosts, including `--check`, through `./run.sh`.
 
