@@ -131,23 +131,13 @@ run_live_playbook() {
     local playbook="$3"
     shift 3
 
-    case "$prerequisite_layers:$playbook" in
-        control-node,proxmox-host:site.yml|\
-        control-node,proxmox-host:playbooks/provision-lxcs.yml|\
-        control-node,proxmox-host:playbooks/configure-lxcs.yml|\
-        control-node,proxmox-host:playbooks/validate-infrastructure.yml|\
-        control-node,proxmox-host:playbooks/add-ssh-keys-to-lxcs.yml|\
-        control-node:playbooks/validate-credentials.yml|\
-        control-node:playbooks/lab-connectivity.yml|\
-        control-node:playbooks/proxmox_api_check.yml)
-            ;;
-        *)
-            echo \
-                "Unsupported prerequisite layers '$prerequisite_layers' for live playbook '$playbook'" \
-                >&2
-            return 2
-            ;;
-    esac
+    local reconcile_status=0
+    (
+        cd "$LIVE_EXECUTION_PROJECT_ROOT" &&
+            exec uv run --locked python -m scripts.live_dependencies \
+                --layers "$prerequisite_layers" --playbook "$playbook"
+    ) || reconcile_status=$?
+    ((reconcile_status == 0)) || return "$reconcile_status"
 
     mkdir -p "$(dirname "$LIVE_EXECUTION_LOCK_FILE")" "$LIVE_EXECUTION_HOLDER_DIR"
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"

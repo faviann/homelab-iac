@@ -6,7 +6,6 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import shutil
 import ssl
 import threading
 from contextlib import contextmanager
@@ -37,10 +36,10 @@ FIXTURE_COLLECTIONS = (
     REPO_ROOT
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
-FIXTURE_COLLECTION_REQUIREMENTS = (
-    REPO_ROOT
-    / "tests/regression/fixtures/controller_prerequisite_empty_collections.yml"
+NO_DECLARED_COLLECTIONS = (
+    REPO_ROOT / "tests/regression/fixtures/no_declared_collections.yml"
 )
+NO_DECLARED_ROLES = REPO_ROOT / "tests/regression/fixtures/no_declared_roles.yml"
 
 
 VERSION_API_PATH = "/api2/json/version"
@@ -464,18 +463,17 @@ def controlled_environment(temp_root: Path) -> dict[str, str]:
         """#!/usr/bin/env python3
 import json
 import os
-import ssl
-import threading
-from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from ipaddress import ip_address
-from typing import Iterator
 import sys
 from pathlib import Path
 
+arguments = sys.argv[1:]
+with Path(os.environ["INSPECT_TEST_INVOCATIONS"]).open("a", encoding="utf-8") as log:
+    log.write(json.dumps(arguments) + "\\n")
+if "ansible-playbook" not in arguments:
+    raise SystemExit(0)
+
 Path(os.environ["INSPECT_TEST_CAPTURE"]).write_text(json.dumps({
-    "argv": sys.argv[1:],
+    "argv": arguments,
     "marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
 }), encoding="utf-8")
 """,
@@ -488,6 +486,7 @@ Path(os.environ["INSPECT_TEST_CAPTURE"]).write_text(json.dumps({
             "HOME": str(home),
             "PATH": f"{bin_dir}:{env['PATH']}",
             "INSPECT_TEST_CAPTURE": str(temp_root / "capture.json"),
+            "INSPECT_TEST_INVOCATIONS": str(temp_root / "invocations.jsonl"),
         }
     )
     return env
@@ -538,6 +537,28 @@ def assert_operations_route_through_shared_live_execution() -> None:
                 raise AssertionError(
                     f"{operation} routed incorrectly:\n"
                     f"expected={expected_arguments!r}\nactual={capture!r}"
+                )
+            invocations = [
+                json.loads(line)
+                for line in (temp_root / "invocations.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            expected_reconciliation = [
+                "run",
+                "--locked",
+                "python",
+                "-m",
+                "scripts.live_dependencies",
+                "--layers",
+                "control-node,proxmox-host" if operation == "plan" else "control-node",
+                "--playbook",
+                playbook,
+            ]
+            if len(invocations) != 2 or invocations[0] != expected_reconciliation:
+                raise AssertionError(
+                    f"{operation} did not reconcile only its own dependencies first:\n"
+                    f"invocations={invocations!r}"
                 )
 
 
@@ -640,32 +661,18 @@ def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str
     vault_password.write_text("unused-fixture-placeholder\n", encoding="utf-8")
     # Keep the public inspect grammar intact; inject fixture prerequisites only
     # at the Ansible invocation, where extra vars override production play vars.
-    real_uv = shutil.which("uv")
-    assert real_uv is not None
-    fixture_bin = temp_root / "bin"
-    fixture_bin.mkdir()
-    uv_shim = fixture_bin / "uv"
-    uv_shim.write_text(
-        f"""#!{sys.executable}
-import os
-import sys
-arguments = sys.argv[1:]
-if "ansible-playbook" in arguments:
-    arguments += ["-e", {f"control_node_collection_requirements={FIXTURE_COLLECTION_REQUIREMENTS}"!r}]
-os.execv({real_uv!r}, [{real_uv!r}, *arguments])
-""",
-        encoding="utf-8",
-    )
-    uv_shim.chmod(0o755)
     env = os.environ.copy()
     env.update(
         {
             "HOME": str(home),
-            "PATH": f"{fixture_bin}:{env['PATH']}",
             "ANSIBLE_INVENTORY": str(inventory),
             "ANSIBLE_VAULT_PASSWORD_FILE": str(vault_password),
             "ANSIBLE_COLLECTIONS_PATH": str(temp_root / "empty-collections"),
             "ANSIBLE_COLLECTIONS_SCAN_SYS_PATH": "false",
+            # Nothing is pinned, so live reconciliation leaves this fixture's
+            # own collection and role trees exactly as staged.
+            "HOMELAB_IAC_COLLECTION_REQUIREMENTS": str(NO_DECLARED_COLLECTIONS),
+            "HOMELAB_IAC_ROLE_REQUIREMENTS": str(NO_DECLARED_ROLES),
         }
     )
     return env

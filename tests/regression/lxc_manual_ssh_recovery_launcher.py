@@ -22,10 +22,6 @@ from ansible_test_helper import ansible_playbook_command
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK = REPO_ROOT / "playbooks" / "add-ssh-keys-to-lxcs.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
-FIXTURE_COLLECTION_REQUIREMENTS = (
-    REPO_ROOT
-    / "tests/regression/fixtures/controller_prerequisite_empty_collections.yml"
-)
 
 
 class _SshPortHandler(socketserver.BaseRequestHandler):
@@ -155,8 +151,6 @@ def main() -> int:
             "-i",
             str(inventory),
             str(PLAYBOOK),
-            "-e",
-            f"control_node_collection_requirements={FIXTURE_COLLECTION_REQUIREMENTS}",
         ]
         command = [*playbook_command, "--limit", "recovery-host"]
         missing_marker_env = {**env, "HOMELAB_IAC_LIFECYCLE_WRAPPER": ""}

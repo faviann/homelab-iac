@@ -1,0 +1,4 @@
+---
+# Credential-free launchers never exercise an external role, so nothing is
+# pinned here and live reconciliation has nothing to install.
+roles: []
