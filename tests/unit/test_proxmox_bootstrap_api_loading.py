@@ -22,7 +22,10 @@ TASKS = REPO_ROOT / "playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks
 
 
 @pytest.fixture
-def api_validation(tmp_path: Path) -> tuple[list[str], dict[str, str]]:
+def api_validation(
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+) -> tuple[list[str], dict[str, str]]:
     playbook = tmp_path / "playbook.yml"
     playbook.write_text(
         yaml.safe_dump([
@@ -48,13 +51,15 @@ def api_validation(tmp_path: Path) -> tuple[list[str], dict[str, str]]:
         ])
     )
     collections = tmp_path / "collections"
-    module = collections / "ansible_collections/community/proxmox/plugins/modules/proxmox_vm_info.py"
-    module.parent.mkdir(parents=True)
-    # An intentional module failure proves execution, independent of callbacks.
-    module.write_text(
-        '#!/usr/bin/python\n'
-        'print(\'{"failed": true, "msg": "controlled API invocation"}\')\n'
-    )
+    collections.mkdir()
+    if request.param:
+        module = collections / "ansible_collections/community/proxmox/plugins/modules/proxmox_vm_info.py"
+        module.parent.mkdir(parents=True)
+        # An intentional module failure proves execution, independent of callbacks.
+        module.write_text(
+            '#!/usr/bin/python\n'
+            'print(\'{"failed": true, "msg": "controlled API invocation"}\')\n'
+        )
     env = {
         **os.environ,
         "ANSIBLE_COLLECTIONS_PATH": str(collections),
@@ -67,6 +72,7 @@ def api_validation(tmp_path: Path) -> tuple[list[str], dict[str, str]]:
     ], env
 
 
+@pytest.mark.parametrize("api_validation", [True], indirect=True)
 def test_enabled_api_validation_executes(
     api_validation: tuple[list[str], dict[str, str]],
 ) -> None:
@@ -77,24 +83,25 @@ def test_enabled_api_validation_executes(
     assert "controlled API invocation" in result.stdout, result.stdout + result.stderr
 
 
-def test_disabled_api_validation_does_not_invoke_the_api_module(
+@pytest.mark.parametrize("api_validation", [False], indirect=True)
+def test_disabled_api_validation_does_not_resolve_the_api_collection(
     api_validation: tuple[list[str], dict[str, str]],
 ) -> None:
-    """Disabling API validation skips the API task instead of invoking the module.
-
-    Ansible always searches `<playbook_dir>/collections`, where this fixture
-    puts its stub, so the stub stays resolvable however
-    ANSIBLE_COLLECTIONS_PATH is set. This case therefore proves the task is
-    not executed; it cannot prove the collection goes unresolved.
-    """
+    """Disabled API validation succeeds without resolving its collection."""
     command, env = api_validation
     result = subprocess.run(
         command + ["-e", "proxmox_validate_api=false"], env=env, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "controlled API invocation" not in result.stdout
+    assert "Proxmox host validation summary" in result.stdout, result.stdout
+    assert "API access: not checked" in result.stdout, result.stdout
+    assert "✓ API access" not in result.stdout, result.stdout
+    assert "pct command: not checked" in result.stdout, result.stdout
+    assert "✓ pct command" not in result.stdout, result.stdout
+    assert "SSH access" not in result.stdout, result.stdout
 
 
+@pytest.mark.parametrize("api_validation", [True], indirect=True)
 def test_task_listing_advertises_api_task_exactly_once(
     api_validation: tuple[list[str], dict[str, str]],
 ) -> None:

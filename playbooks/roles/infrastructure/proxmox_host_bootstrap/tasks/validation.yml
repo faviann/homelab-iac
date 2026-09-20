@@ -5,28 +5,10 @@
 # fully when key auth works; proxmox_ssh_ready is false only when check mode
 # could not install the key, in which case live validation is skipped.
 
-- name: Check if pct command is available
-  when:
-    - proxmox_validate_pct | bool
-    - proxmox_ssh_ready | default(true)
-  ansible.builtin.command:
-    cmd: which pct
-  register: pct_check
-  changed_when: false
-  failed_when: false
-  check_mode: false
-  delegate_to: "{{ proxmox_host }}"
-  vars:
-    ansible_connection: ssh
-    ansible_user: "{{ proxmox_ssh_user }}"
-    ansible_ssh_private_key_file: "{{ proxmox_ssh_key_private }}"
-    ansible_ssh_common_args: "-o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
-
 - name: Verify pct command works
   when:
     - proxmox_validate_pct | bool
     - proxmox_ssh_ready | default(true)
-    - pct_check.rc == 0
   ansible.builtin.command:
     cmd: pct list
   register: pct_list
@@ -86,28 +68,25 @@
   when:
     - proxmox_validate_pct | bool
     - proxmox_ssh_ready | default(true)
-    - pct_check.rc == 0
     - pct_list.stdout_lines is defined
   ansible.builtin.debug:
     msg: "Detected {{ pct_list.stdout_lines | length - 1 }} LXC container(s) on {{ proxmox_host }}"
 
-# Resolve the collection only when API validation is requested. The include
-# keeps the public task name; its child uses this role's validation tags.
+# Dynamic so the community.proxmox collection resolves only when API
+# validation is requested.
 - name: Test Proxmox API connectivity
-  ansible.builtin.include_tasks:
-    file: api.yml
-    apply:
-      tags:
-        - proxmox_bootstrap
-        - validation
+  ansible.builtin.include_tasks: api.yml
   when: proxmox_validate_api | bool
 
 - name: Proxmox host validation summary
-  when: proxmox_ssh_ready | default(true)
+  vars:
+    pct_state: >-
+      {{ 'available' if pct_list.rc is defined else 'not checked' }}
+    lxc_pve_state: "{{ lxc_pve_version.stdout | default('not checked') | trim }}"
+    api_state: "{{ 'working' if api_check is defined else 'not checked' }}"
   ansible.builtin.debug:
     msg:
-      - "✓ SSH access: configured"
-      - "✓ pct command: available"
-      - "✓ lxc-pve: {{ lxc_pve_version.stdout | default('not checked') | trim }}"
-      - "✓ API access: working"
-      - "Proxmox host {{ proxmox_host }} is ready for Ansible management"
+      - "{{ '✓ ' if pct_state == 'available' else '' }}pct command: {{ pct_state }}"
+      - "{{ '✓ ' if lxc_pve_state != 'not checked' else '' }}lxc-pve: {{ lxc_pve_state }}"
+      - "{{ '✓ ' if api_state == 'working' else '' }}API access: {{ api_state }}"
+      - "Proxmox host {{ proxmox_host }} validation complete"
