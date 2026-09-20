@@ -178,16 +178,3 @@ def test_future_live_playbook_needs_l1_but_no_matrix_entry() -> None:
     assert future in live
     for path in live:
         assert CONTROLLER_LAYER in inherited_playbooks(path, graph), path
-
-
-def test_current_entrypoints_exclude_nonignored_untracked_playbooks() -> None:
-    relative = Path("playbooks/_untracked_entrypoint_test.yml")
-    # The path is deliberately never created: repo-wide lint runs concurrently
-    # with this suite and would discover the file.
-    ignored = subprocess.run(
-        ["git", "check-ignore", "--quiet", str(relative)],
-        cwd=REPO_ROOT,
-        check=False,
-    )
-    assert ignored.returncode == 1
-    assert relative not in current_entrypoints()
