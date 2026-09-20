@@ -650,6 +650,25 @@ unrelated_scalar: keep-me  # inline comment
     assert "unrelated_scalar: keep-me  # inline comment" in plaintext
 
 
+def test_configure_does_not_reformat_a_long_untouched_scalar(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = vault_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    long_value = "long-token-" + "x" * 96
+    original_line = f"vault_long_value: {long_value}"
+    vault.write_text(HEADER + original_line + "\n", encoding="utf-8")
+
+    returncode, output = run_vault_tty(
+        repo, env, configure_interactions(), "configure"
+    )
+
+    assert returncode == 0, output
+    plaintext = vault.read_text(encoding="utf-8").removeprefix(HEADER)
+    assert len(original_line) > 80
+    assert original_line in plaintext.splitlines()
+
+
 def test_tty_runner_does_not_capture_secret_responses(
     vault_repo: tuple[Path, dict[str, str]],
 ) -> None:
@@ -1323,6 +1342,26 @@ unrelated_scalar: keep-me  # inline comment
     assert plaintext.startswith("---\n")
     assert "# operator note: rotate quarterly" in plaintext
     assert "unrelated_scalar: keep-me  # inline comment" in plaintext
+
+
+def test_set_does_not_reformat_a_long_untouched_scalar(
+    vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
+) -> None:
+    repo, env = vault_repo
+    vault = repo / "inventory/group_vars/all/vault.yml"
+    long_value = "long-token-" + "x" * 96
+    original_line = f"vault_long_value: {long_value}"
+    vault.write_text(HEADER + original_line + "\n", encoding="utf-8")
+    source = write_source(tmp_path / "secret")
+
+    result = run_vault(
+        repo, env, "set", "vault_transferred", "--from-file", str(source), "--create"
+    )
+
+    assert result.returncode == 0, result.stderr
+    plaintext = vault.read_text(encoding="utf-8").removeprefix(HEADER)
+    assert len(original_line) > 80
+    assert original_line in plaintext.splitlines()
 
 
 @pytest.mark.parametrize(

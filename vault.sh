@@ -289,6 +289,7 @@ value_path = Path(sys.argv[2])
 key, mode, strip = sys.argv[3], sys.argv[4], sys.argv[5]
 yaml = YAML(typ="rt")
 yaml.preserve_quotes = True
+yaml.width = sys.maxsize
 try:
     plaintext = vault_path.read_text(encoding="utf-8")
     document = yaml.load(plaintext)
@@ -359,6 +360,7 @@ vault_path = Path(sys.argv[1])
 credentials = Path(sys.argv[2]).read_text(encoding="utf-8").splitlines()
 yaml = YAML(typ="rt")
 yaml.preserve_quotes = True
+yaml.width = sys.maxsize
 try:
     plaintext = vault_path.read_text(encoding="utf-8")
     value = yaml.load(plaintext)
