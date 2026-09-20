@@ -67,6 +67,22 @@ if state_dir := os.environ.get("VALIDATE_TEST_HANDOFF_STATE"):
             time.sleep(0.2)
         print(f"fake-{phase}-output", flush=True)
         raise SystemExit(status)
+    elif (
+        os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv
+    ):
+        lanes = [
+            Path(state_dir) / "lifecycle.started",
+            Path(state_dir) / "pytest.started",
+        ]
+        deadline = time.monotonic() + 30
+        while not all(lane.exists() for lane in lanes):
+            if time.monotonic() >= deadline:
+                raise SystemExit(
+                    "fake uv: lifecycle and pytest never recorded a start "
+                    "within 30s, so the failing lint cannot abort them"
+                )
+            time.sleep(0.01)
+        raise SystemExit(41)
 if os.environ["VALIDATE_TEST_FAIL_LINT"] == "1" and "ansible-lint" in sys.argv:
     raise SystemExit(41)
 if phase == "pytest":
