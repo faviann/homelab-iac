@@ -111,8 +111,14 @@ RECORDING_UV = """#!/usr/bin/env python3
 import json
 import os
 import sys
+from pathlib import Path
 
 arguments = sys.argv[1:]
+expected_parent = os.environ.get("EXPECTED_CONTROL_PATH_PARENT")
+if "ansible-playbook" in arguments and expected_parent:
+    if not Path(expected_parent).is_dir():
+        sys.stderr.write(f"missing ControlPath parent before ansible-playbook: {expected_parent}\\n")
+        raise SystemExit(9)
 with open(os.environ["UV_RECORD"], "a", encoding="utf-8") as record:
     record.write(json.dumps(arguments) + "\\n")
 if "scripts.live_dependencies" in arguments:
@@ -501,6 +507,143 @@ def test_live_wrapper_prepares_the_control_path_ansible_actually_uses(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_run_passthrough_prepares_explicit_ssh_control_path_before_ansible(
+    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = live_fixture_project
+    declare(project, {"community.proxmox": "9.9.9"}, {})
+    install_collection(project, "community.proxmox", "9.9.9")
+    control_parent = project / "passthrough-sockets"
+    control_path = control_parent / "%h-%p-%r"
+    uv_executable = shutil.which("uv")
+    assert uv_executable is not None
+    write_executable(Path(uv_executable), RECORDING_UV)
+    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
+    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(control_parent))
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(project / "run.sh"),
+            "provision",
+            "--",
+            f"--ssh-common-args=-oControlPath={control_path}",
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert control_parent.is_dir()
+
+
+@pytest.mark.parametrize("source", ["config", "environment"])
+def test_live_wrapper_prepares_control_path_from_effective_ssh_args(
+    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch, source: str
+) -> None:
+    project = live_fixture_project
+    control_parent = project / f"{source}-ssh-args-sockets"
+    control_path = control_parent / "%h-%p-%r"
+    if source == "config":
+        config = project / "ssh-args.cfg"
+        config.write_text(
+            f"[ssh_connection]\nssh_args = -o ControlPath={control_path}\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("ANSIBLE_CONFIG", str(config))
+    else:
+        monkeypatch.setenv("ANSIBLE_SSH_ARGS", f"-o ControlPath={control_path}")
+    uv_executable = shutil.which("uv")
+    assert uv_executable is not None
+    write_executable(Path(uv_executable), RECORDING_UV)
+    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
+    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(control_parent))
+
+    result = subprocess.run(
+        ["bash", str(project / "inspect.sh"), "connectivity"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert control_parent.is_dir()
+
+
+def test_ssh_args_control_path_precedes_cli_common_args(
+    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = live_fixture_project
+    declare(project, {"community.proxmox": "9.9.9"}, {})
+    install_collection(project, "community.proxmox", "9.9.9")
+    ssh_args_parent = project / "ssh-args-sockets"
+    common_args_parent = project / "common-args-sockets"
+    monkeypatch.setenv(
+        "ANSIBLE_SSH_ARGS", f"-o ControlPath={ssh_args_parent}/%h-%p-%r"
+    )
+    uv_executable = shutil.which("uv")
+    assert uv_executable is not None
+    write_executable(Path(uv_executable), RECORDING_UV)
+    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
+    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(ssh_args_parent))
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(project / "run.sh"),
+            "provision",
+            "--",
+            f"--ssh-common-args=-oControlPath={common_args_parent}/%h-%p-%r",
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ssh_args_parent.is_dir()
+    assert not common_args_parent.exists()
+
+
+def test_cli_ssh_extra_control_path_overrides_ssh_args_control_path(
+    live_fixture_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = live_fixture_project
+    declare(project, {"community.proxmox": "9.9.9"}, {})
+    install_collection(project, "community.proxmox", "9.9.9")
+    ssh_args_parent = project / "ignored-ssh-args-sockets"
+    extra_args_parent = project / "ssh-extra-sockets"
+    monkeypatch.setenv(
+        "ANSIBLE_SSH_ARGS", f"-o ControlPath={ssh_args_parent}/%h-%p-%r"
+    )
+    uv_executable = shutil.which("uv")
+    assert uv_executable is not None
+    write_executable(Path(uv_executable), RECORDING_UV)
+    monkeypatch.setenv("UV_RECORD", str(project / "uv-invocations.jsonl"))
+    monkeypatch.setenv("EXPECTED_CONTROL_PATH_PARENT", str(extra_args_parent))
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(project / "run.sh"),
+            "provision",
+            "--",
+            f"--ssh-extra-args=-S{extra_args_parent}/%h-%p-%r",
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert extra_args_parent.is_dir()
 
 
 @pytest.mark.parametrize("shadow", ["none", "role", "collection"])

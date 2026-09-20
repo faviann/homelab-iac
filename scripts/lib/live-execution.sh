@@ -176,7 +176,7 @@ run_live_playbook() {
     # reconciler reads Ansible's effective config, including ANSIBLE_CONFIG.
     local status=0
     uv run --locked python -m scripts.live_dependencies \
-        --playbook "$playbook" || status=$?
+        --playbook "$playbook" -- "$@" || status=$?
     if ((status == 0)); then
         echo "Running Ansible playbook through uv: $playbook"
         echo "────────────────────────────────────────"

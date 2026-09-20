@@ -43,7 +43,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from ansible.cli.playbook import PlaybookCLI
 from ansible.config.manager import ConfigManager
+from ansible.plugins.connection.ssh import Connection as SSHConnection
 from ansible.plugins.connection.ssh import DOCUMENTATION as SSH_DOCUMENTATION
 from ansible.utils.path import unfrackpath
 import yaml
@@ -279,6 +281,74 @@ def _reconcile_roles(
             )
 
 
+def _control_path_option(
+    arguments: list[str], *, supports_control_path_short_option: bool
+) -> str | None:
+    """Return the ControlPath OpenSSH will obtain from command arguments."""
+    short_option: str | None = None
+    if supports_control_path_short_option:
+        for index, argument in enumerate(arguments):
+            if argument == "-S" and index + 1 < len(arguments):
+                short_option = arguments[index + 1]
+            elif argument.startswith("-S") and len(argument) > 2:
+                short_option = argument[2:]
+        if short_option is not None:
+            return short_option
+
+    for index, argument in enumerate(arguments):
+        option: str | None = None
+        if argument == "-o" and index + 1 < len(arguments):
+            option = arguments[index + 1]
+        elif argument.startswith("-o") and len(argument) > 2:
+            option = argument[2:]
+        if option is None:
+            continue
+        key, separator, value = option.partition("=")
+        if not separator:
+            parts = option.split(maxsplit=1)
+            if len(parts) != 2:
+                continue
+            key, value = parts
+        if key.lower() == "controlpath":
+            return value
+    return None
+
+
+def _explicit_control_paths(config: ConfigManager) -> set[str]:
+    """Match the SSH plugin's argument ordering for each spawned SSH utility."""
+    shared = [
+        *SSHConnection._split_ssh_args(
+            config.get_config_value(
+                "ssh_args", plugin_type="connection", plugin_name="ssh"
+            )
+        ),
+        *SSHConnection._split_ssh_args(
+            config.get_config_value(
+                "ssh_common_args", plugin_type="connection", plugin_name="ssh"
+            )
+        ),
+    ]
+    paths: set[str] = set()
+    for subsystem, extra_option in (
+        ("ssh", "ssh_extra_args"),
+        ("scp", "scp_extra_args"),
+        ("sftp", "sftp_extra_args"),
+    ):
+        arguments = [
+            *shared,
+            *SSHConnection._split_ssh_args(
+                config.get_config_value(
+                    extra_option, plugin_type="connection", plugin_name="ssh"
+                )
+            ),
+        ]
+        if control_path := _control_path_option(
+            arguments, supports_control_path_short_option=subsystem == "ssh"
+        ):
+            paths.add(control_path)
+    return paths
+
+
 def _ensure_control_path_parent(config: ConfigManager, playbook: str) -> None:
     config.initialize_plugin_configuration_definitions(
         "connection", "ssh", yaml.safe_load(SSH_DOCUMENTATION)["options"]
@@ -291,22 +361,35 @@ def _ensure_control_path_parent(config: ConfigManager, playbook: str) -> None:
     control_path = config.get_config_value(
         "control_path", plugin_type="connection", plugin_name="ssh"
     )
-    parent = (
+    configured_parent = (
         Path(control_path % {"directory": directory}).expanduser().parent
         if control_path
         else Path(directory)
     )
-    try:
-        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    except OSError as error:
-        raise DependencyReconciliationError(
-            f"Live playbook '{playbook}' consumes the SSH control path {control_path}, "
-            f"whose parent directory {parent} could not be created: {error}"
-        ) from error
+    parents = {configured_parent}
+    parents.update(
+        Path(path).expanduser().parent
+        for path in _explicit_control_paths(config)
+        if path.lower() != "none"
+    )
+    for parent in parents:
+        try:
+            parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError as error:
+            raise DependencyReconciliationError(
+                f"Live playbook '{playbook}' consumes an SSH control path "
+                f"whose parent directory {parent} could not be created: {error}"
+            ) from error
 
 
-def reconcile(playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
+def reconcile(
+    playbook: str,
+    ansible_arguments: tuple[str, ...] = (),
+    *,
+    project_root: Path = PROJECT_ROOT,
+) -> None:
     operation = select_operation(playbook)
+    PlaybookCLI(["ansible-playbook", playbook, *ansible_arguments]).parse()
     config = ConfigManager()
     lock_path = project_root / ".ansible" / "dependencies.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -321,9 +404,13 @@ def reconcile(playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.live_dependencies")
     parser.add_argument("--playbook", required=True)
+    parser.add_argument("ansible_arguments", nargs=argparse.REMAINDER)
     arguments = parser.parse_args(argv)
+    ansible_arguments = arguments.ansible_arguments
+    if ansible_arguments[:1] == ["--"]:
+        ansible_arguments = ansible_arguments[1:]
     try:
-        reconcile(arguments.playbook)
+        reconcile(arguments.playbook, tuple(ansible_arguments))
     except UnsupportedLiveOperation as error:
         print(error, file=sys.stderr)
         return 2
