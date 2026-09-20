@@ -1,0 +1,23 @@
+---
+- name: Test the real beets-flask config template keeps its secrets unescaped
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    beets_config_template: "{{ repo_root }}/stacks/servarr/beets-flask/appdata/beets/config.yaml.j2"
+    stack_vars:
+      acoustid_apikey: "acoustid-pa$$"
+      discogs_token: "discogs-pa$$"
+  tasks:
+    - name: Evaluate the real beets-flask config template
+      ansible.builtin.set_fact:
+        rendered_beets_config: "{{ lookup('template', beets_config_template) | from_yaml }}"
+
+    - name: Assert the rendered beets-flask config carries the exact token values
+      ansible.builtin.assert:
+        that:
+          - rendered_beets_config.chroma.apikey == stack_vars.acoustid_apikey
+          - rendered_beets_config.discogs.user_token == stack_vars.discogs_token
+        fail_msg: >-
+          The beets-flask config template must pass AcoustID and Discogs values through
+          unchanged. Compose-dollar escaping belongs to .env.j2 only.
