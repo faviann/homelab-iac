@@ -140,7 +140,8 @@ trap 'rm -rf -- "$VALIDATION_CACHE_DIR"' EXIT
 export ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR"
 
 run_handoff() {
-    local lifecycle_pid="" pytest_pid="" lifecycle_status=0 pytest_status=0
+    local lint_pid="" lifecycle_pid="" pytest_pid=""
+    local lint_status=0 lifecycle_status=0 pytest_status=0
 
     interrupt_handoff() {
         local latest_pid="$!" signal_status="$1"
@@ -149,10 +150,13 @@ run_handoff() {
         [[ -z "$lifecycle_pid" ]] || kill -TERM -- "-$lifecycle_pid" 2>/dev/null || true
         [[ -z "$pytest_pid" ]] || kill -TERM -- "$pytest_pid" 2>/dev/null || true
         [[ -z "$pytest_pid" ]] || kill -TERM -- "-$pytest_pid" 2>/dev/null || true
+        [[ -z "$lint_pid" ]] || kill -TERM -- "$lint_pid" 2>/dev/null || true
+        [[ -z "$lint_pid" ]] || kill -TERM -- "-$lint_pid" 2>/dev/null || true
         [[ -z "$latest_pid" ]] || kill -TERM -- "$latest_pid" 2>/dev/null || true
         [[ -z "$latest_pid" ]] || kill -TERM -- "-$latest_pid" 2>/dev/null || true
         [[ -z "$lifecycle_pid" ]] || wait "$lifecycle_pid" 2>/dev/null || true
         [[ -z "$pytest_pid" ]] || wait "$pytest_pid" 2>/dev/null || true
+        [[ -z "$lint_pid" ]] || wait "$lint_pid" 2>/dev/null || true
         [[ -z "$latest_pid" ]] || wait "$latest_pid" 2>/dev/null || true
         exit "$signal_status"
     }
@@ -160,6 +164,13 @@ run_handoff() {
     trap 'interrupt_handoff 130' INT
     trap 'interrupt_handoff 143' TERM
 
+    # Lint starts first so $! ends up naming pytest, the child reaped last.
+    # interrupt_handoff signals $!, which must stay unreaped while armed.
+    ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR/lint-cache" \
+        setsid --wait env --default-signal=INT,QUIT uv run --locked \
+        ansible-lint \
+        >"$VALIDATION_CACHE_DIR/lint.log" 2>&1 &
+    lint_pid="$!"
     ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR/lifecycle-cache" \
         setsid --wait env --default-signal=INT,QUIT uv run --locked python \
         tests/regression/run_lxc_lifecycle_regressions.py --full \
@@ -171,10 +182,31 @@ run_handoff() {
         >"$VALIDATION_CACHE_DIR/pytest.log" 2>&1 &
     pytest_pid="$!"
 
+    wait "$lint_pid" || lint_status="$?"
+    lint_pid=""
+    if ((lint_status != 0)); then
+        kill -TERM -- "$lifecycle_pid" 2>/dev/null || true
+        kill -TERM -- "-$lifecycle_pid" 2>/dev/null || true
+        kill -TERM -- "$pytest_pid" 2>/dev/null || true
+        kill -TERM -- "-$pytest_pid" 2>/dev/null || true
+        wait "$lifecycle_pid" 2>/dev/null || true
+        lifecycle_pid=""
+        wait "$pytest_pid" 2>/dev/null || true
+        pytest_pid=""
+        trap - INT TERM
+        printf 'validate.sh: lint failed (exit %s)\n' "$lint_status" >&2
+        cat "$VALIDATION_CACHE_DIR/lint.log" >&2
+        return "$lint_status"
+    fi
+
     wait "$lifecycle_pid" || lifecycle_status="$?"
+    lifecycle_pid=""
     wait "$pytest_pid" || pytest_status="$?"
+    pytest_pid=""
     trap - INT TERM
 
+    printf 'validate.sh: lint passed\n'
+    cat "$VALIDATION_CACHE_DIR/lint.log"
     if ((lifecycle_status == 0)); then
         printf 'validate.sh: lifecycle passed\n'
         cat "$VALIDATION_CACHE_DIR/lifecycle.log"
@@ -199,7 +231,6 @@ run_handoff() {
 
 case "$operation" in
     handoff)
-        uv run --locked ansible-lint
         run_handoff
         ;;
     lint)
