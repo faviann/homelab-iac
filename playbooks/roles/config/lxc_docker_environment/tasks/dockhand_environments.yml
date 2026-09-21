@@ -4,6 +4,13 @@
 # Skipped entirely when dockhand_api_token is not defined — generate a token
 # in the Dockhand UI, then store it as vault_dockhand_api_token and re-run.
 
+- name: Validate configured Dockhand API token
+  ansible.builtin.assert:
+    that: dockhand_api_token | credential_is_configured
+    quiet: true
+  when: dockhand_api_token is defined
+  no_log: true
+
 - name: Fetch existing Dockhand environments
   ansible.builtin.uri:
     url: http://127.0.0.1:3004/api/environments
@@ -14,6 +21,7 @@
       Authorization: "Bearer {{ dockhand_api_token }}"
   register: _dockhand_existing_envs
   when: dockhand_api_token is defined
+  no_log: true
 
 - name: Compute remote Hawser host list
   ansible.builtin.set_fact:
@@ -36,12 +44,13 @@
       host: "{{ item }}.{{ lxc_dns_domain }}"
       port: 2376
       protocol: http
-      hawserToken: "{{ dockhand_hawser_token }}"
+      hawserToken: "{{ dockhand_hawser_token | required_credential }}"
     status_code: [200, 201, 409]
     headers:
       Authorization: "Bearer {{ dockhand_api_token }}"
   loop: "{{ _dockhand_hawser_hosts }}"
   when: dockhand_api_token is defined and item not in _dockhand_existing_names
+  no_log: true
 
 - name: Create local socket environment for portal itself
   ansible.builtin.uri:
@@ -56,6 +65,7 @@
     headers:
       Authorization: "Bearer {{ dockhand_api_token }}"
   when: dockhand_api_token is defined and inventory_hostname not in _dockhand_existing_names
+  no_log: true
 
 - name: Fetch existing Dockhand notification channels
   ansible.builtin.uri:
@@ -67,6 +77,7 @@
       Authorization: "Bearer {{ dockhand_api_token }}"
   register: _dockhand_existing_notifications
   when: dockhand_api_token is defined
+  no_log: true
 
 - name: Configure Discord notification channel
   ansible.builtin.uri:
@@ -78,7 +89,7 @@
       name: Discord
       config:
         urls:
-          - "{{ dockhand_discord_webhook_url | regex_replace('^https://discord\\.com/api/webhooks/', 'discord://') }}"
+          - "{{ dockhand_discord_webhook_url | required_credential | regex_replace('^https://discord\\.com/api/webhooks/', 'discord://') }}"
     status_code: 200
     headers:
       Authorization: "Bearer {{ dockhand_api_token }}"
@@ -87,3 +98,4 @@
     ((_dockhand_existing_notifications.json | default([]))
     | selectattr('name', 'equalto', 'Discord')
     | list | length == 0)
+  no_log: true

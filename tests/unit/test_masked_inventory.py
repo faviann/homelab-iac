@@ -21,7 +21,7 @@ def test_mask_value_collapses_only_runs_longer_than_sixteen() -> None:
 
 def test_vault_example_keys_have_the_required_prefix() -> None:
     vault_example = yaml.safe_load(
-        (REPO_ROOT / "inventory/group_vars/all/vault.yml.example").read_text(
+        (REPO_ROOT / "inventory/vault.yml.example").read_text(
             encoding="utf-8"
         )
     )

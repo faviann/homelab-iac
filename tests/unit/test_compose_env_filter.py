@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FILTER_PATH = REPO_ROOT / "playbooks" / "filter_plugins" / "compose_env.py"
@@ -27,3 +29,17 @@ def test_compose_env_stringifies_values() -> None:
     module = load_filter_module()
 
     assert module.compose_env(1234) == "1234"
+
+
+def test_required_credential_rejects_blank_value() -> None:
+    module = load_filter_module()
+
+    with pytest.raises(module.AnsibleFilterError, match="selected credential"):
+        module.required_credential("  \t")
+
+
+def test_compose_env_rejects_repository_placeholder() -> None:
+    module = load_filter_module()
+
+    with pytest.raises(module.AnsibleFilterError, match="selected credential"):
+        module.compose_env("REPLACE_WITH_RANDOM_JWT_SECRET")

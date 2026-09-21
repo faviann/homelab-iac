@@ -1,5 +1,5 @@
 keys:
-  - key: {{ stack_vars.agent_key | quote }}
+  - key: {{ stack_vars.agent_key | required_credential | quote }}
     agent_id: homelab-dev
     default_namespace: memory-system
     allowed_namespaces:

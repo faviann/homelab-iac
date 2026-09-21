@@ -56,7 +56,9 @@
     - name: Apply Authentik blueprints
       ansible.builtin.include_role:
         name: config/authentik_blueprint_sync
-      when: authentik_blueprint_sync_enabled | default(false)
+      when:
+        - authentik_blueprint_sync_enabled | default(false)
+        - stack_filter | default(none) in [none, 'auth']
 
     - name: Configure workstation baseline
       ansible.builtin.include_role:

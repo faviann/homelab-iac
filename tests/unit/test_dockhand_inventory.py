@@ -19,7 +19,7 @@ def load_yaml(path: Path) -> dict:
 
 class DockhandInventoryTests(unittest.TestCase):
     def test_discord_webhook_uses_dockhand_named_vault_key(self) -> None:
-        vault_example = load_yaml(REPO_ROOT / "inventory/group_vars/all/vault.yml.example")
+        vault_example = load_yaml(REPO_ROOT / "inventory/vault.yml.example")
         portal_vars = load_yaml(REPO_ROOT / "inventory/host_vars/portal.yml")
 
         self.assertIn("vault_dockhand_discord_webhook_url", vault_example)

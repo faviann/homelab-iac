@@ -240,11 +240,11 @@ Test connectivity:
 |   `-- ssh-key-management.md
 |-- inventory/
 |   |-- hosts.yml                      # Static inventory file
+|   |-- vault.yml                      # Encrypted secrets (loaded explicitly)
+|   |-- vault.yml.example              # Template for vault
 |   |-- group_vars/
 |   |   `-- all/
-|   |       |-- proxmox.yml            # Non-secret Proxmox configuration
-|   |       |-- vault.yml              # Encrypted secrets
-|   |       `-- vault.yml.example      # Template for vault
+|   |       `-- proxmox.yml            # Non-secret Proxmox configuration
 |   `-- host_vars/                     # Host-specific variables
 |       |-- auth.yml
 |       |-- portal.yml
@@ -288,14 +288,18 @@ proxmox_verify_ssl: false                  # TLS verification (see below)
 
 ### Secret Variables (Ansible Vault)
 
-Create `inventory/group_vars/all/vault.yml` from the example and encrypt:
+The encrypted vault lives outside `group_vars` so SSH connectivity and recovery
+do not load it. API-consuming workflows load it explicitly and validate their
+API credentials; configuration checks only the selected service inputs.
+
+Create `inventory/vault.yml` from the example and encrypt:
 
 ```yaml
 vault_proxmox_api_token_secret: "your-actual-token-secret"
 ```
 
 ```bash
-uv run --locked ansible-vault encrypt inventory/group_vars/all/vault.yml
+uv run --locked ansible-vault encrypt --vault-password-file ~/.ansible/vault-pass inventory/vault.yml
 ```
 
 ### Inventory
@@ -380,7 +384,7 @@ Builds the effective LXC specs from tier and capability group variables, ensures
 
 ### Authentication fails
 
-- Verify API token secret in vault: `uv run --locked ansible-vault view inventory/group_vars/all/vault.yml`
+- Verify API token secret in vault: `uv run --locked ansible-vault view --vault-password-file ~/.ansible/vault-pass inventory/vault.yml`
 - Check token permissions in Proxmox web UI
 - Ensure token ID format: `user@realm!tokenid` (e.g., `ansible@pve!controller`)
 

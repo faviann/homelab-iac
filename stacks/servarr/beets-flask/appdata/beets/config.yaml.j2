@@ -41,10 +41,10 @@ replace:
   '\s+$': ''
 
 chroma:
-  apikey: "{{ stack_vars.acoustid_apikey }}"
+  apikey: "{{ stack_vars.acoustid_apikey | required_credential }}"
 
 discogs:
-  user_token: "{{ stack_vars.discogs_token }}"
+  user_token: "{{ stack_vars.discogs_token | required_credential }}"
 
 replaygain:
   backend: ffmpeg

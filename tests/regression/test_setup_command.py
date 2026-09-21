@@ -59,7 +59,7 @@ def project(tmp_path: Path) -> Path:
     guided path's filesystem writes inside the test.
     """
     project = tmp_path / "project"
-    (project / "inventory" / "group_vars" / "all").mkdir(parents=True)
+    (project / "inventory").mkdir(parents=True)
     (project / ".agents" / "skills" / "example-skill").mkdir(parents=True)
     for name in ("setup.sh", "vault.sh"):
         (project / name).symlink_to(REPO_ROOT / name)
@@ -114,7 +114,7 @@ def children(env: dict[str, str]) -> list[list[str]]:
 
 
 def vault_file(project: Path) -> Path:
-    return project / "inventory" / "group_vars" / "all" / "vault.yml"
+    return project / "inventory" / "vault.yml"
 
 
 # --- operations -----------------------------------------------------------

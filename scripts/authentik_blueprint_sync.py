@@ -251,7 +251,7 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
             lines += [f"    - {grant_type}" for grant_type in app["grant_types"]]
         lines += [
             f"    client_id: {app['client_id']}",
-            f"    client_secret: \"{{{{ {secret_var} }}}}\"",
+            f"    client_secret: \"{{{{ {secret_var} | required_credential }}}}\"",
             "    access_code_validity: minutes=1",
             "    access_token_validity: hours=24",
             "    refresh_token_validity: days=30",

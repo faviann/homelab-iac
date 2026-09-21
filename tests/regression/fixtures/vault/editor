@@ -12,7 +12,7 @@ assert workspace.stat().st_mode & 0o777 == 0o700
 content = plaintext.read_text(encoding="utf-8")
 assert "vault_proxmox_api_token_secret" in content
 assert "unrelated_mapping" in content
-tracked = Path(os.environ["VAULT_TEST_REPO"]) / "inventory/group_vars/all/vault.yml"
+tracked = Path(os.environ["VAULT_TEST_REPO"]) / "inventory/vault.yml"
 if tracked.exists():
     tracked_bytes = tracked.read_bytes()
     tracked_state = (

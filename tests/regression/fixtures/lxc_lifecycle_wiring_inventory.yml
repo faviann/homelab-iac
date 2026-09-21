@@ -4,7 +4,7 @@ all:
     proxmox_api_host: localhost
     proxmox_api_user: fixture@pam
     proxmox_api_token_id: fixture
-    proxmox_api_token_secret: "<REPLACE_ME>"
+    proxmox_api_token_secret: "controlled-api-token"
     proxmox_verify_ssl: false
     proxmox_validate_pct: false
   children:
@@ -49,6 +49,7 @@ all:
               net0: name=eth0,bridge=vmbr0,ip=dhcp
             pubkey: ssh-ed25519 AAAAAWIRING lifecycle@test
         wiring_peer:
+          proxmox_api_token_secret: "{{ lifecycle_wiring_peer_token | default('controlled-api-token') }}"
           proxmox_lxc:
             state: present
             vmid: 7202

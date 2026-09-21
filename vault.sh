@@ -6,9 +6,10 @@ set -uo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INVOCATION_DIR="$PWD"
 cd "$PROJECT_ROOT" || exit 1
-VAULT_FILE="$PROJECT_ROOT/inventory/group_vars/all/vault.yml"
+VAULT_FILE="$PROJECT_ROOT/inventory/vault.yml"
 STANDARD_PASS_FILE="$HOME/.ansible/vault-pass"
 PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$STANDARD_PASS_FILE}"
+export ANSIBLE_VAULT_PASSWORD_FILE="$PASS_FILE"
 TRANSACTION_WORKSPACE=""
 TRANSACTION_PUBLISH_TMP=""
 

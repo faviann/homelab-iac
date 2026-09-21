@@ -40,17 +40,36 @@ def main() -> int:
         env["ANSIBLE_COLLECTIONS_PATH"] = os.pathsep.join(
             [str(ASSETS / "collections"), str(REPO_ROOT / "collections")]
         )
+        command = [
+            *ANSIBLE_PLAYBOOK,
+            "-i",
+            str(INVENTORY),
+            str(PLAYBOOK),
+            "--limit",
+            "wiring_target,wiring_peer",
+            "-e",
+            f"lifecycle_test_state_dir={state_dir}",
+        ]
+        rejected = subprocess.run(
+            [*command, "-e", "lifecycle_wiring_peer_token=<REPLACE_ME>"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        rejected_output = f"{rejected.stdout}\n{rejected.stderr}"
+        if (
+            rejected.returncode == 0
+            or "Proxmox API credentials require" not in rejected_output
+            or "Lifecycle planning failed for wiring_peer" not in rejected_output
+            or any((state_dir / f"{vmid}.events").read_text() for vmid in (7201, 7202))
+        ):
+            print("credential failure bypassed the lifecycle planning barrier", file=sys.stderr)
+            print(rejected_output, file=sys.stderr)
+            return 1
+
         proc = subprocess.run(
-            [
-                *ANSIBLE_PLAYBOOK,
-                "-i",
-                str(INVENTORY),
-                str(PLAYBOOK),
-                "--limit",
-                "wiring_target,wiring_peer",
-                "-e",
-                f"lifecycle_test_state_dir={state_dir}",
-            ],
+            command,
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,

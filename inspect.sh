@@ -61,6 +61,7 @@ case "${1:-}" in
         shift
         (($# == 1)) || usage_error "vars requires one host or --graph"
         if [[ "$1" == "--graph" ]]; then
+            unset ANSIBLE_VAULT_PASSWORD_FILE ANSIBLE_VAULT_IDENTITY_LIST
             if uv run --locked ansible-inventory \
                 -i inventory/hosts.yml --graph 2>/dev/null; then
                 exit 0
@@ -68,12 +69,13 @@ case "${1:-}" in
             exit 1
         fi
         [[ "$1" != -* ]] || usage_error "unknown option"
+        use_live_vault_password
         if ! masked_inventory_file="$(mktemp)"; then
             exit 1
         fi
         trap 'rm -f -- "$masked_inventory_file"' EXIT
         if uv run --locked ansible-inventory \
-            -i inventory/hosts.yml --host "$1" --yaml 2>/dev/null \
+            -i inventory/hosts.yml -e @inventory/vault.yml --host "$1" --yaml 2>/dev/null \
             | uv run --locked python -m scripts.masked_inventory \
                 >"$masked_inventory_file" 2>/dev/null; then
             if cat "$masked_inventory_file"; then

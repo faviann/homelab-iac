@@ -30,11 +30,24 @@
   strategy: ansible.builtin.free
   module_defaults: *proxmox_module_defaults
   tasks:
-    - name: Compile one target-local LXC contract
-      ansible.builtin.import_role:
-        name: provisioning/proxmox_lxc_lifecycle
-        tasks_from: compile_target
+    - name: Establish credentials and compile one target-local LXC contract
       when: proxmox_lifecycle_selected | default(false) | bool
+      block:
+        - name: Establish credentials for the selected API consumer
+          ansible.builtin.include_tasks: tasks/proxmox_api_credentials.yml
+
+        - name: Compile one target-local LXC contract
+          ansible.builtin.import_role:
+            name: provisioning/proxmox_lxc_lifecycle
+            tasks_from: compile_target
+      rescue:
+        - name: Record the target's credential prerequisite failure
+          ansible.builtin.set_fact:
+            proxmox_lifecycle_planning_problem: >-
+              {{
+                (ansible_failed_result | default({})).msg
+                | default('Proxmox API credential validation failed for ' ~ inventory_hostname)
+              }}
 
 - name: Coordinate Fleet preflight after targeted compilation
   hosts: lxcs

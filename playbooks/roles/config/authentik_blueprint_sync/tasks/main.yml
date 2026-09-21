@@ -10,11 +10,11 @@
   ansible.builtin.assert:
     that:
       - authentik_blueprint_sync_url | length > 0
-      - authentik_blueprint_api_token | length > 0
+      - authentik_blueprint_api_token | credential_is_configured
     fail_msg: >-
       config/authentik_blueprint_sync requires authentik_blueprint_sync_url and
       authentik_blueprint_api_token. Add vault_auth_blueprint_api_token to the local
-      inventory/group_vars/all/vault.yml and bind it in inventory/host_vars/auth.yml.
+      inventory/vault.yml and bind it in inventory/host_vars/auth.yml.
   when: not ansible_check_mode | bool
 
 - name: Apply Authentik blueprints

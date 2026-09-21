@@ -8,7 +8,7 @@ from pathlib import Path
 
 target = Path(sys.argv[-1])
 if str(target).startswith("/dev/shm/homelab-vault."):
-    tracked = Path(os.environ["VAULT_TEST_REPO"]) / "inventory/group_vars/all/vault.yml"
+    tracked = Path(os.environ["VAULT_TEST_REPO"]) / "inventory/vault.yml"
     if tracked.exists():
         tracked_bytes = tracked.read_bytes()
         tracked_state = (

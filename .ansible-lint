@@ -24,4 +24,4 @@ exclude_paths:
   # ansible-vault encrypted file: must start with the $ANSIBLE_VAULT
   # header, so yaml rules (e.g. document-start) cannot apply and fix
   # mode must never rewrite it.
-  - inventory/group_vars/all/vault.yml
+  - inventory/vault.yml

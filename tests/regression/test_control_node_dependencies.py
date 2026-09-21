@@ -110,14 +110,14 @@ printf 'version: %s\\n' "$role_version" > "$install_path/$role_name/meta/.galaxy
     project_root = tmp_path / "project"
     (project_root / "collections").mkdir(parents=True)
     (project_root / "requirements").mkdir()
-    (project_root / "inventory" / "group_vars" / "all").mkdir(parents=True)
+    (project_root / "inventory").mkdir(parents=True)
     (project_root / "collections" / "requirements.yml").write_text(
         "collections: []\n", encoding="utf-8"
     )
     (project_root / "requirements" / "roles.yml").write_text(
         "roles:\n  - name: example.role\n    version: 2.0.0\n", encoding="utf-8"
     )
-    (project_root / "inventory" / "group_vars" / "all" / "vault.yml").write_text(
+    (project_root / "inventory" / "vault.yml").write_text(
         "$ANSIBLE_VAULT;1.1;AES256\n", encoding="utf-8"
     )
     home = tmp_path / "home"

@@ -12,7 +12,7 @@ auth-dir: "/root/.cli-proxy-api"
 
 # Client authentication. Every consuming agent presents this key.
 api-keys:
-  - {{ stack_vars.client_api_key | quote }}
+  - {{ stack_vars.client_api_key | required_credential | quote }}
 
 remote-management:
   # The panel is reached through Traefik, not localhost, so remote access is
@@ -21,7 +21,7 @@ remote-management:
   # A bcrypt hash, not plaintext. The server rewrites a plaintext value into
   # this file at startup, which would make every deploy report changed and
   # would fight the read-only mount.
-  secret-key: {{ stack_vars.management_key_hash | quote }}
+  secret-key: {{ stack_vars.management_key_hash | required_credential | quote }}
   # The panel is the OAuth login surface; disabling it removes browser login.
   disable-control-panel: false
   # The panel asset is downloaded from GitHub on first access and cached under
