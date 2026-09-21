@@ -37,12 +37,14 @@ def ansible_playbook_command(
     return [*ANSIBLE_PLAYBOOK, *arguments]
 
 
-def write_controller_identity(home: Path, *, name: str = "proxmox_lxc") -> Path:
+def write_controller_identity(
+    home: Path, *, name: str = "proxmox_lxc", passphrase: str = ""
+) -> Path:
     """Generate a throwaway controller identity under a fixture ``HOME``."""
     private_key = home / ".ansible" / "ssh" / name
     private_key.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(private_key),
+        ["ssh-keygen", "-q", "-t", "ed25519", "-N", passphrase, "-f", str(private_key),
          "-C", "regression-fixture"],
         check=True,
         stdin=subprocess.DEVNULL,

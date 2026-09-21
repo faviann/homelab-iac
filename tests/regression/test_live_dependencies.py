@@ -464,6 +464,9 @@ def test_live_path_never_directs_the_caller_to_the_retired_bootstrap() -> None:
 def stage_controller_identity(home: Path, state: str) -> None:
     if state == "absent":
         return
+    if state == "encrypted":
+        write_controller_identity(home, passphrase="fixture-passphrase")
+        return
     private_key = write_controller_identity(home)
     if state == "mismatched":
         unrelated = write_controller_identity(home, name="unrelated")
@@ -475,6 +478,7 @@ def run_boundary(
     *arguments: str,
     hold_lock: bool = False,
     identity: str = "absent",
+    extra_environment: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     home = tmp_path / "home"
     (home / ".ansible").mkdir(parents=True)
@@ -496,6 +500,7 @@ def run_boundary(
         "HOME": str(home),
         "PATH": f"{fixture_bin}{os.pathsep}{os.environ['PATH']}",
         "UV_RECORD": str(record),
+        **(extra_environment or {}),
     }
 
     def invoke() -> subprocess.CompletedProcess[str]:
@@ -562,7 +567,12 @@ def test_reconciliation_precedes_ansible_at_the_live_boundary(tmp_path: Path) ->
 @pytest.mark.serial
 @pytest.mark.parametrize(
     ("identity", "condition"),
-    [("present", ""), ("absent", "is absent"), ("mismatched", "is inconsistent")],
+    [
+        ("present", ""),
+        ("absent", "is absent"),
+        ("mismatched", "is inconsistent"),
+        ("encrypted", "is inconsistent"),
+    ],
 )
 def test_ssh_operation_requires_a_consistent_controller_identity(
     tmp_path: Path, identity: str, condition: str
@@ -586,3 +596,38 @@ def test_ssh_operation_requires_a_consistent_controller_identity(
     public_key = tmp_path / "home/.ansible/ssh/proxmox_lxc.pub"
     if public_key.exists():
         assert public_key.read_text(encoding="utf-8").split()[1] not in output
+
+
+@pytest.mark.serial
+def test_identity_check_never_prompts_for_a_passphrase(tmp_path: Path) -> None:
+    """An encrypted key must fail, not reach for an interactive prompt.
+
+    Without a controlling tty, ssh-keygen falls back to reading the closed
+    stdin and fails anyway, so forcing askpass is what makes a regression to
+    an interactive form observable here.
+    """
+    askpass_log = tmp_path / "askpass.log"
+    askpass = tmp_path / "askpass.sh"
+    askpass.write_text(
+        f"#!/bin/bash\necho invoked >> {askpass_log}\necho fixture-passphrase\n",
+        encoding="utf-8",
+    )
+    askpass.chmod(0o755)
+
+    result, _ = run_boundary(
+        tmp_path,
+        "shared",
+        "playbooks/lab-connectivity.yml",
+        identity="encrypted",
+        extra_environment={
+            "SSH_ASKPASS": str(askpass),
+            "SSH_ASKPASS_REQUIRE": "force",
+            "DISPLAY": ":0",
+        },
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "is inconsistent" in output
+    assert not askpass_log.exists(), askpass_log.read_text(encoding="utf-8")
+    assert "fixture-passphrase" not in output

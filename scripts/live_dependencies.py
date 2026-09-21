@@ -234,10 +234,12 @@ def _classify_controller_identity(private_key: Path) -> ControllerIdentity:
         declared = public_key.read_text(encoding="utf-8").split()
     except (OSError, UnicodeDecodeError):
         return ControllerIdentity.INCONSISTENT
-    # DEVNULL keeps a passphrase-protected key from stalling the live boundary
-    # on a prompt, and the captured output never reaches the operator.
+    # -P '' supplies the passphrase, so a protected key fails instead of
+    # prompting. Closing stdin is not enough: ssh-keygen reaches for SSH_ASKPASS
+    # and then /dev/tty, and would stall the live boundary on either. The
+    # captured output never reaches the operator.
     derived = subprocess.run(
-        ["ssh-keygen", "-y", "-f", str(private_key)],
+        ["ssh-keygen", "-y", "-P", "", "-f", str(private_key)],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
