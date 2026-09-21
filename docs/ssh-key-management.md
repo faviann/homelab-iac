@@ -19,7 +19,7 @@ LXC containers created outside of Ansible (manually or by other tools) won't hav
 
 Recovery reaches the guests with `pct exec` on the Proxmox host, so containers do not need to be SSH-accessible beforehand. It is idempotent and non-destructive: it only adds keys, never removes them.
 
-It resolves the control node public key through the shared SSH key resolver, using `~/.ansible/ssh/proxmox_lxc.pub` unless an explicit override is provided. No playbook generates that key pair; you create or restore it yourself.
+It reads the control node public key from `~/.ansible/ssh/proxmox_lxc.pub`, the one machine-global location, and fails when that file is absent. No playbook generates that key pair; you create or restore it yourself.
 
 **Prerequisites**: the container must be running. Proxmox host SSH access is established by the command itself — its prerequisite layer installs the controller key on the Proxmox host, prompting once for the root password when key authentication is not yet configured.
 

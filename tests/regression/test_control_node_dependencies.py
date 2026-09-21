@@ -136,8 +136,6 @@ printf 'version: %s\\n' "$role_version" > "$install_path/$role_name/meta/.galaxy
             project_root / "collections" / "requirements.yml"
         ),
         "control_node_collection_install_path": str(project_root / "collections"),
-        "control_node_ssh_private_key_path": str(private_key),
-        "control_node_ssh_public_key_path": str(public_key),
         "control_node_vault_password_file": str(vault_pass),
         "control_node_skip_system_packages": True,
         "control_node_ansible_galaxy_executable": str(fake_galaxy),

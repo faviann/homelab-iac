@@ -16,7 +16,7 @@ import threading
 from pathlib import Path
 from typing import Iterator
 
-from ansible_test_helper import ansible_playbook_command
+from ansible_test_helper import ansible_playbook_command, write_controller_identity
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -48,13 +48,11 @@ def main() -> int:
         local_ssh_port() as ssh_port,
     ):
         temp_root = Path(temp_dir)
-        public_key = temp_root / "controller.pub"
-        public_key.write_text("ssh-ed25519 AAAARECOVERY recovery@test\n")
+        home = temp_root / "home"
+        public_key = Path(f"{write_controller_identity(home)}.pub")
         encoded_public_key = base64.b64encode(
-            b"ssh-ed25519 AAAARECOVERY recovery@test"
+            public_key.read_text().strip().encode()
         ).decode()
-        private_key = temp_root / "controller"
-        private_key.write_text("controlled-placeholder\n")
 
         ssh_log = temp_root / "ssh-calls.log"
         ssh = temp_root / "ssh"
@@ -111,10 +109,7 @@ def main() -> int:
             "        proxmox_api_host: localhost\n"
             "        proxmox_host: 127.0.0.1\n"
             f"        proxmox_ssh_port: {ssh_port}\n"
-            f"        proxmox_ssh_key_private: '{private_key}'\n"
-            f"        proxmox_ssh_key_public: '{public_key}'\n"
             "        proxmox_validate_pct: false\n"
-            f"        proxmox_lxc_controller_pubkey_path: '{public_key}'\n"
             "        proxmox_default_storage: ''\n"
             "        proxmox_lxc_global_defaults:\n"
             "          node: ''\n"
@@ -143,6 +138,9 @@ def main() -> int:
         )
 
         env = os.environ.copy()
+        # The resolver reads the canonical HOME-relative identity, so the run
+        # must use the staged one rather than the operator's own key.
+        env["HOME"] = str(home)
         env["PATH"] = f"{temp_root}:{env['PATH']}"
         env["ANSIBLE_COLLECTIONS_PATH"] = str(temp_root / "empty-collections")
         env["ANSIBLE_COLLECTIONS_SCAN_SYS_PATH"] = "false"
