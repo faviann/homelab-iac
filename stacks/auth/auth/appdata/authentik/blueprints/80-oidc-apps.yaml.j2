@@ -79,7 +79,7 @@ entries:
     - !KeyOf scope-romm-email-verification
     client_type: confidential
     client_id: romm-public
-    client_secret: "{{ stack_vars.romm_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.romm_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30
@@ -156,7 +156,7 @@ entries:
     - !KeyOf scope-reading-apps-email-verification
     client_type: confidential
     client_id: audiobookshelf-public
-    client_secret: "{{ stack_vars.audiobookshelf_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.audiobookshelf_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30
@@ -235,7 +235,7 @@ entries:
     - !KeyOf scope-reading-apps-email-verification
     client_type: confidential
     client_id: komga-public
-    client_secret: "{{ stack_vars.komga_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.komga_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30
@@ -312,7 +312,7 @@ entries:
     - !KeyOf scope-reading-apps-email-verification
     client_type: confidential
     client_id: calibre-web-automated-public
-    client_secret: "{{ stack_vars.calibre_web_automated_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.calibre_web_automated_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30
@@ -389,7 +389,7 @@ entries:
     - !KeyOf scope-immich-email-verification
     client_type: confidential
     client_id: immich-public
-    client_secret: "{{ stack_vars.immich_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.immich_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30
@@ -470,7 +470,7 @@ entries:
     - !KeyOf scope-reading-apps-email-verification
     client_type: confidential
     client_id: readmeabook-public
-    client_secret: "{{ stack_vars.readmeabook_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.readmeabook_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30
@@ -547,7 +547,7 @@ entries:
     - !KeyOf scope-admin-apps-email-verification
     client_type: confidential
     client_id: dockhand-admin
-    client_secret: "{{ stack_vars.dockhand_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.dockhand_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30
@@ -626,7 +626,7 @@ entries:
     grant_types:
     - authorization_code
     client_id: moraine-mcp
-    client_secret: "{{ stack_vars.moraine_mcp_oidc_client_secret }}"
+    client_secret: "{{ stack_vars.moraine_mcp_oidc_client_secret | required_credential }}"
     access_code_validity: minutes=1
     access_token_validity: hours=24
     refresh_token_validity: days=30

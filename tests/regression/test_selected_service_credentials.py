@@ -68,12 +68,32 @@ def test_stack_filter_renders_only_selected_service_inputs(tmp_path: Path) -> No
     assert not (shared / "stacks/unselected").exists()
 
 
-@pytest.mark.parametrize("stack_filter", ["selected", "readmeabook"])
-def test_readmeabook_placeholder_is_rejected_only_when_selected(
-    tmp_path: Path, stack_filter: str,
+@pytest.mark.parametrize("stack_filter", ["selected", "credential_consumer"])
+@pytest.mark.parametrize(("stack_source", "sensitive_values"), [
+    (
+        "public/readmeabook",
+        {
+            "jwt_secret": "REPLACE_ME",
+            "jwt_refresh_secret": "fixture-sensitive-refresh",
+            "config_encryption_key": "fixture-sensitive-encryption",
+            "postgres_password": "fixture-sensitive-postgres",
+        },
+    ),
+    (
+        "jellyfin/jellystat",
+        {
+            "jwt_secret": "REPLACE_WITH_RANDOM_JWT_SECRET",
+            "postgres_password": "fixture-sensitive-postgres",
+        },
+    ),
+])
+def test_real_credential_placeholder_is_rejected_only_when_selected(
+    tmp_path: Path, stack_filter: str, stack_source: str,
+    sensitive_values: dict[str, str],
 ) -> None:
+    stack_name = "credential_consumer"
     source = tmp_path / "source"
-    shutil.copytree(REPO_ROOT / "stacks/public/readmeabook", source / "readmeabook")
+    shutil.copytree(REPO_ROOT / "stacks" / stack_source, source / stack_name)
     (source / "selected").mkdir()
     (source / "selected/compose.yaml").write_text("services: {}\n", encoding="utf-8")
     shared = tmp_path / "shared"
@@ -89,12 +109,6 @@ def test_readmeabook_placeholder_is_rejected_only_when_selected(
     )
     docker.chmod(0o755)
     docker_log = tmp_path / "docker.log"
-    sensitive_values = {
-        "jwt_secret": "REPLACE_ME",
-        "jwt_refresh_secret": "fixture-sensitive-refresh",
-        "config_encryption_key": "fixture-sensitive-encryption",
-        "postgres_password": "fixture-sensitive-postgres",
-    }
     result = run_playbook(tmp_path, {
         "environment": {
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
@@ -111,7 +125,7 @@ def test_readmeabook_placeholder_is_rejected_only_when_selected(
                 "docker_uid": os.getuid(), "docker_gid": os.getgid(),
                 "path_ownership_overrides": [],
             },
-            "lxc_docker_env_stack_vars": {"readmeabook": sensitive_values},
+            "lxc_docker_env_stack_vars": {stack_name: sensitive_values},
         },
         "roles": ["config/lxc_stack_sync"],
     }, "-vvv", "--diff")
@@ -120,16 +134,16 @@ def test_readmeabook_placeholder_is_rejected_only_when_selected(
         if value != "REPLACE_ME":
             assert value not in output
 
-    if stack_filter == "readmeabook":
+    if stack_filter == stack_name:
         assert result.returncode != 0, output
         assert "Required stack template inputs are missing or invalid" in output
-        assert not (shared / "stacks/readmeabook/.env").exists()
+        assert not (shared / f"stacks/{stack_name}/.env").exists()
         assert not docker_log.exists()
         return
 
     assert result.returncode == 0, output
     assert (shared / "stacks/selected/compose.yaml").exists()
-    assert not (shared / "stacks/readmeabook").exists()
+    assert not (shared / f"stacks/{stack_name}").exists()
     assert [line for line in docker_log.read_text(encoding="utf-8").splitlines()
             if "|compose up" in line] == [
         f"{shared}/stacks/selected|compose up -d",

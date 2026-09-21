@@ -62,10 +62,7 @@
 - name: Validate Dockhand Hawser variables
   ansible.builtin.assert:
     that:
-      - dockhand_hawser_token is defined
-      - dockhand_hawser_token is string
-      - dockhand_hawser_token | trim | length > 0
-      - dockhand_hawser_token | trim != 'REPLACE_ME'
+      - dockhand_hawser_token | credential_is_configured
     fail_msg: >-
       Hawser Standard requires dockhand_hawser_token to be configured for every non-portal
       Docker host.

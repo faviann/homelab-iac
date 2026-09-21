@@ -89,11 +89,11 @@ def test_proxy_environment_has_the_required_public_oidc_contract() -> None:
             ".well-known/openid-configuration"
         ),
         "OIDC_CLIENT_ID": "moraine-mcp",
-        "OIDC_CLIENT_SECRET": "{{ stack_vars.oidc_client_secret | replace('$', '$$') }}",
+        "OIDC_CLIENT_SECRET": "{{ stack_vars.oidc_client_secret | compose_env }}",
         "OIDC_SCOPES": "openid,profile,email",
         "TRUSTED_PROXIES": "{{ stack_vars.trusted_proxies }}",
-        "AUTH_HMAC_SECRET": "{{ stack_vars.auth_hmac_secret | replace('$', '$$') }}",
-        "JWT_PRIVATE_KEY": "'{{ stack_vars.jwt_private_key | replace('$', '$$') }}'",
+        "AUTH_HMAC_SECRET": "{{ stack_vars.auth_hmac_secret | compose_env }}",
+        "JWT_PRIVATE_KEY": "'{{ stack_vars.jwt_private_key | compose_env }}'",
         "PROXY_FORWARD_AUTHORIZATION": "false",
     }
 

@@ -9,7 +9,7 @@
       - overmind_postgres_backup.admin_user is defined
       - overmind_postgres_backup.admin_user | string | length > 0
       - overmind_postgres_backup.admin_password is defined
-      - overmind_postgres_backup.admin_password | string | length > 0
+      - overmind_postgres_backup.admin_password | credential_is_configured
       - overmind_postgres_backup.database is defined
       - overmind_postgres_backup.database | string | length > 0
       - overmind_postgres_backup.database is match('^[a-z_][a-z0-9_]*$')
@@ -20,7 +20,7 @@
       - overmind_postgres_backup.freshness_max_age_seconds is defined
       - overmind_postgres_backup.freshness_max_age_seconds | int >= 1
       - overmind_postgres_backup.discord_webhook_url is defined
-      - overmind_postgres_backup.discord_webhook_url | string | length > 0
+      - overmind_postgres_backup.discord_webhook_url | credential_is_configured
       - overmind_postgres_backup.timer_calendar is defined
       - overmind_postgres_backup.timer_calendar | string | length > 0
       - overmind_postgres_backup.randomized_delay_seconds is defined

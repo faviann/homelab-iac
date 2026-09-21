@@ -120,7 +120,10 @@ class OvermindContractTests(unittest.TestCase):
         self.assertIn("temporary during active application design", env_template.lower())
         self.assertIn("POSTGRES_ADMIN_PASSWORD={{ stack_vars.postgres_admin_password | compose_env }}", env_template)
         self.assertIn("MEMSRV_PASSWORD={{ stack_vars.memsrv_password | compose_env }}", env_template)
-        self.assertIn("key: {{ stack_vars.agent_key | quote }}", keys_template)
+        self.assertIn(
+            "key: {{ stack_vars.agent_key | required_credential | quote }}",
+            keys_template,
+        )
         self.assertIn("agent_id: homelab-dev", keys_template)
         self.assertIn("default_namespace: memory-system", keys_template)
         self.assertIn("- memory-system", keys_template)

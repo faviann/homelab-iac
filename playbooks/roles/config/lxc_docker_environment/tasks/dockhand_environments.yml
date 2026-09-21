@@ -4,6 +4,13 @@
 # Skipped entirely when dockhand_api_token is not defined — generate a token
 # in the Dockhand UI, then store it as vault_dockhand_api_token and re-run.
 
+- name: Validate configured Dockhand API token
+  ansible.builtin.assert:
+    that: dockhand_api_token | credential_is_configured
+    quiet: true
+  when: dockhand_api_token is defined
+  no_log: true
+
 - name: Fetch existing Dockhand environments
   ansible.builtin.uri:
     url: http://127.0.0.1:3004/api/environments
@@ -37,7 +44,7 @@
       host: "{{ item }}.{{ lxc_dns_domain }}"
       port: 2376
       protocol: http
-      hawserToken: "{{ dockhand_hawser_token }}"
+      hawserToken: "{{ dockhand_hawser_token | required_credential }}"
     status_code: [200, 201, 409]
     headers:
       Authorization: "Bearer {{ dockhand_api_token }}"
@@ -82,7 +89,7 @@
       name: Discord
       config:
         urls:
-          - "{{ dockhand_discord_webhook_url | regex_replace('^https://discord\\.com/api/webhooks/', 'discord://') }}"
+          - "{{ dockhand_discord_webhook_url | required_credential | regex_replace('^https://discord\\.com/api/webhooks/', 'discord://') }}"
     status_code: 200
     headers:
       Authorization: "Bearer {{ dockhand_api_token }}"
