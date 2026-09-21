@@ -1,0 +1,48 @@
+---
+- name: Validate Proxmox host SSH enrollment prerequisites
+  ansible.builtin.import_playbook: controller-prerequisites.yml
+
+- name: Enroll the selected controller identity on the Proxmox host
+  hosts: "{{ prerequisite_target_pattern | default('proxmox_api') }}"
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Check current Proxmox host SSH trust
+      ansible.builtin.include_role:
+        name: infrastructure/proxmox_host_bootstrap
+        tasks_from: check_ssh
+      run_once: true
+
+    # Enrollment is the only operation that needs the key material itself, to
+    # name the identity it authorizes and to append it on the target.
+    - name: Resolve selected controller SSH public key
+      ansible.builtin.include_role:
+        name: infrastructure/ssh_key_shared
+        tasks_from: resolve_pubkey
+      run_once: true
+
+    - name: Resolve selected controller SSH identity fingerprint
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -lf
+          - "{{ ssh_key_shared_resolved_public_key_path }}"
+      register: pubkey_fingerprint
+      changed_when: false
+      delegate_to: localhost
+      run_once: true
+
+    - name: Identify the authorized Proxmox host enrollment
+      ansible.builtin.debug:
+        msg: >-
+          Selected identity {{ pubkey_fingerprint.stdout }} for
+          {{ proxmox_ssh_user }}@{{ proxmox_host }}:{{ proxmox_ssh_port }}.
+      run_once: true
+
+    - name: Enroll selected identity when trust is absent
+      ansible.builtin.include_role:
+        name: infrastructure/proxmox_host_bootstrap
+        tasks_from: enroll_ssh
+      when: ssh_key_test.rc != 0
+      run_once: true

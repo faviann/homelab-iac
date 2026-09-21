@@ -35,7 +35,6 @@ def api_validation(
                 "vars": {
                     "proxmox_validate_api": True,
                     "proxmox_validate_pct": False,
-                    "proxmox_ssh_ready": False,
                     "proxmox_api_host": "controlled.invalid",
                     "proxmox_host": "localhost",
                     "proxmox_api_user": "fixture",

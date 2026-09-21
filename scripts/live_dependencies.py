@@ -71,6 +71,7 @@ LIVE_OPERATIONS: dict[str, LiveOperation] = {
         ("community.proxmox",), (), True
     ),
     "playbooks/add-ssh-keys-to-lxcs.yml": LiveOperation((), (), True),
+    "playbooks/enroll-proxmox-host-ssh.yml": LiveOperation((), (), True),
     "playbooks/validate-credentials.yml": LiveOperation((), (), False),
     "playbooks/lab-connectivity.yml": LiveOperation((), (), True),
     "playbooks/proxmox_api_check.yml": LiveOperation((), (), False),
@@ -222,7 +223,8 @@ CONTROLLER_IDENTITY_GUIDANCE = (
     "controller, create one explicitly: ssh-keygen -t ed25519 -N '' -f "
     "~/.ansible/ssh/proxmox_lxc -C ansible-control@$(hostname). Neither "
     "restoring nor creating enrolls trust on managed infrastructure; "
-    "./recover.sh ssh-keys does that."
+    "./recover.sh proxmox-host-ssh enrolls the Proxmox host and "
+    "./recover.sh ssh-keys enrolls existing LXCs."
 )
 
 

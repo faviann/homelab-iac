@@ -5,41 +5,23 @@ from __future__ import annotations
 
 import base64
 from collections import Counter
-from contextlib import contextmanager
 import os
-import socketserver
 import stat
 import subprocess
 import sys
 import tempfile
-import threading
 from pathlib import Path
-from typing import Iterator
 
-from ansible_test_helper import ansible_playbook_command, write_controller_identity
+from ansible_test_helper import (
+    ansible_playbook_command,
+    local_ssh_port,
+    write_controller_identity,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK = REPO_ROOT / "playbooks" / "add-ssh-keys-to-lxcs.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
-
-
-class _SshPortHandler(socketserver.BaseRequestHandler):
-    def handle(self) -> None:
-        return
-
-
-@contextmanager
-def local_ssh_port() -> Iterator[int]:
-    server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _SshPortHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield server.server_address[1]
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
 
 
 def main() -> int:
@@ -59,6 +41,7 @@ def main() -> int:
         ssh.write_text(
             "#!/bin/sh\n"
             f"printf '%s\\n' \"$*\" >> '{ssh_log}'\n"
+            "[ \"${SSH_FAIL:-}\" != 1 ] || exit 255\n"
             "exit 0\n"
         )
         ssh.chmod(ssh.stat().st_mode | stat.S_IXUSR)
@@ -172,6 +155,27 @@ def main() -> int:
             return 1
 
         env["HOMELAB_IAC_LIFECYCLE_WRAPPER"] = "1"
+        missing_trust = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            env={**env, "SSH_FAIL": "1"},
+        )
+        missing_trust_output = f"{missing_trust.stdout}\n{missing_trust.stderr}"
+        if (
+            missing_trust.returncode == 0
+            or "./recover.sh proxmox-host-ssh" not in missing_trust_output
+            or pct_log.exists()
+        ):
+            print(
+                "missing Proxmox trust did not stop LXC enrollment as a separate prerequisite",
+                file=sys.stderr,
+            )
+            print(missing_trust_output, file=sys.stderr)
+            return 1
+        ssh_log.unlink()
+
         proc = subprocess.run(
             command,
             cwd=REPO_ROOT,

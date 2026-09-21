@@ -24,6 +24,9 @@ L3_CONSUMERS = {
     Path("playbooks/validate-infrastructure.yml"),
 }
 L1_ONLY_CONSUMERS = {
+    # Enrollment establishes the trust the L3 layer verifies, so routing it
+    # through L3 would make it require its own outcome.
+    Path("playbooks/enroll-proxmox-host-ssh.yml"),
     Path("playbooks/lab-connectivity.yml"),
     Path("playbooks/proxmox_api_check.yml"),
     PROXMOX_HOST_LAYER,

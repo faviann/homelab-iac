@@ -110,7 +110,7 @@ the operation fails before any live effect and names the condition.
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
-**Note**: This repository now automatically handles restricted feature flags (like `keyctl=1`) by applying them via `pct` commands directly on the Proxmox host after API-based provisioning. The automation will prompt for the Proxmox root password on first run to configure SSH access, then all subsequent operations are passwordless.
+**Note**: This repository handles restricted feature flags (like `keyctl=1`) by applying them via `pct` commands directly on the Proxmox host after API-based provisioning. Ordinary lifecycle runs require the selected controller identity to be trusted already; they never prompt for a password or enroll it implicitly.
 
 ### Proxmox Environment Defaults
 
@@ -183,10 +183,11 @@ If you prefer manual setup or need to troubleshoot:
    ssh-keygen -t ed25519 -N '' -f ~/.ansible/ssh/proxmox_lxc -C "ansible-control@$(hostname)"
    ```
 
-   Neither restoring nor creating enrolls trust on managed infrastructure. The
-   Proxmox host is enrolled on the first managed-host run, which prompts once
-   for its root password. Existing LXCs are enrolled with
-   `./recover.sh ssh-keys`.
+   Neither restoring nor creating enrolls trust on managed infrastructure, and
+   no ordinary run enrolls it for you. Each target is a separate explicit
+   transition: `./recover.sh proxmox-host-ssh` enrolls the Proxmox host,
+   prompting once for its root password, and `./recover.sh ssh-keys` enrolls
+   existing LXCs.
 
    When you run lifecycle playbooks from the `workstation` LXC itself, they exclude that host by
    default. To manage it intentionally, run:
@@ -231,13 +232,13 @@ Test connectivity:
 
 ### Running Playbooks
    - Verify bootstrap prerequisites
-   - **Automatically detect if SSH access to the Proxmox host is configured**
-   - **Prompt for the Proxmox root password only if needed** to add your SSH key
+   - **Verify that the Proxmox host already trusts the controller identity**, stopping before any effect when it does not
    - Validate API connectivity
    - Provision LXC containers
    - Apply host-side configuration (including restricted feature flags via `pct` commands)
 
-   Subsequent runs will use passwordless SSH and skip the interactive prompt.
+   A lifecycle run never prompts for the Proxmox root password. Enroll trust
+   once with `./recover.sh proxmox-host-ssh`.
 
    Use `--tags validation` to test connectivity without provisioning, or `--tags provision` to only provision containers.
 
@@ -339,13 +340,20 @@ The `inventory/hosts.yml` defines two groups:
 
 The automation requires SSH access to the Proxmox host to apply certain configuration that cannot be done via API (such as restricted LXC feature flags like `keyctl=1`).
 
-**Automatic Setup**: On first run of `site.yml`, the `proxmox_host_bootstrap` role will:
-1. Check if your SSH key already works for `root@proxmox`
-2. If not, prompt you for the Proxmox root password
-3. Automatically add your SSH public key to the Proxmox host
-4. Verify the connection works
+Check whether the selected controller identity is already trusted by running the
+intended lifecycle or inspection operation. If it is not, that operation stops
+before its effects and points to the explicit enrollment transition:
 
-**Manual Setup** (optional): If you prefer to configure SSH access manually:
+```bash
+./recover.sh proxmox-host-ssh
+```
+
+The enrollment command identifies the configured Proxmox target and the selected
+public-key fingerprint before requesting the Proxmox host password. Ordinary
+lifecycle and inspection operations never request that password or modify
+`authorized_keys`.
+
+**Manual Setup**: If you prefer to configure SSH access manually:
 ```bash
 # Copy your public key to Proxmox
 ssh-copy-id -i ~/.ansible/ssh/proxmox_lxc.pub root@proxmox.lan

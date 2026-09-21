@@ -17,9 +17,7 @@
       infrastructure/lxc_ssh_key_injector requires an explicit guest-bootstrap
       mapping containing vmid, hostname, and pubkey.
 
-# In check mode the derived state below ignores pct status anyway, and when
-# the controller key could not be installed (proxmox_ssh_ready false) the
-# Proxmox host is unreachable — skip the probe instead of failing the host.
+# In check mode the derived state below ignores pct status.
 - name: Check if container exists on Proxmox
   proxmox_pct:
     vmid: "{{ lxc_ssh_key_injector_guest_bootstrap.vmid }}"
@@ -29,7 +27,6 @@
   vars:
     ansible_user: "{{ lxc_ssh_key_injector_delegate_user }}"
   ignore_errors: true
-  when: hostvars['localhost'].proxmox_ssh_ready | default(true)
 
 - name: Derive container runtime state from pct status
   ansible.builtin.set_fact:

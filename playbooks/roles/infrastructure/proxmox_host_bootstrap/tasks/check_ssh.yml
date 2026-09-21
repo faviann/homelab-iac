@@ -1,0 +1,37 @@
+---
+# Reads target trust only. The live execution boundary already verified that
+# the controller identity exists and pairs with its public key.
+- name: Test Proxmox host SSH port
+  ansible.builtin.wait_for:
+    host: "{{ proxmox_host }}"
+    port: "{{ proxmox_ssh_port }}"
+    timeout: "{{ proxmox_ssh_connect_timeout }}"
+  register: ssh_port_check
+  ignore_errors: true
+  delegate_to: localhost
+
+- name: Require a reachable Proxmox host SSH port
+  ansible.builtin.assert:
+    that:
+      - not ssh_port_check.failed
+    fail_msg: >-
+      Cannot reach {{ proxmox_host }}:{{ proxmox_ssh_port }}. Check network
+      connectivity and firewall rules.
+    quiet: true
+
+- name: Test selected identity trust on Proxmox host
+  ansible.builtin.command:
+    cmd: >-
+      ssh -i {{ proxmox_ssh_key_private }}
+          -p {{ proxmox_ssh_port }}
+          -o BatchMode=yes
+          -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
+          -o StrictHostKeyChecking=accept-new
+          -o IdentitiesOnly=yes
+          {{ proxmox_ssh_user }}@{{ proxmox_host }}
+          true
+  register: ssh_key_test
+  failed_when: false
+  changed_when: false
+  check_mode: false
+  delegate_to: localhost

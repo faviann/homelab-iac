@@ -11,8 +11,9 @@ usage() {
 Usage: ./recover.sh <operation> [options]
 
 Operations:
+  proxmox-host-ssh             Enroll the selected controller SSH identity on the Proxmox host
   ssh-keys [--limit <targets>]
-                              Restore control-node SSH access to existing LXCs
+                              Enroll the selected controller SSH identity in existing LXCs
 
 Options:
   --limit <targets>           Select hosts with Ansible limit grammar
@@ -26,7 +27,8 @@ usage_error() {
     exit 2
 }
 
-case "${1:-}" in
+operation="${1:-}"
+case "$operation" in
     --help)
         usage
         exit 0
@@ -35,6 +37,13 @@ case "${1:-}" in
         usage_error "an operation is required"
         ;;
     ssh-keys)
+        supports_limit=true
+        playbook="playbooks/add-ssh-keys-to-lxcs.yml"
+        shift
+        ;;
+    proxmox-host-ssh)
+        supports_limit=false
+        playbook="playbooks/enroll-proxmox-host-ssh.yml"
         shift
         ;;
     *)
@@ -46,6 +55,7 @@ limit_pattern=""
 while (($#)); do
     case "$1" in
         --limit)
+            $supports_limit || usage_error "--limit is not valid for this operation"
             (($# >= 2)) && [[ -n "$2" ]] && [[ "$2" != -* ]] || \
                 usage_error "$1 requires a value"
             limit_pattern="$2"
@@ -62,7 +72,9 @@ while (($#)); do
 done
 
 arguments=()
-if [[ -n "$limit_pattern" ]]; then
+if [[ "$operation" == "proxmox-host-ssh" ]]; then
+    prerequisite_target_pattern="proxmox_api"
+elif [[ -n "$limit_pattern" ]]; then
     arguments+=("--limit" "$limit_pattern")
     prerequisite_target_pattern="$limit_pattern"
 else
@@ -72,5 +84,5 @@ arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
 
 run_live_playbook \
     exclusive \
-    playbooks/add-ssh-keys-to-lxcs.yml \
+    "$playbook" \
     "${arguments[@]}"
