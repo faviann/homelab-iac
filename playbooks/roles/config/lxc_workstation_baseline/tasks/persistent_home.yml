@@ -12,8 +12,8 @@
       - workstation_persistent_home_links | selectattr('path', 'defined') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | selectattr('target', 'defined') | list | length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | selectattr('mode', 'defined') | list | length == workstation_persistent_home_links | length
-      - workstation_persistent_home_links | map(attribute='type') | map('string') | select('equalto', 'bind_mount') | list | length ==
-        workstation_persistent_home_links | length
+      - workstation_persistent_home_links | map(attribute='type') | map('string') | select('in', ['bind_mount', 'bind_file']) | list |
+        length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | map(attribute='path') | map('string') | select('match', '^' ~ workstation_home ~ '/.+') | list |
         length == workstation_persistent_home_links | length
       - workstation_persistent_home_links | map(attribute='target') | map('string') | select('match', '^' ~ workstation_persistent_home_root
@@ -24,7 +24,7 @@
       - workstation_persistent_home_fstab_path | string | length > 0
     fail_msg: >-
       workstation_persistent_home_links must define name, type, path, target, and mode.
-      Only type=bind_mount is supported.
+      Supported types are bind_mount (directory) and bind_file (regular file).
       Paths must be under workstation_home, targets must be under
       workstation_persistent_home_root, modes must be four-digit octal strings,
       mount state must be mounted/present, and fstab path must be non-empty.
@@ -40,10 +40,23 @@
     - "{{ workstation_persistent_home_root | dirname }}"
     - "{{ workstation_persistent_home_root }}"
 
+- name: Initialize missing workstation persistent home files
+  ansible.builtin.copy:
+    dest: "{{ item.target }}"
+    content: "{{ item.content | default('') }}"
+    force: false
+    owner: "{{ workstation_uid }}"
+    group: "{{ workstation_gid }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ workstation_persistent_home_links }}"
+  when: item.type == 'bind_file'
+
 - name: Ensure workstation persistent home targets exist
   ansible.builtin.file:
     path: "{{ item.target }}"
-    state: directory
+    state: "{{ 'touch' if item.type == 'bind_file' else 'directory' }}"
+    access_time: preserve
+    modification_time: preserve
     owner: "{{ workstation_uid }}"
     group: "{{ workstation_gid }}"
     mode: "{{ item.mode }}"
@@ -92,7 +105,10 @@
         (
           workstation_persistent_home_mount_state == 'present'
           and
-          (item.stat.isdir | default(false))
+          (
+            (item.item.type == 'bind_mount' and item.stat.isdir | default(false))
+            or (item.item.type == 'bind_file' and item.stat.isreg | default(false))
+          )
         )
     fail_msg: >-
       {{ item.item.path }} exists and is not the managed bind mount path from
@@ -115,7 +131,9 @@
 - name: Ensure workstation persistent home mount points exist
   ansible.builtin.file:
     path: "{{ item.path }}"
-    state: directory
+    state: "{{ 'touch' if item.type == 'bind_file' else 'directory' }}"
+    access_time: preserve
+    modification_time: preserve
     owner: "{{ workstation_uid }}"
     group: "{{ workstation_gid }}"
     mode: "{{ item.mode }}"

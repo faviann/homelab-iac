@@ -64,6 +64,14 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
                     "mode": "0700",
                 },
                 {
+                    "name": "claude_config",
+                    "type": "bind_file",
+                    "path": "{{ workstation_home }}/.claude.json",
+                    "target": "{{ workstation_persistent_home_root }}/.claude.json",
+                    "mode": "0600",
+                    "content": "{}\n",
+                },
+                {
                     "name": "codex",
                     "type": "bind_mount",
                     "path": "{{ workstation_home }}/.codex",
