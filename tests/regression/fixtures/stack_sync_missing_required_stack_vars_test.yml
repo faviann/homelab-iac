@@ -16,7 +16,7 @@
       path_ownership_overrides: []
     lxc_docker_env_stack_vars:
       komf:
-        komga_user: "komf-user"
+        komga_user: "fixture-private-template-marker"
   tasks:
     - name: Create source stack layout
       ansible.builtin.file:

@@ -10,7 +10,7 @@
 #   1. Run ./setup.sh for guided credential configuration (recommended)
 #   OR
 #   2. Copy this file to vault.yml and replace the values below
-#   3. Encrypt with: uv run --locked ansible-vault encrypt inventory/group_vars/all/vault.yml
+#   3. Encrypt with: uv run --locked ansible-vault encrypt --vault-password-file ~/.ansible/vault-pass inventory/vault.yml
 #
 # To update credentials later:
 #   Run ./vault.sh configure for guided reconfiguration

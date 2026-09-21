@@ -8,6 +8,12 @@ readonly LIVE_EXECUTION_METADATA_LOCK_FILE="${LIVE_EXECUTION_LOCK_FILE}.metadata
 readonly LIVE_EXECUTION_METADATA_LOCK_WAIT_SECONDS=0.1
 readonly LIVE_EXECUTION_WRAPPER_MARKER="HOMELAB_IAC_LIFECYCLE_WRAPPER"
 
+use_live_vault_password() {
+    if [[ -z "${ANSIBLE_VAULT_PASSWORD_FILE:-}" && -f "$HOME/.ansible/vault-pass" ]]; then
+        export ANSIBLE_VAULT_PASSWORD_FILE="$HOME/.ansible/vault-pass"
+    fi
+}
+
 write_live_holder_record() {
     local holder_file="$1"
     local holder_pid="$2"
@@ -180,6 +186,12 @@ run_live_playbook() {
         echo "────────────────────────────────────────"
         (
             write_live_holder_record "$holder_file" "$BASHPID" "$$"
+            case "$playbook" in
+                playbooks/lab-connectivity.yml|playbooks/add-ssh-keys-to-lxcs.yml)
+                    unset ANSIBLE_VAULT_PASSWORD_FILE ANSIBLE_VAULT_IDENTITY_LIST
+                    ;;
+                *) use_live_vault_password ;;
+            esac
             exec uv run --locked ansible-playbook "$playbook" "$@"
         ) || status=1
     fi

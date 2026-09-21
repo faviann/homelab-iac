@@ -17,12 +17,12 @@ PLAYBOOKS = [
     (
         "missing required stack var key",
         REPO_ROOT / "tests" / "regression" / "fixtures" / "stack_sync_missing_required_stack_vars_test.yml",
-        ["stack_vars", "komga_password"],
+        ["Required stack template inputs", "stack_vars", "komf/.env.j2"],
     ),
     (
         "missing stack vars map",
         REPO_ROOT / "tests" / "regression" / "fixtures" / "stack_sync_missing_stack_vars_map_test.yml",
-        ["stack_vars", "komga_user"],
+        ["Required stack template inputs", "stack_vars", "komf/.env.j2"],
     ),
 ]
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
@@ -37,6 +37,8 @@ def run_missing_stack_vars_case(name: str, playbook: Path, markers: list[str]) -
             [
                 *ANSIBLE_PLAYBOOK,
                 str(playbook),
+                "-vvv",
+                "--diff",
                 "-e",
                 f"temp_root={temp_root}",
             ],
@@ -45,6 +47,9 @@ def run_missing_stack_vars_case(name: str, playbook: Path, markers: list[str]) -
             text=True,
             env=env,
         )
+        if (Path(temp_root) / "shared/stacks/komf").exists():
+            print("missing stack inputs created destination assets", file=sys.stderr)
+            return 1
 
     output = f"{proc.stdout}\n{proc.stderr}"
 
@@ -54,13 +59,13 @@ def run_missing_stack_vars_case(name: str, playbook: Path, markers: list[str]) -
         return 1
 
     missing = [marker for marker in markers if marker not in output]
-    has_failure_kind = ("undefined" in output) or ("has no attribute" in output)
-    if missing or not has_failure_kind:
+    if "fixture-private-template-marker" in output:
+        print("missing stack input failure disclosed a resolved credential", file=sys.stderr)
+        return 1
+    if missing:
         print(f"playbook failed for {name}, but not with the expected missing stack vars output", file=sys.stderr)
         if missing:
             print(f"missing fragments: {missing}", file=sys.stderr)
-        if not has_failure_kind:
-            print("missing failure kind marker: undefined or has no attribute", file=sys.stderr)
         print(output, file=sys.stderr)
         return 1
 

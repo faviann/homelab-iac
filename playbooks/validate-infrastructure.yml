@@ -11,6 +11,12 @@
   gather_facts: false
   become: false
   tasks:
+    - name: Establish credentials for lifecycle API inspection
+      ansible.builtin.include_tasks: tasks/proxmox_api_credentials.yml
+      when: >-
+        not (proxmox_skip_self | default(true) | bool)
+        or inventory_hostname != lookup('ansible.builtin.pipe', 'hostname')
+
     - name: Run aggregate standalone lifecycle validation
       ansible.builtin.include_tasks:
         file: "{{ [playbook_dir, 'tasks', 'standalone_lifecycle_validation.yml'] | path_join }}"

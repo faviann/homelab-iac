@@ -61,11 +61,13 @@
   ansible.builtin.assert:
     that:
       - dockhand_hawser_token is defined
+      - dockhand_hawser_token is string
       - dockhand_hawser_token | length > 0
     fail_msg: >-
       Hawser Standard requires dockhand_hawser_token to be defined and non-empty for every
       non-portal Docker host.
   when: lxc_docker_env_hawser_enabled | default(false)
+  no_log: true
 
 - name: Ensure Docker agents stack directory exists
   ansible.builtin.file:
@@ -109,6 +111,8 @@
     - docker_agents_enabled | default(false)
     - (traefik_kop_enabled | default(false)) or (lxc_docker_env_hawser_enabled | default(false))
   register: _template_docker_agents_env_result
+  no_log: true
+  diff: false
 
 - name: Remove Docker agents override environment file when not needed
   ansible.builtin.file:

@@ -150,7 +150,7 @@ def vault_repo(
     tmp_path: Path, fake_executable: FakeExecutableFactory
 ) -> tuple[Path, dict[str, str]]:
     repo = tmp_path / "repo"
-    vault_dir = repo / "inventory/group_vars/all"
+    vault_dir = repo / "inventory"
     bin_dir = tmp_path / "bin"
     home = tmp_path / "home"
     vault_dir.mkdir(parents=True)
@@ -218,7 +218,7 @@ def run_real_ansible_vault(
             "--locked",
             "ansible-vault",
             operation,
-            str(repo / "inventory/group_vars/all/vault.yml"),
+            str(repo / "inventory/vault.yml"),
         ],
         cwd=repo,
         env=env,
@@ -280,7 +280,7 @@ def test_vault_uses_its_project_when_invoked_from_an_unrelated_directory(
     tmp_path: Path,
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
@@ -322,14 +322,18 @@ def test_real_ansible_vault_runs_through_the_locked_project_environment(
     assert observed_command[:4] == ["uv", "run", "--locked", "ansible-vault"]
 
 
+@pytest.mark.parametrize("explicit_password_file", [False, True])
 def test_check_accepts_a_genuinely_encrypted_vault(
     real_vault_repo: tuple[Path, dict[str, str]],
+    explicit_password_file: bool,
 ) -> None:
     repo, env = real_vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     vault.write_text(VALID_YAML, encoding="utf-8")
     encrypted = run_real_ansible_vault(repo, env, "encrypt")
     assert encrypted.returncode == 0, encrypted.stderr
+    if not explicit_password_file:
+        env.pop("ANSIBLE_VAULT_PASSWORD_FILE")
 
     result = run_vault(repo, env, "check")
 
@@ -362,7 +366,7 @@ def test_check_reports_each_contract_check_without_disclosing_values(
     expected_failure: str | None,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     pass_file.write_text("synthetic-passphrase-marker\n", encoding="utf-8")
     pass_file.chmod(0o600)
@@ -430,7 +434,7 @@ def test_check_rejects_a_passphrase_file_not_owned_by_the_current_user(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
@@ -449,7 +453,7 @@ def test_check_treats_yaml_validation_tool_failure_as_a_failed_check(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
@@ -496,7 +500,7 @@ def test_check_rejects_every_missing_empty_or_placeholder_required_key(
                 content_lines.append(f"{key}: {json.dumps(replacement)}")
         else:
             content_lines.append(line)
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + "\n".join(content_lines) + "\n", encoding="utf-8"
     )
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
@@ -521,7 +525,7 @@ def test_check_accepts_ordinary_padded_values_without_changing_them(
     body = "---\n" + "".join(
         f"{key}: {json.dumps(value)}\n" for key, value in values.items()
     )
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + body).encode()
     vault.write_bytes(original)
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
@@ -541,7 +545,7 @@ def test_interrupted_check_removes_its_exact_plaintext_workspace(
     signal_number: int,
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
@@ -583,7 +587,7 @@ def test_configure_replaces_only_credentials_through_a_tty_transaction(
     vault_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = HEADER + VALID_YAML
     vault.write_text(original, encoding="utf-8")
     Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).write_text(
@@ -632,7 +636,7 @@ def test_configure_preserves_untouched_yaml_presentation(
     vault_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     long_value = "long-token-" + "x" * 96
     original_line = f"vault_long_value: {long_value}"
     annotated = f"""---
@@ -770,7 +774,7 @@ def test_configure_rejects_every_value_that_check_rejects(
     vault_repo: tuple[Path, dict[str, str]], key_index: int, invalid_value: str
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     values = ["replacement@pve", "replacement-id", "replacement-secret-marker"]
@@ -799,7 +803,7 @@ def test_configure_preserves_ordinary_credential_whitespace_exactly(
 
     assert returncode == 0, output
     plaintext = (
-        repo / "inventory/group_vars/all/vault.yml"
+        repo / "inventory/vault.yml"
     ).read_text(encoding="utf-8").removeprefix(HEADER)
     parsed = yaml.safe_load(plaintext)
     assert tuple(
@@ -841,7 +845,7 @@ def test_configure_creates_only_required_fields_in_a_protected_tmpfs_transaction
     )
 
     assert returncode == 0, output
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     plaintext = vault.read_text(encoding="utf-8").removeprefix(HEADER)
     assert set(
         line.split(":", 1)[0] for line in plaintext.splitlines() if ":" in line
@@ -860,7 +864,7 @@ def test_edit_presents_and_publishes_the_complete_vault(
     tmp_path: Path,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     vault.write_text(HEADER + VALID_YAML, encoding="utf-8")
     Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).write_text(
         "synthetic-passphrase-marker\n", encoding="utf-8"
@@ -903,7 +907,7 @@ def test_mutations_keep_the_tracked_path_safe_at_every_external_boundary(
     initial_state: str,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = VALID_YAML.encode()
     if initial_state == "ciphertext":
         original = (HEADER + VALID_YAML).encode()
@@ -1006,7 +1010,7 @@ def test_unencrypted_vault_requires_confirmation_and_retains_no_plaintext_backup
     operation: str,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = VALID_YAML.encode()
     vault.write_bytes(original)
     if operation == "edit":
@@ -1061,7 +1065,7 @@ def test_failed_mutation_preserves_the_original_bytes(
     failure: str,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     body = VALID_YAML + "invalid: [yaml\n" if failure == "yaml" else VALID_YAML
     original = (HEADER + body).encode()
     vault.write_bytes(original)
@@ -1126,7 +1130,7 @@ def test_interrupted_edit_cleans_its_exact_transaction_workspace(
     signal_number: int,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     install_editor(
@@ -1155,7 +1159,7 @@ def test_cleanup_status_failure_makes_a_successful_mutation_fail(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     fake_executable("rm", env, fail=True)
@@ -1186,7 +1190,7 @@ def test_signal_between_cleanup_and_publication_preserves_the_original(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     fake_executable("rm", env, signal=True)
@@ -1206,7 +1210,7 @@ def test_signal_after_atomic_rename_reports_the_committed_success(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     fake_executable("mv", env, signal_after=True)
@@ -1248,14 +1252,14 @@ def source_state(path: Path) -> tuple[bool, str | None, int | None, int | None]:
 
 def published_mapping(repo: Path) -> dict[str, object]:
     published = (
-        repo / "inventory/group_vars/all/vault.yml"
+        repo / "inventory/vault.yml"
     ).read_text(encoding="utf-8")
     assert published.startswith(HEADER)
     return yaml.safe_load(published.removeprefix(HEADER))
 
 
 def assert_vault_untouched(repo: Path, original: bytes) -> None:
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     assert vault.read_bytes() == original
     assert not list(repo.rglob("*.tmp.*"))
     assert not list(repo.rglob("*backup*"))
@@ -1265,7 +1269,7 @@ def test_set_transfers_a_file_into_a_named_top_level_key(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     vault.write_text(HEADER + VALID_YAML, encoding="utf-8")
     source = write_source(tmp_path / "secret")
 
@@ -1287,7 +1291,7 @@ def test_set_replaces_an_existing_key_in_place(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     source = write_source(tmp_path / "secret")
@@ -1313,7 +1317,7 @@ def test_set_preserves_untouched_yaml_presentation(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     long_value = "long-token-" + "x" * 96
     original_line = f"vault_long_value: {long_value}"
     annotated = f"""---
@@ -1352,7 +1356,7 @@ def test_set_requires_exactly_one_explicit_create_or_replace(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path, modes: tuple[str, ...]
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     source = write_source(tmp_path / "secret")
@@ -1382,7 +1386,7 @@ def test_set_refuses_to_silently_overwrite_or_silently_create(
     mode: str,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     source = write_source(tmp_path / "secret")
@@ -1412,7 +1416,7 @@ def test_set_rejects_a_source_that_is_not_a_private_regular_file(
     shape: str,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     source = write_source(tmp_path / "secret")
@@ -1456,7 +1460,7 @@ def test_set_accepts_no_source_channel_other_than_a_file(
     arguments: tuple[str, ...],
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     env["VAULT_TEST_SECRET_SOURCE"] = SOURCE_SECRET.decode()
@@ -1480,7 +1484,7 @@ def test_set_preserves_the_source_bytes_and_strips_only_on_request(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path, strip: bool
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     source = write_source(tmp_path / "secret", AWKWARD_SECRET)
@@ -1508,7 +1512,7 @@ def test_set_never_modifies_or_removes_the_source_file(
     tmp_path: Path,
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     source = write_source(tmp_path / "secret", AWKWARD_SECRET)
@@ -1545,7 +1549,7 @@ def test_set_output_names_the_key_and_action_but_never_the_value(
     expected: str,
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     source = write_source(tmp_path / "secret", AWKWARD_SECRET)
@@ -1564,7 +1568,7 @@ def test_failed_set_leaves_the_vault_byte_identical(
     tmp_path: Path,
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     passphrase = "synthetic-passphrase-marker"
@@ -1603,7 +1607,7 @@ def test_set_fails_the_transaction_for_a_non_utf8_source(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     source = write_source(tmp_path / "secret", b"\xfe\xff binary-marker \x00\x80\n")
@@ -1624,7 +1628,7 @@ def test_set_round_trips_through_real_ansible_vault(
     real_vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = real_vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     vault.write_text(VALID_YAML, encoding="utf-8")
     assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
     source = write_source(tmp_path / "secret", AWKWARD_SECRET)
@@ -1645,7 +1649,7 @@ def test_set_declines_an_unencrypted_vault_without_prompting(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = VALID_YAML.encode()
     vault.write_bytes(original)
     source = write_source(tmp_path / "secret", AWKWARD_SECRET)
@@ -1664,7 +1668,7 @@ def test_set_transfers_the_caller_relative_file_the_caller_named(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     caller_directory = tmp_path / "caller"
@@ -1691,7 +1695,7 @@ def test_set_refuses_the_vault_file_as_its_own_source(
     vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     vault.chmod(0o600)
@@ -1726,7 +1730,7 @@ def rotation_repo(
     tmp_path: Path,
 ) -> tuple[Path, dict[str, str]]:
     repo, env = vault_repo
-    (repo / "inventory/group_vars/all/vault.yml").write_text(
+    (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
@@ -1773,7 +1777,7 @@ def test_rotate_dry_run_rehearses_without_touching_any_real_state(
     rotation_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     vault_before = vault.read_bytes()
     passphrase_before = passphrase_file.read_bytes()
@@ -1800,7 +1804,7 @@ def test_rotate_dry_run_recovery_never_claims_the_real_vault_was_restored(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     vault_before = vault.read_bytes()
     fake_executable("uv", env, verify_fail=True)
@@ -1824,7 +1828,7 @@ def test_rotate_requires_a_typed_confirmation_before_mutating_anything(
     rotation_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     vault_before = vault.read_bytes()
 
@@ -1854,7 +1858,7 @@ def test_rotate_publishes_only_after_a_verified_local_rekey(
     rotation_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     vault_before = vault.read_bytes()
 
@@ -1906,7 +1910,7 @@ def test_real_rotation_refuses_a_non_standard_live_passphrase_file(
     rotation_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     standard = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     diverted = tmp_path / "diverted-vault-pass"
     diverted.write_text(f"{OLD_PASSPHRASE}\n", encoding="utf-8")
@@ -1976,7 +1980,7 @@ def test_rotate_backs_the_old_ciphertext_up_outside_the_repository(
     rotation_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     vault_before = vault.read_bytes()
 
     returncode, output = rotate_on_a_tty(repo, env)
@@ -1994,7 +1998,7 @@ def test_rotate_rolls_back_when_the_publish_fails(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     vault_before = vault.read_bytes()
     fake_executable("bw", env, edit_fail=True)
@@ -2016,7 +2020,7 @@ def test_rotate_rolls_forward_when_the_live_file_may_already_be_new(
     fake_executable: FakeExecutableFactory,
 ) -> None:
     repo, env = rotation_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     vault_before = vault.read_bytes()
     fake_executable("chezmoi", env, fail=True)
@@ -2046,7 +2050,7 @@ def test_rotate_ignores_every_environment_name_that_could_redirect_it(
     repo, env = rotation_repo
     decoy = tmp_path / value
     env[name] = value if name.startswith("BW_") else str(decoy)
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
     vault_before = vault.read_bytes()
 
@@ -2108,7 +2112,7 @@ def test_rotate_dry_run_rekeys_through_real_ansible_vault(
     real_vault_repo: tuple[Path, dict[str, str]],
 ) -> None:
     repo, env = real_vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     vault.write_text(VALID_YAML, encoding="utf-8")
     assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
     vault_before = vault.read_bytes()
@@ -2134,7 +2138,7 @@ def test_agent_permitted_operations_never_disclose_a_vault_secret(
     real_vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = real_vault_repo
-    vault = repo / "inventory/group_vars/all/vault.yml"
+    vault = repo / "inventory/vault.yml"
     markers = (
         "disclosure-user-marker",
         "disclosure-token-id-marker",

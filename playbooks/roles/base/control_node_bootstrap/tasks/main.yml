@@ -92,12 +92,12 @@
 
 - name: Check if vault.yml exists
   ansible.builtin.stat:
-    path: "{{ [control_node_project_root, 'inventory', 'group_vars', 'all', 'vault.yml'] | path_join }}"
+    path: "{{ [control_node_project_root, 'inventory', 'vault.yml'] | path_join }}"
   register: control_node_vault_file_stat
 
 - name: Check if vault.yml is encrypted
   ansible.builtin.command:
-    cmd: head -n1 "{{ [control_node_project_root, 'inventory', 'group_vars', 'all', 'vault.yml'] | path_join }}"
+    cmd: head -n1 "{{ [control_node_project_root, 'inventory', 'vault.yml'] | path_join }}"
   register: control_node_vault_file_header
   changed_when: false
   failed_when: false
@@ -114,7 +114,7 @@
   ansible.builtin.debug:
     msg: >-
       WARNING: vault.yml exists but is NOT encrypted. This is a security risk!
-      Encrypt it with: uv run --locked ansible-vault encrypt inventory/group_vars/all/vault.yml
+      Encrypt it with: uv run --locked ansible-vault encrypt --vault-password-file ~/.ansible/vault-pass inventory/vault.yml
   when:
     - control_node_vault_file_stat.stat.exists
     - control_node_vault_file_header.stdout is defined

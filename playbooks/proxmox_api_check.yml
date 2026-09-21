@@ -8,6 +8,33 @@
   gather_facts: false
 
   tasks:
+    - name: Establish credentials for container inspection
+      ansible.builtin.include_tasks: tasks/proxmox_api_credentials.yml
+
+    - name: Verify API authority to list every LXC
+      block:
+        - name: Check effective permission for the complete VM namespace
+          ansible.builtin.uri:
+            url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/access/permissions?path=/vms"
+            method: GET
+            headers:
+              Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+            validate_certs: "{{ proxmox_verify_ssl | default(false) }}"
+            status_code: 200
+            timeout: 10
+          register: lxc_list_permission
+          failed_when: >-
+            lxc_list_permission.status | default(0) != 200
+            or (lxc_list_permission.json.data | default({})).get('/vms', {}).get('VM.Audit', 0) | int != 1
+          no_log: true
+          check_mode: false
+      rescue:
+        - name: Report missing container inspection authority
+          ansible.builtin.fail:
+            msg: >-
+              Proxmox container inspection requires valid API credentials and
+              propagated VM.Audit permission on /vms to return a complete list.
+
     - name: Query Proxmox API for LXC containers
       ansible.builtin.uri:
         url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/nodes/{{ proxmox_default_node }}/lxc"

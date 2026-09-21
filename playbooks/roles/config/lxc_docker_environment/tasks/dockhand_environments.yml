@@ -14,6 +14,7 @@
       Authorization: "Bearer {{ dockhand_api_token }}"
   register: _dockhand_existing_envs
   when: dockhand_api_token is defined
+  no_log: true
 
 - name: Compute remote Hawser host list
   ansible.builtin.set_fact:
@@ -42,6 +43,7 @@
       Authorization: "Bearer {{ dockhand_api_token }}"
   loop: "{{ _dockhand_hawser_hosts }}"
   when: dockhand_api_token is defined and item not in _dockhand_existing_names
+  no_log: true
 
 - name: Create local socket environment for portal itself
   ansible.builtin.uri:
@@ -56,6 +58,7 @@
     headers:
       Authorization: "Bearer {{ dockhand_api_token }}"
   when: dockhand_api_token is defined and inventory_hostname not in _dockhand_existing_names
+  no_log: true
 
 - name: Fetch existing Dockhand notification channels
   ansible.builtin.uri:
@@ -67,6 +70,7 @@
       Authorization: "Bearer {{ dockhand_api_token }}"
   register: _dockhand_existing_notifications
   when: dockhand_api_token is defined
+  no_log: true
 
 - name: Configure Discord notification channel
   ansible.builtin.uri:
@@ -87,3 +91,4 @@
     ((_dockhand_existing_notifications.json | default([]))
     | selectattr('name', 'equalto', 'Discord')
     | list | length == 0)
+  no_log: true

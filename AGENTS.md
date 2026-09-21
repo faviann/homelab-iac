@@ -25,7 +25,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 ## Non-negotiables
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
 - Run Python and Ansible tools through `uv run --locked <tool>`. If `.venv/` does not exist, run `./setup.sh sync`.
-- `ansible.cfg` expects the vault passphrase at `~/.ansible/vault-pass`.
+- Commands that consume the vault expect its passphrase at `~/.ansible/vault-pass` (overridable with `ANSIBLE_VAULT_PASSWORD_FILE`).
 - Lifecycle playbooks skip any host whose `inventory_hostname` matches the controller's hostname (`proxmox_skip_self: true` by default). To manage the control node intentionally: `./run.sh -e proxmox_skip_self=false --limit workstation` (`--limit` targets the host, `-e` disables the guard).
 
 ## Standard Paths
@@ -35,12 +35,12 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 | SSH key (private) | `~/.ansible/ssh/proxmox_lxc` (home-dir, machine-local, shared across worktrees) |
 | SSH key (public) | `~/.ansible/ssh/proxmox_lxc.pub` (home-dir, machine-local, shared across worktrees) |
 | Vault password | `~/.ansible/vault-pass` (home-dir, written by chezmoi from Bitwarden) |
-| Vaulted secrets | `inventory/group_vars/all/vault.yml` (encrypted) |
+| Vaulted secrets | `inventory/vault.yml` (encrypted) |
 | Fact cache | `.ansible/cache/` (project-relative, gitignored, 1h TTL) |
 | Venv | `.venv/` (project-relative, gitignored) |
 | External roles | `.ansible/roles/` (project-relative, gitignored, auto-installed) |
 
-Secrets are only in encrypted `inventory/group_vars/all/vault.yml` — never commit plaintext credentials. The vault password file is machine-local and should be provisioned outside this repo.
+Secrets are only in encrypted `inventory/vault.yml` — never commit plaintext credentials. The vault password file is machine-local and should be provisioned outside this repo.
 
 ## Inventory Structure
 

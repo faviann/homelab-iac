@@ -108,7 +108,7 @@ class OvermindContractTests(unittest.TestCase):
 
     def test_secret_templates_and_managed_key_file_contract(self) -> None:
         overmind_vars = load_yaml(REPO_ROOT / "inventory/host_vars/overmind.yml")
-        vault_example = load_yaml(REPO_ROOT / "inventory/group_vars/all/vault.yml.example")
+        vault_example = load_yaml(REPO_ROOT / "inventory/vault.yml.example")
         compose = load_yaml(STACK_ROOT / "compose.yaml")
         env_template = (STACK_ROOT / ".env.j2").read_text(encoding="utf-8")
         keys_template = (STACK_ROOT / "agent-keys.yaml.j2").read_text(encoding="utf-8")

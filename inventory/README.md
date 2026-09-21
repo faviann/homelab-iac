@@ -43,11 +43,11 @@ and does not run Hawser because it hosts Dockhand and Traefik instead of acting 
 ```text
 inventory/
 |-- hosts.yml
+|-- vault.yml                  # Encrypted secrets, loaded explicitly by consumers
+|-- vault.yml.example
 |-- group_vars/
 |   |-- all/
-|   |   |-- proxmox.yml
-|   |   |-- vault.yml
-|   |   `-- vault.yml.example
+|   |   `-- proxmox.yml
 |   |-- proxmox_api/vars.yml
 |   |-- tier_tiny/vars.yml
 |   |-- tier_small/vars.yml

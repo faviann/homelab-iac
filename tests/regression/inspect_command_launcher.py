@@ -6,25 +6,21 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import ssl
-import threading
-from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from ipaddress import ip_address
-from typing import Iterator
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import yaml
-from cryptography import x509
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from lxc_fleet_preflight_launcher import COMMON_OBSERVATION
+from proxmox_api_fixture import (
+    COMMON_OBSERVATION,
+    LXC_API_PATHS,
+    generate_localhost_certificate,
+    local_proxmox_server,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -36,100 +32,6 @@ FIXTURE_COLLECTIONS = (
     REPO_ROOT
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
-
-
-VERSION_API_PATH = "/api2/json/version"
-CLUSTER_STATUS_API_PATH = "/api2/json/cluster/status"
-NODE_STATUS_API_PATH = "/api2/json/nodes/pve-a/status"
-LXC_API_PATHS = (
-    "/api2/json/nodes/pve-a/lxc",
-    "/api2/json/nodes/pve-b/lxc",
-)
-
-
-class _ProxmoxHandler(BaseHTTPRequestHandler):
-    def do_GET(self) -> None:
-        if self.path == VERSION_API_PATH:
-            status = 200
-            payload = {"data": {"version": "9.0"}}
-        elif self.path == CLUSTER_STATUS_API_PATH:
-            status = 200
-            payload = {"data": [{"type": "cluster", "name": "fixture"}]}
-        elif self.path == NODE_STATUS_API_PATH:
-            status = 200
-            payload = {"data": {"status": "online"}}
-        elif self.path in LXC_API_PATHS:
-            status = 200
-            node = self.path.split("/")[4]
-            payload = {
-                "data": [
-                    container
-                    for container in COMMON_OBSERVATION
-                    if container["node"] == node
-                ]
-            }
-        else:
-            status = 404
-            payload = {"errors": "unknown test endpoint"}
-        body = json.dumps(payload).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, format: str, *args: object) -> None:
-        return
-
-
-@contextmanager
-def local_proxmox_server(
-    certificate: Path,
-    private_key: Path,
-) -> Iterator[ThreadingHTTPServer]:
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _ProxmoxHandler)
-    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    tls.load_cert_chain(certificate, private_key)
-    server.socket = tls.wrap_socket(server.socket, server_side=True)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield server
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
-
-
-def generate_localhost_certificate(certificate: Path, private_key: Path) -> None:
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = issuer = x509.Name(
-        [x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")]
-    )
-    now = datetime.now(timezone.utc)
-    cert = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(issuer)
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(minutes=1))
-        .not_valid_after(now + timedelta(days=1))
-        .add_extension(
-            x509.SubjectAlternativeName([x509.IPAddress(ip_address("127.0.0.1"))]),
-            critical=False,
-        )
-        .sign(key, hashes.SHA256())
-    )
-    certificate.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    private_key.write_bytes(
-        key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-    )
-    private_key.chmod(0o600)
 
 
 def run_inspect(
@@ -217,6 +119,8 @@ def expected_host_vars_invocations(host: str) -> list[dict[str, object]]:
                 "ansible-inventory",
                 "-i",
                 "inventory/hosts.yml",
+                "-e",
+                "@inventory/vault.yml",
                 "--host",
                 host,
                 "--yaml",
@@ -578,7 +482,12 @@ def assert_diagnostic_playbooks_are_consolidated() -> None:
         raise AssertionError("connectivity still contains its duplicate Proxmox API play")
 
     container_tasks = task_names("playbooks/proxmox_api_check.yml")
-    expected = ["Query Proxmox API for LXC containers", "List LXC containers"]
+    expected = [
+        "Establish credentials for container inspection",
+        "Verify API authority to list every LXC",
+        "Query Proxmox API for LXC containers",
+        "List LXC containers",
+    ]
     if container_tasks != expected:
         raise AssertionError(
             f"containers playbook is not reduced to the full list: {container_tasks!r}"
@@ -647,14 +556,11 @@ def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str
 
 def assert_connectivity_fails_after_reporting_unreachable_targets() -> None:
     with tempfile.TemporaryDirectory(prefix="inspect-connectivity-live-") as temp_dir:
+        temp_root = Path(temp_dir)
         env = live_fixture_environment(
-            Path(temp_dir),
-            f"""---
+            temp_root,
+            """---
 all:
-  vars:
-    proxmox_api_user: {CONTROLLED_API_USER}
-    proxmox_api_token_id: {CONTROLLED_API_TOKEN_ID}
-    proxmox_api_token_secret: {CONTROLLED_API_TOKEN_SECRET}
   children:
     lxcs:
       hosts:
@@ -668,6 +574,11 @@ all:
           ansible_ssh_common_args: -o ConnectTimeout=1 -o BatchMode=yes
 """,
         )
+        (temp_root / "vault.yml").write_text(
+            "$ANSIBLE_VAULT;1.1;AES256\ninvalid-unrelated-ciphertext\n",
+            encoding="utf-8",
+        )
+        env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(temp_root / "missing-vault-pass")
         result = run_inspect("connectivity", env=env)
     output = f"{result.stdout}\n{result.stderr}"
     if (
@@ -689,13 +600,17 @@ all:
             raise AssertionError("connectivity disclosed a controlled credential value")
 
 
-def assert_containers_includes_unreserved_node_container() -> None:
+def assert_containers_includes_unreserved_node_container(*, deny_audit: bool = False) -> None:
     with tempfile.TemporaryDirectory(prefix="inspect-containers-live-") as temp_dir:
         temp_root = Path(temp_dir)
         certificate = temp_root / "certificate.pem"
         private_key = temp_root / "private-key.pem"
         generate_localhost_certificate(certificate, private_key)
-        with local_proxmox_server(certificate, private_key) as server:
+        with local_proxmox_server(
+            certificate,
+            private_key,
+            denied_audit_paths=("/vms",) if deny_audit else (),
+        ) as server:
             env = live_fixture_environment(
                 temp_root,
                 f"""---
@@ -720,7 +635,14 @@ all:
             )
             result = run_inspect("containers", env=env)
     output = f"{result.stdout}\n{result.stderr}"
-    if result.returncode != 0 or "5105" not in output or "release-problem" not in output:
+    if deny_audit:
+        if (
+            result.returncode == 0
+            or "VM.Audit" not in output
+            or any(path in server.requested_paths for path in LXC_API_PATHS)
+        ):
+            raise AssertionError(f"containers accepted an incomplete observation:\n{output}")
+    elif result.returncode != 0 or "5105" not in output or "release-problem" not in output:
         raise AssertionError(f"containers omitted the unreserved node container:\n{output}")
     for credential_value in (
         CONTROLLED_API_USER,
@@ -825,13 +747,21 @@ def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> 
         observation.write_text(json.dumps({"proxmox_vms": COMMON_OBSERVATION}), encoding="utf-8")
         env["LIFECYCLE_PROXMOX_OBSERVATION"] = str(observation)
         env["ANSIBLE_COLLECTIONS_PATH"] = str(FIXTURE_COLLECTIONS)
-        result = run_inspect(
-            "plan",
-            "--limit",
-            "target_conflict,release_problem",
-            env=env,
-            timeout=60,
-        )
+        certificate = temp_root / "certificate.pem"
+        private_key = temp_root / "private-key.pem"
+        generate_localhost_certificate(certificate, private_key)
+        with local_proxmox_server(certificate, private_key) as server:
+            inventory["all"]["vars"]["proxmox_api_port"] = server.server_address[1]
+            Path(env["ANSIBLE_INVENTORY"]).write_text(
+                yaml.safe_dump(inventory), encoding="utf-8"
+            )
+            result = run_inspect(
+                "plan",
+                "--limit",
+                "target_conflict,release_problem",
+                env=env,
+                timeout=60,
+            )
         module_calls = observation.with_suffix(".calls").read_text(encoding="utf-8").splitlines()
 
     output = f"{result.stdout}\n{result.stderr}"
@@ -887,6 +817,7 @@ def main() -> int:
         assert_diagnostic_playbooks_are_consolidated()
         assert_connectivity_fails_after_reporting_unreachable_targets()
         assert_containers_includes_unreserved_node_container()
+        assert_containers_includes_unreserved_node_container(deny_audit=True)
         assert_credentials_walks_permission_ladder_without_disclosure()
         assert_public_plan_reports_all_problems_without_disclosure_or_mutation()
     except (AssertionError, subprocess.TimeoutExpired) as error:

@@ -12,6 +12,11 @@ from pathlib import Path
 
 import yaml
 from ansible_test_helper import ansible_playbook_command
+from proxmox_api_fixture import (
+    COMMON_OBSERVATION,
+    generate_localhost_certificate,
+    local_proxmox_server,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -33,72 +38,82 @@ FIXTURE_COLLECTIONS = (
 DUMMY_API_USER = "dummy@pam"
 DUMMY_API_TOKEN_ID = "dummy-token"
 DUMMY_API_TOKEN_SECRET = "<REPLACE_ME>"
-COMMON_OBSERVATION = [
-    {"vmid": 5101, "name": "target-a", "node": "pve-a", "status": "stopped"},
-    {"vmid": 5102, "name": "target-b", "node": "pve-b", "status": "stopped"},
-    {
-        "vmid": 5105,
-        "name": "release-problem",
-        "node": "pve-a",
-        "status": "stopped",
-    },
-]
 
 
 def run_module_query_case(
-    *, limit: str, fail: bool = False, check_mode: bool = False
+    *, limit: str, fail: bool = False, check_mode: bool = False,
+    deny_audit: bool = False,
 ) -> bool:
     with tempfile.TemporaryDirectory(prefix="lxc-fleet-module-") as temp_dir:
-        observation = Path(temp_dir) / "observation.json"
-        expected_arguments = {
-            "api_host": "api.invalid",
-            "api_port": 8006,
-            "api_user": DUMMY_API_USER,
-            "api_token_id": DUMMY_API_TOKEN_ID,
-            "api_token_secret": DUMMY_API_TOKEN_SECRET,
-            "validate_certs": False,
-            "node": None,
-            "type": "lxc",
-        }
-        observation.write_text(
-            json.dumps({
-                "proxmox_vms": COMMON_OBSERVATION,
-                "fail": fail,
-                "expected_arguments": expected_arguments,
-            }),
-            encoding="utf-8",
-        )
-        extra_vars = {
-            "proxmox_fleet_observation_override": None,
-            "proxmox_api_host": "api.invalid",
-            "proxmox_api_port": 8006,
-            "proxmox_api_user": DUMMY_API_USER,
-            "proxmox_api_token_id": DUMMY_API_TOKEN_ID,
-            "proxmox_api_token_secret": DUMMY_API_TOKEN_SECRET,
-            "proxmox_default_node": "pve-a",
-            "proxmox_verify_ssl": False,
-        }
-        command = [
-            *ANSIBLE_PLAYBOOK, "-i", str(INVENTORY), str(PLAYBOOK),
-            "--limit", limit, "--extra-vars", json.dumps(extra_vars),
-        ]
-        if check_mode:
-            command.append("--check")
-        proc = subprocess.run(
-            command,
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            env={**os.environ, "LIFECYCLE_PROXMOX_OBSERVATION": str(observation)},
-        )
+        temp_root = Path(temp_dir)
+        observation = temp_root / "observation.json"
+        certificate = temp_root / "certificate.pem"
+        private_key = temp_root / "private-key.pem"
+        generate_localhost_certificate(certificate, private_key)
+        with local_proxmox_server(
+            certificate,
+            private_key,
+            denied_audit_paths=("/vms/5103",) if deny_audit else (),
+        ) as server:
+            expected_arguments = {
+                "api_host": "127.0.0.1",
+                "api_port": server.server_address[1],
+                "api_user": DUMMY_API_USER,
+                "api_token_id": DUMMY_API_TOKEN_ID,
+                "api_token_secret": DUMMY_API_TOKEN_SECRET,
+                "validate_certs": False,
+                "node": None,
+                "type": "lxc",
+            }
+            observation.write_text(
+                json.dumps({
+                    "proxmox_vms": COMMON_OBSERVATION,
+                    "fail": fail,
+                    "expected_arguments": expected_arguments,
+                }),
+                encoding="utf-8",
+            )
+            extra_vars = {
+                "proxmox_fleet_observation_override": None,
+                "proxmox_api_host": "127.0.0.1",
+                "proxmox_api_port": server.server_address[1],
+                "proxmox_api_user": DUMMY_API_USER,
+                "proxmox_api_token_id": DUMMY_API_TOKEN_ID,
+                "proxmox_api_token_secret": DUMMY_API_TOKEN_SECRET,
+                "proxmox_default_node": "pve-a",
+                "proxmox_verify_ssl": False,
+            }
+            command = [
+                *ANSIBLE_PLAYBOOK, "-i", str(INVENTORY), str(PLAYBOOK),
+                "--limit", limit, "--extra-vars", json.dumps(extra_vars),
+            ]
+            if check_mode:
+                command.append("--check")
+            proc = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "LIFECYCLE_PROXMOX_OBSERVATION": str(observation)},
+            )
         calls_path = observation.with_suffix(".calls")
         calls = (
             calls_path.read_text(encoding="utf-8").splitlines()
             if calls_path.exists() else []
         )
-        if proc.returncode == 0 and calls == [json.dumps({"check_mode": check_mode})]:
+        output = f"{proc.stdout}\n{proc.stderr}"
+        expected_calls = [] if deny_audit else [json.dumps({"check_mode": check_mode})]
+        if (
+            proc.returncode == 0
+            and calls == expected_calls
+            and len(server.requested_paths) == 2
+            and (not deny_audit or "VM.Audit" in output)
+            and not any(value in output for value in (
+                DUMMY_API_USER, DUMMY_API_TOKEN_ID, DUMMY_API_TOKEN_SECRET
+            ))
+        ):
             return True
-    print(f"module query case {limit!r} fail={fail} check={check_mode} failed", file=sys.stderr)
+    print(f"module query case {limit!r} fail={fail} check={check_mode} deny_audit={deny_audit} failed", file=sys.stderr)
     print(f"{proc.stdout}\n{proc.stderr}", file=sys.stderr)
     return False
 
@@ -158,6 +173,7 @@ def run_regressions() -> int:
         run_module_query_case(limit="target_a,target_b"),
         run_module_query_case(limit="target_a,target_b", check_mode=True),
         run_module_query_case(limit="access_target,access_peer", fail=True),
+        run_module_query_case(limit="access_target,access_peer", deny_audit=True),
     )):
         return 1
 

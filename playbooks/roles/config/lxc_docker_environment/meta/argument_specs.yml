@@ -19,8 +19,3 @@ argument_specs:
         type: str
         required: false
         description: Host path mirrored into Hawser for Dockhand-managed remote stack files.
-      dockhand_hawser_token:
-        type: str
-        required: false
-        no_log: true
-        description: Shared Hawser authentication token sourced from vault for the Standard-mode pilot.

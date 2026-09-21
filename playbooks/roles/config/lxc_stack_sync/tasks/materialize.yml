@@ -1,8 +1,30 @@
 ---
 # Materialize: execute the compose manifest plan by syncing stack files and creating planned assets.
 
+- name: Validate selected stack template inputs before materialization
+  block:
+    - name: Render selected stack templates without writing assets
+      ansible.builtin.assert:
+        that: lookup('ansible.builtin.template', item.path) is string
+        quiet: true
+      vars:
+        stack_name: "{{ (item.path | relpath(lxc_docker_environment_internal.stacks_source)).split('/')[0] }}"
+        stack_vars: "{{ (lxc_docker_env_stack_vars | default({}))[stack_name] | default({}) }}"
+      loop: "{{ _per_host_j2_files.files | default([]) }}"
+      no_log: true
+  rescue:
+    - name: Report missing or invalid selected stack template inputs
+      ansible.builtin.fail:
+        msg: >-
+          Required stack template inputs are missing or invalid for {{ inventory_hostname }}.
+          Check stack_vars for the selected templates:
+          {{ _per_host_j2_files.files | map(attribute='path') | join(', ') }}.
+
 - name: Plan desired stack materialization inputs
-  ansible.builtin.include_tasks: planner.yml
+  ansible.builtin.include_tasks:
+    file: planner.yml
+    apply:
+      no_log: true
 
 - name: Check which stack prereq dirs already exist
   ansible.builtin.stat:
@@ -50,6 +72,8 @@
   loop_control:
     label: "{{ item.relative_path }}"
   register: _stack_sync_template_results
+  no_log: true
+  diff: false
 
 - name: Copy static files for per-host stacks
   ansible.builtin.copy:
@@ -81,6 +105,7 @@
           )
       }}
   when: (lxc_stack_sync_manifest_plan.prereq_dirs | default([])) | length > 0
+  no_log: true
 
 - name: Ensure stack prereq dirs exist
   ansible.builtin.file:

@@ -136,6 +136,33 @@
       api_token_secret: "{{ proxmox_api_token_secret }}"
       validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
   block:
+    # The listing silently omits guests without VM.Audit. Check each selected
+    # identity before interpreting a missing guest as an absent container.
+    - name: Verify API observation permission for each targeted LXC
+      ansible.builtin.uri:
+        url: >-
+          {{ 'https://' ~ proxmox_api_host ~ ':' ~ (proxmox_api_port | default(8006))
+             ~ '/api2/json/access/permissions?'
+             ~ ({'path': '/vms/' ~ hostvars[item].proxmox_lxc_contract.identity.vmid} | urlencode) }}
+        method: GET
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_verify_ssl | default(true) | bool }}"
+        status_code: 200
+        timeout: 10
+      loop: "{{ proxmox_fleet_target_hosts }}"
+      when: hostvars[item].proxmox_lxc_contract.identity is defined
+      register: proxmox_fleet_permission_response
+      failed_when: >-
+        proxmox_fleet_permission_response.status | default(0) != 200
+        or 'VM.Audit' not in (
+          proxmox_fleet_permission_response.json.data | default({})
+        ).get('/vms/' ~ hostvars[item].proxmox_lxc_contract.identity.vmid, {})
+      changed_when: false
+      check_mode: false
+      no_log: true
+      delegate_to: localhost
+
     - name: Query the common Proxmox LXC observation
       community.proxmox.proxmox_vm_info:
         type: lxc
@@ -156,7 +183,10 @@
           {{
             proxmox_fleet_preflight_problem_records
             + [{
-                'message': 'Shared Proxmox access failed; no common LXC observation is available.',
+                'message': (
+                  'Shared Proxmox access failed; verify API credentials and VM.Audit permission '
+                  ~ 'for each selected VMID. No common LXC observation is available.'
+                ),
                 'cause_hosts': []
               }]
           }}

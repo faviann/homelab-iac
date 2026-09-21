@@ -16,7 +16,7 @@ STACK_ROOT = REPO_ROOT / "stacks" / "workstation" / "mcp-auth-proxy"
 WORKSTATION_VARS_PATH = REPO_ROOT / "inventory" / "host_vars" / "workstation.yml"
 PORTAL_VARS_PATH = REPO_ROOT / "inventory" / "host_vars" / "portal.yml"
 AUTH_VARS_PATH = REPO_ROOT / "inventory" / "host_vars" / "auth.yml"
-VAULT_EXAMPLE_PATH = REPO_ROOT / "inventory" / "group_vars" / "all" / "vault.yml.example"
+VAULT_EXAMPLE_PATH = REPO_ROOT / "inventory" / "vault.yml.example"
 TRAEFIK_CONFIG_PATH = (
     REPO_ROOT
     / "stacks"

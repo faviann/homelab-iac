@@ -1019,6 +1019,8 @@ def assert_check_mode_opt_out_audit_is_unchanged() -> None:
         ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_nvidia.yml", "Get current NVIDIA GPU configuration lines"),
         ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_sysctls.yml", "Get current sysctl and AppArmor configuration"),
         ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_idmap.yml", "Get current UID/GID ID mappings"),
+        # Read-only GET: check mode must not treat an unauditable guest as absent.
+        ("playbooks/roles/provisioning/proxmox_lxc_fleet_preflight/tasks/main.yml", "Verify API observation permission for each targeted LXC"),
     }
 
     actual: set[tuple[str, str]] = set()

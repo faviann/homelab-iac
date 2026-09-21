@@ -222,7 +222,7 @@ echo
 echo "Step 7: Proxmox API credentials..."
 echo "─────────────────────────────────────────"
 
-VAULT_FILE="inventory/group_vars/all/vault.yml"
+VAULT_FILE="inventory/vault.yml"
 
 if [ -f "$VAULT_FILE" ] && head -n1 "$VAULT_FILE" | grep -q '$ANSIBLE_VAULT'; then
     print_status "Encrypted vault already present — leaving it untouched"

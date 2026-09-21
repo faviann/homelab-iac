@@ -40,7 +40,7 @@ class JellystatSecretContractTests(unittest.TestCase):
             self.fail("Jellystat PostgreSQL template must use its required stack_vars expression")
 
     def test_vault_example_documents_required_jellystat_keys(self) -> None:
-        vault_example = load_yaml(REPO_ROOT / "inventory/group_vars/all/vault.yml.example")
+        vault_example = load_yaml(REPO_ROOT / "inventory/vault.yml.example")
 
         self.assertEqual(
             vault_example.get("vault_jellystat_jwt_secret"),
