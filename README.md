@@ -133,7 +133,9 @@ Run the automated setup script:
 ./setup.sh
 ```
 
-This handles controller prerequisites, installs `uv` when needed, syncs `.venv/`, generates vault passwords, prompts for Proxmox credentials, and prepares the project for use. On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides the stable base tools and the npm agent CLI layer is present.
+This installs system prerequisites, installs `uv` when needed, syncs `.venv/`, verifies the machine-local vault password file, reconciles collections and external roles, and prompts for Proxmox credentials.
+
+It does not establish the controller SSH identity, so a fresh controller is not yet ready for managed-host operations when it finishes. Establishing it is an explicit decision, described in step 4 below. On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides the stable base tools and the npm agent CLI layer is present.
 
 ### Manual Setup
 
