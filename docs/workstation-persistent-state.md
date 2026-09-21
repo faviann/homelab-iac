@@ -66,8 +66,9 @@ first deploy with this mapping, retaining a recoverable copy until validation su
 )
 ```
 
-If the target or backup already exists, inspect the previous migration before proceeding;
-a failed deployment may have initialized the target. Do not print the JSON contents.
+If the target or backup already exists, inspect the previous migration before proceeding.
+The role rejects a conflicting home file before initializing the target, so a rejected
+deployment leaves a previously absent target absent. Do not print the JSON contents.
 When the source is absent, the role creates the initial JSON file itself.
 
 After deployment, use `findmnt --mountpoint "$HOME/.claude.json"` and compare its

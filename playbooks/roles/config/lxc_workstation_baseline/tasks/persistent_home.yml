@@ -29,39 +29,6 @@
       workstation_persistent_home_root, modes must be four-digit octal strings,
       mount state must be mounted/present, and fstab path must be non-empty.
 
-- name: Ensure workstation persistent home parent directories exist
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ workstation_uid }}"
-    group: "{{ workstation_gid }}"
-    mode: "0700"
-  loop:
-    - "{{ workstation_persistent_home_root | dirname }}"
-    - "{{ workstation_persistent_home_root }}"
-
-- name: Initialize missing workstation persistent home files
-  ansible.builtin.copy:
-    dest: "{{ item.target }}"
-    content: "{{ item.content | default('') }}"
-    force: false
-    owner: "{{ workstation_uid }}"
-    group: "{{ workstation_gid }}"
-    mode: "{{ item.mode }}"
-  loop: "{{ workstation_persistent_home_links }}"
-  when: item.type == 'bind_file'
-
-- name: Ensure workstation persistent home targets exist
-  ansible.builtin.file:
-    path: "{{ item.target }}"
-    state: "{{ 'touch' if item.type == 'bind_file' else 'directory' }}"
-    access_time: preserve
-    modification_time: preserve
-    owner: "{{ workstation_uid }}"
-    group: "{{ workstation_gid }}"
-    mode: "{{ item.mode }}"
-  loop: "{{ workstation_persistent_home_links }}"
-
 - name: Inspect workstation persistent home paths
   ansible.builtin.stat:
     path: "{{ item.path }}"
@@ -117,6 +84,39 @@
   loop: "{{ _workstation_persistent_home_paths.results }}"
   loop_control:
     index_var: _workstation_persistent_home_idx
+
+- name: Ensure workstation persistent home parent directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ workstation_uid }}"
+    group: "{{ workstation_gid }}"
+    mode: "0700"
+  loop:
+    - "{{ workstation_persistent_home_root | dirname }}"
+    - "{{ workstation_persistent_home_root }}"
+
+- name: Initialize missing workstation persistent home files
+  ansible.builtin.copy:
+    dest: "{{ item.target }}"
+    content: "{{ item.content | default('') }}"
+    force: false
+    owner: "{{ workstation_uid }}"
+    group: "{{ workstation_gid }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ workstation_persistent_home_links }}"
+  when: item.type == 'bind_file'
+
+- name: Ensure workstation persistent home targets exist
+  ansible.builtin.file:
+    path: "{{ item.target }}"
+    state: "{{ 'touch' if item.type == 'bind_file' else 'directory' }}"
+    access_time: preserve
+    modification_time: preserve
+    owner: "{{ workstation_uid }}"
+    group: "{{ workstation_gid }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ workstation_persistent_home_links }}"
 
 - name: Remove legacy workstation persistent home symlinks before bind-mount migration
   ansible.builtin.file:

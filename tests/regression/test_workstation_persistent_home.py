@@ -81,6 +81,7 @@ def test_workstation_persistent_home_contract() -> None:
         assert [
             path.read_text() for path in (Path(temp_root) / "home").glob("*/.claude.json")
         ] == ['{"hasCompletedOnboarding":true}\n']
+        assert not (Path(temp_root) / "ephemeral/workstation/home/.claude.json").exists()
 
     conflict_output = f"{conflict.stdout}\n{conflict.stderr}"
     assert conflict.returncode != 0, conflict_output
