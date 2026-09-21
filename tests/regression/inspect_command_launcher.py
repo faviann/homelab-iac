@@ -747,7 +747,7 @@ def assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing() -> N
                 env=env,
                 timeout=60,
             )
-        module_calls_path = observation.with_suffix(".calls")
+        lifecycle_observation_reached = observation.with_suffix(".calls").exists()
 
     output = f"{result.stdout}\n{result.stderr}"
     required_fragments = (
@@ -762,7 +762,7 @@ def assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing() -> N
         raise AssertionError(f"public plan did not report missing Proxmox trust:\n{output}")
     if "Password for " in output:
         raise AssertionError("public plan entered the password-driven mutation path")
-    if module_calls_path.exists():
+    if lifecycle_observation_reached:
         raise AssertionError("public plan reached lifecycle observation after trust failed")
     for credential_value in (
         CONTROLLED_API_USER,
