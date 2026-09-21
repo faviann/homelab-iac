@@ -23,7 +23,7 @@ The `setup.sh` script will:
 - ✅ Install system prerequisites (`python3`, `curl`, `sshpass`)
 - ✅ Verify the machine-local vault password file
 - ✅ Install `uv` when needed and synchronize the locked environment
-- ✅ Reconcile collections, external roles, and the controller SSH key
+- ✅ Reconcile collections and external roles
 - ✅ Offer `./vault.sh configure` when no encrypted vault exists
 
 On an already-configured machine — a second worktree, say — the two operations
@@ -31,13 +31,14 @@ run on their own, non-interactively:
 
 ```bash
 ./setup.sh sync       # locked dependency synchronization only
-./setup.sh bootstrap  # every declared collection and role, plus the controller SSH key
+./setup.sh bootstrap  # every declared collection and external role
 ```
 
 Bootstrap is not prerequisite sequencing for collections or external roles:
 `./run.sh`, `./inspect.sh`, and `./recover.sh` install and verify what they
-consume. A new controller may still need `./setup.sh bootstrap` once to create
-`~/.ansible/ssh/proxmox_lxc` before managed-host operations.
+consume. It does not establish controller identity either, so a new controller
+still needs `~/.ansible/ssh/proxmox_lxc` put in place explicitly before any
+managed-host operation.
 
 **After setup, validate your credentials:**
 
@@ -103,9 +104,9 @@ change. An existing installation can otherwise mask a stale row.
 Reconciliation installs into the repository-owned `collections/` and
 `.ansible/roles/` paths configured in `ansible.cfg`. SSH-consuming operations
 also create the repository's configured `.ansible/cp/` directory before
-Ansible starts. They do not create the controller SSH key; if
-`~/.ansible/ssh/proxmox_lxc` is absent, run `./setup.sh bootstrap` before a
-managed-host operation.
+Ansible starts. They verify the controller SSH identity and never create it:
+when `~/.ansible/ssh/proxmox_lxc` is missing, or does not pair with its `.pub`,
+the operation fails before any live effect and names the condition.
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
@@ -163,16 +164,27 @@ If you prefer manual setup or need to troubleshoot:
    ./setup.sh sync
    ```
 
-4. **Create the controller SSH key:**
+4. **Establish the controller SSH identity:**
+
+   Managed-host operations authenticate with `~/.ansible/ssh/proxmox_lxc`.
+   Nothing in this repository creates it. Live commands verify it and fail
+   before any live effect when it is missing, because which of the two cases
+   below you are in is yours to decide.
+
+   On a rebuilt controller, restore the previously trusted private key and its
+   `.pub` from your own backup. Minting a new identity loses the trust the
+   fleet already grants, and managed hosts will still reject it.
+
+   On a genuinely first controller, create one:
 
    ```bash
-   ./setup.sh bootstrap
+   ssh-keygen -t ed25519 -N '' -f ~/.ansible/ssh/proxmox_lxc -C "ansible-control@$(hostname)"
    ```
 
-   Live commands install the collections and roles they consume by themselves,
-   but they only verify controller identity, never create it. On a new
-   controller, run bootstrap once so `~/.ansible/ssh/proxmox_lxc` exists before
-   the first managed-host operation.
+   Neither restoring nor creating enrolls trust on managed infrastructure. The
+   Proxmox host is enrolled on the first managed-host run, which prompts once
+   for its root password. Existing LXCs are enrolled with
+   `./recover.sh ssh-keys`.
 
    When you run lifecycle playbooks from the `workstation` LXC itself, they exclude that host by
    default. To manage it intentionally, run:

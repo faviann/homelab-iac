@@ -6,9 +6,9 @@
 proxmox_host: "{{ proxmox_api_host | default('proxmox.lan') }}"
 proxmox_ssh_user: root
 
-# SSH key configuration - references control_node_bootstrap variables for DRY
-# These paths should match what control_node_bootstrap generates
-# Machine-local paths (home-dir based so every git worktree shares the same key)
+# Reuses control_node_bootstrap's resolved paths when that role has run, and
+# otherwise falls back to the same machine-local location. Nothing creates the
+# identity; the live boundary verifies it before Ansible starts.
 proxmox_ssh_key_private: "{{ control_node_ssh_private_key_path | default(lookup('env', 'HOME') + '/.ansible/ssh/proxmox_lxc') }}"
 proxmox_ssh_key_public: "{{ control_node_ssh_public_key_path | default(ssh_key_shared_resolved_public_key_path | default('')) }}"
 
