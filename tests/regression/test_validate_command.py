@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 # This module covers signal cleanup, timed supervision, and checkout boundaries.
@@ -666,9 +667,25 @@ def test_an_unusable_test_target_reports_the_commands_own_usage_error(
 # --- AC5: the stack update policy machine interface ------------------------
 
 
-def run_real_validation(*arguments: str) -> subprocess.CompletedProcess[str]:
+# These real-stack checks need the Compose CLI, not a Docker daemon: the
+# validator uses `config --format json --no-interpolate --no-env-resolution`.
+# This repository-wide dependency predates PR #243; issue #240 reports 59 unit
+# tests sharing it. Keeping the real CLI avoids a fake that must
+# mirror production services. ADR-0008 permits it: the non-live boundary is no
+# managed host, no vault secret, and no machine-specific credential.
+def run_real_stack_validation(path: str) -> subprocess.CompletedProcess[str]:
+    manifest = REPO_ROOT / path / "stack.yaml"
+    if manifest.is_file():
+        metadata = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+        updates = metadata.get("updates")
+        mode = updates.get("mode") if isinstance(updates, dict) else None
+        # Guard before launching: vendor mode can clone an upstream repository.
+        assert mode in (None, "images"), (
+            f"AC5 stack {path} acquired update mode {mode!r}; "
+            "this command-contract coverage requires network-free validation"
+        )
     return subprocess.run(
-        [str(RUNNER), *arguments],
+        [str(RUNNER), "stack", path],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -678,7 +695,7 @@ def run_real_validation(*arguments: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_stack_reports_a_valid_policy_as_schema_versioned_json() -> None:
-    result = run_real_validation("stack", "stacks/workstation/mcp-auth-proxy")
+    result = run_real_stack_validation("stacks/workstation/mcp-auth-proxy")
 
     assert result.returncode == 0, result.stderr
     document = json.loads(result.stdout)
@@ -702,7 +719,7 @@ def test_stack_reports_a_valid_policy_as_schema_versioned_json() -> None:
 def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero(
     path: str,
 ) -> None:
-    result = run_real_validation("stack", path)
+    result = run_real_stack_validation(path)
 
     assert result.returncode != 0
     document = json.loads(result.stdout)
