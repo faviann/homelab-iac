@@ -4,26 +4,28 @@
 
 LXC containers created outside of Ansible (manually or by other tools) won't have the control node's SSH public key, preventing Ansible from connecting. This also applies if the provisioning phase's SSH injection step failed.
 
-## Automated Playbook (Recommended)
+## Supported Recovery
 
 ```bash
 # All containers
-uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
+./recover.sh ssh-keys
 
 # Specific container(s)
-uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
-uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal,seedbox
+./recover.sh ssh-keys --limit portal
+./recover.sh ssh-keys --limit portal,seedbox
 ```
 
-The playbook uses `pct exec` on the Proxmox host — containers don't need to be SSH-accessible beforehand. It is idempotent and non-destructive (only adds, never removes keys).
+`./recover.sh` is the only supported entry point for this recovery. It holds the machine-local lifecycle lock for the duration and reconciles the dependencies the playbook consumes before Ansible starts. Running `playbooks/add-ssh-keys-to-lxcs.yml` directly fails the controller prerequisite, which requires the wrapper.
 
-The playbook resolves the control node public key through the shared SSH key resolver, using `~/.ansible/ssh/proxmox_lxc.pub` unless an explicit override is provided. No playbook generates that key pair; you create or restore it yourself.
+Recovery reaches the guests with `pct exec` on the Proxmox host, so containers do not need to be SSH-accessible beforehand. It is idempotent and non-destructive: it only adds keys, never removes them.
 
-**Prerequisites**: Container must be running; Proxmox host SSH access must be configured (run `./run.sh --tags bootstrap` first if needed).
+It resolves the control node public key through the shared SSH key resolver, using `~/.ansible/ssh/proxmox_lxc.pub` unless an explicit override is provided. No playbook generates that key pair; you create or restore it yourself.
 
-## Manual Method (via Proxmox host)
+**Prerequisites**: the container must be running. Proxmox host SSH access is established by the command itself — its prerequisite layer installs the controller key on the Proxmox host, prompting once for the root password when key authentication is not yet configured.
 
-If the playbook isn't working:
+## Last Resort: Manual Injection via the Proxmox Host
+
+Human-only, and only when the supported recovery cannot run at all. This bypasses the live boundary, so nothing serializes it against another lifecycle operation.
 
 ```bash
 ssh root@proxmox.lan
@@ -40,6 +42,6 @@ pct exec $VMID -- chmod 600 /root/.ssh/authorized_keys
 ## Verification
 
 ```bash
-ansible lxcs -m ping
-ansible portal -m ping  # single host
+./inspect.sh connectivity
+./inspect.sh connectivity --limit portal
 ```

@@ -1,10 +1,9 @@
 ---
-# Playbook to add control node SSH key to existing LXC containers
-# This does NOT delete containers - it only adds the SSH public key to authorized_keys
+# Adds the control node SSH key to existing LXC containers. It never deletes a
+# container; it only appends the public key to authorized_keys.
 #
-# Usage:
-#   uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml
-#   uv run --locked ansible-playbook playbooks/add-ssh-keys-to-lxcs.yml --limit portal
+# Run it through ./recover.sh ssh-keys [--limit <targets>]. Direct invocation
+# fails the controller prerequisite, which requires the serializing wrapper.
 
 - name: Validate manual SSH recovery prerequisites
   ansible.builtin.import_playbook: proxmox-host-prerequisites.yml
