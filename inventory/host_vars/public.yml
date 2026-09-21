@@ -11,10 +11,10 @@ lxc_docker_env_stack_vars:
   mealie:
     smtp_password: "{{ vault_public_mealie_smtp_password }}"
   readmeabook:
-    jwt_secret: "{{ vault_public_readmeabook_jwt_secret | default('REPLACE_ME', true) }}"
-    jwt_refresh_secret: "{{ vault_public_readmeabook_jwt_refresh_secret | default('REPLACE_ME', true) }}"
-    config_encryption_key: "{{ vault_public_readmeabook_config_encryption_key | default('REPLACE_ME', true) }}"
-    postgres_password: "{{ vault_public_readmeabook_postgres_password | default('REPLACE_ME', true) }}"
+    jwt_secret: "{{ vault_public_readmeabook_jwt_secret }}"
+    jwt_refresh_secret: "{{ vault_public_readmeabook_jwt_refresh_secret }}"
+    config_encryption_key: "{{ vault_public_readmeabook_config_encryption_key }}"
+    postgres_password: "{{ vault_public_readmeabook_postgres_password }}"
   romm:
     db_passwd: "{{ vault_public_romm_db_passwd }}"
     db_root_passwd: "{{ vault_public_romm_db_root_passwd }}"

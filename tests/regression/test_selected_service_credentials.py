@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 
@@ -67,6 +68,74 @@ def test_stack_filter_renders_only_selected_service_inputs(tmp_path: Path) -> No
     assert not (shared / "stacks/unselected").exists()
 
 
+@pytest.mark.parametrize("stack_filter", ["selected", "readmeabook"])
+def test_readmeabook_placeholder_is_rejected_only_when_selected(
+    tmp_path: Path, stack_filter: str,
+) -> None:
+    source = tmp_path / "source"
+    shutil.copytree(REPO_ROOT / "stacks/public/readmeabook", source / "readmeabook")
+    (source / "selected").mkdir()
+    (source / "selected/compose.yaml").write_text("services: {}\n", encoding="utf-8")
+    shared = tmp_path / "shared"
+    (shared / "stacks").mkdir(parents=True)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text(
+        '#!/bin/sh\n'
+        'printf "%s|%s\\n" "$PWD" "$*" >> "$DOCKER_TEST_LOG"\n',
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    docker_log = tmp_path / "docker.log"
+    sensitive_values = {
+        "jwt_secret": "REPLACE_ME",
+        "jwt_refresh_secret": "fixture-sensitive-refresh",
+        "config_encryption_key": "fixture-sensitive-encryption",
+        "postgres_password": "fixture-sensitive-postgres",
+    }
+    result = run_playbook(tmp_path, {
+        "environment": {
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DOCKER_TEST_LOG": str(docker_log),
+        },
+        "vars": {
+            "stack_filter": stack_filter,
+            "default_domain": "example.invalid",
+            "docker_uid": os.getuid(), "docker_gid": os.getgid(),
+            "lxc_docker_environment_internal": {
+                "stacks_source": str(source), "shared_mount_source": str(shared),
+                "root_docker_conf_path": str(shared), "external_networks": [],
+                "shared_owner": os.getuid(), "shared_group": os.getgid(),
+                "docker_uid": os.getuid(), "docker_gid": os.getgid(),
+                "path_ownership_overrides": [],
+            },
+            "lxc_docker_env_stack_vars": {"readmeabook": sensitive_values},
+        },
+        "roles": ["config/lxc_stack_sync"],
+    }, "-vvv", "--diff")
+    output = result.stdout + result.stderr
+    for value in sensitive_values.values():
+        if value != "REPLACE_ME":
+            assert value not in output
+
+    if stack_filter == "readmeabook":
+        assert result.returncode != 0, output
+        assert "Required stack template inputs are missing or invalid" in output
+        assert not (shared / "stacks/readmeabook/.env").exists()
+        assert not docker_log.exists()
+        return
+
+    assert result.returncode == 0, output
+    assert (shared / "stacks/selected/compose.yaml").exists()
+    assert not (shared / "stacks/readmeabook").exists()
+    assert [line for line in docker_log.read_text(encoding="utf-8").splitlines()
+            if "|compose up" in line] == [
+        f"{shared}/stacks/selected|compose up -d",
+    ]
+
+
 def test_unselected_optional_credential_is_not_validated_by_docker_role(tmp_path: Path) -> None:
     result = run_playbook(tmp_path, {
         "vars": {
@@ -123,7 +192,7 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
             "docker_enabled": True, "docker_agents_enabled": True,
             "portal_instance": False, "traefik_kop_enabled": False,
             "homepage_docker_proxy_port": 2375,
-            "dockhand_hawser_token": "{{ vault_unselected_hawser_token }}",
+            "dockhand_hawser_token": "REPLACE_ME",
             "dockhand_hawser_stacks_dir": str(shared / "dockhand-stacks"),
             "lxc_docker_env_shared_mount_source": str(shared),
             "lxc_docker_env_root_docker_conf_path": str(shared),
@@ -144,6 +213,8 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     if stack_filter == "docker-agents":
         assert result.returncode != 0, output
         assert "Validate Dockhand Hawser variables" in output
+        assert not [line for line in docker_log.read_text().splitlines()
+                    if "|compose up" in line]
         assert not report.exists()
         return
 

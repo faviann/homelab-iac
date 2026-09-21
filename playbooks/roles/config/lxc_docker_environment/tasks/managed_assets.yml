@@ -64,10 +64,11 @@
     that:
       - dockhand_hawser_token is defined
       - dockhand_hawser_token is string
-      - dockhand_hawser_token | length > 0
+      - dockhand_hawser_token | trim | length > 0
+      - dockhand_hawser_token | trim != 'REPLACE_ME'
     fail_msg: >-
-      Hawser Standard requires dockhand_hawser_token to be defined and non-empty for every
-      non-portal Docker host.
+      Hawser Standard requires dockhand_hawser_token to be configured for every non-portal
+      Docker host.
   when:
     - lxc_docker_env_hawser_enabled | default(false)
     - stack_filter | default(none) in [none, 'docker-agents']
