@@ -39,8 +39,7 @@ With no operation, run guided workstation setup.
 
 Operations:
   sync       Synchronize the locked controller environment only
-  bootstrap  Reconcile Ansible collections, external roles, and the
-             controller SSH key, creating the key only when absent
+  bootstrap  Reconcile Ansible collections and external roles
 EOF
 }
 
@@ -75,7 +74,7 @@ reconcile_controller_artifacts() {
         print_error "bootstrap.yml not found in $PROJECT_ROOT"
         return 1
     fi
-    print_info "Reconciling collections, external roles, and the controller SSH key..."
+    print_info "Reconciling collections and external roles..."
     # --no-sync keeps this operation out of sync's territory: without it, uv
     # materializes or repairs the locked environment here, so bootstrap would
     # silently do the dependency synchronization it is supposed to require.
