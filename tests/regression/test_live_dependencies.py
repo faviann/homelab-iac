@@ -467,10 +467,20 @@ def stage_controller_identity(home: Path, state: str) -> None:
     if state == "encrypted":
         write_controller_identity(home, passphrase="fixture-passphrase")
         return
-    private_key = write_controller_identity(home)
+    declared = Path(f"{write_controller_identity(home)}.pub")
     if state == "mismatched":
         unrelated = write_controller_identity(home, name="unrelated")
-        Path(f"{private_key}.pub").write_bytes(Path(f"{unrelated}.pub").read_bytes())
+        declared.write_bytes(Path(f"{unrelated}.pub").read_bytes())
+    elif state == "extra-key":
+        unrelated = write_controller_identity(home, name="unrelated")
+        declared.write_text(
+            declared.read_text(encoding="utf-8")
+            + Path(f"{unrelated}.pub").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+    elif state == "recommented":
+        key_type, material = declared.read_text(encoding="utf-8").split()[:2]
+        declared.write_text(f"{key_type} {material} operator@elsewhere\n\n", encoding="utf-8")
 
 
 def run_boundary(
@@ -569,8 +579,10 @@ def test_reconciliation_precedes_ansible_at_the_live_boundary(tmp_path: Path) ->
     ("identity", "condition"),
     [
         ("present", ""),
+        ("recommented", ""),
         ("absent", "is absent"),
         ("mismatched", "is inconsistent"),
+        ("extra-key", "is inconsistent"),
     ],
 )
 def test_ssh_operation_requires_a_consistent_controller_identity(

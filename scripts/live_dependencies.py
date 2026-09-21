@@ -231,8 +231,15 @@ def _classify_controller_identity(private_key: Path) -> ControllerIdentity:
         return ControllerIdentity.ABSENT
     public_key = private_key.with_name(f"{private_key.name}.pub")
     try:
-        declared = public_key.read_text(encoding="utf-8").split()
+        declared_lines = public_key.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeDecodeError):
+        return ControllerIdentity.INCONSISTENT
+    # ssh_key_shared enrolls this file whole, so a second key line would reach
+    # authorized_keys on every managed host without ever being derived from the
+    # private key. The comment field is the operator's, so only the key type
+    # and material are compared.
+    declared = [line.split() for line in declared_lines if line.strip()]
+    if len(declared) != 1:
         return ControllerIdentity.INCONSISTENT
     # -P '' supplies the passphrase, so a protected key fails instead of
     # prompting. Closing stdin is not enough: ssh-keygen reaches for SSH_ASKPASS
@@ -245,7 +252,7 @@ def _classify_controller_identity(private_key: Path) -> ControllerIdentity:
         text=True,
         check=False,
     )
-    if derived.returncode != 0 or derived.stdout.split()[:2] != declared[:2]:
+    if derived.returncode != 0 or derived.stdout.split()[:2] != declared[0][:2]:
         return ControllerIdentity.INCONSISTENT
     return ControllerIdentity.PRESENT
 
@@ -260,8 +267,8 @@ def _require_controller_identity(playbook: str) -> None:
     else:
         condition = (
             f"the controller SSH identity at {private_key}, which is "
-            f"inconsistent: the private key does not pair with a readable "
-            f"{private_key}.pub"
+            f"inconsistent: {private_key}.pub must be readable and hold "
+            f"exactly the one public key this private key derives"
         )
     raise DependencyReconciliationError(
         f"Live playbook '{playbook}' consumes {condition}. This is a "
