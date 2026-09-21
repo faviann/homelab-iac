@@ -25,7 +25,7 @@ OPERATOR_MARKER = "operator-secret-marker-4f2b"
 
 
 def validation_environment(
-    tmp_path: Path, *, fail_lint: bool = False, sentinel_mode: int = 0o600
+    tmp_path: Path, *, fail_lint: bool = False, sentinel_mode: int | None = 0o600
 ) -> dict[str, str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -136,18 +136,20 @@ def wait_for_handoff_children(tmp_path: Path) -> list[int]:
     return [int(marker.read_text()) for marker in markers]
 
 
-def operator_sentinel(tmp_path: Path, name: str, mode: int = 0o600) -> str:
+def operator_sentinel(tmp_path: Path, name: str, mode: int | None = 0o600) -> str:
     """An operator input the command must neither read nor disclose.
 
-    Two modes detect two different faults. At ``0o600`` the file reads like a
-    real operator's inventory or vault-password file, so a disclosing read
-    surfaces the marker in the command's own output. At ``0o000`` any
-    unguarded read fails instead, aborting the command and showing up as a
-    non-zero exit even when nothing is printed.
+    Three variants detect different faults. At ``0o600`` a disclosing read
+    surfaces the marker in the command's own output. At ``0o000`` a silent
+    read fails for non-root users, even when guarded by an existence check.
+    With ``None`` the path does not exist, so an unguarded read fails under
+    every uid, including root. Failed reads abort the command even when
+    nothing is printed, unless the command tolerates the failure.
     """
     sentinel = tmp_path / f"operator-{name}"
-    sentinel.write_text(f"{OPERATOR_MARKER}\n", encoding="utf-8")
-    sentinel.chmod(mode)
+    if mode is not None:
+        sentinel.write_text(f"{OPERATOR_MARKER}\n", encoding="utf-8")
+        sentinel.chmod(mode)
     return str(sentinel)
 
 
@@ -738,9 +740,13 @@ def test_every_operation_runs_under_the_fixture_environment(
 
 
 @pytest.mark.parametrize("arguments", OPERATION_ENTRY_POINTS)
-@pytest.mark.parametrize("sentinel_mode", [0o600, 0o000])
+@pytest.mark.parametrize(
+    "sentinel_mode",
+    [0o600, 0o000, None],
+    ids=["readable", "unreadable", "nonexistent"],
+)
 def test_every_operation_is_agent_safe(
-    tmp_path: Path, arguments: tuple[str, ...], sentinel_mode: int
+    tmp_path: Path, arguments: tuple[str, ...], sentinel_mode: int | None
 ) -> None:
     if sentinel_mode == 0o000 and os.geteuid() == 0:
         pytest.skip(
@@ -752,8 +758,8 @@ def test_every_operation_is_agent_safe(
     result = run_validation(env, REPO_ROOT, *arguments)
 
     # A readable sentinel catches a disclosing read through the marker
-    # assertions; an unreadable one catches a silent read, which fails and
-    # aborts the command before it can exit 0.
+    # assertions; unreadable and nonexistent sentinels catch silent reads
+    # that fail and abort the command before it can exit 0.
     assert result.returncode == 0, result.stderr
     assert OPERATOR_MARKER not in result.stdout
     assert OPERATOR_MARKER not in result.stderr
