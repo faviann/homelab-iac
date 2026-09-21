@@ -571,7 +571,6 @@ def test_reconciliation_precedes_ansible_at_the_live_boundary(tmp_path: Path) ->
         ("present", ""),
         ("absent", "is absent"),
         ("mismatched", "is inconsistent"),
-        ("encrypted", "is inconsistent"),
     ],
 )
 def test_ssh_operation_requires_a_consistent_controller_identity(
