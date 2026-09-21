@@ -17,6 +17,8 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+from ansible_test_helper import write_controller_identity  # noqa: E402
+
 from scripts.live_dependencies import (  # noqa: E402
     COLLECTIONS_PATH,
     LIVE_OPERATIONS,
@@ -121,6 +123,8 @@ def fixture_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     monkeypatch.setenv("PATH", f"{fixture_bin}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("GALAXY_LOG", str(tmp_path / "galaxy.log"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    write_controller_identity(tmp_path / "home")
     monkeypatch.chdir(project_root)
     return project_root
 
@@ -457,11 +461,24 @@ def test_live_path_never_directs_the_caller_to_the_retired_bootstrap() -> None:
         assert "setup.sh bootstrap" not in source.read_text(encoding="utf-8"), source
 
 
+def stage_controller_identity(home: Path, state: str) -> None:
+    if state == "absent":
+        return
+    private_key = write_controller_identity(home)
+    if state == "mismatched":
+        unrelated = write_controller_identity(home, name="unrelated")
+        Path(f"{private_key}.pub").write_bytes(Path(f"{unrelated}.pub").read_bytes())
+
+
 def run_boundary(
-    tmp_path: Path, *arguments: str, hold_lock: bool = False
+    tmp_path: Path,
+    *arguments: str,
+    hold_lock: bool = False,
+    identity: str = "absent",
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     home = tmp_path / "home"
     (home / ".ansible").mkdir(parents=True)
+    stage_controller_identity(home, identity)
     fixture_bin = tmp_path / "bin"
     fixture_bin.mkdir()
     write_executable(fixture_bin / "uv", RECORDING_UV)
@@ -540,3 +557,32 @@ def test_reconciliation_precedes_ansible_at_the_live_boundary(tmp_path: Path) ->
     invoked = [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
     assert "scripts.live_dependencies" in invoked[0]
     assert "ansible-playbook" in invoked[1]
+
+
+@pytest.mark.serial
+@pytest.mark.parametrize(
+    ("identity", "condition"),
+    [("present", ""), ("absent", "is absent"), ("mismatched", "is inconsistent")],
+)
+def test_ssh_operation_requires_a_consistent_controller_identity(
+    tmp_path: Path, identity: str, condition: str
+) -> None:
+    result, _ = run_boundary(
+        tmp_path, "shared", "playbooks/lab-connectivity.yml", identity=identity
+    )
+    output = result.stdout + result.stderr
+
+    if not condition:
+        assert result.returncode == 0, output
+        return
+
+    assert result.returncode != 0
+    assert condition in output
+    assert "controller-identity problem" in output
+    assert "not a managed-host trust failure" in output
+    contradicting = {"is absent": "is inconsistent", "is inconsistent": "is absent"}
+    assert contradicting[condition] not in output
+    assert "PRIVATE KEY" not in output
+    public_key = tmp_path / "home/.ansible/ssh/proxmox_lxc.pub"
+    if public_key.exists():
+        assert public_key.read_text(encoding="utf-8").split()[1] not in output
