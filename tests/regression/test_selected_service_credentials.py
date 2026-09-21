@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import stat
 import subprocess
 
 import pytest
@@ -13,8 +14,6 @@ from ansible_test_helper import ansible_playbook_command
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DOCKER_TASKS = REPO_ROOT / "playbooks/roles/config/lxc_docker_environment/tasks"
-LIFECYCLE_TASKS = REPO_ROOT / "playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks"
 
 
 def run_playbook(tmp_path: Path, play: dict, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -80,35 +79,87 @@ def test_unselected_optional_credential_is_not_validated_by_docker_role(tmp_path
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("stack_filter", ["selected", "docker-agents", "overmind", "dockhand", "auth", None])
-def test_service_branches_honor_stack_selection(tmp_path: Path, stack_filter: str | None) -> None:
-    # Exercise the production include boundaries; their consumers are replaced by
-    # a marker so selected branches cannot touch a host or service API.
-    tasks = yaml.safe_load((DOCKER_TASKS / "main.yml").read_text())
-    tasks += yaml.safe_load((LIFECYCLE_TASKS / "configure.yml").read_text())[1]["block"]
-    branches = {
-        "Materialize managed Docker assets": "docker-agents",
-        "Configure overmind verified Postgres backups": "overmind",
-        "Seed Dockhand environments": "dockhand",
-        "Apply Authentik blueprints": "auth",
-    }
-    selected_tasks = []
-    for task in tasks:
-        if task["name"] in branches:
-            selected_tasks.append({
-                "name": task["name"], "when": task.get("when", True),
-                "ansible.builtin.copy": {
-                    "content": "selected", "dest": str(tmp_path / task["name"]), "mode": "0600",
-                },
-            })
+@pytest.mark.parametrize("stack_filter", ["selected", "docker-agents"])
+def test_filtered_deployment_preserves_managed_host_assets_without_unselected_credentials(
+    tmp_path: Path, stack_filter: str,
+) -> None:
+    source = tmp_path / "source"
+    (source / "selected").mkdir(parents=True)
+    (source / "selected/compose.yaml").write_text("services: {}\n")
+    shared = tmp_path / "shared"
+    agents = shared / "stacks/docker-agents"
+    agents.mkdir(parents=True)
+    existing_env = "TOKEN=existing-fixture-token\n"
+    (agents / ".env").write_text(existing_env)
+    (shared / "admin").mkdir()
+    (shared / "README.md").write_text("obsolete deployed documentation\n")
+    legacy = shared / "stacks/legacy"
+    legacy.mkdir()
+    (legacy / "compose.yml").write_text("services: {}\n")
+    shared.chmod(0o710)
+    (shared / "stacks").chmod(0o700)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text(
+        '#!/bin/sh\n'
+        'printf "%s|%s\\n" "$PWD" "$*" >> "$DOCKER_TEST_LOG"\n'
+        'printf "Total reclaimed space: 0B\\n"\n'
+    )
+    docker.chmod(0o755)
+    docker_log = tmp_path / "docker.log"
+    report = tmp_path / "report.yml"
+    # Run the real role wiring and asset/stack reconciliation. Package, mount,
+    # and account setup are outside this fixture; Docker commands are recorded.
     result = run_playbook(tmp_path, {
+        "environment": {
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DOCKER_TEST_LOG": str(docker_log),
+        },
         "vars": {
             "stack_filter": stack_filter,
+            "docker_user": "fixture", "docker_uid": os.getuid(), "docker_gid": os.getgid(),
+            "docker_enabled": True, "docker_agents_enabled": True,
+            "portal_instance": False, "traefik_kop_enabled": False,
+            "homepage_docker_proxy_port": 2375,
+            "dockhand_hawser_token": "{{ vault_unselected_hawser_token }}",
+            "dockhand_hawser_stacks_dir": str(shared / "dockhand-stacks"),
+            "lxc_docker_env_shared_mount_source": str(shared),
+            "lxc_docker_env_root_docker_conf_path": str(shared),
+            "lxc_docker_env_stacks_source": str(source),
+            "lxc_docker_env_absent_containers": [],
+            "lxc_docker_env_legacy_managed_stacks": [{
+                "name": "legacy", "dir": str(legacy), "compose_file": "compose.yml",
+            }],
             "overmind_postgres_backup_enabled": True,
-            "portal_instance": True, "authentik_blueprint_sync_enabled": True,
         },
-        "tasks": selected_tasks,
-    })
-    assert result.returncode == 0, result.stdout + result.stderr
-    for name, stack in branches.items():
-        assert (tmp_path / name).exists() == (stack_filter in (None, stack))
+        "roles": ["config/lxc_docker_environment"],
+        "tasks": [{"ansible.builtin.copy": {
+            "content": "{{ lxc_docker_env_deployment_report | to_json }}", "dest": str(report),
+        }}],
+    }, "--skip-tags", "docker_host_setup")
+    output = result.stdout + result.stderr
+    assert (agents / ".env").read_text() == existing_env
+    if stack_filter == "docker-agents":
+        assert result.returncode != 0, output
+        assert "Validate Dockhand Hawser variables" in output
+        assert not report.exists()
+        return
+
+    assert result.returncode == 0, output
+    assert not legacy.exists()
+    assert not (shared / "admin").exists()
+    assert not (shared / "README.md").exists()
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o710
+    assert stat.S_IMODE((shared / "stacks").stat().st_mode) == 0o755
+    assert "TOKEN=${TOKEN}" in (agents / "compose.yml").read_text()
+    assert (shared / "stacks/selected/compose.yaml").exists()
+    commands = docker_log.read_text().splitlines()
+    assert f"{legacy}|compose down --remove-orphans" in commands
+    assert [line for line in commands if "|compose up" in line] == [
+        f"{shared}/stacks/selected|compose up -d",
+    ]
+    deployment = yaml.safe_load(report.read_text())
+    assert deployment["changed"] is True
+    assert deployment["discovered_stacks"] == ["selected"]
