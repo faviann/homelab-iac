@@ -23,6 +23,12 @@
         path: "{{ workstation_home }}/.claude"
         target: "{{ workstation_persistent_home_root }}/.claude"
         mode: "0700"
+      - name: claude_config
+        type: bind_file
+        path: "{{ workstation_home }}/.claude.json"
+        target: "{{ workstation_persistent_home_root }}/.claude.json"
+        mode: "0600"
+        content: "{}\n"
   tasks:
     - name: Ensure workstation home exists
       ansible.builtin.file:
@@ -46,6 +52,13 @@
       ansible.builtin.copy:
         dest: "{{ workstation_home }}/.config/lobu/credentials.json"
         content: synthetic-auth-state
+        mode: "0600"
+
+    - name: Create conflicting Claude onboarding state
+      ansible.builtin.copy:
+        dest: "{{ workstation_home }}/.claude.json"
+        content: |
+          {"hasCompletedOnboarding":true}
         mode: "0600"
 
     - name: Include focused workstation persistent home tasks

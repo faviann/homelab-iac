@@ -6,13 +6,22 @@ The workstation role bind-mounts selected home paths from `/ephemeral/workstatio
 
 **Status: the original ten declared paths were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
 
-Note that `~/.claude.json` is a sibling of the mounted `~/.claude` and is therefore *not* covered — see #157.
+Claude's sibling `~/.claude.json` is persisted separately as a file bind mount (#157).
+It holds onboarding and recent-project state; `~/.claude` holds transcripts and credentials.
+Its live rebuild validation is pending.
+
+`workstation_persistent_home_links` supports `type: bind_mount` for directories and
+`type: bind_file` for regular files. File entries may specify `content` to initialize
+an absent target; existing content is never replaced. Claude's file starts as `{}`
+with mode `0600`, because an empty file is invalid JSON. Modes and ownership are
+reconciled on both the backing target and mount point, preserving existing file
+contents and modification times.
 
 `~/.pi` remains the Pi harness state root. OMP is a separate harness with separate state under `~/.omp`; neither path replaces or contains the other. OpenCode's three durable XDG roots preserve its configuration, authentication, and session state. Read this runbook before the first `site.yml` run that enables any newly declared path.
 
 ## The Fail-Closed Assert
 
-`playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml` refuses to mount over a home path that already exists as a plain directory and is neither a symlink to the target nor already a bind mount. The run fails with:
+`playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml` refuses to mount over a home path that already exists as a plain directory or file and is neither a symlink to the target nor already a bind mount. The run fails with:
 
 ```
 /home/faviann/.config/herdr exists and is not the managed bind mount path from
@@ -25,6 +34,49 @@ This is deliberate. A bind mount hides whatever is underneath it, so mounting ov
 ## Pre-Deploy Migration
 
 Run these on the workstation, as the workstation user, before `./run.sh --include-controller`.
+
+### Claude onboarding config
+
+Exit Claude Code processes before copying `~/.claude.json`. Migrate it before the
+first deploy with this mapping, retaining a recoverable copy until validation succeeds:
+
+```bash
+(
+  set -eu
+  source_path="$HOME/.claude.json"
+  target_path=/ephemeral/workstation/home/.claude.json
+  backup_path="$HOME/.claude.json.pre-persist"
+  if [ -e "$source_path" ] || [ -L "$source_path" ]; then
+    test -f "$source_path"
+    test ! -L "$source_path"
+    if mountpoint -q "$source_path"; then
+      echo 'Claude config is already mounted; inspect it before migrating.' >&2
+      exit 1
+    fi
+    test ! -e "$target_path"
+    test ! -L "$target_path"
+    test ! -e "$backup_path"
+    test ! -L "$backup_path"
+    mkdir -p /ephemeral/workstation/home
+    cp -a "$source_path" "$target_path"
+    chmod 0600 "$target_path"
+    mv "$source_path" "$backup_path"
+    chmod 0600 "$backup_path"
+  fi
+)
+```
+
+If the target or backup already exists, inspect the previous migration before proceeding.
+The role rejects a conflicting home file before initializing the target, so a rejected
+deployment leaves a previously absent target absent. Do not print the JSON contents.
+When the source is absent, the role creates the initial JSON file itself.
+
+After deployment, use `findmnt --mountpoint "$HOME/.claude.json"` and compare its
+SHA-256 hash with the retained copy before restarting Claude. Then verify that
+Claude opens without onboarding and retains its recent projects. Claude Code
+2.1.278 handles a file bind mount by falling back to an in-place write when atomic
+replacement returns `EBUSY`; saving through this mount therefore does not retain
+atomic replacement semantics.
 
 ### Lobu
 
@@ -213,7 +265,7 @@ Detaching survives an SSH drop. It does not survive a container restart — noth
 Afterwards, confirm the mounts are actually live rather than trusting the play recap — an unmounted bind mount is an empty directory, not an error:
 
 ```bash
-findmnt ~/.claude ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
+findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
         ~/.config/lobu ~/.config/agent-of-empires ~/.hermes ~/.openclaw ~/.config/herdr \
         ~/.local/state/collie ~/repos
@@ -273,6 +325,11 @@ sha256sum ~/.config/herdr/session.json ~/.config/herdr/plugins.json \
 ```
 
 Hash the VAPID `.env`; never copy or print it. It is the one genuinely irreplaceable artifact — deliberately absent from Bitwarden, and existing only on `/ephemeral`.
+
+With Claude stopped, record `sha256sum ~/.claude.json` on the driving machine.
+After rebuilding, compare the hash before starting Claude, then confirm onboarding
+is still complete and the same recent projects appear. Keep Claude stopped during
+the hash comparison, since startup can legitimately update the config.
 
 Also capture the file list for each OpenCode and OMP durable root and keep that output on the driving machine. After the rebuild, compare it with a fresh listing to prove that the separate OMP state and all three OpenCode roots returned:
 
@@ -376,6 +433,7 @@ Tracked as faviann/dotfiles#84.
 Confirm:
 
 - Every declared path appears in `findmnt` (check one target per invocation; an unmounted bind mount is an empty directory, not an error, and the play recap will not flag it).
+- Claude's `~/.claude.json` passes its pre-start hash comparison, and Claude opens without onboarding with its recent projects intact.
 - The four hashes from the before-manifest are unchanged.
 - Lobu passes its pre-start hash comparison and reconnects as the same registered device after dotfiles convergence (see [Lobu before-manifest](#lobu-before-manifest)).
 - The before/after OpenCode and OMP file lists match for `~/.omp` and all three durable OpenCode roots; `~/.pi` remains independently mounted.

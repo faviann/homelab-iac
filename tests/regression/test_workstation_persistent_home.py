@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 from contextlib import nullcontext
@@ -77,6 +78,10 @@ def test_workstation_persistent_home_contract() -> None:
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-conflict-") as temp_root:
         conflict = run_playbook(CONFLICT_PLAYBOOK, temp_root)
+        assert [
+            path.read_text() for path in (Path(temp_root) / "home").glob("*/.claude.json")
+        ] == ['{"hasCompletedOnboarding":true}\n']
+        assert not (Path(temp_root) / "ephemeral/workstation/home/.claude.json").exists()
 
     conflict_output = f"{conflict.stdout}\n{conflict.stderr}"
     assert conflict.returncode != 0, conflict_output
@@ -84,9 +89,10 @@ def test_workstation_persistent_home_contract() -> None:
     expected_conflicts = [
         "/.claude exists and is not the managed bind mount path",
         "/.config/lobu exists and is not the managed bind mount path",
+        "/.claude.json exists and is not the managed bind mount path",
     ]
     assert all(conflict in conflict_output for conflict in expected_conflicts), conflict_output
-    assert conflict_output.count("Move or migrate it manually") >= 2, conflict_output
+    assert conflict_output.count("Move or migrate it manually") >= 3, conflict_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-symlink-migration-") as temp_root:
         migration = run_playbook(SYMLINK_MIGRATION_PLAYBOOK, temp_root)
@@ -112,17 +118,39 @@ def test_workstation_persistent_home_contract() -> None:
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-check-mode-") as temp_root:
         check_mode = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root, check_mode=True)
+        assert not (Path(temp_root) / "ephemeral/workstation/home/.claude.json").exists()
 
     check_mode_output = f"{check_mode.stdout}\n{check_mode.stderr}"
     assert check_mode.returncode == 0, check_mode_output
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-idempotency-") as temp_root:
         first_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
+        first_idempotency_output = f"{first_idempotency.stdout}\n{first_idempotency.stderr}"
+        assert first_idempotency.returncode == 0, first_idempotency_output
+
+        target = Path(temp_root) / "ephemeral/workstation/home/.claude.json"
+        assert target.read_text() == "{}\n"
+        content = '{"hasCompletedOnboarding":true,"projects":{"synthetic":{}}}\n'
+        target.write_text(content)
+        target_mtime = target.stat().st_mtime_ns
         second_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
+        second_idempotency_output = f"{second_idempotency.stdout}\n{second_idempotency.stderr}"
+        assert second_idempotency.returncode == 0, second_idempotency_output
+        assert "changed=0" in second_idempotency_output, second_idempotency_output
+        assert target.read_text() == content
+        assert target.stat().st_mtime_ns == target_mtime
 
-    first_idempotency_output = f"{first_idempotency.stdout}\n{first_idempotency.stderr}"
-    assert first_idempotency.returncode == 0, first_idempotency_output
-
-    second_idempotency_output = f"{second_idempotency.stdout}\n{second_idempotency.stderr}"
-    assert second_idempotency.returncode == 0, second_idempotency_output
-    assert "changed=0" in second_idempotency_output, second_idempotency_output
+        # Simulate losing the container-owned home and fstab while backing survives.
+        workstation_home = Path(temp_root) / "home/faviann"
+        shutil.rmtree(workstation_home)
+        (Path(temp_root) / "fstab").unlink()
+        target.chmod(0o644)
+        recreated_home = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
+        recreated_home_output = f"{recreated_home.stdout}\n{recreated_home.stderr}"
+        assert recreated_home.returncode == 0, recreated_home_output
+        assert target.read_text() == content
+        assert target.stat().st_mtime_ns == target_mtime
+        assert target.stat().st_mode & 0o777 == 0o600
+        mount_point = workstation_home / ".claude.json"
+        assert mount_point.is_file()
+        assert f"{target} {mount_point} none bind " in (Path(temp_root) / "fstab").read_text()
