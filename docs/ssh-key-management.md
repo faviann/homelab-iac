@@ -27,11 +27,19 @@ It resolves the control node public key through the shared SSH key resolver, usi
 
 Human-only, and only when the supported recovery cannot run at all. This bypasses the live boundary, so nothing serializes it against another lifecycle operation.
 
+**Step 1 — on the control node.** Print the public key and copy the single line it outputs.
+
+```bash
+cat ~/.ansible/ssh/proxmox_lxc.pub
+```
+
+**Step 2 — on the Proxmox host.** Paste that line between the single quotes, and set the container's VMID.
+
 ```bash
 ssh root@proxmox.lan
 
 VMID=300
-PUBKEY="$(cat ~/.ansible/ssh/proxmox_lxc.pub)"  # run on control node first
+PUBKEY='ssh-ed25519 AAAA... ansible-control@workstation'
 
 pct exec $VMID -- mkdir -p /root/.ssh
 pct exec $VMID -- chmod 700 /root/.ssh
