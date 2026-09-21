@@ -8,11 +8,16 @@ at their exact declared pins before Ansible starts.
 ``community.crypto`` is declared but consumed by no live operation. The Docker
 role is reached only by configure-capable lifecycle operations. The lifecycle
 preflight consumes ``community.proxmox`` for every lifecycle intent.
+
+An SSH-consuming operation also requires the machine-global controller SSH
+identity. This module verifies that identity and never creates, restores, or
+replaces it.
 """
 
 from __future__ import annotations
 
 import argparse
+import enum
 import fcntl
 import json
 import subprocess
@@ -28,6 +33,7 @@ ROLE_REQUIREMENTS = Path("requirements/roles.yml")
 COLLECTIONS_PATH = Path("collections")
 ROLES_PATH = Path(".ansible/roles")
 SSH_CONTROL_PATH_PARENT = Path(".ansible/cp")
+CONTROLLER_IDENTITY_RELATIVE_PATH = Path(".ansible/ssh/proxmox_lxc")
 
 
 @dataclass(frozen=True)
@@ -203,6 +209,65 @@ def _reconcile_roles(
             )
 
 
+class ControllerIdentity(enum.Enum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    INCONSISTENT = "inconsistent"
+
+
+CONTROLLER_IDENTITY_GUIDANCE = (
+    "Restore the previously trusted private key and its .pub from your own "
+    "backup of this controller; minting a new identity loses the trust the "
+    "fleet already grants, and managed hosts will still reject it. On a first "
+    "controller, create one explicitly: ssh-keygen -t ed25519 -N '' -f "
+    "~/.ansible/ssh/proxmox_lxc -C ansible-control@$(hostname). Neither "
+    "restoring nor creating enrolls trust on managed infrastructure; "
+    "./recover.sh ssh-keys does that."
+)
+
+
+def _classify_controller_identity(private_key: Path) -> ControllerIdentity:
+    if not private_key.is_file():
+        return ControllerIdentity.ABSENT
+    public_key = private_key.with_name(f"{private_key.name}.pub")
+    try:
+        declared = public_key.read_text(encoding="utf-8").split()
+    except (OSError, UnicodeDecodeError):
+        return ControllerIdentity.INCONSISTENT
+    # DEVNULL keeps a passphrase-protected key from stalling the live boundary
+    # on a prompt, and the captured output never reaches the operator.
+    derived = subprocess.run(
+        ["ssh-keygen", "-y", "-f", str(private_key)],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if derived.returncode != 0 or derived.stdout.split()[:2] != declared[:2]:
+        return ControllerIdentity.INCONSISTENT
+    return ControllerIdentity.PRESENT
+
+
+def _require_controller_identity(playbook: str) -> None:
+    private_key = Path.home() / CONTROLLER_IDENTITY_RELATIVE_PATH
+    state = _classify_controller_identity(private_key)
+    if state is ControllerIdentity.PRESENT:
+        return
+    if state is ControllerIdentity.ABSENT:
+        condition = f"the controller SSH identity at {private_key}, which is absent"
+    else:
+        condition = (
+            f"the controller SSH identity at {private_key}, which is "
+            f"inconsistent: the private key does not pair with a readable "
+            f"{private_key}.pub"
+        )
+    raise DependencyReconciliationError(
+        f"Live playbook '{playbook}' consumes {condition}. This is a "
+        "controller-identity problem on this machine, not a managed-host "
+        f"trust failure. {CONTROLLER_IDENTITY_GUIDANCE}"
+    )
+
+
 def _ensure_ssh_control_path_parent(project_root: Path, playbook: str) -> None:
     parent = project_root / SSH_CONTROL_PATH_PARENT
     try:
@@ -226,6 +291,7 @@ def reconcile(playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
             _reconcile_collections(project_root, playbook, operation.collections)
             _reconcile_roles(project_root, playbook, operation.roles)
     if operation.uses_ssh:
+        _require_controller_identity(playbook)
         _ensure_ssh_control_path_parent(project_root, playbook)
 
 

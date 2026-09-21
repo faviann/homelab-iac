@@ -77,9 +77,6 @@
   register: control_node_galaxy_install
   changed_when: false
 
-- name: Include control node SSH tasks
-  ansible.builtin.include_tasks: ssh_key.yml
-
 - name: Verify vault password file presence
   ansible.builtin.stat:
     path: "{{ control_node_vault_password_file }}"
