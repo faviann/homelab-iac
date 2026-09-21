@@ -15,6 +15,7 @@ import yaml
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from ansible_test_helper import write_controller_identity
 from proxmox_api_fixture import (
     COMMON_OBSERVATION,
     LXC_API_PATHS,
@@ -535,6 +536,7 @@ def assert_diagnostic_playbooks_are_consolidated() -> None:
 def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str, str]:
     home = temp_root / "home"
     home.mkdir()
+    write_controller_identity(home)
     inventory = temp_root / "inventory.yml"
     inventory.write_text(inventory_source, encoding="utf-8")
     vault_password = temp_root / "vault-pass"
