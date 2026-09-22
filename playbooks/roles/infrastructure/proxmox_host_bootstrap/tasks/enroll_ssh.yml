@@ -36,79 +36,58 @@
   register: proxmox_root_password
   delegate_to: localhost
 
+# argv goes straight to execve, so no local shell reads the password or the
+# key, and sshpass -e keeps the password out of the process table as well.
 - name: Verify Proxmox host password authentication
   ansible.builtin.command:
-    cmd: >-
-      sshpass -p "{{ proxmox_root_password.user_input }}"
-      ssh -p {{ proxmox_ssh_port }}
-          -o StrictHostKeyChecking=accept-new
-          -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
-      {{ proxmox_ssh_user }}@{{ proxmox_host }}
-      'echo PASSWORD_OK'
+    argv: "{{ proxmox_ssh_password_argv + ['true'] }}"
+  environment:
+    SSHPASS: "{{ proxmox_root_password.user_input }}"
   register: password_test
   changed_when: false
   failed_when: password_test.rc != 0
   no_log: true
   delegate_to: localhost
 
-- name: Ensure Proxmox host SSH directory exists
-  ansible.builtin.command:
-    cmd: >-
-      sshpass -p "{{ proxmox_root_password.user_input }}"
-      ssh -p {{ proxmox_ssh_port }} -o StrictHostKeyChecking=accept-new
-      {{ proxmox_ssh_user }}@{{ proxmox_host }}
-      'mkdir -p /root/.ssh && chmod 700 /root/.ssh && chown root:root /root/.ssh'
-  changed_when: true
-  no_log: true
-  delegate_to: localhost
-
-- name: Check selected identity enrollment on Proxmox host
-  ansible.builtin.command:
-    cmd: >-
-      sshpass -p "{{ proxmox_root_password.user_input }}"
-      ssh -p {{ proxmox_ssh_port }} -o StrictHostKeyChecking=accept-new
-      {{ proxmox_ssh_user }}@{{ proxmox_host }}
-      "grep -qxF -- '{{ ssh_key_shared_public_key_content }}' /root/.ssh/authorized_keys 2>/dev/null"
-  register: key_exists_check
-  changed_when: false
-  failed_when: false
-  no_log: true
-  delegate_to: localhost
-
+# Base64 carries the key through the remote shell as opaque data, so a valid
+# key comment cannot be reinterpreted there.
 - name: Enroll selected identity on Proxmox host
-  ansible.builtin.shell:
-    cmd: |
-      sshpass -p "{{ proxmox_root_password.user_input }}" \
-      ssh -p {{ proxmox_ssh_port }} -o StrictHostKeyChecking=accept-new \
-      {{ proxmox_ssh_user }}@{{ proxmox_host }} \
-      "echo '{{ ssh_key_shared_public_key_content }}' >> /root/.ssh/authorized_keys"
-  changed_when: true
-  no_log: true
-  delegate_to: localhost
-  when: key_exists_check.rc != 0
-
-- name: Set Proxmox host authorized_keys permissions
   ansible.builtin.command:
-    cmd: >-
-      sshpass -p "{{ proxmox_root_password.user_input }}"
-      ssh -p {{ proxmox_ssh_port }} -o StrictHostKeyChecking=accept-new
-      {{ proxmox_ssh_user }}@{{ proxmox_host }}
-      'chmod 600 /root/.ssh/authorized_keys && chown root:root /root/.ssh/authorized_keys'
-  changed_when: false
+    argv: >-
+      {{
+        proxmox_ssh_password_argv + [
+          proxmox_host_enrollment_script
+          | replace('@PUBKEY_B64@', ssh_key_shared_public_key_content | b64encode)
+        ]
+      }}
+  environment:
+    SSHPASS: "{{ proxmox_root_password.user_input }}"
+  register: proxmox_host_enrollment
+  changed_when: "'CHANGED=1' in (proxmox_host_enrollment.stdout | default(''))"
+  failed_when: >-
+    (proxmox_host_enrollment.rc != 0)
+    or ('CHANGED=' not in (proxmox_host_enrollment.stdout | default('')))
   no_log: true
   delegate_to: localhost
 
 - name: Verify selected identity is enrolled on Proxmox host
   ansible.builtin.command:
-    cmd: >-
-      ssh -i {{ proxmox_ssh_key_private }}
-          -p {{ proxmox_ssh_port }}
-          -o BatchMode=yes
-          -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
-          -o StrictHostKeyChecking=accept-new
-          -o IdentitiesOnly=yes
-          {{ proxmox_ssh_user }}@{{ proxmox_host }}
-          true
+    argv:
+      - ssh
+      - -i
+      - "{{ proxmox_ssh_key_private }}"
+      - -p
+      - "{{ proxmox_ssh_port | string }}"
+      - -o
+      - BatchMode=yes
+      - -o
+      - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
+      - -o
+      - StrictHostKeyChecking=accept-new
+      - -o
+      - IdentitiesOnly=yes
+      - "{{ proxmox_ssh_user }}@{{ proxmox_host }}"
+      - "true"
   register: ssh_key_test
   changed_when: false
   failed_when: ssh_key_test.rc != 0
