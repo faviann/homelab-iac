@@ -27,6 +27,16 @@ It reads the control node public key from `~/.ansible/ssh/proxmox_lxc.pub`, the 
 ./recover.sh proxmox-host-ssh
 ```
 
+## Proxmox Host Access: Supported Scope
+
+The trust check uses the configured Proxmox host, SSH user, and port for a fresh public-key login with `~/.ansible/ssh/proxmox_lxc`. It deliberately does not load `ssh_config`, so another configured identity or an existing shared connection cannot supply a successful trust result. A normal DNS hostname is supported; a host alias defined only in `ssh_config`, or a route that depends on `ProxyJump` there, is not. Host-key checking remains `accept-new` against the normal known-hosts files.
+
+The supported lifecycle assumes root access on the Proxmox host. Enrollment installs the selected key for the configured SSH user, but changing that user alone does not provide end-to-end non-root operation: the subsequent `pct` validation runs without privilege escalation. Non-root support is a separate capability, not part of SSH enrollment.
+
+Enrollment installs the selected identity; it is not general SSH repair. It does not promise to fix unrelated pre-existing ownership, permissions, or `sshd` configuration. If the selected identity still cannot authenticate after installation, enrollment fails rather than claiming success or attempting broader repairs.
+
+These limits were retained when [PR #359](https://github.com/faviann/homelab-iac/pull/359) completed. Differences between the trust check, enrollment's connection handling, and Ansible's `pct` connection are recorded in [deferred investigation #362](https://github.com/faviann/homelab-iac/issues/362). That investigation may conclude that no change is needed; the observations are not a requirement to unify the SSH paths.
+
 ## Last Resort: Manual Injection via the Proxmox Host
 
 Human-only, and only when the supported recovery cannot run at all. This bypasses the live boundary, so nothing serializes it against another lifecycle operation.
