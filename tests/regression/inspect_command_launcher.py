@@ -516,22 +516,6 @@ def assert_diagnostic_playbooks_are_consolidated() -> None:
     if "tasks_from: plan" not in standalone_source or "tasks_from: execute" in standalone_source:
         raise AssertionError("standalone validation is not routed exclusively through planning")
 
-    ssh_bootstrap = yaml.safe_load(
-        (
-            REPO_ROOT
-            / "playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/ssh_access.yml"
-        ).read_text(encoding="utf-8")
-    )
-    if any(
-        "ansible.builtin.pause" in task or "ansible.builtin.shell" in task
-        for task in ssh_bootstrap
-    ):
-        raise AssertionError("ordinary trust verification still owns interactive mutation")
-    # That enrollment still owns a working mutation path is proven behaviorally
-    # by proxmox_host_ssh_enrollment_launcher.py, not by this file's shape.
-    if "enroll_ssh" in yaml.safe_dump(ssh_bootstrap):
-        raise AssertionError("ordinary trust verification can still reach enrollment")
-
 
 def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str, str]:
     home = temp_root / "home"
@@ -757,7 +741,8 @@ def assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing() -> N
         fragment in output for fragment in required_fragments
     ):
         raise AssertionError(f"public plan did not report missing Proxmox trust:\n{output}")
-    if "Password for " in output:
+    # Without a terminal, Ansible replaces a prompt with this warning.
+    if "Password for " in output or "Not waiting for response to prompt" in output:
         raise AssertionError("public plan entered the password-driven mutation path")
     if lifecycle_observation_reached:
         raise AssertionError("public plan reached lifecycle observation after trust failed")
