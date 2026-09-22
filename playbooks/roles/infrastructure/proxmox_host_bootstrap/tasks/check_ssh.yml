@@ -19,17 +19,31 @@
       connectivity and firewall rules.
     quiet: true
 
+# Trust means a fresh public-key login with the selected identity. -F none keeps
+# ssh_config from adding identities, remapping the host, or reusing a connection
+# something else authenticated; IdentitiesOnly still ignores other agent keys.
 - name: Test selected identity trust on Proxmox host
   ansible.builtin.command:
-    cmd: >-
-      ssh -i {{ proxmox_ssh_key_private }}
-          -p {{ proxmox_ssh_port }}
-          -o BatchMode=yes
-          -o ConnectTimeout={{ proxmox_ssh_connect_timeout }}
-          -o StrictHostKeyChecking=accept-new
-          -o IdentitiesOnly=yes
-          {{ proxmox_ssh_user }}@{{ proxmox_host }}
-          true
+    argv:
+      - ssh
+      - -F
+      - none
+      - -i
+      - "{{ proxmox_ssh_key_private }}"
+      - -p
+      - "{{ proxmox_ssh_port | string }}"
+      - -o
+      - BatchMode=yes
+      - -o
+      - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
+      - -o
+      - StrictHostKeyChecking=accept-new
+      - -o
+      - IdentitiesOnly=yes
+      - -o
+      - PreferredAuthentications=publickey
+      - "{{ proxmox_ssh_user }}@{{ proxmox_host }}"
+      - "true"
   register: ssh_key_test
   failed_when: false
   changed_when: false
