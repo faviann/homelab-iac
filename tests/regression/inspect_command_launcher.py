@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from ansible_test_helper import write_controller_identity
+from ansible_test_helper import local_ssh_port, write_controller_identity
 from proxmox_api_fixture import (
     COMMON_OBSERVATION,
     LXC_API_PATHS,
@@ -516,20 +516,6 @@ def assert_diagnostic_playbooks_are_consolidated() -> None:
     if "tasks_from: plan" not in standalone_source or "tasks_from: execute" in standalone_source:
         raise AssertionError("standalone validation is not routed exclusively through planning")
 
-    ssh_bootstrap = yaml.safe_load(
-        (
-            REPO_ROOT
-            / "playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/ssh_access.yml"
-        ).read_text(encoding="utf-8")
-    )
-    password_install = next(
-        task
-        for task in ssh_bootstrap
-        if task.get("name") == "Configure SSH key authentication (interactive)"
-    )
-    if "not ansible_check_mode" not in password_install.get("when", []):
-        raise AssertionError("plan check mode does not guard password-driven key installation")
-
 
 def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str, str]:
     home = temp_root / "home"
@@ -698,7 +684,7 @@ all:
             raise AssertionError("credentials disclosed a controlled credential value")
 
 
-def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> None:
+def assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing() -> None:
     with tempfile.TemporaryDirectory(prefix="inspect-plan-live-") as temp_dir:
         temp_root = Path(temp_dir)
         inventory = yaml.safe_load(
@@ -715,8 +701,7 @@ def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> 
             "proxmox_api_token_secret": CONTROLLED_API_TOKEN_SECRET,
             "proxmox_default_node": "pve-a",
             "proxmox_verify_ssl": False,
-            "proxmox_host": "controlled.invalid",
-            "proxmox_ssh_port": 1,
+            "proxmox_host": "127.0.0.1",
             "proxmox_ssh_connect_timeout": 1,
         }
         inventory["all"]["children"]["lxcs"]["vars"][
@@ -730,8 +715,9 @@ def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> 
         certificate = temp_root / "certificate.pem"
         private_key = temp_root / "private-key.pem"
         generate_localhost_certificate(certificate, private_key)
-        with local_proxmox_server(certificate, private_key) as server:
+        with local_proxmox_server(certificate, private_key) as server, local_ssh_port() as ssh_port:
             inventory["all"]["vars"]["proxmox_api_port"] = server.server_address[1]
+            inventory["all"]["vars"]["proxmox_ssh_port"] = ssh_port
             Path(env["ANSIBLE_INVENTORY"]).write_text(
                 yaml.safe_dump(inventory), encoding="utf-8"
             )
@@ -742,38 +728,24 @@ def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> 
                 env=env,
                 timeout=60,
             )
-        module_calls = observation.with_suffix(".calls").read_text(encoding="utf-8").splitlines()
+        lifecycle_observation_reached = observation.with_suffix(".calls").exists()
 
     output = f"{result.stdout}\n{result.stderr}"
     required_fragments = (
-        "Standalone lifecycle validation found",
-        "Target identity conflict",
-        "VMID 5199",
-        "Guest release observation is required",
-        "release_problem",
-        "SSH key authentication to controlled.invalid is not configured",
+        "selected controller SSH identity is not trusted",
+        "root@127.0.0.1",
+        "./recover.sh proxmox-host-ssh",
+        "will not modify authorized_keys",
     )
     if result.returncode == 0 or not all(
         fragment in output for fragment in required_fragments
     ):
-        raise AssertionError(f"public plan did not report every controlled problem:\n{output}")
-    mutation_tasks = (
-        "Prompt for Proxmox root password",
-        "Add SSH public key to authorized_keys",
-        "Set correct permissions on authorized_keys",
-    )
-    for task_name in mutation_tasks:
-        task_start = output.find(f": {task_name}] ")
-        task_end = output.find("\nTASK [", task_start + 1)
-        task_output = output[task_start : task_end if task_end >= 0 else None]
-        if task_start < 0 or "skipping:" not in task_output:
-            raise AssertionError(
-                f"public plan did not skip L3 mutation task {task_name!r}:\n{output}"
-            )
-    if "Password for root@" in output:
+        raise AssertionError(f"public plan did not report missing Proxmox trust:\n{output}")
+    # Without a terminal, Ansible replaces a prompt with this warning.
+    if "Password for " in output or "Not waiting for response to prompt" in output:
         raise AssertionError("public plan entered the password-driven mutation path")
-    if not module_calls:
-        raise AssertionError("public plan did not exercise the controlled Proxmox module boundary")
+    if lifecycle_observation_reached:
+        raise AssertionError("public plan reached lifecycle observation after trust failed")
     for credential_value in (
         CONTROLLED_API_USER,
         CONTROLLED_API_TOKEN_ID,
@@ -799,7 +771,7 @@ def main() -> int:
         assert_containers_includes_unreserved_node_container()
         assert_containers_includes_unreserved_node_container(deny_audit=True)
         assert_credentials_walks_permission_ladder_without_disclosure()
-        assert_public_plan_reports_all_problems_without_disclosure_or_mutation()
+        assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing()
     except (AssertionError, subprocess.TimeoutExpired) as error:
         print(error, file=sys.stderr)
         return 1

@@ -2,7 +2,7 @@
 - name: Validate control node health
   ansible.builtin.import_playbook: controller-prerequisites.yml
 
-- name: Bootstrap Proxmox host SSH access
+- name: Verify Proxmox host SSH access
   hosts: "{{ prerequisite_target_pattern | default('localhost') }}"
   connection: local
   gather_facts: false

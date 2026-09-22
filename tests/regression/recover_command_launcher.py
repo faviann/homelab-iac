@@ -37,8 +37,14 @@ def assert_explicit_operation_and_help() -> None:
 
     help_result = run_recover("--help")
     help_output = f"{help_result.stdout}\n{help_result.stderr}"
-    if help_result.returncode != 0 or "ssh-keys" not in help_output:
+    if help_result.returncode != 0 or not all(
+        operation in help_output for operation in ("proxmox-host-ssh", "ssh-keys")
+    ):
         raise AssertionError(f"recover help is incomplete:\n{help_output}")
+
+    invalid_limit = run_recover("proxmox-host-ssh", "--limit", "anything")
+    if invalid_limit.returncode != 2:
+        raise AssertionError("Proxmox host enrollment unexpectedly accepted --limit")
 
 
 def controlled_environment(temp_root: Path) -> dict[str, str]:
@@ -110,6 +116,33 @@ def assert_ssh_keys_routes_through_live_execution() -> None:
                 )
 
 
+def assert_proxmox_enrollment_routes_through_live_execution() -> None:
+    with tempfile.TemporaryDirectory(prefix="recover-proxmox-command-") as temp_dir:
+        temp_root = Path(temp_dir)
+        env = controlled_environment(temp_root)
+        result = run_recover("proxmox-host-ssh", env=env)
+        if result.returncode != 0:
+            raise AssertionError(
+                f"proxmox-host-ssh failed unexpectedly:\n{result.stdout}\n{result.stderr}"
+            )
+        capture = json.loads(
+            (temp_root / "capture.json").read_text(encoding="utf-8")
+        )
+        expected_arguments = [
+            "run",
+            "--locked",
+            "ansible-playbook",
+            "playbooks/enroll-proxmox-host-ssh.yml",
+            "-e",
+            "prerequisite_target_pattern=proxmox_api",
+        ]
+        if capture != {"argv": expected_arguments, "marker": "1"}:
+            raise AssertionError(
+                "Proxmox host enrollment did not use the exclusive live boundary:\n"
+                f"expected={expected_arguments!r}\nactual={capture!r}"
+            )
+
+
 def assert_ssh_keys_fails_immediately_with_holder_identity() -> None:
     with tempfile.TemporaryDirectory(prefix="recover-command-lock-") as temp_dir:
         temp_root = Path(temp_dir)
@@ -142,8 +175,9 @@ def assert_ssh_keys_fails_immediately_with_holder_identity() -> None:
 def main() -> int:
     assert_explicit_operation_and_help()
     assert_ssh_keys_routes_through_live_execution()
+    assert_proxmox_enrollment_routes_through_live_execution()
     assert_ssh_keys_fails_immediately_with_holder_identity()
-    print("ok: recovery command requires an operation and describes ssh-keys")
+    print("ok: recovery command exposes explicit, locked SSH enrollment operations")
     return 0
 
 

@@ -1,0 +1,24 @@
+---
+- name: Validate Proxmox host SSH enrollment prerequisites
+  ansible.builtin.import_playbook: controller-prerequisites.yml
+
+- name: Enroll the selected controller identity on the Proxmox host
+  hosts: "{{ prerequisite_target_pattern | default('proxmox_api') }}"
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Check current Proxmox host SSH trust
+      ansible.builtin.include_role:
+        name: infrastructure/proxmox_host_bootstrap
+        tasks_from: check_ssh
+      run_once: true
+
+    # Both task files read the role's own connection defaults, so the target
+    # and identity are named from inside the role rather than from here.
+    - name: Enroll selected identity when trust is absent
+      ansible.builtin.include_role:
+        name: infrastructure/proxmox_host_bootstrap
+        tasks_from: enroll_ssh
+      when: ssh_key_test.rc != 0
+      run_once: true

@@ -1,0 +1,76 @@
+---
+- name: Reject Proxmox host SSH enrollment in check mode
+  ansible.builtin.assert:
+    that:
+      - not ansible_check_mode
+    fail_msg: Proxmox host SSH enrollment cannot run in check mode.
+    quiet: true
+
+- name: Resolve selected controller SSH identity fingerprint
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -lf
+      - "{{ proxmox_ssh_key_private }}.pub"
+  register: pubkey_fingerprint
+  changed_when: false
+  delegate_to: localhost
+
+- name: Identify the authorized Proxmox host enrollment
+  ansible.builtin.debug:
+    msg: >-
+      Selected identity {{ pubkey_fingerprint.stdout }} for
+      {{ proxmox_ssh_user }}@{{ proxmox_host }}:{{ proxmox_ssh_port }}.
+
+- name: Prompt for Proxmox host password
+  ansible.builtin.pause:
+    prompt: "Password for {{ proxmox_ssh_user }}@{{ proxmox_host }}"
+    echo: false
+  register: proxmox_ssh_password
+  no_log: true
+  delegate_to: localhost
+
+# ssh-copy-id appends only the -i key, even when an agent holds others, to the
+# login user's own ~/.ssh/authorized_keys. -f skips its already-installed check:
+# enrollment runs only after the trust probe failed, and that check is a login
+# attempt that honours ssh_config, so it could skip installation on the strength
+# of a credential the probe deliberately ignores. Password authentication only,
+# so unrelated agent keys cannot exhaust the server's attempt limit first. The
+# password goes in on stdin because Ansible prepends `environment` values to the
+# module's shell command line.
+- name: Enroll selected identity on Proxmox host
+  ansible.builtin.command:
+    argv:
+      - sshpass
+      - -d
+      - "0"
+      - ssh-copy-id
+      - -f
+      - -i
+      - "{{ proxmox_ssh_key_private }}.pub"
+      - -p
+      - "{{ proxmox_ssh_port | string }}"
+      - -o
+      - StrictHostKeyChecking=accept-new
+      - -o
+      - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
+      - -o
+      - PreferredAuthentications=password
+      - "{{ proxmox_ssh_user }}@{{ proxmox_host }}"
+    stdin: "{{ proxmox_ssh_password.user_input }}"
+  changed_when: true
+  no_log: true
+  delegate_to: localhost
+
+- name: Probe selected identity trust after enrollment
+  ansible.builtin.include_tasks: check_ssh.yml
+
+- name: Require the selected identity to authenticate after enrollment
+  ansible.builtin.assert:
+    that:
+      - ssh_key_test.rc == 0
+    fail_msg: >-
+      Enrollment ran, but the selected controller SSH identity still cannot
+      authenticate to {{ proxmox_ssh_user }}@{{ proxmox_host }}:{{ proxmox_ssh_port }}.
+      Check that host's SSH configuration; this operation does not repair it.
+    quiet: true

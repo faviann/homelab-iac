@@ -187,7 +187,7 @@ run_live_playbook() {
         (
             write_live_holder_record "$holder_file" "$BASHPID" "$$"
             case "$playbook" in
-                playbooks/lab-connectivity.yml|playbooks/add-ssh-keys-to-lxcs.yml)
+                playbooks/lab-connectivity.yml|playbooks/add-ssh-keys-to-lxcs.yml|playbooks/enroll-proxmox-host-ssh.yml)
                     unset ANSIBLE_VAULT_PASSWORD_FILE ANSIBLE_VAULT_IDENTITY_LIST
                     ;;
                 *) use_live_vault_password ;;

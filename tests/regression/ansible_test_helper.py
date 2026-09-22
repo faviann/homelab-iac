@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import os
+import socketserver
 import subprocess
+import threading
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -38,7 +42,10 @@ def ansible_playbook_command(
 
 
 def write_controller_identity(
-    home: Path, *, name: str = "proxmox_lxc", passphrase: str = ""
+    home: Path,
+    *,
+    name: str = "proxmox_lxc",
+    passphrase: str = "",
 ) -> Path:
     """Generate a throwaway controller identity under a fixture ``HOME``."""
     private_key = home / ".ansible" / "ssh" / name
@@ -51,3 +58,22 @@ def write_controller_identity(
         capture_output=True,
     )
     return private_key
+
+
+class _SshPortHandler(socketserver.BaseRequestHandler):
+    def handle(self) -> None:
+        return
+
+
+@contextmanager
+def local_ssh_port() -> Iterator[int]:
+    """Bind a listening port so a trust probe fails on authentication, not reachability."""
+    server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _SshPortHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address[1]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
