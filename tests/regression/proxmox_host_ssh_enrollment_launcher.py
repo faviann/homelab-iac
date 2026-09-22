@@ -46,28 +46,39 @@ all:
 # comment and in a password.
 HOSTILE = "fixture '$({command})' \"x\" end"
 
-# The target trusts the selected identity only once it has been enrolled, so
-# both stubs read one marker: key authentication fails until enrollment writes
-# it. That is the whole simulated state.
+# The target trusts the selected identity exactly when authorized_keys holds it
+# and is not loosely permissioned, which is what sshd itself requires, so key
+# authentication is answered by reading the same file enrollment writes. -f -x
+# -F matches the whole line literally, which the hostile comment requires.
 SSH_STUB = """#!/bin/sh
-[ -f '{marker}' ] || exit 255
+[ "$(stat -c '%a' '{auth_keys}' 2>/dev/null)" = '600' ] || exit 255
+grep -qxF -f '{pubkey_file}' '{auth_keys}' 2>/dev/null || exit 255
 exit 0
 """
 
-# Records the password it was handed and the request it carried, so the test
-# can compare both against what it supplied. Anything that is not the bare
-# reachability probe is enrollment, whatever shape it takes, so this stays out
-# of the way of how the key is actually carried.
+# Records the password and the request, then runs the received enrollment
+# script the way the remote shell would. Rewriting the one hardcoded /root/.ssh
+# to a fixture directory is the only edit; everything the script does to
+# authorized_keys, including the base64 decode, then happens for real, so a key
+# comment the remote shell would reinterpret leaves its canary behind here.
 SSHPASS_STUB = """#!/bin/sh
 printf '%s\\n' "$SSHPASS" >> '{passwords}'
 printf '%s\\n' "$*" | tr '\\n' ' ' >> '{requests}'
 printf '\\n' >> '{requests}'
-case "$*" in
-    *' true') ;;
-    *) : > '{marker}'; printf 'CHANGED=1\\n' ;;
-esac
+for arg in "$@"; do script="$arg"; done
+printf '%s' "$script" | sed 's#/root/.ssh#{ssh_dir}#g' | sh
+"""
+
+# The script chowns to 0:0, which an unprivileged fixture cannot do and root
+# would not need. Neutralizing just this one command keeps the rest of the
+# script real; the cost is that the ownership branch always reports a change,
+# so this fixture cannot assert change reporting across runs.
+CHOWN_STUB = """#!/bin/sh
 exit 0
 """
+
+# Any line that is a valid authorized_keys entry and is not the selected key.
+EXISTING_ENTRY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB1111111111111111111111111111111111111 someone@elsewhere"
 
 
 def enrollment_run(
@@ -77,26 +88,40 @@ def enrollment_run(
     name: str,
     *,
     password: str,
+    public_key: str,
     already_trusted: bool,
-) -> tuple[subprocess.CompletedProcess[str], list[str], list[str]]:
+    seed_mode: int = 0o600,
+) -> tuple[subprocess.CompletedProcess[str], list[str], list[str], Path]:
     """Run the real enrollment playbook from the given starting trust state."""
     run_root = temp_root / name
     run_root.mkdir()
-    marker = run_root / "trusted"
-    if already_trusted:
-        marker.touch()
+
+    # Stands in for the target's /root/.ssh. Seeded with an unrelated entry so
+    # the run has existing content to preserve, and with the selected key too
+    # when the target is meant to trust it already.
+    ssh_dir = run_root / "target-ssh"
+    ssh_dir.mkdir(mode=0o700)
+    auth_keys = ssh_dir / "authorized_keys"
+    seeded = [EXISTING_ENTRY, public_key] if already_trusted else [EXISTING_ENTRY]
+    auth_keys.write_text("".join(f"{line}\n" for line in seeded), encoding="utf-8")
+    auth_keys.chmod(seed_mode)
+
+    pubkey_file = run_root / "selected.pub"
+    pubkey_file.write_text(f"{public_key}\n", encoding="utf-8")
+
     passwords = run_root / "passwords.log"
     requests = run_root / "requests.log"
     for stub, body in (
-        ("ssh", SSH_STUB.format(marker=marker)),
+        ("ssh", SSH_STUB.format(pubkey_file=pubkey_file, auth_keys=auth_keys)),
         (
             "sshpass",
             SSHPASS_STUB.format(
                 passwords=passwords,
                 requests=requests,
-                marker=marker,
+                ssh_dir=ssh_dir,
             ),
         ),
+        ("chown", CHOWN_STUB),
     ):
         path = run_root / stub
         path.write_text(body)
@@ -139,7 +164,7 @@ def enrollment_run(
     log = lambda path: (  # noqa: E731
         path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     )
-    return result, log(passwords), log(requests)
+    return result, log(passwords), log(requests), auth_keys
 
 
 def main() -> int:
@@ -160,12 +185,13 @@ def main() -> int:
         # and base64 are both fine; what matters is that it arrives unaltered.
         carried = (public_key, base64.b64encode(public_key.encode()).decode())
 
-        untrusted, passwords, requests = enrollment_run(
+        untrusted, passwords, requests, auth_keys = enrollment_run(
             temp_root,
             home,
             ssh_port,
             "untrusted",
             password=password,
+            public_key=public_key,
             already_trusted=False,
         )
         untrusted_output = f"{untrusted.stdout}\n{untrusted.stderr}"
@@ -209,18 +235,60 @@ def main() -> int:
             )
             print(untrusted_output, file=sys.stderr)
             return 1
+        enrolled_lines = auth_keys.read_text(encoding="utf-8").splitlines()
+        if EXISTING_ENTRY not in enrolled_lines:
+            print(
+                "enrollment replaced the existing authorized_keys entry instead "
+                "of appending to it",
+                file=sys.stderr,
+            )
+            return 1
+        if enrolled_lines.count(public_key) != 1:
+            print(
+                f"authorized_keys holds the selected key {enrolled_lines.count(public_key)} "
+                "times, not exactly once",
+                file=sys.stderr,
+            )
+            return 1
         if password in untrusted_output or any(
             form in untrusted_output for form in carried
         ):
             print("enrollment disclosed the password or the key material", file=sys.stderr)
             return 1
 
-        trusted, trusted_passwords, trusted_requests = enrollment_run(
+        repaired, _, repaired_requests, repaired_keys = enrollment_run(
+            temp_root,
+            home,
+            ssh_port,
+            "loose-permissions",
+            password=password,
+            public_key=public_key,
+            already_trusted=True,
+            seed_mode=0o644,
+        )
+        repaired_lines = repaired_keys.read_text(encoding="utf-8").splitlines()
+        if (
+            repaired.returncode != 0
+            or not repaired_requests
+            or repaired_lines.count(public_key) != 1
+            or EXISTING_ENTRY not in repaired_lines
+            or stat.S_IMODE(repaired_keys.stat().st_mode) != 0o600
+        ):
+            print(
+                "enrollment over an already-listed key did not repair the "
+                "permissions and leave the file otherwise intact",
+                file=sys.stderr,
+            )
+            print(f"{repaired.stdout}\n{repaired.stderr}", file=sys.stderr)
+            return 1
+
+        trusted, trusted_passwords, trusted_requests, _ = enrollment_run(
             temp_root,
             home,
             ssh_port,
             "trusted",
             password=password,
+            public_key=public_key,
             already_trusted=True,
         )
         trusted_output = f"{trusted.stdout}\n{trusted.stderr}"
