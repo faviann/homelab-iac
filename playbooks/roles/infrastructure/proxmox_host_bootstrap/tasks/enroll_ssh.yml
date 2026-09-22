@@ -6,19 +6,12 @@
     fail_msg: Proxmox host SSH enrollment cannot run in check mode.
     quiet: true
 
-# Enrollment is the only operation that needs the key material itself, to name
-# the identity it authorizes and to append it on the target.
-- name: Resolve selected controller SSH public key
-  ansible.builtin.include_role:
-    name: infrastructure/ssh_key_shared
-    tasks_from: resolve_pubkey
-
 - name: Resolve selected controller SSH identity fingerprint
   ansible.builtin.command:
     argv:
       - ssh-keygen
       - -lf
-      - "{{ ssh_key_shared_resolved_public_key_path }}"
+      - "{{ proxmox_ssh_key_private }}.pub"
   register: pubkey_fingerprint
   changed_when: false
   delegate_to: localhost
@@ -33,21 +26,25 @@
   ansible.builtin.pause:
     prompt: "Password for {{ proxmox_ssh_user }}@{{ proxmox_host }}"
     echo: false
-  register: proxmox_root_password
+  register: proxmox_ssh_password
   delegate_to: localhost
 
-# One password-authenticated command does the whole enrollment. argv goes
-# straight to execve, so no local shell reads the key or the connection
-# arguments, and sshpass -e takes the password from the environment, keeping it
-# out of both the process table and any shell. The key crosses base64-encoded,
-# so the remote shell sees only that alphabet and a valid key comment cannot be
-# reinterpreted there.
+# ssh-copy-id appends only the -i key, even when an agent holds others, to the
+# login user's own ~/.ssh/authorized_keys. -f skips its login-based duplicate
+# filter: the playbook runs this only after the trust probe failed, and that
+# filter can stall on a passphrase prompt that sshpass never answers. The
+# password goes in on stdin because Ansible prepends `environment` values to
+# the module's shell command line.
 - name: Enroll selected identity on Proxmox host
   ansible.builtin.command:
     argv:
       - sshpass
-      - -e
-      - ssh
+      - -d
+      - "0"
+      - ssh-copy-id
+      - -f
+      - -i
+      - "{{ proxmox_ssh_key_private }}.pub"
       - -p
       - "{{ proxmox_ssh_port | string }}"
       - -o
@@ -55,60 +52,8 @@
       - -o
       - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
       - "{{ proxmox_ssh_user }}@{{ proxmox_host }}"
-      - |
-        set -eu
-        changed=0
-        pubkey="$(printf '%s' '{{ ssh_key_shared_public_key_content | b64encode }}' | base64 -d)"
-        [ -n "$pubkey" ]
-
-        ssh_dir=/root/.ssh
-        auth_keys="$ssh_dir/authorized_keys"
-
-        umask 077
-
-        if [ ! -d "$ssh_dir" ]; then
-          mkdir -p "$ssh_dir"
-          changed=1
-        fi
-
-        if [ "$(stat -c '%u:%g' "$ssh_dir")" != '0:0' ]; then
-          chown 0:0 "$ssh_dir"
-          changed=1
-        fi
-
-        if [ "$(stat -c '%a' "$ssh_dir")" != '700' ]; then
-          chmod 700 "$ssh_dir"
-          changed=1
-        fi
-
-        if [ ! -f "$auth_keys" ]; then
-          : > "$auth_keys"
-          changed=1
-        fi
-
-        if [ "$(stat -c '%u:%g' "$auth_keys")" != '0:0' ]; then
-          chown 0:0 "$auth_keys"
-          changed=1
-        fi
-
-        if [ "$(stat -c '%a' "$auth_keys")" != '600' ]; then
-          chmod 600 "$auth_keys"
-          changed=1
-        fi
-
-        if ! grep -qxF -- "$pubkey" "$auth_keys"; then
-          printf '%s\n' "$pubkey" >> "$auth_keys"
-          changed=1
-        fi
-
-        printf 'CHANGED=%s\n' "$changed"
-  environment:
-    SSHPASS: "{{ proxmox_root_password.user_input }}"
-  register: proxmox_host_enrollment
-  changed_when: "'CHANGED=1' in (proxmox_host_enrollment.stdout | default(''))"
-  failed_when: >-
-    (proxmox_host_enrollment.rc != 0)
-    or ('CHANGED=' not in (proxmox_host_enrollment.stdout | default('')))
+    stdin: "{{ proxmox_ssh_password.user_input }}"
+  changed_when: true
   no_log: true
   delegate_to: localhost
 
@@ -130,7 +75,5 @@
       - IdentitiesOnly=yes
       - "{{ proxmox_ssh_user }}@{{ proxmox_host }}"
       - "true"
-  register: ssh_key_test
   changed_when: false
-  failed_when: ssh_key_test.rc != 0
   delegate_to: localhost

@@ -349,13 +349,15 @@ before its effects and points to the explicit enrollment transition:
 ```
 
 The enrollment command identifies the configured Proxmox target and the selected
-public-key fingerprint before requesting the Proxmox host password. Ordinary
-lifecycle and inspection operations never request that password or modify
-`authorized_keys`.
+public-key fingerprint before requesting the Proxmox host password. It then runs
+`ssh-copy-id` for that one public key, which appends it to the configured SSH
+user's `~/.ssh/authorized_keys`, and confirms that the private key can log in.
+Ordinary lifecycle and inspection operations never request that password or
+modify `authorized_keys`.
 
-**Manual Setup**: If you prefer to configure SSH access manually:
+**Manual Setup**: the same `ssh-copy-id` step, run by hand outside the lifecycle
+lock:
 ```bash
-# Copy your public key to Proxmox
 ssh-copy-id -i ~/.ansible/ssh/proxmox_lxc.pub root@proxmox.lan
 ```
 
