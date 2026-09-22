@@ -13,6 +13,12 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
+## Recording review observations
+
+Before closing reviewed work, give each review observation a disposition: fixed (link the change or evidence), deferred (link an existing or focused follow-up issue), or accepted/rejected with a recorded reason (link documented limitations where applicable). A short closing note on the governing issue is sufficient; no separate tracking system is needed.
+
+Group related unanswered questions and check for existing issues first. Mark deferred investigations clearly and keep them out of `ready-for-agent` until prioritized. An investigation may conclude "no change needed." An observation does not automatically require a fix or reopen completed work; a blocker must demonstrate a relevant failure within the agreed scope.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
