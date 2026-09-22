@@ -5,10 +5,15 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
+import select
 import stat
 import subprocess
 import sys
 import tempfile
+import termios
+import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from ansible_test_helper import (
@@ -22,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK = REPO_ROOT / "playbooks" / "enroll-proxmox-host-ssh.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
 TARGET = "root@127.0.0.1"
+PROMPT = f"Password for {TARGET}".encode()
 
 # Only what the production inventory itself defines. proxmox_host,
 # proxmox_ssh_user, and proxmox_ssh_connect_timeout stay on the role's own
@@ -75,6 +81,63 @@ done
 """
 
 
+@dataclass
+class Run:
+    returncode: int
+    output: str
+    prompted: bool
+    passwords: list[str]
+    requests: list[str]
+    exposed: list[str]
+
+
+def run_in_terminal(command: list[str], env: dict[str, str], password: str) -> tuple[int, str, bool]:
+    """Run as an operator would, typing the password only when prompted.
+
+    ansible.builtin.pause reads only from a controlling terminal in the
+    foreground, so the playbook gets a pseudo-terminal of its own.
+    """
+    controller, terminal = os.openpty()
+    process = subprocess.Popen(
+        ["setsid", "--ctty", *command],
+        cwd=REPO_ROOT,
+        env=env,
+        stdin=terminal,
+        stdout=terminal,
+        stderr=terminal,
+    )
+    os.close(terminal)
+    output = bytearray()
+    prompted = False
+    deadline = time.monotonic() + 120
+    try:
+        while time.monotonic() < deadline:
+            if select.select([controller], [], [], 0.1)[0]:
+                try:
+                    chunk = os.read(controller, 65536)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output += chunk
+            # Ansible switches the terminal to no-echo only after showing the
+            # prompt, then discards pending input, so type after both.
+            if (
+                not prompted
+                and PROMPT in output
+                and not termios.tcgetattr(controller)[3] & termios.ECHO
+            ):
+                time.sleep(0.5)
+                os.write(controller, password.encode() + b"\r")
+                prompted = True
+        else:
+            process.kill()
+        returncode = process.wait()
+    finally:
+        os.close(controller)
+    return returncode, output.decode(errors="replace"), prompted
+
+
 def enrollment_run(
     temp_root: Path,
     home: Path,
@@ -84,7 +147,7 @@ def enrollment_run(
     password: str,
     already_trusted: bool,
     grants_trust: bool = True,
-) -> tuple[subprocess.CompletedProcess[str], list[str], list[str], list[str]]:
+) -> Run:
     """Run the real enrollment playbook from the given starting trust state."""
     run_root = temp_root / name
     run_root.mkdir()
@@ -116,11 +179,6 @@ def enrollment_run(
 
     inventory = run_root / "inventory.yml"
     inventory.write_text(INVENTORY, encoding="utf-8")
-    # Extra vars outrank the registered prompt result, so the operator's answer
-    # can be supplied without a tty and without a production seam. A file keeps
-    # it out of this command's own arguments.
-    answer = run_root / "answer.json"
-    answer.write_text(json.dumps({"proxmox_ssh_password": {"user_input": password}}))
 
     env = os.environ.copy()
     env["HOME"] = str(home)
@@ -129,7 +187,7 @@ def enrollment_run(
     env["ANSIBLE_INVENTORY"] = str(inventory)
     env["ANSIBLE_COLLECTIONS_PATH"] = str(temp_root / "empty-collections")
     env["ANSIBLE_COLLECTIONS_SCAN_SYS_PATH"] = "false"
-    result = subprocess.run(
+    returncode, output, prompted = run_in_terminal(
         [
             *ANSIBLE_PLAYBOOK,
             str(PLAYBOOK),
@@ -139,23 +197,18 @@ def enrollment_run(
             # and check_ssh really waits on the port before probing trust.
             "-e",
             f"proxmox_ssh_port={ssh_port}",
-            "-e",
-            f"@{answer}",
             # Module arguments and the module's command line are echoed at this
             # level, so no_log is what keeps the password out of the transcript
             # rather than Ansible's terseness.
             "-vvvv",
         ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-        env=env,
+        env,
+        password,
     )
     log = lambda path: (  # noqa: E731
         path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     )
-    return result, log(passwords), log(requests), log(exposed)
+    return Run(returncode, output, prompted, log(passwords), log(requests), log(exposed))
 
 
 def main() -> int:
@@ -168,33 +221,33 @@ def main() -> int:
         write_controller_identity(home)
         public_key = (home / ".ansible" / "ssh" / "proxmox_lxc.pub").read_text().strip()
         # No single quote, so a shell-quoted copy still contains it verbatim.
-        password = 'fixture $(false) "x" end'
+        # The random tail keeps the process scan from matching anything else.
+        password = f'fixture $(false) "x" {secrets.token_hex(8)}'
 
-        untrusted, passwords, requests, exposed = enrollment_run(
+        untrusted = enrollment_run(
             temp_root, home, ssh_port, "untrusted", password=password, already_trusted=False
         )
-        untrusted_output = f"{untrusted.stdout}\n{untrusted.stderr}"
-        if untrusted.returncode != 0 or not requests:
+        if untrusted.returncode != 0 or not untrusted.prompted or not untrusted.requests:
             print(
                 "explicit enrollment did not establish key-based trust for the "
                 "selected identity on the intended target",
                 file=sys.stderr,
             )
-            print(untrusted_output, file=sys.stderr)
+            print(untrusted.output, file=sys.stderr)
             return 1
-        if passwords != [password]:
-            print("the target did not receive the supplied password verbatim", file=sys.stderr)
+        if untrusted.passwords != [password]:
+            print("the target did not receive the typed password verbatim", file=sys.stderr)
             return 1
-        if exposed or any(password in request for request in requests):
+        if untrusted.exposed or any(password in request for request in untrusted.requests):
             print("the password was placed in process arguments", file=sys.stderr)
             return 1
         # Ansible prints results as JSON, which escapes the password's quotes.
         disclosed = (password, json.dumps(password)[1:-1], public_key.split()[1])
-        if any(form in untrusted_output for form in disclosed):
+        if any(form in untrusted.output for form in disclosed):
             print("enrollment disclosed the password or the key material", file=sys.stderr)
             return 1
 
-        unverified, *_ = enrollment_run(
+        unverified = enrollment_run(
             temp_root,
             home,
             ssh_port,
@@ -211,21 +264,21 @@ def main() -> int:
             )
             return 1
 
-        trusted, trusted_passwords, trusted_requests, _ = enrollment_run(
+        trusted = enrollment_run(
             temp_root, home, ssh_port, "trusted", password=password, already_trusted=True
         )
-        if trusted.returncode != 0 or trusted_requests or trusted_passwords:
+        if trusted.returncode != 0 or trusted.prompted or trusted.requests or trusted.passwords:
             print(
                 "enrollment did not stay a no-op when the target already trusts "
                 "the selected identity",
                 file=sys.stderr,
             )
-            print(f"{trusted.stdout}\n{trusted.stderr}", file=sys.stderr)
+            print(trusted.output, file=sys.stderr)
             return 1
 
     print(
-        "ok: explicit Proxmox host enrollment installs the selected identity, "
-        "verifies it, and does nothing once trusted"
+        "ok: explicit Proxmox host enrollment prompts, installs the selected "
+        "identity, verifies it, and does nothing once trusted"
     )
     return 0
 

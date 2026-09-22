@@ -27,6 +27,7 @@
     prompt: "Password for {{ proxmox_ssh_user }}@{{ proxmox_host }}"
     echo: false
   register: proxmox_ssh_password
+  no_log: true
   delegate_to: localhost
 
 # ssh-copy-id appends only the -i key, even when an agent holds others, to the
