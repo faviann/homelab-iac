@@ -6,6 +6,29 @@
     fail_msg: Proxmox host SSH enrollment cannot run in check mode.
     quiet: true
 
+# Enrollment is the only operation that needs the key material itself, to name
+# the identity it authorizes and to append it on the target.
+- name: Resolve selected controller SSH public key
+  ansible.builtin.include_role:
+    name: infrastructure/ssh_key_shared
+    tasks_from: resolve_pubkey
+
+- name: Resolve selected controller SSH identity fingerprint
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -lf
+      - "{{ ssh_key_shared_resolved_public_key_path }}"
+  register: pubkey_fingerprint
+  changed_when: false
+  delegate_to: localhost
+
+- name: Identify the authorized Proxmox host enrollment
+  ansible.builtin.debug:
+    msg: >-
+      Selected identity {{ pubkey_fingerprint.stdout }} for
+      {{ proxmox_ssh_user }}@{{ proxmox_host }}:{{ proxmox_ssh_port }}.
+
 - name: Prompt for Proxmox host password
   ansible.builtin.pause:
     prompt: "Password for {{ proxmox_ssh_user }}@{{ proxmox_host }}"

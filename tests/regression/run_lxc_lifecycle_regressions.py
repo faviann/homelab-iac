@@ -87,6 +87,7 @@ FULL_ONLY_SCRIPTS = (
     "proxmox_lxc_lifecycle_configure_check_mode_absent_launcher.py",
     "proxmox_lxc_lifecycle_observation_status_launcher.py",
     "lxc_manual_ssh_recovery_launcher.py",
+    "proxmox_host_ssh_enrollment_launcher.py",
     "lxc_ssh_key_injector_identity_mismatch_launcher.py",
     "lxc_fleet_preflight_launcher.py",
     "proxmox_lxc_host_config_check_mode_missing_config_launcher.py",
