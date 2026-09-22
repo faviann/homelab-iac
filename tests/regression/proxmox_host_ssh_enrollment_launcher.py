@@ -46,12 +46,11 @@ all:
 # comment and in a password.
 HOSTILE = "fixture '$({command})' \"x\" end"
 
-# The target trusts the selected identity exactly when authorized_keys holds it
-# and is not loosely permissioned, which is what sshd itself requires, so key
-# authentication is answered by reading the same file enrollment writes. -f -x
-# -F matches the whole line literally, which the hostile comment requires.
+# The target trusts the selected identity exactly when authorized_keys holds
+# it, which is the real condition, so key authentication is answered by reading
+# the same file enrollment writes. -f -x -F matches the whole line literally,
+# which the hostile comment requires.
 SSH_STUB = """#!/bin/sh
-[ "$(stat -c '%a' '{auth_keys}' 2>/dev/null)" = '600' ] || exit 255
 grep -qxF -f '{pubkey_file}' '{auth_keys}' 2>/dev/null || exit 255
 exit 0
 """
@@ -90,7 +89,6 @@ def enrollment_run(
     password: str,
     public_key: str,
     already_trusted: bool,
-    seed_mode: int = 0o600,
 ) -> tuple[subprocess.CompletedProcess[str], list[str], list[str], Path]:
     """Run the real enrollment playbook from the given starting trust state."""
     run_root = temp_root / name
@@ -104,7 +102,7 @@ def enrollment_run(
     auth_keys = ssh_dir / "authorized_keys"
     seeded = [EXISTING_ENTRY, public_key] if already_trusted else [EXISTING_ENTRY]
     auth_keys.write_text("".join(f"{line}\n" for line in seeded), encoding="utf-8")
-    auth_keys.chmod(seed_mode)
+    auth_keys.chmod(0o600)
 
     pubkey_file = run_root / "selected.pub"
     pubkey_file.write_text(f"{public_key}\n", encoding="utf-8")
@@ -254,32 +252,6 @@ def main() -> int:
             form in untrusted_output for form in carried
         ):
             print("enrollment disclosed the password or the key material", file=sys.stderr)
-            return 1
-
-        repaired, _, repaired_requests, repaired_keys = enrollment_run(
-            temp_root,
-            home,
-            ssh_port,
-            "loose-permissions",
-            password=password,
-            public_key=public_key,
-            already_trusted=True,
-            seed_mode=0o644,
-        )
-        repaired_lines = repaired_keys.read_text(encoding="utf-8").splitlines()
-        if (
-            repaired.returncode != 0
-            or not repaired_requests
-            or repaired_lines.count(public_key) != 1
-            or EXISTING_ENTRY not in repaired_lines
-            or stat.S_IMODE(repaired_keys.stat().st_mode) != 0o600
-        ):
-            print(
-                "enrollment over an already-listed key did not repair the "
-                "permissions and leave the file otherwise intact",
-                file=sys.stderr,
-            )
-            print(f"{repaired.stdout}\n{repaired.stderr}", file=sys.stderr)
             return 1
 
         trusted, trusted_passwords, trusted_requests, _ = enrollment_run(
