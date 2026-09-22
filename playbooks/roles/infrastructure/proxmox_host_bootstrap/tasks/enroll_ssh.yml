@@ -36,39 +36,102 @@
   register: proxmox_root_password
   delegate_to: localhost
 
-# argv goes straight to execve, so no local shell reads the password or the
-# key, and sshpass -e keeps the password out of the process table as well.
-- name: Verify Proxmox host password authentication
-  ansible.builtin.command:
-    argv: "{{ proxmox_ssh_password_argv + ['true'] }}"
-  environment:
-    SSHPASS: "{{ proxmox_root_password.user_input }}"
-  register: password_test
-  changed_when: false
-  failed_when: password_test.rc != 0
-  no_log: true
-  delegate_to: localhost
+# Command construction private to this path, not operator configuration, so it
+# is scoped to the only tasks that use it.
+- name: Enroll the selected identity over password authentication
+  vars:
+    # argv goes straight to execve, so no local shell reads the password, the
+    # key, or the connection arguments, and sshpass -e takes the password from
+    # the environment, which keeps it out of the process table as well.
+    password_argv:
+      - sshpass
+      - -e
+      - ssh
+      - -p
+      - "{{ proxmox_ssh_port | string }}"
+      - -o
+      - StrictHostKeyChecking=accept-new
+      - -o
+      - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
+      - "{{ proxmox_ssh_user }}@{{ proxmox_host }}"
+    # Runs on the Proxmox host. @PUBKEY_B64@ is substituted with the base64 of
+    # the selected public key, whose alphabet the remote shell cannot
+    # reinterpret.
+    enrollment_script: |
+      set -eu
+      changed=0
+      pubkey="$(printf '%s' '@PUBKEY_B64@' | base64 -d)"
+      [ -n "$pubkey" ]
 
-# Base64 carries the key through the remote shell as opaque data, so a valid
-# key comment cannot be reinterpreted there.
-- name: Enroll selected identity on Proxmox host
-  ansible.builtin.command:
-    argv: >-
-      {{
-        proxmox_ssh_password_argv + [
-          proxmox_host_enrollment_script
-          | replace('@PUBKEY_B64@', ssh_key_shared_public_key_content | b64encode)
-        ]
-      }}
+      ssh_dir=/root/.ssh
+      auth_keys="$ssh_dir/authorized_keys"
+
+      umask 077
+
+      if [ ! -d "$ssh_dir" ]; then
+        mkdir -p "$ssh_dir"
+        changed=1
+      fi
+
+      if [ "$(stat -c '%u:%g' "$ssh_dir")" != '0:0' ]; then
+        chown 0:0 "$ssh_dir"
+        changed=1
+      fi
+
+      if [ "$(stat -c '%a' "$ssh_dir")" != '700' ]; then
+        chmod 700 "$ssh_dir"
+        changed=1
+      fi
+
+      if [ ! -f "$auth_keys" ]; then
+        : > "$auth_keys"
+        changed=1
+      fi
+
+      if [ "$(stat -c '%u:%g' "$auth_keys")" != '0:0' ]; then
+        chown 0:0 "$auth_keys"
+        changed=1
+      fi
+
+      if [ "$(stat -c '%a' "$auth_keys")" != '600' ]; then
+        chmod 600 "$auth_keys"
+        changed=1
+      fi
+
+      if ! grep -qxF -- "$pubkey" "$auth_keys"; then
+        printf '%s\n' "$pubkey" >> "$auth_keys"
+        changed=1
+      fi
+
+      printf 'CHANGED=%s\n' "$changed"
   environment:
     SSHPASS: "{{ proxmox_root_password.user_input }}"
-  register: proxmox_host_enrollment
-  changed_when: "'CHANGED=1' in (proxmox_host_enrollment.stdout | default(''))"
-  failed_when: >-
-    (proxmox_host_enrollment.rc != 0)
-    or ('CHANGED=' not in (proxmox_host_enrollment.stdout | default('')))
-  no_log: true
-  delegate_to: localhost
+  block:
+    - name: Verify Proxmox host password authentication
+      ansible.builtin.command:
+        argv: "{{ password_argv + ['true'] }}"
+      register: password_test
+      changed_when: false
+      failed_when: password_test.rc != 0
+      no_log: true
+      delegate_to: localhost
+
+    - name: Enroll selected identity on Proxmox host
+      ansible.builtin.command:
+        argv: >-
+          {{
+            password_argv + [
+              enrollment_script
+              | replace('@PUBKEY_B64@', ssh_key_shared_public_key_content | b64encode)
+            ]
+          }}
+      register: proxmox_host_enrollment
+      changed_when: "'CHANGED=1' in (proxmox_host_enrollment.stdout | default(''))"
+      failed_when: >-
+        (proxmox_host_enrollment.rc != 0)
+        or ('CHANGED=' not in (proxmox_host_enrollment.stdout | default('')))
+      no_log: true
+      delegate_to: localhost
 
 - name: Verify selected identity is enrolled on Proxmox host
   ansible.builtin.command:
