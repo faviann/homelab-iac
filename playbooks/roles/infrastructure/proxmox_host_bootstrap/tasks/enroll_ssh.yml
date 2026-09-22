@@ -33,9 +33,10 @@
 # ssh-copy-id appends only the -i key, even when an agent holds others, to the
 # login user's own ~/.ssh/authorized_keys. -f skips its login-based duplicate
 # filter: the playbook runs this only after the trust probe failed, and that
-# filter can stall on a passphrase prompt that sshpass never answers. The
-# password goes in on stdin because Ansible prepends `environment` values to
-# the module's shell command line.
+# filter can stall on a passphrase prompt that sshpass never answers. Password
+# authentication only, so unrelated agent keys cannot exhaust the server's
+# attempt limit first. The password goes in on stdin because Ansible prepends
+# `environment` values to the module's shell command line.
 - name: Enroll selected identity on Proxmox host
   ansible.builtin.command:
     argv:
@@ -52,6 +53,8 @@
       - StrictHostKeyChecking=accept-new
       - -o
       - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
+      - -o
+      - PreferredAuthentications=password
       - "{{ proxmox_ssh_user }}@{{ proxmox_host }}"
     stdin: "{{ proxmox_ssh_password.user_input }}"
   changed_when: true
