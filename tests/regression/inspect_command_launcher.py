@@ -527,11 +527,8 @@ def assert_diagnostic_playbooks_are_consolidated() -> None:
         for task in ssh_bootstrap
     ):
         raise AssertionError("ordinary trust verification still owns interactive mutation")
-    enrollment_source = (
-        REPO_ROOT / "playbooks/enroll-proxmox-host-ssh.yml"
-    ).read_text(encoding="utf-8")
-    if "tasks_from: enroll_ssh" not in enrollment_source:
-        raise AssertionError("explicit Proxmox enrollment lost its mutation task")
+    # That enrollment still owns a working mutation path is proven behaviorally
+    # by proxmox_host_ssh_enrollment_launcher.py, not by this file's shape.
     if "enroll_ssh" in yaml.safe_dump(ssh_bootstrap):
         raise AssertionError("ordinary trust verification can still reach enrollment")
 
