@@ -1,8 +1,9 @@
-"""Shared construction of credential-free Ansible regression invocations."""
+"""Shared construction of credential-free Ansible regression environments."""
 
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 
@@ -34,3 +35,19 @@ def ansible_playbook_command(
             "run this test through ./validate.sh tests"
         )
     return [*ANSIBLE_PLAYBOOK, *arguments]
+
+
+def write_controller_identity(
+    home: Path, *, name: str = "proxmox_lxc", passphrase: str = ""
+) -> Path:
+    """Generate a throwaway controller identity under a fixture ``HOME``."""
+    private_key = home / ".ansible" / "ssh" / name
+    private_key.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["ssh-keygen", "-q", "-t", "ed25519", "-N", passphrase, "-f", str(private_key),
+         "-C", "regression-fixture"],
+        check=True,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+    )
+    return private_key

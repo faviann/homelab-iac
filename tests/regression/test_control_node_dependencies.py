@@ -136,8 +136,6 @@ printf 'version: %s\\n' "$role_version" > "$install_path/$role_name/meta/.galaxy
             project_root / "collections" / "requirements.yml"
         ),
         "control_node_collection_install_path": str(project_root / "collections"),
-        "control_node_ssh_private_key_path": str(private_key),
-        "control_node_ssh_public_key_path": str(public_key),
         "control_node_vault_password_file": str(vault_pass),
         "control_node_skip_system_packages": True,
         "control_node_ansible_galaxy_executable": str(fake_galaxy),
@@ -152,18 +150,15 @@ printf 'version: %s\\n' "$role_version" > "$install_path/$role_name/meta/.galaxy
         env=bootstrap_env,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert private_key.exists()
-    assert public_key.exists()
-    existing_key = (private_key.read_bytes(), public_key.read_bytes())
     second_result = run_playbook(
         REPO_ROOT / "tests" / "regression" / "fixtures" / "control_node_bootstrap_test.yml",
         extra_vars=bootstrap_extra_vars,
         env=bootstrap_env,
     )
     assert second_result.returncode == 0, second_result.stdout + second_result.stderr
-    # The fleet already trusts this key, so reconciliation creates one when
-    # absent and must never replace it.
-    assert (private_key.read_bytes(), public_key.read_bytes()) == existing_key
+    # Absence of the controller identity is not authorization to mint one.
+    assert not private_key.exists()
+    assert not public_key.exists()
     invocations = galaxy_log.read_text(encoding="utf-8").splitlines()
     role_installs = [line for line in invocations if line.startswith("role install ")]
     assert len(role_installs) == 1

@@ -60,9 +60,9 @@
       {%- endif -%}
       {%- if proxmox_lxc_controller_pubkey_enabled | bool
              and compiled.value.pubkey is not defined
-             and proxmox_lxc_controller_pubkey_path | default('') | length > 0 -%}
+             and ssh_key_shared_resolved_public_key_path | default('') | length > 0 -%}
       {%-   set controller_pubkey = lookup('ansible.builtin.file',
-              proxmox_lxc_controller_pubkey_path, errors='ignore') | default('', true) -%}
+              ssh_key_shared_resolved_public_key_path, errors='ignore') | default('', true) -%}
       {%-   if controller_pubkey | length > 0 -%}
       {%-     set compiled.value = compiled.value | combine({'pubkey': controller_pubkey}, recursive=True) -%}
       {%-   endif -%}

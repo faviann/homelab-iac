@@ -6,9 +6,8 @@ and to the tracked bootstrap play, and reconciles nothing itself. These tests
 observe exactly that boundary -- the process, its exit status, its output, and
 the child commands it invokes.
 
-What the bootstrap play then does -- installing collections, reconciling
-external role pins, creating the controller SSH key without replacing an
-existing one -- is owned by `test_control_node_dependencies.py`, which drives
+What the bootstrap play then does -- installing collections and reconciling
+external role pins -- is owned by `test_control_node_dependencies.py`, which drives
 the role directly. Re-proving it here would mean rebuilding an Ansible
 environment around a shell wrapper.
 """

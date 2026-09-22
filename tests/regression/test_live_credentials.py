@@ -10,7 +10,7 @@ from ansible.parsing.vault import VaultLib, VaultSecret
 import pytest
 import yaml
 
-from ansible_test_helper import ansible_playbook_command
+from ansible_test_helper import ansible_playbook_command, write_controller_identity
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -95,6 +95,7 @@ def test_ssh_connectivity_ignores_encrypted_vault_and_missing_passphrase(tmp_pat
     (tmp_path / "vault.yml").write_bytes(vault.encrypt("vault_unrelated: unused\n"))
     home = tmp_path / "home"
     home.mkdir()
+    write_controller_identity(home)
     result = subprocess.run(
         [str(REPO_ROOT / "inspect.sh"), "connectivity", "--limit", "credential_free_target"],
         cwd=REPO_ROOT,

@@ -12,9 +12,8 @@ import tempfile
 from pathlib import Path
 
 import yaml
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
+from ansible_test_helper import write_controller_identity
 from proxmox_api_fixture import (
     COMMON_OBSERVATION,
     LXC_API_PATHS,
@@ -535,6 +534,7 @@ def assert_diagnostic_playbooks_are_consolidated() -> None:
 def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str, str]:
     home = temp_root / "home"
     home.mkdir()
+    write_controller_identity(home)
     inventory = temp_root / "inventory.yml"
     inventory.write_text(inventory_source, encoding="utf-8")
     vault_password = temp_root / "vault-pass"
@@ -701,24 +701,6 @@ all:
 def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> None:
     with tempfile.TemporaryDirectory(prefix="inspect-plan-live-") as temp_dir:
         temp_root = Path(temp_dir)
-        ssh_private_key = temp_root / "fixture-ssh-key"
-        ssh_public_key = temp_root / "fixture-ssh-key.pub"
-        ssh_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        ssh_private_key.write_bytes(
-            ssh_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.OpenSSH,
-                encryption_algorithm=serialization.NoEncryption(),
-            )
-        )
-        ssh_private_key.chmod(0o600)
-        ssh_public_key.write_bytes(
-            ssh_key.public_key().public_bytes(
-                encoding=serialization.Encoding.OpenSSH,
-                format=serialization.PublicFormat.OpenSSH,
-            )
-            + b" inspect@test\n"
-        )
         inventory = yaml.safe_load(
             (
                 REPO_ROOT
@@ -736,8 +718,6 @@ def assert_public_plan_reports_all_problems_without_disclosure_or_mutation() -> 
             "proxmox_host": "controlled.invalid",
             "proxmox_ssh_port": 1,
             "proxmox_ssh_connect_timeout": 1,
-            "proxmox_ssh_key_private": str(ssh_private_key),
-            "proxmox_ssh_key_public": str(ssh_public_key),
         }
         inventory["all"]["children"]["lxcs"]["vars"][
             "proxmox_fleet_observation_override"
