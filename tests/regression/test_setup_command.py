@@ -2,8 +2,8 @@
 """Regression coverage for the ./setup.sh command facade.
 
 `setup.sh` has one operation, `sync`, which delegates to `uv sync --locked`.
-These tests observe the process, its exit status, its output, the child
-commands it invokes, and the filesystem it leaves behind.
+These tests observe the process, its exit status, its output, the work it
+delegates, and the filesystem it leaves behind.
 """
 
 from __future__ import annotations
@@ -21,7 +21,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # uv plus the programs a machine installation would reach for. Shimming them
-# records any attempt without touching the package manager or the network.
+# records any delegated work or install attempt without touching the package
+# manager or the network. The ordinary commands the script itself runs are not
+# delegation, so they stay unrecorded.
 SHIMMED = ("uv", "curl", "sudo", "apt", "apt-get")
 
 # An absolute interpreter keeps the shim runnable on the controlled PATH below.
@@ -69,7 +71,7 @@ def env(tmp_path: Path) -> dict[str, str]:
         {
             "HOME": str(tmp_path / "home"),
             "PATH": str(bin_dir),
-            "SETUP_TEST_LOG": str(tmp_path / "children.jsonl"),
+            "SETUP_TEST_LOG": str(tmp_path / "delegated.jsonl"),
         }
     )
     return environment
@@ -87,7 +89,7 @@ def run(project: Path, env: dict[str, str], *arguments: str) -> subprocess.Compl
     )
 
 
-def children(env: dict[str, str]) -> list[list[str]]:
+def delegated(env: dict[str, str]) -> list[list[str]]:
     log = Path(env["SETUP_TEST_LOG"])
     if not log.exists():
         return []
@@ -107,7 +109,7 @@ def test_sync_runs_locked_synchronization_and_nothing_else(project, env) -> None
     result = run(project, env, "sync")
 
     assert result.returncode == 0, result.stderr
-    assert children(env) == [SYNC]
+    assert delegated(env) == [SYNC]
 
 
 def test_sync_failure_is_not_reported_as_success(project, env) -> None:
@@ -124,7 +126,7 @@ def test_sync_is_independently_repeatable(project, env) -> None:
 
     assert (first.returncode, second.returncode) == (0, 0), first.stderr
     assert second.stdout == first.stdout
-    assert children(env) == [SYNC, SYNC]
+    assert delegated(env) == [SYNC, SYNC]
 
 
 def test_sync_without_uv_names_the_machine_prerequisite(project, env, tmp_path) -> None:
@@ -137,7 +139,7 @@ def test_sync_without_uv_names_the_machine_prerequisite(project, env, tmp_path) 
     assert "uv not found on PATH" in result.stderr
     assert "https://docs.astral.sh/uv/" in result.stderr
     assert "./setup.sh" not in result.stdout + result.stderr
-    assert children(env) == []
+    assert delegated(env) == []
 
 
 # --- grammar --------------------------------------------------------------
@@ -149,39 +151,33 @@ def test_help_exits_zero_and_documents_only_sync(project, env) -> None:
     assert result.returncode == 0
     assert "sync" in result.stdout and "--help" in result.stdout
     assert "bootstrap" not in result.stdout
-    assert children(env) == []
-
-
-def test_bare_invocation_requires_an_explicit_operation(project, env, tmp_path) -> None:
-    before = filesystem(tmp_path)
-
-    result = run(project, env)
-
-    assert result.returncode == 2
-    assert result.stderr.startswith("setup.sh: an operation is required")
-    assert children(env) == []
-    assert filesystem(tmp_path) == before
+    assert delegated(env) == []
 
 
 @pytest.mark.parametrize(
-    "arguments",
+    ("arguments", "diagnostic"),
     [
-        ("bootstrap",),
-        ("bogus",),
-        ("--bogus",),
-        ("sync", "extra"),
-        ("bootstrap", "extra"),
-        ("--help", "extra"),
+        ((), "an operation is required"),
+        (("bootstrap",), "unknown operation"),
+        (("bogus",), "unknown operation"),
+        (("--bogus",), "unknown option"),
+        (("sync", "extra"), "sync takes no arguments"),
+        (("bootstrap", "extra"), "unknown operation"),
+        (("--help", "extra"), "--help takes no arguments"),
     ],
 )
-def test_retired_unknown_or_surplus_input_is_invalid_usage(
-    project, env, tmp_path, arguments
+def test_bare_retired_unknown_or_surplus_input_is_invalid_usage(
+    project, env, tmp_path, arguments, diagnostic
 ) -> None:
     before = filesystem(tmp_path)
 
     result = run(project, env, *arguments)
 
     assert result.returncode == 2
-    assert result.stderr.startswith("setup.sh: ")
-    assert children(env) == []
+    assert result.stdout == ""
+    assert result.stderr.splitlines() == [
+        f"setup.sh: {diagnostic}",
+        "Try './setup.sh --help' for usage.",
+    ]
+    assert delegated(env) == []
     assert filesystem(tmp_path) == before
