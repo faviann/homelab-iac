@@ -20,8 +20,9 @@ repository runs it but never installs it.
 
 `./setup.sh sync` optionally synchronizes the locked Python environment ahead
 of time. It is not prerequisite sequencing: every command reconciles the
-environment through `uv run --locked`, and `./run.sh`, `./inspect.sh`, and
-`./recover.sh` install and verify the collections and roles they consume.
+environment through `uv run --locked`, and `./run.sh`, `./recover.sh`, and the
+live `./inspect.sh` operations install and verify the collections and roles
+they consume.
 Nothing establishes controller identity either, so a new controller still needs
 `~/.ansible/ssh/proxmox_lxc` put in place explicitly before any managed-host
 operation.
@@ -33,6 +34,14 @@ operation.
 ```
 
 **Manual setup:** See [detailed instructions below](#first-time-setup).
+
+## Commands
+
+Six commands are the supported interface: `./run.sh`, `./inspect.sh`,
+`./recover.sh`, `./vault.sh`, `./validate.sh`, and `./setup.sh`. Each answers
+`--help` with its operations. [docs/command-policy.md](docs/command-policy.md)
+records their grammar, exit statuses, and lock classes, and the few raw
+commands that remain permitted.
 
 ## Overview
 
@@ -164,11 +173,11 @@ On the managed `workstation` LXC, run `workstation-setup` first so Home Manager 
    prompting once for its root password, and `./recover.sh ssh-keys` enrolls
    existing LXCs.
 
-   When you run lifecycle playbooks from the `workstation` LXC itself, they exclude that host by
+   When you run the lifecycle from the `workstation` LXC itself, it excludes that host by
    default. To manage it intentionally, run:
 
    ```bash
-   ./run.sh -e proxmox_skip_self=false --limit workstation
+   ./run.sh --include-controller
    ```
 
 5. **Configure Proxmox API credentials:**
@@ -205,17 +214,33 @@ Test connectivity:
 
 ## Usage
 
-### Running Playbooks
-   - Verify control node prerequisites
-   - **Verify that the Proxmox host already trusts the controller identity**, stopping before any effect when it does not
-   - Validate API connectivity
-   - Provision LXC containers
-   - Apply host-side configuration (including restricted feature flags via `pct` commands)
+### Running the Lifecycle
 
-   A lifecycle run never prompts for the Proxmox root password. Enroll trust
-   once with `./recover.sh proxmox-host-ssh`.
+```bash
+./run.sh                                  # full lifecycle for every LXC
+./run.sh provision                        # create or update LXCs only
+./run.sh configure                        # in-container configuration only
+./run.sh --limit portal                   # one host (Ansible limit grammar)
+./run.sh --limit portal --stack traefik3  # one stack on one host
+./run.sh --check                          # dry run
+./inspect.sh plan                         # report planning problems without running anything
+```
 
-   Use `--tags validation` to test connectivity without provisioning, or `--tags provision` to only provision containers.
+A full run verifies control node prerequisites, **verifies that the Proxmox
+host already trusts the controller identity** (stopping before any effect when
+it does not), validates API connectivity, provisions LXC containers, applies
+host-side configuration (including restricted feature flags via `pct`), and
+configures each container.
+
+A lifecycle run never prompts for the Proxmox root password. Enroll trust once
+with `./recover.sh proxmox-host-ssh`.
+
+Live commands share one machine-local lock across every worktree on the
+controller. A mutating run takes it exclusively; `--check` and the live
+`./inspect.sh` operations take it shared. `./inspect.sh vars` reads only local
+inventory and takes no lock. A command that cannot take the lock exits 75 at
+once, and names the holder when it is another live command. The lock does not coordinate two
+control nodes.
 
 ## Repository Structure
 
@@ -225,6 +250,7 @@ Test connectivity:
 |-- collections/
 |   `-- requirements.yml               # Ansible collection dependencies
 |-- docs/
+|   |-- command-policy.md
 |   |-- inventory-structure-guide.md
 |   `-- ssh-key-management.md
 |-- inventory/
@@ -240,14 +266,7 @@ Test connectivity:
 |       |-- servarr.yml
 |       |-- seedbox.yml
 |       `-- jellyfin.yml
-|-- playbooks/
-|   |-- validate-infrastructure.yml   # Pre-flight checks (controller, SSH, API)
-|   |-- provision-lxcs.yml            # Create/update LXC containers
-|   |-- configure-lxcs.yml            # In-container setup (Docker, GPU, stacks)
-|   |-- add-ssh-keys-to-lxcs.yml      # Manual SSH key injection
-|   |-- validate-credentials.yml      # Test API credentials
-|   |-- lab-connectivity.yml          # SSH + Proxmox API connectivity checks
-|   `-- proxmox_api_check.yml         # API connectivity test
+|-- playbooks/                         # Playbooks and roles behind the commands
 |-- pyproject.toml                     # Python dependency declarations for uv
 |-- uv.lock                            # Locked Python dependency resolution
 |-- site.yml                           # Top-level orchestration playbook
@@ -256,6 +275,7 @@ Test connectivity:
 
 ## Documentation
 
+- **docs/command-policy.md** - Command grammar, lock classes, and permitted raw commands
 - **docs/inventory-structure-guide.md** - Inventory design and best practices
 - **docs/ssh-key-management.md** - Adding SSH keys to existing containers
 - **stacks/README.md** - Docker Compose conventions and Traefik label contract
@@ -281,15 +301,10 @@ The encrypted vault lives outside `group_vars` so SSH connectivity and recovery
 do not load it. API-consuming workflows load it explicitly and validate their
 API credentials; configuration checks only the selected service inputs.
 
-Create `inventory/vault.yml` from the example and encrypt:
-
-```yaml
-vault_proxmox_api_token_secret: "your-actual-token-secret"
-```
-
-```bash
-uv run --locked ansible-vault encrypt --vault-password-file ~/.ansible/vault-pass inventory/vault.yml
-```
+`./vault.sh configure` creates the encrypted vault, or updates its Proxmox
+credentials, through a TTY prompt. `./vault.sh edit` opens the whole vault in
+your editor, and `./vault.sh check` verifies it without printing any value.
+Every top-level key starts with `vault_`, as in `inventory/vault.yml.example`.
 
 ### Inventory
 
@@ -329,39 +344,16 @@ user's `~/.ssh/authorized_keys`, and confirms that the private key can log in.
 Ordinary lifecycle and inspection operations never request that password or
 modify `authorized_keys`.
 
-**Manual Setup**: the same `ssh-copy-id` step, run by hand outside the lifecycle
-lock:
-```bash
-ssh-copy-id -i ~/.ansible/ssh/proxmox_lxc.pub root@proxmox.lan
-```
-
 After initial setup, all subsequent playbook runs will use passwordless SSH authentication.
 
-## Example Playbooks
-
-#### Connectivity validation
+## Diagnostics
 
 ```bash
-uv run --locked ansible-playbook playbooks/lab-connectivity.yml
+./inspect.sh credentials     # Proxmox API credential and permission ladder
+./inspect.sh connectivity    # SSH reachability of the LXCs; non-zero when one is unreachable
+./inspect.sh containers      # every LXC on the Proxmox node
+./inspect.sh vars portal     # merged variables, vault-derived values masked
 ```
-
-Runs SSH ping checks against managed hosts and calls the Proxmox `/api2/json/version` endpoint using your API token.
-
-### Check API Connectivity
-
-```bash
-uv run --locked ansible-playbook playbooks/proxmox_api_check.yml
-```
-
-Lists all LXC containers on the default node.
-
-### Provision Inventory-Defined LXCs
-
-```bash
-uv run --locked ansible-playbook -i inventory/hosts.yml site.yml --tags provision
-```
-
-Builds the effective LXC specs from tier and capability group variables, ensures each container exists through the `proxmox_lxc_provision` role, and applies host-side preparation tasks when enabled. Edit inventory group and host vars to tailor resources and features.
 
 ## TLS Certificate Verification
 
@@ -376,37 +368,26 @@ Builds the effective LXC specs from tier and capability group variables, ensures
 
 ### Cannot reach Proxmox API
 
-- Verify controller can reach Proxmox host: `curl -k https://proxmox.lan:8006`
+- Run `./inspect.sh credentials`. Its first API step calls the `/api2/json/version` endpoint and reports whether the API answered
 - Check firewall rules allow HTTPS (port 8006)
 - Verify VPN/network connectivity
 
 ### Authentication fails
 
-- Verify API token secret in vault: `uv run --locked ansible-vault view --vault-password-file ~/.ansible/vault-pass inventory/vault.yml`
+- Run `./inspect.sh credentials` to see which step of the credential ladder fails
+- Run `./vault.sh check` to verify the vault without printing its values; `./vault.sh configure` replaces the token secret
 - Check token permissions in Proxmox web UI
 - Ensure token ID format: `user@realm!tokenid` (e.g., `ansible@pve!controller`)
 
 ### Module not found
 
-- Verify collections installed: `uv run --locked ansible-galaxy collection list | grep proxmox`
 - Live commands reconcile only dependencies listed in their `LIVE_OPERATIONS`
   row. For a missing module, verify that its collection is both exactly pinned
   and listed for the playbook; an existing installation can mask a stale row.
 
 ### Python import errors
 
-- Verify Python packages: `uv run --locked python -c "import proxmoxer, requests"`
-- Re-run `./setup.sh sync` to rebuild the controller Python environment if packages drift
-
-## Migration from Legacy Implementation
-
-The previous implementation (running Ansible on the Proxmox host with shell commands) has been archived to `archive/ansible/`. It is **deprecated and unsupported**.
-
-The new API-driven approach provides:
-- No shell access required to Proxmox host
-- Better security (API tokens vs root access)
-- Remote execution from any controller
-- Consistent with Proxmox best practices
+- Run `./setup.sh sync` to resynchronize the locked Python environment
 
 ## Contributing
 
@@ -416,7 +397,7 @@ Run the complete non-live verification suite before handoff:
 ./validate.sh
 ```
 
-This runs the production Ansible lint gate, full credential-free lifecycle regressions, and the full Python test suite. It does not load live inventory or acquire the lifecycle lock. Route all live operations, including check-mode runs, through `./run.sh`. In pull request descriptions, report `./validate.sh` as the verification command rather than listing its internal commands.
+This runs the production Ansible lint gate, full credential-free lifecycle regressions, and the full Python test suite. It does not load live inventory or acquire the lifecycle lock. Route all live operations, including check-mode runs, through `./run.sh`, `./recover.sh`, or a live `./inspect.sh` operation. In pull request descriptions, report `./validate.sh` as the verification command rather than listing its internal commands.
 
 `./validate.sh` needs `/usr/sbin/sshd` (Debian package `openssh-server`) on the machine that runs it. The Proxmox trust regression starts an unprivileged `sshd` on `127.0.0.1` so the real `ssh` client decides trust; it installs nothing and fails with that path in its message when `sshd` is absent. The `workstation` guest has it because the `debian-13-standard` template it is built from ships `openssh-server`. The system `sshd` service does not need to be running.
 
