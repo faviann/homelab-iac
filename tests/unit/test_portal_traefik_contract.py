@@ -138,26 +138,26 @@ def test_proxmox_spice_proxy_is_a_local_only_raw_tcp_forward() -> None:
         TRAEFIK_STACK / "appdata/traefik3/config/conf.d/externalservice.yaml"
     )
     tcp = dynamic["tcp"]
+    router = tcp["routers"]["proxmox-spice"]
+    servers = tcp["services"][router["service"]]["loadBalancer"]["servers"]
 
     assert "3128:3128/tcp" in compose["services"]["traefik"]["ports"]
-    assert static["entryPoints"]["spice"] == {"address": ":3128/tcp"}
+    assert static["entryPoints"]["spice"]["address"] == ":3128/tcp"
+    # A catch-all TCP router on websecure would take over HTTPS, so spice must
+    # be its only entrypoint.
+    assert router["entryPoints"] == ["spice"]
     # Remote Viewer opens a plaintext HTTP CONNECT to spiceproxy and runs SPICE
-    # TLS inside that tunnel, so the router must neither terminate nor
-    # pass through TLS.
-    assert tcp["routers"] == {
-        "proxmox-spice": {
-            "rule": "HostSNI(`*`)",
-            "entryPoints": ["spice"],
-            "service": "proxmox-spice",
-            "middlewares": ["local-ip-restriction"],
-        }
-    }
-    assert tcp["services"]["proxmox-spice"] == {
-        "loadBalancer": {"servers": [{"address": "proxmox.lan:3128"}]}
-    }
-    assert (
+    # TLS inside that tunnel. Only HostSNI(`*`) matches a non-TLS connection,
+    # and any tls block would terminate or pass through TLS.
+    assert router["rule"] == "HostSNI(`*`)"
+    assert "tls" not in router
+    assert router["service"] == "proxmox-spice"
+    assert "local-ip-restriction" in router["middlewares"]
+    assert [server["address"] for server in servers] == ["proxmox.lan:3128"]
+    assert set(
         tcp["middlewares"]["local-ip-restriction"]["ipAllowList"]["sourceRange"]
-        == dynamic["http"]["middlewares"]["local-ip-restriction"]["IPAllowList"][
+    ) == set(
+        dynamic["http"]["middlewares"]["local-ip-restriction"]["IPAllowList"][
             "sourceRange"
         ]
     )
