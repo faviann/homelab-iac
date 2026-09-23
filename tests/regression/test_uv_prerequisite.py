@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # failure never turns into an install attempt.
 INSTALLERS = ("curl", "sudo", "apt", "apt-get")
 
-RECORDING_SHIM = '''#!/usr/bin/env python3
+# An absolute interpreter keeps the shim runnable on the controlled PATH below.
+RECORDING_SHIM = f'''#!{sys.executable}
 import json, os, sys
 from pathlib import Path
 
@@ -62,10 +64,13 @@ def test_missing_uv_is_reported_before_any_effect(
         shim = bin_dir / name
         shim.write_text(RECORDING_SHIM, encoding="utf-8")
         shim.chmod(0o755)
+    # dirname is the only ordinary command any path runs before its uv check,
+    # so PATH holds it and the shims, and no host uv can be found.
+    (bin_dir / "dirname").symlink_to(shutil.which("dirname"))
     home = tmp_path / "home"
     home.mkdir()
     log = tmp_path / "children.jsonl"
-    path = f"{bin_dir}:/usr/bin:/bin"
+    path = str(bin_dir)
     assert shutil.which("uv", path=path) is None
 
     result = subprocess.run(

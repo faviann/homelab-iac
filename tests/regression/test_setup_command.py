@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # records any attempt without touching the package manager or the network.
 SHIMMED = ("uv", "curl", "sudo", "apt", "apt-get")
 
-RECORDING_SHIM = '''#!/usr/bin/env python3
+# An absolute interpreter keeps the shim runnable on the controlled PATH below.
+RECORDING_SHIM = f'''#!{sys.executable}
 import json, os, sys
 from pathlib import Path
 
@@ -56,13 +58,17 @@ def env(tmp_path: Path) -> dict[str, str]:
         shim = bin_dir / name
         shim.write_text(RECORDING_SHIM, encoding="utf-8")
         shim.chmod(0o755)
+    # setup.sh runs only dirname, and cat for --help. PATH holds those and the
+    # shims and nothing more, so a host uv is never the one found.
+    for name in ("dirname", "cat"):
+        (bin_dir / name).symlink_to(shutil.which(name))
     (tmp_path / "home").mkdir()
 
     environment = os.environ.copy()
     environment.update(
         {
             "HOME": str(tmp_path / "home"),
-            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "PATH": str(bin_dir),
             "SETUP_TEST_LOG": str(tmp_path / "children.jsonl"),
         }
     )
@@ -123,8 +129,6 @@ def test_sync_is_independently_repeatable(project, env) -> None:
 
 def test_sync_without_uv_names_the_machine_prerequisite(project, env, tmp_path) -> None:
     (tmp_path / "bin" / "uv").unlink()
-    # PATH still carries /usr/bin, so this case only means anything while no
-    # real uv is reachable there.
     assert shutil.which("uv", path=env["PATH"]) is None
 
     result = run(project, env, "sync")
