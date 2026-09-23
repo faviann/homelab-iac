@@ -88,8 +88,9 @@ Live operations, meaning every `./run.sh` and `./recover.sh` form and every
 exclusively. Audited read-only operations take it shared, so reads can overlap
 each other but never a mutation. A live operation that cannot take the lock
 stops at once with status `75`. There is no wait mode. When the holder is
-another live operation, the message names its process and worktree. A holder that took the lock directly, such as the stack-rename
-`flock` below, leaves no holder record. The message then cannot identify it,
+another live operation, the message names its process and worktree. A holder
+that took the lock directly, such as the stack-rename `flock` below, leaves no
+holder record. The message then cannot identify it,
 and any pid and worktree it prints were left in the lock file by an earlier
 lock implementation.
 
@@ -109,9 +110,18 @@ the wrapper marker, dependency reconciliation, and the playbook call.
 
 ## Raw commands
 
-The six commands are the default. A raw command, meaning a direct call to
-Ansible, `uv`, `pytest`, `ssh`, or a repository script, is documented only for a
-bounded purpose no supported operation owns.
+A raw command is any command other than the six that does work they exist to
+govern. That means running Ansible, `uv`, `pytest`, or a repository script
+directly, or acting on the Proxmox host, its API, or a managed LXC outside the
+six commands, through `ssh`, `pct`, `docker`, `curl`, or any other client.
+Local workstation tooling that touches none of these, such as `git`, `rg`, or
+`tail` on a local log, is not a raw command.
+
+When a supported command owns an operation, tracked guidance uses that
+command. For example, `./inspect.sh credentials` owns Proxmox API
+reachability, so guidance does not teach a `curl` against the API. A raw
+command is documented only for a bounded purpose that no supported operation
+owns.
 
 Agent use of a documented raw command is a separate decision:
 
@@ -119,8 +129,9 @@ Agent use of a documented raw command is a separate decision:
 - An agent cannot approve its own exception.
 - A live bypass needs a person's approval for the exact operation and scope.
   Read-only intent does not waive this.
-- Approval given in a conversation covers that one operation and expires with
-  the task.
+- Approval given in a conversation covers one operation when it names the
+  target, purpose, allowed effects, and relevant safeguards. It expires with
+  the task and is not precedent for later work.
 - A standing permission is valid only when it is recorded below with all six
   fields.
 
@@ -128,8 +139,8 @@ Agent use of a documented raw command is a separate decision:
 
 #### Read-only SSH diagnosis of a named host
 
-- **Trigger:** a request to investigate live behavior on a named LXC or on the
-  Proxmox host that no `./inspect.sh` operation answers.
+- **Trigger:** a request to diagnose a named or clearly implied LXC or the
+  Proxmox host, where no `./inspect.sh` operation answers the question.
 - **Audience:** agents and people.
 - **Scope:** the named host only.
 
@@ -137,14 +148,19 @@ Agent use of a documented raw command is a separate decision:
   ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> '<read-only command>'
   ```
 
-- **Boundary:** observational. No file writes, service or container state
-  changes, package changes, or `docker compose` operations other than reads
-  such as `ps` and `logs`.
+- **Boundary:** observational. Non-secret files, logs, processes, memory,
+  disks, networking, and service state may be inspected without asking for
+  each observation. No file edits, service restarts, package installs, process
+  kills, or container changes, and no `docker compose` operations other than
+  reads such as `ps` and `logs`.
 - **Sensitive output:** do not read or print secrets. This covers `.env`
   files, container environment from `docker inspect`, vault material, and
-  private keys. Filter log output that can carry tokens.
-- **Escalation:** any mutation, or any host the request did not name, needs a
-  person's approval for that exact operation.
+  private keys. Filter log output that can carry tokens. A masked value from
+  `./inspect.sh vars` is not a secret. That exemption covers that one command
+  and its documented mask only.
+- **Escalation:** when diagnosis needs a mutation, use `./run.sh` or
+  `./recover.sh`, or get a person's approval for that exact operation. A host
+  the request did not name or clearly imply needs the same approval.
 
 #### Proxmox-host manual key injection
 
@@ -246,33 +262,43 @@ Agent use of a documented raw command is a separate decision:
 | `--tags bootstrap` | `./recover.sh proxmox-host-ssh` |
 | `ansible-playbook` on a repository playbook | the operation that runs it |
 | `ansible -m ping` | `./inspect.sh connectivity` |
-| `ansible-inventory --host`, `--list` | `./inspect.sh vars <host>` |
+| `ansible-inventory --host <host>` | `./inspect.sh vars <host>` |
+| `ansible-inventory --list` | none. The whole-inventory dump was removed; `./inspect.sh vars <host>` shows one host |
 | `ansible-inventory --graph` | `./inspect.sh vars --graph` |
 | `ansible-vault encrypt` | `./vault.sh configure`, which creates the vault |
 | `ansible-vault edit` | `./vault.sh edit` |
-| `ansible-vault view` | none. Use `./vault.sh check` or `./inspect.sh vars <host>` |
+| `ansible-vault view` | `./vault.sh check`, which verifies the vault without printing values. No operation prints decrypted contents |
 | `ansible-lint` | `./validate.sh lint` |
-| `pytest` | `./validate.sh tests [<target>...]` |
+| the lifecycle regression runner | `./validate.sh lifecycle [--full] [--only <launcher.py>]... [--fail-fast]` |
+| `pytest`, `python -m unittest`, or a test file run with `python` | `./validate.sh tests [<target>...]` |
+| `python -m stack_update_policy validate` | `./validate.sh stack <path>` |
+| `python -c "import proxmoxer, requests"` | none. `./setup.sh sync` repairs the environment it only probed |
 | `./configure-vault.sh` | `./vault.sh configure` |
 | `./rotate-vault-passphrase.sh` | `./vault.sh rotate` |
 | bare `./setup.sh`, `./setup.sh bootstrap` | none. Each command owns its prerequisites (ADR-0011) |
-| `ansible-galaxy collection install`, `role install` | none. Live commands reconcile what they consume |
+| `ansible-galaxy collection install`, `collection list`, `role install` | none. Live commands reconcile what they consume |
 
 In a documented `./run.sh` invocation, `-e` and `--tags` appear only after
 `--`.
 
 ### Text-check allowlist
 
-Only these files may carry a superseded form or a raw command:
+The guidance text check that #219 adds will look for the superseded forms in
+the table above, and for `-e` or `--tags` before `--` in a documented
+`./run.sh` invocation. It will not recognize raw commands in general. A raw
+command that is not one of those shapes passes the check, so review enforces
+the rest of this policy.
 
-| File | Permitted content |
+Outside these files, the check will reject every superseded form. Each file
+may carry only the shape listed:
+
+| File | Permitted shape |
 | --- | --- |
-| `docs/command-policy.md` | every form in this document |
-| `docs/adr/*.md` | superseded forms quoted to explain a decision |
-| `docs/ssh-key-management.md` | the manual key-injection procedure |
-| `.agents/skills/rename-stack/SKILL.md` | the rename remote mutation, and `stack_filter` named to warn against it |
-| `.agents/skills/proxmox-ram-usage/SKILL.md` | the RAM report command |
-| `docs/image-update-renovate-adapter.md` | the adapter command |
+| `docs/command-policy.md` | every standing permission's command, and every superseded form documented here |
+| `docs/adr/*.md` | any superseded form named in a decision's reasoning |
+| `docs/ssh-key-management.md` | the `pct exec` key-injection procedure |
+| `.agents/skills/rename-stack/SKILL.md` | the `docker compose down`, `mv`, `chown -R` sequence, and its `-e stack_filter=` warning |
+| `docs/image-update-renovate-adapter.md` | `uv run --locked python scripts/image_update_renovate_adapter.py <request.json>` |
 
 ## Recorded boundaries
 

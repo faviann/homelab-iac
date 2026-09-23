@@ -368,7 +368,7 @@ After initial setup, all subsequent playbook runs will use passwordless SSH auth
 
 ### Cannot reach Proxmox API
 
-- Verify controller can reach Proxmox host: `curl -k https://proxmox.lan:8006`
+- Run `./inspect.sh credentials`. Its first API step calls the `/api2/json/version` endpoint and reports whether the API answered
 - Check firewall rules allow HTTPS (port 8006)
 - Verify VPN/network connectivity
 
