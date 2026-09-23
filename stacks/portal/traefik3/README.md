@@ -38,6 +38,27 @@ Host-owned:
 - portal vault-backed variable bindings in `inventory/host_vars/portal.yml`
 - domain-edge exposure and certificate DNS credentials
 
+## Proxmox SPICE Proxy
+
+Proxmox `.vv` files set `proxy=http://proxmox.local.faviann.com:3128`, so Remote
+Viewer reaches Proxmox `spiceproxy` through this stack. The client sends a
+plaintext HTTP `CONNECT` and runs SPICE TLS inside that tunnel. For that reason
+the `spice` entrypoint forwards raw TCP to `proxmox.lan:3128` with a
+`HostSNI(`*`)` router. It does not terminate TLS or use TLS passthrough, and
+the per-VM TLS ports (61000+) are never exposed. The TCP `local-ip-restriction`
+reuses the HTTP allowlist ranges through a YAML anchor.
+
+Check from a LAN or VPN client:
+
+```bash
+printf 'CONNECT pvespiceproxy:x:0:proxmox:61000 HTTP/1.0\r\n\r\n' \
+  | nc -w 3 proxmox.local.faviann.com 3128 | head -1
+# HTTP/1.0 401 invalid ticket   <- reached spiceproxy through Traefik
+```
+
+A refused connection means Traefik is not publishing 3128. A connection that
+closes with no bytes means the client IP is outside the allowlist.
+
 ## Deploy
 
 ```bash

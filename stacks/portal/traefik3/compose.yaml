@@ -35,6 +35,7 @@ services:
       - 80:80
       - 443:443/tcp
       - 443:443/udp
+      - 3128:3128/tcp
     volumes:
       - ./appdata/traefik3/config/traefik.yaml:/etc/traefik/traefik.yaml:ro
       - ./appdata/traefik3/config/conf.d/:/etc/traefik/conf.d/:ro

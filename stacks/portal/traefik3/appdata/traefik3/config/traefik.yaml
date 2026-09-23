@@ -68,6 +68,9 @@ entryPoints:
 #          - main: example2.com # change this to your proxy domain
 #            sans:
 #              - '*.example2.com' # change this to your proxy domain
+  # Proxmox SPICE proxy (spiceproxy), forwarded as raw TCP to the Proxmox host.
+  spice:
+    address: ":3128/tcp"
 
 serversTransport:
   insecureSkipVerify: true
