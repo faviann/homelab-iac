@@ -236,8 +236,9 @@ with `./recover.sh proxmox-host-ssh`.
 
 Live commands share one machine-local lock across every worktree on the
 controller. A mutating run takes it exclusively; `--check` and `./inspect.sh`
-take it shared. A command that cannot take the lock exits 75 at once and names
-the holder. The lock does not coordinate two control nodes.
+take it shared. A command that cannot take the lock exits 75 at once, and names
+the holder when it is another live command. The lock does not coordinate two
+control nodes.
 
 ## Repository Structure
 

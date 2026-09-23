@@ -49,14 +49,28 @@ Only `./run.sh` accepts low-level arguments, and only after `--`. Those
 arguments cannot change target selection, lifecycle intent, check mode, the
 lock, or the wrapper marker. `./run.sh` rejects them as invalid usage.
 
-Every command uses the same exit status:
+Two statuses are guaranteed across all six commands. A command that rejects
+its own grammar, such as an unknown operation or option or a missing
+operation, exits `2` before it does any work. `./run.sh`, `./inspect.sh`, and
+`./recover.sh` exit `75` when another live operation holds the lock. `0` means
+success.
 
-| Status | Meaning |
+Every other non-zero status is a failure, and its value depends on the
+command. Some operations pass the status of the tool they run through
+unchanged:
+
+| Command | Failure statuses |
 | --- | --- |
-| `0` | Success |
-| `1` | A check or operation failed |
-| `2` | Invalid usage, such as an unknown operation or option |
-| `75` | Another live operation holds the lock. Only `./run.sh`, `./inspect.sh`, and `./recover.sh` return it. |
+| `./setup.sh`, `./vault.sh` | `1` |
+| `./run.sh`, `./inspect.sh`, `./recover.sh` | `1` when the playbook or inspection fails. A dependency reconciliation failure passes its own status through, usually `1`. |
+| `./validate.sh lint` | `ansible-lint`'s status, for example `2` when it finds violations |
+| `./validate.sh lifecycle` | `1` when a launcher fails, and `2` when the runner rejects an unregistered launcher |
+| `./validate.sh tests` | pytest's status: `1` for failed tests, `4` for a target pytest cannot load, and `5` when no test was collected |
+| `./validate.sh stack` | `1` when the stack policy is invalid |
+| `./validate.sh` | the status of the first failing gate, checked as lint, then lifecycle, then tests. `130` or `143` when interrupted. |
+
+So a `2` from `./validate.sh` does not always mean invalid usage. Read stderr:
+wrapper usage errors name the command and point to `--help`.
 
 The stable interface is the documented names, operations, options, exit
 status, safety guarantees, and explicit output formats. Terminal prose is for
@@ -69,8 +83,12 @@ Live operations take one machine-local lock at
 `~/.ansible/homelab-iac-lifecycle.lock`. Mutating operations take it
 exclusively. Audited read-only operations take it shared, so reads can overlap
 each other but never a mutation. A command that cannot take the lock stops at
-once with status `75` and names the holding process and worktree. There is no
-wait mode.
+once with status `75`. There is no wait mode. When the holder is another
+`./run.sh`, `./inspect.sh`, or `./recover.sh`, the message names its process
+and worktree. A holder that took the lock directly, such as the stack-rename
+`flock` below, leaves no holder record. The message then cannot identify it,
+and any pid and worktree it prints were left in the lock file by an earlier
+lock implementation.
 
 The lock covers every worktree on one machine. It does not coordinate two
 control nodes (#174). ADR-0009 records the split.
@@ -155,8 +173,9 @@ Agent use of a documented raw command is a separate decision:
   ```
 
   A non-zero `flock` status means a live operation is running. Wait for it to
-  finish. The lock is machine-local, so it does not cover a run from another
-  control node.
+  finish. While the move runs, a live command started on this machine exits
+  `75` and cannot name this holder. The lock is machine-local, so it does not
+  cover a run from another control node.
 - **Sensitive output:** as for SSH diagnosis.
 - **Escalation:** a stack the skill refuses (foundational, OIDC-coupled, or
   with named volumes) needs a dedicated migration that a person plans.
