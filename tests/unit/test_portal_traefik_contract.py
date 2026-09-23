@@ -127,3 +127,37 @@ def test_protected_edge_auth_chain_keeps_its_forward_auth_address() -> None:
     assert middleware["forwardAuth-authentik"]["forwardAuth"]["address"] == (
         "http://auth.faviann.vms:9000/outpost.goauthentik.io/auth/traefik"
     )
+
+
+def test_proxmox_spice_proxy_is_a_local_only_raw_tcp_forward() -> None:
+    compose = load_yaml(TRAEFIK_STACK / "compose.yaml")
+    static = load_yaml(
+        TRAEFIK_STACK / "appdata/traefik3/config/traefik.yaml"
+    )
+    dynamic = load_yaml(
+        TRAEFIK_STACK / "appdata/traefik3/config/conf.d/externalservice.yaml"
+    )
+    tcp = dynamic["tcp"]
+
+    assert "3128:3128/tcp" in compose["services"]["traefik"]["ports"]
+    assert static["entryPoints"]["spice"] == {"address": ":3128/tcp"}
+    # Remote Viewer opens a plaintext HTTP CONNECT to spiceproxy and runs SPICE
+    # TLS inside that tunnel, so the router must neither terminate nor
+    # pass through TLS.
+    assert tcp["routers"] == {
+        "proxmox-spice": {
+            "rule": "HostSNI(`*`)",
+            "entryPoints": ["spice"],
+            "service": "proxmox-spice",
+            "middlewares": ["local-ip-restriction"],
+        }
+    }
+    assert tcp["services"]["proxmox-spice"] == {
+        "loadBalancer": {"servers": [{"address": "proxmox.lan:3128"}]}
+    }
+    assert (
+        tcp["middlewares"]["local-ip-restriction"]["ipAllowList"]["sourceRange"]
+        == dynamic["http"]["middlewares"]["local-ip-restriction"]["IPAllowList"][
+            "sourceRange"
+        ]
+    )
