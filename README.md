@@ -9,36 +9,22 @@ Ansible automation for managing Proxmox LXC containers via API from a remote con
 ```bash
 git clone https://github.com/faviann/homelab-iac.git
 cd homelab-iac
-./setup.sh
 ```
 
 On the Ansible-managed `workstation` LXC, complete `workstation-setup` first.
 That command applies the dotfiles Home Manager flake for Node/npm, `uv`, `gh`,
 and other baseline tools, then repairs missing npm-managed agent CLIs. Use
 `update-agent-tools` on the workstation when you want the latest Codex, Claude
-Code, and Pi.dev CLIs. `setup.sh` is still safe as a generic controller
-bootstrap and installs `uv` itself when needed.
+Code, and Pi.dev CLIs. On any other controller, install `uv` yourself; this
+repository runs it but never installs it.
 
-The `setup.sh` script will:
-- ✅ Install system prerequisites (`python3`, `curl`, `sshpass`)
-- ✅ Verify the machine-local vault password file
-- ✅ Install `uv` when needed and synchronize the locked environment
-- ✅ Reconcile collections and external roles
-- ✅ Offer `./vault.sh configure` when no encrypted vault exists
-
-On an already-configured machine — a second worktree, say — the two operations
-run on their own, non-interactively:
-
-```bash
-./setup.sh sync       # locked dependency synchronization only
-./setup.sh bootstrap  # every declared collection and external role
-```
-
-Bootstrap is not prerequisite sequencing for collections or external roles:
-`./run.sh`, `./inspect.sh`, and `./recover.sh` install and verify what they
-consume. It does not establish controller identity either, so a new controller
-still needs `~/.ansible/ssh/proxmox_lxc` put in place explicitly before any
-managed-host operation.
+`./setup.sh sync` optionally synchronizes the locked Python environment ahead
+of time. It is not prerequisite sequencing: every command reconciles the
+environment through `uv run --locked`, and `./run.sh`, `./inspect.sh`, and
+`./recover.sh` install and verify the collections and roles they consume.
+Nothing establishes controller identity either, so a new controller still needs
+`~/.ansible/ssh/proxmox_lxc` put in place explicitly before any managed-host
+operation.
 
 **After setup, validate your credentials:**
 
@@ -90,7 +76,7 @@ sudo apt install -y python3 curl sshpass
 ### Ansible Dependencies
 
 Python dependencies are declared in `pyproject.toml` and locked in `uv.lock`.
-Run `./setup.sh` for the guided path, or `./setup.sh sync` if the workstation is already prepared.
+Commands reconcile the environment through `uv run --locked`; `./setup.sh sync` does it ahead of time.
 
 Collections are pinned in `collections/requirements.yml` and external roles in
 `requirements/roles.yml`. Each live command reconciles the subset it consumes
@@ -125,21 +111,9 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
 
 ## First-Time Setup
 
-### Automated Setup (Recommended)
-
-Run the automated setup script:
-
-```bash
-./setup.sh
-```
-
-This installs system prerequisites, installs `uv` when needed, syncs `.venv/`, verifies the machine-local vault password file, reconciles collections and external roles, and prompts for Proxmox credentials.
-
-It does not establish the controller SSH identity, so a fresh controller is not yet ready for managed-host operations when it finishes. Establishing it is an explicit decision, described in step 4 below. On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides the stable base tools and the npm agent CLI layer is present.
-
 ### Manual Setup
 
-If you prefer manual setup or need to troubleshoot:
+On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides `uv` and the other base tools. On any other controller:
 
 1. **Install system prerequisites:**
 
@@ -156,7 +130,7 @@ If you prefer manual setup or need to troubleshoot:
    chezmoi init --apply https://github.com/faviann/dotfiles.git
    ```
 
-   This writes `~/.ansible/vault-pass` before you bootstrap this repo.
+   This writes `~/.ansible/vault-pass` before any command needs the vault.
 
 3. **Install uv and sync dependencies:**
 
@@ -231,7 +205,7 @@ Test connectivity:
 ## Usage
 
 ### Running Playbooks
-   - Verify bootstrap prerequisites
+   - Verify control node prerequisites
    - **Verify that the Proxmox host already trusts the controller identity**, stopping before any effect when it does not
    - Validate API connectivity
    - Provision LXC containers
@@ -247,7 +221,6 @@ Test connectivity:
 ```
 .
 |-- ansible.cfg
-|-- bootstrap.yml
 |-- collections/
 |   `-- requirements.yml               # Ansible collection dependencies
 |-- docs/
@@ -267,7 +240,7 @@ Test connectivity:
 |       |-- seedbox.yml
 |       `-- jellyfin.yml
 |-- playbooks/
-|   |-- validate-infrastructure.yml   # Pre-flight checks (bootstrap, SSH, API)
+|   |-- validate-infrastructure.yml   # Pre-flight checks (controller, SSH, API)
 |   |-- provision-lxcs.yml            # Create/update LXC containers
 |   |-- configure-lxcs.yml            # In-container setup (Docker, GPU, stacks)
 |   |-- add-ssh-keys-to-lxcs.yml      # Manual SSH key injection

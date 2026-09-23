@@ -138,7 +138,6 @@ def test_every_derived_live_playbook_inherits_the_controller_layer() -> None:
     for path in live:
         assert CONTROLLER_LAYER in inherited_playbooks(path, graph), path
 
-    assert Path("bootstrap.yml") not in live
     controller_source = (REPO_ROOT / CONTROLLER_LAYER).read_text(encoding="utf-8")
     assert "HOMELAB_IAC_LIFECYCLE_WRAPPER" in controller_source
     assert "HOMELAB_IAC_LIFECYCLE_WRAPPER" not in (

@@ -26,6 +26,7 @@ with Path(os.environ["UV_PREREQUISITE_LOG"]).open("a", encoding="utf-8") as log:
 '''
 
 UV_COMMAND_PATHS = [
+    ("setup.sh", "sync"),
     ("validate.sh",),
     ("validate.sh", "lint"),
     ("validate.sh", "lifecycle"),
