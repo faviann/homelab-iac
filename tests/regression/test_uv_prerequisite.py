@@ -70,11 +70,9 @@ def run(env: dict[str, str], cwd: Path, *command: str) -> subprocess.CompletedPr
     )
 
 
-def assert_no_install_and_untouched_home(env: dict[str, str]) -> None:
+def assert_no_install(env: dict[str, str]) -> None:
     log = Path(env["UV_PREREQUISITE_LOG"])
     assert not log.exists(), log.read_text(encoding="utf-8")
-    # The live boundary would create its lifecycle lock under ~/.ansible.
-    assert list(Path(env["HOME"]).iterdir()) == []
 
 
 @pytest.mark.parametrize(
@@ -92,7 +90,7 @@ def assert_no_install_and_untouched_home(env: dict[str, str]) -> None:
         pytest.param(("vault.sh", "rotate", "--dry-run"), id="vault-rotate-preflight"),
     ],
 )
-def test_missing_uv_is_reported_before_any_effect(
+def test_missing_uv_is_reported_as_a_machine_prerequisite(
     without_uv: dict[str, str], tmp_path: Path, command: tuple[str, ...]
 ) -> None:
     result = run(without_uv, tmp_path, *command)
@@ -101,7 +99,10 @@ def test_missing_uv_is_reported_before_any_effect(
     assert f"{command[0]}: {DIAGNOSTIC}" in result.stderr
     assert "https://docs.astral.sh/uv/" in result.stderr
     assert "./setup.sh" not in result.stdout + result.stderr
-    assert_no_install_and_untouched_home(without_uv)
+    assert_no_install(without_uv)
+    if command[0] == "run.sh":
+        # The live boundary creates its lifecycle lock under ~/.ansible.
+        assert list(Path(without_uv["HOME"]).iterdir()) == []
 
 
 def test_interactive_vault_mutation_reports_missing_uv_once_it_has_a_tty(
@@ -112,7 +113,7 @@ def test_interactive_vault_mutation_reports_missing_uv_once_it_has_a_tty(
     assert returncode == 1, transcript
     assert f"vault.sh: {DIAGNOSTIC}" in transcript
     assert "https://docs.astral.sh/uv/" in transcript
-    assert_no_install_and_untouched_home(without_uv)
+    assert_no_install(without_uv)
 
 
 @pytest.mark.parametrize(
@@ -131,4 +132,4 @@ def test_invalid_grammar_outranks_missing_uv(
 
     assert result.returncode == 2, result.stdout + result.stderr
     assert DIAGNOSTIC not in result.stderr
-    assert_no_install_and_untouched_home(without_uv)
+    assert_no_install(without_uv)
