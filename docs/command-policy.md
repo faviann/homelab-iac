@@ -51,9 +51,11 @@ lock, or the wrapper marker. `./run.sh` rejects them as invalid usage.
 
 Two statuses are guaranteed across all six commands. A command that rejects
 its own grammar, such as an unknown operation or option or a missing
-operation, exits `2` before it does any work. `./run.sh`, `./inspect.sh`, and
-`./recover.sh` exit `75` when another live operation holds the lock. `0` means
-success.
+operation, exits `2` before it does any work. A live operation exits `75` when
+another live operation holds the lock. The live operations are every
+`./run.sh` and `./recover.sh` form and every `./inspect.sh` operation except
+`vars`, which reads only local inventory, takes no lock, and never returns
+`75`. `0` means success.
 
 Every other non-zero status is a failure, and its value depends on the
 command. Some operations pass the status of the tool they run through
@@ -62,7 +64,8 @@ unchanged:
 | Command | Failure statuses |
 | --- | --- |
 | `./setup.sh`, `./vault.sh` | `1` |
-| `./run.sh`, `./inspect.sh`, `./recover.sh` | `1` when the playbook or inspection fails. A dependency reconciliation failure passes its own status through, usually `1`. |
+| `./run.sh`, `./recover.sh`, live `./inspect.sh` operations | `1` when the playbook fails. A dependency reconciliation failure passes its own status through, usually `1`. |
+| `./inspect.sh vars` | `1` |
 | `./validate.sh lint` | `ansible-lint`'s status, for example `2` when it finds violations |
 | `./validate.sh lifecycle` | `1` when a launcher fails, and `2` when the runner rejects an unregistered launcher |
 | `./validate.sh tests` | pytest's status: `1` for failed tests, `4` for a target pytest cannot load, and `5` when no test was collected |
@@ -79,13 +82,13 @@ that `./validate.sh stack` writes to stdout.
 
 ### The lock
 
-Live operations take one machine-local lock at
+Live operations, meaning every `./run.sh` and `./recover.sh` form and every
+`./inspect.sh` operation except `vars`, take one machine-local lock at
 `~/.ansible/homelab-iac-lifecycle.lock`. Mutating operations take it
 exclusively. Audited read-only operations take it shared, so reads can overlap
-each other but never a mutation. A command that cannot take the lock stops at
-once with status `75`. There is no wait mode. When the holder is another
-`./run.sh`, `./inspect.sh`, or `./recover.sh`, the message names its process
-and worktree. A holder that took the lock directly, such as the stack-rename
+each other but never a mutation. A live operation that cannot take the lock
+stops at once with status `75`. There is no wait mode. When the holder is
+another live operation, the message names its process and worktree. A holder that took the lock directly, such as the stack-rename
 `flock` below, leaves no holder record. The message then cannot identify it,
 and any pid and worktree it prints were left in the lock file by an earlier
 lock implementation.
@@ -164,21 +167,36 @@ Agent use of a documented raw command is a separate decision:
 - **Scope:** one stack folder on one named host, as written in
   `.agents/skills/rename-stack/SKILL.md`.
 - **Boundary:** mutating. It stops the old stack, moves its folder in place,
-  and changes ownership. Precondition: no live operation holds the lock. Run
-  the SSH command under the lock so that none can start during the move:
+  and changes ownership. Precondition: no live operation holds the lock. Take
+  the lock first, then run the SSH command while holding it, so that no live
+  operation can start during the move:
 
   ```bash
-  flock --exclusive --nonblock ~/.ansible/homelab-iac-lifecycle.lock \
+  (
+    flock --exclusive --nonblock 9 ||
+      { echo "lifecycle lock held: nothing ran" >&2; exit 75; }
     ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> '<rename commands>'
+  ) 9>>~/.ansible/homelab-iac-lifecycle.lock
   ```
 
-  A non-zero `flock` status means a live operation is running. Wait for it to
-  finish. While the move runs, a live command started on this machine exits
-  `75` and cannot name this holder. The lock is machine-local, so it does not
-  cover a run from another control node.
+  The message tells the two failures apart. The status does not, because the
+  remote commands can return any status, including `75`.
+
+  - `lifecycle lock held: nothing ran` means a live operation holds the lock
+    and SSH never started. Wait for that operation to finish, then run the
+    block again.
+  - Any other non-zero status comes from SSH or the remote commands, and the
+    move may be partial. Do not retry. Follow the escalation below.
+
+  While the move runs, a live operation started on this machine exits `75` and
+  cannot name this holder. The lock is machine-local, so it does not cover a
+  run from another control node.
 - **Sensitive output:** as for SSH diagnosis.
 - **Escalation:** a stack the skill refuses (foundational, OIDC-coupled, or
-  with named volumes) needs a dedicated migration that a person plans.
+  with named volumes) needs a dedicated migration that a person plans. A
+  failure after SSH starts goes to a person with the command output. Read-only
+  SSH diagnosis may establish which of the old and new folders exist, but
+  repairing a partial move needs that person's approval.
 
 #### Proxmox RAM report
 
@@ -278,6 +296,10 @@ These are known limits, not defects waiting for a fix.
   not detected.
 - The lifecycle lock is machine-local. Two control nodes can still collide
   (#174).
+- `./validate.sh` requires `/usr/sbin/sshd` (Debian package `openssh-server`).
+  The Proxmox trust regression starts an unprivileged `sshd` on `127.0.0.1` so
+  that the real `ssh` client decides trust. Validation fails on a machine
+  without it, and it installs nothing.
 - `./validate.sh` needs no machine-local secret, so a build server can now run
   it after a checkout, a `uv` install, and `openssh-server`. None exists yet
   (#200).
