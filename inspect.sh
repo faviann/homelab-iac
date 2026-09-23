@@ -60,6 +60,8 @@ case "${1:-}" in
     vars)
         shift
         (($# == 1)) || usage_error "vars requires one host or --graph"
+        [[ "$1" == "--graph" || "$1" != -* ]] || usage_error "unknown option"
+        require_uv || exit 1
         if [[ "$1" == "--graph" ]]; then
             unset ANSIBLE_VAULT_PASSWORD_FILE ANSIBLE_VAULT_IDENTITY_LIST
             if uv run --locked ansible-inventory \
@@ -68,7 +70,6 @@ case "${1:-}" in
             fi
             exit 1
         fi
-        [[ "$1" != -* ]] || usage_error "unknown option"
         use_live_vault_password
         if ! masked_inventory_file="$(mktemp)"; then
             exit 1

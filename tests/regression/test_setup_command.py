@@ -62,6 +62,10 @@ def project(tmp_path: Path) -> Path:
     (project / ".agents" / "skills" / "example-skill").mkdir(parents=True)
     for name in ("setup.sh", "vault.sh"):
         (project / name).symlink_to(REPO_ROOT / name)
+    (project / "scripts" / "lib").mkdir(parents=True)
+    (project / "scripts" / "lib" / "uv-prerequisite.sh").symlink_to(
+        REPO_ROOT / "scripts" / "lib" / "uv-prerequisite.sh"
+    )
     (project / "bootstrap.yml").write_text("---\n", encoding="utf-8")
     (project / ".venv").mkdir()
     return project

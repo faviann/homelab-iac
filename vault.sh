@@ -6,6 +6,7 @@ set -uo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INVOCATION_DIR="$PWD"
 cd "$PROJECT_ROOT" || exit 1
+source "$PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 VAULT_FILE="$PROJECT_ROOT/inventory/vault.yml"
 STANDARD_PASS_FILE="$HOME/.ansible/vault-pass"
 PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$STANDARD_PASS_FILE}"
@@ -483,8 +484,8 @@ rotation_recover() {
 rotation_preflight() {
     local dry_run="$1"
     local required requirement status
-    required="uv"
-    [[ "$dry_run" == 1 ]] || required="bw jq chezmoi uv"
+    required=""
+    [[ "$dry_run" == 1 ]] || required="bw jq chezmoi"
     for requirement in $required; do
         command -v "$requirement" >/dev/null 2>&1 || {
             rotation_fail "required command not found: $requirement"
@@ -729,6 +730,7 @@ case "$1" in
         ;;
     check)
         (( $# == 1 )) || exit 2
+        require_uv || exit 1
         check_vault
         exit $?
         ;;
@@ -738,6 +740,7 @@ case "$1" in
             usage >&2
             exit 2
         fi
+        require_uv || exit 1
         if ! source_file_authorized "$SET_SOURCE"; then
             printf 'set %s: FAIL\n' "$SET_KEY" >&2
             exit 1
@@ -765,6 +768,7 @@ case "$1" in
                     ;;
             esac
         done
+        require_uv || exit 1
         if (( ROTATE_DRY_RUN == 0 )); then
             open_tty || {
                 printf 'rotate: FAIL\n' >&2
@@ -776,6 +780,7 @@ case "$1" in
         ;;
     configure|edit)
         (( $# == 1 )) || exit 2
+        require_uv || exit 1
         open_tty || {
             printf '%s: FAIL\n' "$1" >&2
             exit 1
