@@ -8,6 +8,8 @@ readonly LIVE_EXECUTION_METADATA_LOCK_FILE="${LIVE_EXECUTION_LOCK_FILE}.metadata
 readonly LIVE_EXECUTION_METADATA_LOCK_WAIT_SECONDS=0.1
 readonly LIVE_EXECUTION_WRAPPER_MARKER="HOMELAB_IAC_LIFECYCLE_WRAPPER"
 
+source "$LIVE_EXECUTION_PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
+
 use_live_vault_password() {
     if [[ -z "${ANSIBLE_VAULT_PASSWORD_FILE:-}" && -f "$HOME/.ansible/vault-pass" ]]; then
         export ANSIBLE_VAULT_PASSWORD_FILE="$HOME/.ansible/vault-pass"
@@ -136,6 +138,7 @@ run_live_playbook() {
     local playbook="$2"
     shift 2
 
+    require_uv || return 1
     mkdir -p "$(dirname "$LIVE_EXECUTION_LOCK_FILE")" "$LIVE_EXECUTION_HOLDER_DIR"
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"
     if ! acquire_live_metadata_lock "$live_execution_metadata_lock_fd"; then

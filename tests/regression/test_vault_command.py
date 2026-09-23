@@ -157,6 +157,11 @@ def vault_repo(
     bin_dir.mkdir(exist_ok=True)
     (home / ".ansible").mkdir(parents=True)
     shutil.copy2(RUNNER, repo / "vault.sh")
+    (repo / "scripts" / "lib").mkdir(parents=True)
+    shutil.copy2(
+        REPO_ROOT / "scripts" / "lib" / "uv-prerequisite.sh",
+        repo / "scripts" / "lib" / "uv-prerequisite.sh",
+    )
 
     env = {
         name: os.environ[name] for name in INHERITED_ENVIRONMENT if name in os.environ

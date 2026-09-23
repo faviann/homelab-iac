@@ -62,7 +62,7 @@ Secrets are only in encrypted `inventory/vault.yml` — never commit plaintext c
 
 Run lifecycle operations through `./run.sh`. It serializes lifecycle mutation with one machine-local lock shared by every worktree on the workstation; it does not coordinate runs from different control nodes.
 
-Roles live in `playbooks/roles/{base,infrastructure,provisioning,config}/`.
+Roles live in `playbooks/roles/{infrastructure,provisioning,config}/`.
 
 ## Docker Stacks
 
@@ -87,9 +87,7 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `./validate.sh lint` | Targeted repo-wide lint feedback (production profile). Prefer `./validate.sh` for handoff verification |
 | `./validate.sh tests [<target>...]` | Run the test suite, optionally restricted to targets inside `tests/` (a path, optionally with a `::` node-id suffix). Targets outside the test tree are invalid usage |
 | `./validate.sh stack <path>` | Validate one repo-managed stack's update policy — schema-versioned JSON on stdout, diagnostics on stderr. Not part of the no-argument handoff run |
-| `./setup.sh` | Guided fresh workstation setup — extend here for new workstation config (editor, tooling, env) |
-| `./setup.sh sync` | Synchronize the locked controller environment only (non-interactive; no OS packages, no managed host) |
-| `./setup.sh bootstrap` | Eagerly reconcile every declared collection and external role. Live commands do not require it for worktree dependencies |
+| `./setup.sh sync` | Optionally synchronize the locked Python environment ahead of use (non-interactive; no OS packages, no managed host). Every command reconciles it on its own |
 | `ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 
 **Timing**: `uv run --locked ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
@@ -120,6 +118,5 @@ Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged
 
 → [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read when adding hosts or debugging variable precedence.
 → [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
-→ [setup.sh](setup.sh) — read when addressing workstation tooling, editor config, or environment setup for contributors.
 → [docs/workstation-persistent-state.md](docs/workstation-persistent-state.md) — read before any workstation deploy that enables persistent home mounts.
 → [docs/lobu-control-plane.md](docs/lobu-control-plane.md) — read before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.

@@ -262,7 +262,7 @@ all:
             )
             output = f"{list_result.stdout}\n{list_result.stderr}"
             for play_name in (
-                "Verify control node has been bootstrapped",
+                "Verify control node prerequisites",
                 "Verify Proxmox host SSH access",
             ):
                 play_start = output.rfind(play_name)

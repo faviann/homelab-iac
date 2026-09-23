@@ -6,6 +6,7 @@ set -uo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INVOCATION_DIR="$PWD"
 cd "$PROJECT_ROOT" || exit 1
+source "$PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 VAULT_FILE="$PROJECT_ROOT/inventory/vault.yml"
 STANDARD_PASS_FILE="$HOME/.ansible/vault-pass"
 PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$STANDARD_PASS_FILE}"
@@ -83,6 +84,11 @@ check_vault() {
         check_line "passphrase permissions" FAIL
     fi
 
+    if ! require_uv; then
+        check_line "decryptability" FAIL
+        report_content_failures
+        return 1
+    fi
     workspace="$(mktemp -d /dev/shm/homelab-vault.XXXXXX)" || {
         check_line "decryptability" FAIL
         report_content_failures
@@ -483,14 +489,18 @@ rotation_recover() {
 rotation_preflight() {
     local dry_run="$1"
     local required requirement status
-    required="uv"
-    [[ "$dry_run" == 1 ]] || required="bw jq chezmoi uv"
+    required=""
+    [[ "$dry_run" == 1 ]] || required="bw jq chezmoi"
     for requirement in $required; do
         command -v "$requirement" >/dev/null 2>&1 || {
             rotation_fail "required command not found: $requirement"
             return 1
         }
     done
+    require_uv || {
+        rotation_fail "required command not found: uv"
+        return 1
+    }
     [[ -s "$PASS_FILE" ]] || {
         rotation_fail "live passphrase file missing or empty: $PASS_FILE"
         return 1
@@ -746,6 +756,7 @@ case "$1" in
         # A transfer is non-interactive, so it reads EOF and declines instead
         # of prompting to convert an unencrypted vault.
         exec 3<>/dev/null
+        require_uv || exit 1
         run_mutation set "set $SET_KEY"
         exit $?
         ;;
@@ -780,6 +791,7 @@ case "$1" in
             printf '%s: FAIL\n' "$1" >&2
             exit 1
         }
+        require_uv || exit 1
         run_mutation "$1"
         exit $?
         ;;

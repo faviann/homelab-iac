@@ -21,6 +21,7 @@ from ansible_test_helper import write_controller_identity  # noqa: E402
 
 from scripts.live_dependencies import (  # noqa: E402
     COLLECTIONS_PATH,
+    CONTROLLER_IDENTITY_CREATION,
     LIVE_OPERATIONS,
     ROLES_PATH,
     SSH_CONTROL_PATH_PARENT,
@@ -416,6 +417,27 @@ def test_ssh_operation_creates_the_repository_control_path_parent(
     control_path_parent = fixture_project / ".ansible" / "cp"
     assert control_path_parent.is_dir()
     assert control_path_parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_documented_first_controller_identity_works_from_a_fresh_home(
+    fixture_project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fresh_home = tmp_path / "fresh-home"
+    fresh_home.mkdir()
+    monkeypatch.setenv("HOME", str(fresh_home))
+
+    with pytest.raises(DependencyReconciliationError, match="which is absent"):
+        reconcile("playbooks/lab-connectivity.yml", project_root=fixture_project)
+    assert list(fresh_home.iterdir()) == []
+
+    subprocess.run(
+        ["bash", "-c", CONTROLLER_IDENTITY_CREATION],
+        check=True,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+    )
+
+    reconcile("playbooks/lab-connectivity.yml", project_root=fixture_project)
 
 
 def test_dependency_free_ssh_operation_does_not_wait_for_dependency_lock(

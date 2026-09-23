@@ -5,6 +5,7 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
+source "$PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 
 usage() {
     cat <<'EOF'
@@ -128,6 +129,8 @@ fi
 if [[ "$operation" == "stack" ]] && ((${#stack_paths[@]} != 1)); then
     usage_error "stack requires exactly one stack path"
 fi
+
+require_uv || exit 1
 
 # Keep every validation child on repository-owned, credential-free Ansible
 # inputs. Individual regression launchers inherit the same boundary.
