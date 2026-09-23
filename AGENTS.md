@@ -24,9 +24,9 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 
 ## Non-negotiables
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
-- Run Python and Ansible tools through `uv run --locked <tool>`. If `.venv/` does not exist, run `./setup.sh sync`.
+- Use the repository's Bash commands. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
 - Commands that consume the vault expect its passphrase at `~/.ansible/vault-pass` (overridable with `ANSIBLE_VAULT_PASSWORD_FILE`).
-- Lifecycle playbooks skip any host whose `inventory_hostname` matches the controller's hostname (`proxmox_skip_self: true` by default). To manage the control node intentionally: `./run.sh -e proxmox_skip_self=false --limit workstation` (`--limit` targets the host, `-e` disables the guard).
+- Lifecycle runs skip any host whose `inventory_hostname` matches the controller's hostname. To manage the control node intentionally, run `./run.sh --include-controller`, which targets only `workstation`.
 
 ## Standard Paths
 
@@ -60,7 +60,7 @@ Secrets are only in encrypted `inventory/vault.yml` — never commit plaintext c
 
 `site.yml` runs three phases in sequence: **validate** → **provision** (LXC create/update via Proxmox API) → **configure** (in-container: packages, Docker, stacks). Two-tier host config: `proxmox_lxc_provision` handles API-allowed settings; `proxmox_lxc_host_config` handles restricted features (`keyctl=1`, `nesting=1`) via `pct` on the Proxmox host.
 
-Run lifecycle operations through `./run.sh`. It serializes lifecycle mutation with one machine-local lock shared by every worktree on the workstation; it does not coordinate runs from different control nodes.
+Run lifecycle operations through `./run.sh`. Live commands share one machine-local lock across every worktree on the workstation: mutations take it exclusively, read-only operations take it shared. It does not coordinate runs from different control nodes.
 
 Roles live in `playbooks/roles/{infrastructure,provisioning,config}/`.
 
@@ -72,14 +72,29 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 
 ## Command Reference
 
+Six commands are the whole interface. Each answers `--help`; [docs/command-policy.md](docs/command-policy.md) holds the grammar, exit statuses, lock classes, and the raw commands that remain permitted, including read-only SSH diagnosis of a named host.
+
 | Command | Purpose |
 |---------|---------|
+| `./run.sh` | Full lifecycle — deploy/update all LXCs. Exclusive lock |
+| `./run.sh provision` / `./run.sh configure` | Provision-only or configure-only lifecycle |
+| `./run.sh --limit <targets>` | Target hosts with Ansible limit grammar |
+| `./run.sh --limit <host> --stack <stack>` | Deploy one stack on a host (skips all others) |
+| `./run.sh --check` | Dry run. Shared lock |
+| `./run.sh --include-controller` | Intentionally manage the control node (`workstation`) |
+| `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode |
+| `./inspect.sh credentials` | Walk the Proxmox API credential and permission ladder |
+| `./inspect.sh connectivity [--limit <targets>]` | Check LXC SSH reachability; non-zero when a target is unreachable |
+| `./inspect.sh containers` | List every LXC on the Proxmox node |
+| `./inspect.sh plan [--limit <targets>]` | Report lifecycle planning problems without executing anything |
+| `./inspect.sh vars <host>` / `vars --graph` | Merged variables with vault-derived values masked, or the group tree. No lock |
+| `./recover.sh ssh-keys [--limit <targets>]` | Human-only. Enroll the controller key in existing LXCs |
+| `./recover.sh proxmox-host-ssh` | Human-only. Enroll the controller key on the Proxmox host (prompts for its root password) |
+| `./vault.sh check` | Verify the vault without disclosing its contents |
+| `./vault.sh set <key> --from-file <path> --create\|--replace` | Only on explicit request. Move a secret file into the vault without reading it |
+| `./vault.sh rotate --dry-run` | Rehearse passphrase rotation on throwaway copies |
+| `./vault.sh configure` / `edit` / `rotate` | Human-only. Interactive credential, vault, and passphrase changes |
 | `./validate.sh` | Complete non-live verification — lint, full lifecycle regressions, and full pytest suite |
-| `./run.sh` | Full lifecycle — deploy/update all LXCs |
-| `./run.sh -e proxmox_skip_self=false --limit workstation` | Intentionally include the control node when running from `workstation` |
-| `./run.sh --limit <host>` | Target one host |
-| `./run.sh --limit <host> -e stack_filter=<stack>` | Deploy one stack on a host (skips all others) |
-| `./run.sh --check` | Dry run |
 | `./validate.sh lifecycle` | Fast lifecycle feedback (~1.5 min) — semantic lifecycle facade matrix + targeted planning barrier, controlled observations only. Run while iterating on LXC lifecycle changes |
 | `./validate.sh lifecycle --only <launcher.py>` | Target one registered lifecycle launcher in the same credential-free fixture environment. Repeat `--only` to run several launchers in the supplied order |
 | `./validate.sh lifecycle --full --fail-fast` | Remediation pass — finish the concurrent fast launchers, then stop scheduling after the first observed failure. Launchers already in flight in the bounded pool still finish and are reported |
@@ -88,15 +103,14 @@ Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered an
 | `./validate.sh tests [<target>...]` | Run the test suite, optionally restricted to targets inside `tests/` (a path, optionally with a `::` node-id suffix). Targets outside the test tree are invalid usage |
 | `./validate.sh stack <path>` | Validate one repo-managed stack's update policy — schema-versioned JSON on stdout, diagnostics on stderr. Not part of the no-argument handoff run |
 | `./setup.sh sync` | Optionally synchronize the locked Python environment ahead of use (non-interactive; no OS packages, no managed host). Every command reconciles it on its own |
-| `ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host>` | Direct SSH into an LXC |
 
-**Timing**: `uv run --locked ansible-playbook` runs against live hosts typically take 5–10 minutes. Do not assume a hang — wait for completion before acting on the result.
+**Timing**: `./run.sh` against live hosts typically takes 5–10 minutes, and `--limit` or `--stack` shortens it. Live `./inspect.sh` operations take about 10 seconds for `credentials`, `containers`, and `connectivity`, and about half a minute for a fleet-wide `plan`; a first run in a fresh worktree also reconciles dependencies. Do not assume a hang — wait for completion before acting on the result. A command that cannot take the lock exits 75 at once and names the holder; it never waits.
 
 For lifecycle-regression remediation, use repeatable `./validate.sh lifecycle --only <launcher.py>` for the shortest targeted loop and add `--fail-fast` when later selected launchers cannot provide useful evidence after a failure. `--only` accepts the registered filenames reported by the runner's actionable error, and cannot be combined with `--full`. Lifecycle launchers are the `tests/regression/*_launcher.py` files, run only by the lifecycle runner; pytest owns the `test_*.py` files under `tests/` and never collects a launcher. A targeted operation never substitutes for the full handoff run: before handoff, always run `./validate.sh` with no arguments so every gate reports a result.
 
-**Live dependencies**: `./run.sh`, live `./inspect.sh`, and `./recover.sh` reconcile their own worktree dependencies. Once the shared boundary holds the lifecycle lock and before it invokes Ansible, it runs `scripts/live_dependencies.py`, which installs and verifies, by name and at its own pin, only the collections and external roles the selected playbook consumes, then creates `.ansible/cp/` for SSH-consuming operations. No supported workflow creates controller identity. An SSH-consuming live operation verifies `~/.ansible/ssh/proxmox_lxc` against its `.pub` and fails before any live effect when the pair is missing or inconsistent; creating or restoring that identity is an explicit human step. Reconciling under the held lock keeps contention fail-fast: a caller that loses the lock exits 75 without downloading anything. `LIVE_OPERATIONS` is hand-maintained; the reconciler cannot detect a newly consumed dependency omitted from a row, and an existing installation can mask the omission. When a live playbook begins consuming a collection or external role, update its row in the same change. Never widen reconciliation back to a whole declaration file — a dependency one operation does not consume must never block it.
+**Live dependencies**: `./run.sh`, live `./inspect.sh`, and `./recover.sh` reconcile their own worktree dependencies. Once the shared boundary holds the lifecycle lock and before it invokes Ansible, it runs `scripts/live_dependencies.py`, which installs and verifies, by name and at its own pin, only the collections and external roles the selected playbook consumes, then creates `.ansible/cp/` for SSH-consuming operations. No supported workflow creates controller identity. An SSH-consuming live operation verifies `~/.ansible/ssh/proxmox_lxc` against its `.pub` and fails before any live effect when the pair is missing or inconsistent; creating or restoring that identity is an explicit human step. Reconciling under the held machine-local lock keeps contention fail-fast: a caller that loses the lock exits 75 without downloading anything. `LIVE_OPERATIONS` is hand-maintained; the reconciler cannot detect a newly consumed dependency omitted from a row, and an existing installation can mask the omission. When a live playbook begins consuming a collection or external role, update its row in the same change. Never widen reconciliation back to a whole declaration file — a dependency one operation does not consume must never block it.
 
-Run `./validate.sh` for complete deterministic handoff verification. It requires `/usr/sbin/sshd` (`openssh-server`, shipped by the `debian-13-standard` template the `workstation` guest uses) because the Proxmox trust regression runs an unprivileged local `sshd`. It does not load live inventory or acquire the lifecycle lock. Route every operation that contacts managed hosts, including `--check`, through `./run.sh`.
+Run `./validate.sh` for complete deterministic handoff verification. It requires `/usr/sbin/sshd` (`openssh-server`, shipped by the `debian-13-standard` template the `workstation` guest uses) because the Proxmox trust regression runs an unprivileged local `sshd`. It does not load live inventory or acquire the lifecycle lock. Route every operation that contacts managed hosts, including `--check`, through `./run.sh`, `./inspect.sh`, or `./recover.sh`.
 
 **Long-running output discipline**: For live deploys or other noisy commands, avoid streaming full output into chat context. Prefer redirecting to a temp log and polling only high-signal excerpts:
 ```bash
@@ -106,7 +120,7 @@ rg "failed=|unreachable=|FAILED|changed=|<relevant-resource>" /tmp/<task>.log
 ```
 Only read the full log when the summarized output is insufficient to diagnose a failure. Never print secrets from logs or vault output.
 
-Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged vars, `uv run --locked ansible -i inventory/hosts.yml lxcs -m ping` for connectivity, delete `.ansible/cache/` for stale facts.
+Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged vars, `./inspect.sh connectivity` for connectivity, delete `.ansible/cache/` for stale facts.
 
 ## Role Design Principles
 
