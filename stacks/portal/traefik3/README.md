@@ -62,5 +62,5 @@ closes with no bytes means the client IP is outside the allowlist.
 ## Deploy
 
 ```bash
-./run.sh --limit portal -e stack_filter=traefik3
+./run.sh configure --limit portal --stack traefik3
 ```
