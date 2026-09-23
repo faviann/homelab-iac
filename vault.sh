@@ -84,6 +84,11 @@ check_vault() {
         check_line "passphrase permissions" FAIL
     fi
 
+    if ! require_uv; then
+        check_line "decryptability" FAIL
+        report_content_failures
+        return 1
+    fi
     workspace="$(mktemp -d /dev/shm/homelab-vault.XXXXXX)" || {
         check_line "decryptability" FAIL
         report_content_failures
@@ -492,6 +497,10 @@ rotation_preflight() {
             return 1
         }
     done
+    require_uv || {
+        rotation_fail "required command not found: uv"
+        return 1
+    }
     [[ -s "$PASS_FILE" ]] || {
         rotation_fail "live passphrase file missing or empty: $PASS_FILE"
         return 1
@@ -730,7 +739,6 @@ case "$1" in
         ;;
     check)
         (( $# == 1 )) || exit 2
-        require_uv || exit 1
         check_vault
         exit $?
         ;;
@@ -740,7 +748,6 @@ case "$1" in
             usage >&2
             exit 2
         fi
-        require_uv || exit 1
         if ! source_file_authorized "$SET_SOURCE"; then
             printf 'set %s: FAIL\n' "$SET_KEY" >&2
             exit 1
@@ -749,6 +756,7 @@ case "$1" in
         # A transfer is non-interactive, so it reads EOF and declines instead
         # of prompting to convert an unencrypted vault.
         exec 3<>/dev/null
+        require_uv || exit 1
         run_mutation set "set $SET_KEY"
         exit $?
         ;;
@@ -768,7 +776,6 @@ case "$1" in
                     ;;
             esac
         done
-        require_uv || exit 1
         if (( ROTATE_DRY_RUN == 0 )); then
             open_tty || {
                 printf 'rotate: FAIL\n' >&2
@@ -780,11 +787,11 @@ case "$1" in
         ;;
     configure|edit)
         (( $# == 1 )) || exit 2
-        require_uv || exit 1
         open_tty || {
             printf '%s: FAIL\n' "$1" >&2
             exit 1
         }
+        require_uv || exit 1
         run_mutation "$1"
         exit $?
         ;;
