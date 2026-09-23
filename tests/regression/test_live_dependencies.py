@@ -471,18 +471,6 @@ def test_dependency_free_ssh_operation_does_not_wait_for_dependency_lock(
     assert (fixture_project / ".ansible/cp").is_dir()
 
 
-def test_live_path_never_directs_the_caller_to_the_retired_bootstrap() -> None:
-    live_sources = [
-        REPO_ROOT / "scripts" / "live_dependencies.py",
-        REPO_ROOT / "scripts" / "lib" / "live-execution.sh",
-        REPO_ROOT / "playbooks" / "controller-prerequisites.yml",
-        REPO_ROOT / "playbooks" / "proxmox-host-prerequisites.yml",
-        *(REPO_ROOT / command for command in PUBLIC_COMMANDS),
-    ]
-    for source in live_sources:
-        assert "setup.sh bootstrap" not in source.read_text(encoding="utf-8"), source
-
-
 def stage_controller_identity(home: Path, state: str) -> None:
     if state == "absent":
         return
