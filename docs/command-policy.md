@@ -285,12 +285,21 @@ In a documented `./run.sh` invocation, `-e` and `--tags` appear only after
 
 The guidance text check that #219 adds will look for the superseded forms in
 the table above, and for `-e` or `--tags` before `--` in a documented
-`./run.sh` invocation. It will not recognize raw commands in general. A raw
-command that is not one of those shapes passes the check, so review enforces
-the rest of this policy.
+`./run.sh` invocation. It will scan only these guidance surfaces:
 
-Outside these files, the check will reject every superseded form. Each file
-may carry only the shape listed:
+- tracked Markdown outside `tests/`
+- `inventory/vault.yml.example`
+- `.ansible-lint`
+- comment and `msg:` text in YAML under `playbooks/` and in `site.yml`
+- string literals passed to `echo` or `printf` in tracked shell scripts
+
+Shell execution lines are not scanned. The internal-call rule governs them.
+
+Within those surfaces, a superseded form fails the check unless it appears in
+a file below and matches that file's permitted shape. The check will not
+recognize raw commands in general, and it will not look anywhere else. Review
+enforces the rest of this policy, including any raw command or superseded form
+the check does not recognize.
 
 | File | Permitted shape |
 | --- | --- |
