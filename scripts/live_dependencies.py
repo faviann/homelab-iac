@@ -216,12 +216,16 @@ class ControllerIdentity(enum.Enum):
     INCONSISTENT = "inconsistent"
 
 
+CONTROLLER_IDENTITY_CREATION = (
+    "mkdir -p -m 700 ~/.ansible/ssh && ssh-keygen -t ed25519 -N '' -f "
+    "~/.ansible/ssh/proxmox_lxc -C ansible-control@$(hostname)"
+)
+
 CONTROLLER_IDENTITY_GUIDANCE = (
     "Restore the previously trusted private key and its .pub from your own "
     "backup of this controller; minting a new identity loses the trust the "
     "fleet already grants, and managed hosts will still reject it. On a first "
-    "controller, create one explicitly: ssh-keygen -t ed25519 -N '' -f "
-    "~/.ansible/ssh/proxmox_lxc -C ansible-control@$(hostname). Neither "
+    f"controller, create one explicitly: {CONTROLLER_IDENTITY_CREATION}. Neither "
     "restoring nor creating enrolls trust on managed infrastructure; "
     "./recover.sh proxmox-host-ssh enrolls the Proxmox host and "
     "./recover.sh ssh-keys enrolls existing LXCs."

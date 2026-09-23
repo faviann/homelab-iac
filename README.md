@@ -154,6 +154,7 @@ On the managed `workstation` LXC, run `workstation-setup` first so Home Manager 
    On a genuinely first controller, create one:
 
    ```bash
+   mkdir -p -m 700 ~/.ansible/ssh
    ssh-keygen -t ed25519 -N '' -f ~/.ansible/ssh/proxmox_lxc -C "ansible-control@$(hostname)"
    ```
 
