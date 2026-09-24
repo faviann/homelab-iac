@@ -178,6 +178,18 @@ def run_regressions() -> int:
     ):
         print("site.yml still exposes standalone validation", file=sys.stderr)
         return 1
+    lifecycle = (REPO_ROOT / "playbooks" / "lifecycle-lxcs.yml").resolve()
+    if not any(
+        (REPO_ROOT / imported).resolve() == lifecycle
+        for document in site_documents
+        for imported in (
+            document.get("ansible.builtin.import_playbook"),
+            document.get("import_playbook"),
+        )
+        if imported
+    ):
+        print("site.yml no longer imports playbooks/lifecycle-lxcs.yml", file=sys.stderr)
+        return 1
 
     env = os.environ.copy()
     env["HOMELAB_IAC_LIFECYCLE_WRAPPER"] = "1"
