@@ -460,29 +460,20 @@ REQUIRED_KEYS = (
     "vault_proxmox_api_token_id",
     "vault_proxmox_api_token_secret",
 )
-PLACEHOLDERS = (
-    "REPLACE_ME",
-    "<REPLACE_ME>",
-    "REPLACE_WITH_SYNTHETIC",
-    "  REPLACE_ME\t",
-    "\t<REPLACE_ME>  ",
-    "  REPLACE_WITH_SYNTHETIC  ",
-)
-
-
-# Both validators apply one rule to every key, so each rejected value runs
-# once, and cycling the keys still gives every key several rejections.
-def cycle_required_keys(
-    values: tuple[str | None, ...],
-) -> list[tuple[str, str | None]]:
-    return [
-        (REQUIRED_KEYS[index % len(REQUIRED_KEYS)], value)
-        for index, value in enumerate(values)
-    ]
 
 
 @pytest.mark.parametrize(
-    ("key", "replacement"), cycle_required_keys((None, "", *PLACEHOLDERS))
+    ("key", "replacement"),
+    [
+        ("vault_proxmox_api_user", None),
+        ("vault_proxmox_api_token_id", ""),
+        ("vault_proxmox_api_token_secret", "REPLACE_ME"),
+        ("vault_proxmox_api_user", "<REPLACE_ME>"),
+        ("vault_proxmox_api_token_id", "REPLACE_WITH_SYNTHETIC"),
+        ("vault_proxmox_api_token_secret", "  REPLACE_ME\t"),
+        ("vault_proxmox_api_user", "\t<REPLACE_ME>  "),
+        ("vault_proxmox_api_token_id", "  REPLACE_WITH_SYNTHETIC  "),
+    ],
 )
 def test_check_rejects_every_missing_empty_or_placeholder_required_key(
     vault_repo: tuple[Path, dict[str, str]], key: str, replacement: str | None
@@ -737,7 +728,16 @@ def configure_interactions(
 
 
 @pytest.mark.parametrize(
-    ("key", "invalid_value"), cycle_required_keys(("   ", *PLACEHOLDERS))
+    ("key", "invalid_value"),
+    [
+        ("vault_proxmox_api_user", "   "),
+        ("vault_proxmox_api_token_id", "REPLACE_ME"),
+        ("vault_proxmox_api_token_secret", "<REPLACE_ME>"),
+        ("vault_proxmox_api_user", "REPLACE_WITH_SYNTHETIC"),
+        ("vault_proxmox_api_token_id", "  REPLACE_ME\t"),
+        ("vault_proxmox_api_token_secret", "\t<REPLACE_ME>  "),
+        ("vault_proxmox_api_user", "  REPLACE_WITH_SYNTHETIC  "),
+    ],
 )
 def test_configure_rejects_every_value_that_check_rejects(
     vault_repo: tuple[Path, dict[str, str]], key: str, invalid_value: str
