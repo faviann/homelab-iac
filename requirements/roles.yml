@@ -1,6 +1,6 @@
 ---
 # External Ansible roles required for this project
-# Install with: ansible-galaxy role install -r requirements/roles.yml -p .ansible/roles
+# Live commands install the roles they consume (scripts/live_dependencies.py).
 
 roles:
   - name: geerlingguy.docker
