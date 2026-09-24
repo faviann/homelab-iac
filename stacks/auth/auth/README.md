@@ -82,5 +82,5 @@ application bindings no longer reference it.
 ## Deploy
 
 ```bash
-./run.sh --limit auth -e stack_filter=auth
+./run.sh --limit auth --stack auth
 ```

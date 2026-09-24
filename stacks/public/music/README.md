@@ -46,5 +46,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-./run.sh --limit public -e stack_filter=music
+./run.sh --limit public --stack music
 ```

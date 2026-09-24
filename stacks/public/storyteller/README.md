@@ -18,5 +18,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-./run.sh --limit public -e stack_filter=storyteller
+./run.sh --limit public --stack storyteller
 ```

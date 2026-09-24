@@ -79,19 +79,28 @@ Look up `docker_uid`/`docker_gid` for the host if a `chown` is needed
 (`./inspect.sh vars <host>`).
 
 ```bash
-# Stop old stack and rename folder in place (bind appdata rides along).
-ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> \
-  'cd /shared/<host>/stacks/<old> && docker compose down; \
-   mv /shared/<host>/stacks/<old> /shared/<host>/stacks/<new> && \
-   chown -R <docker_uid>:<docker_gid> /shared/<host>/stacks/<new>'
+# Stop old stack and rename folder in place (bind appdata rides along),
+# holding the lifecycle lock so no live operation starts during the move.
+(
+  flock --exclusive --nonblock 9 ||
+    { echo "lifecycle lock held: nothing ran" >&2; exit 75; }
+  ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> \
+    'cd /shared/<host>/stacks/<old> && docker compose down; \
+     mv /shared/<host>/stacks/<old> /shared/<host>/stacks/<new> && \
+     chown -R <docker_uid>:<docker_gid> /shared/<host>/stacks/<new>'
+) 9>>~/.ansible/homelab-iac-lifecycle.lock
 
-# Full-host deploy — NOT stack_filter (it suppresses stale detection and skips reconciliation).
+# Full-host deploy — NOT --stack (it suppresses stale detection and skips reconciliation).
 ./run.sh --limit <host> > /tmp/rename-<new>.log 2>&1
 tail -40 /tmp/rename-<new>.log
 rg "failed=|unreachable=|quarantin|<new>" /tmp/rename-<new>.log
 ```
 
-- **Use a full-host deploy.** `-e stack_filter=` short-circuits `stale` handling (`discover.yml` →
+- **Precondition: no live operation holds the lock.** `lifecycle lock held: nothing ran` means SSH never
+  started; wait for that operation to finish and rerun the block. Any other failure may have left a
+  partial move: do not retry, hand the output to the user (`docs/command-policy.md` → "Stack-rename
+  remote mutation").
+- **Use a full-host deploy.** `--stack` short-circuits `stale` handling (`discover.yml` →
   "Suppress stale stack list when stack_filter is active") and would leave orphans if the in-place `mv`
   were ever skipped.
 - After the in-place `mv`, `<old>` no longer exists on the remote → not stale → nothing quarantined;

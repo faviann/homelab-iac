@@ -2,7 +2,7 @@
 """Opt-in probe for multiprocessing primitives in the Codex sandbox.
 
 Run with:
-EXPECT_SANDBOX_MULTIPROCESSING_PERMISSIONERROR=1 uv run --locked pytest \
+EXPECT_SANDBOX_MULTIPROCESSING_PERMISSIONERROR=1 ./validate.sh tests \
     tests/regression/test_sandbox_multiprocessing_primitives.py
 """
 

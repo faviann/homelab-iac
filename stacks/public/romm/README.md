@@ -35,5 +35,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-./run.sh --limit public -e stack_filter=romm
+./run.sh --limit public --stack romm
 ```

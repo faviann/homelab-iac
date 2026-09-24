@@ -231,7 +231,7 @@ the app version:
 
 1. Resolve the new tag to a digest and update `compose.yaml` with both.
 2. `./validate.sh stack stacks/lobu/lobu` and `./validate.sh`.
-3. `./run.sh --limit lobu -e stack_filter=lobu`.
+3. `./run.sh --limit lobu --stack lobu`.
 4. Watch `docker logs -f lobu-app` through the migration block; the entrypoint
    fails fast and loudly rather than migrating partially.
 5. Re-run the health checks above, then re-check the OAuth discovery documents
