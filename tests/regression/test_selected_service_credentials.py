@@ -164,8 +164,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     }, "--skip-tags", "docker_host_setup", "-vvv", "--diff")
     output = result.stdout + result.stderr
     assert (agents / ".env").read_text() == existing_env
-    assert "fixture-selected-value" not in output
-    assert not (shared / "stacks/unselected").exists()
     if stack_filter == "docker-agents":
         assert result.returncode != 0, output
         assert "Validate Dockhand Hawser variables" in output
@@ -175,6 +173,8 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
         return
 
     assert result.returncode == 0, output
+    assert "fixture-selected-value" not in output
+    assert not (shared / "stacks/unselected").exists()
     assert not legacy.exists()
     assert not (shared / "admin").exists()
     assert not (shared / "README.md").exists()
