@@ -148,6 +148,12 @@
         group: "{{ ansible_user_gid }}"
         mode: "0700"
 
+    - name: Seed existing managed-only content with a divergent mode
+      ansible.builtin.copy:
+        content: operator-data
+        dest: "{{ komf_target }}/data/existing.json"
+        mode: "0644"
+
     - name: Create a templated Komf compose file (.j2)
       ansible.builtin.copy:
         content: |
@@ -165,6 +171,10 @@
               mode: "0600"
             - path: ./config.conf
               mode: "0755"
+            - path: ./data/certs/absent.json
+              mode: "0600"
+            - path: ./data/existing.json
+              mode: "0600"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/compose.yaml.j2"
         mode: "0644"
 
@@ -240,15 +250,21 @@
     - name: Inspect targets after check-mode materialization
       ansible.builtin.stat:
         path: "{{ komf_target }}/{{ item }}"
-      loop: [data/uploads, data/downloads, compose.yaml, .env, agent-keys.yaml, config.conf, undeclared.conf]
+      loop: [data/uploads, data/downloads, compose.yaml, .env, agent-keys.yaml, config.conf, undeclared.conf, data/certs/absent.json]
       register: _check_mode_target_stats
 
-    - name: Verify check mode reports missing prereq creation without writing targets
+    - name: Verify check mode reports pending changes without writing targets
       ansible.builtin.assert:
         that:
           - _check_mode_target_stats.results[0].stat.mode == '0700'
           - _check_mode_target_stats.results[1:] | selectattr('stat.exists') | list == []
           - changed_prereq_paths == [komf_target ~ '/data/downloads']
+          - >-
+            _stack_sync_managed_file_create_results.results | selectattr('changed')
+            | map(attribute='item.path') | list == [komf_target ~ '/data/certs/absent.json']
+          - >-
+            _stack_sync_managed_file_permission_results.results | selectattr('changed')
+            | map(attribute='item.item.path') | list == [komf_target ~ '/data/existing.json']
 
     - name: Include materialize
       ansible.builtin.include_tasks:
@@ -327,23 +343,25 @@
         that:
           - _rendered_file_stats.results[0].stat.mode == '0644'
 
-    - name: Assert synced managed files bypass managed-only enforcement
+    - name: Inspect managed-only files after materialization
+      ansible.builtin.stat:
+        path: "{{ komf_target }}/{{ item }}"
+      loop: [data/certs/absent.json, data/existing.json]
+      register: _managed_only_stats
+
+    - name: Assert managed-only files are created empty or keep content, with the declared mode
+      ansible.builtin.assert:
+        that:
+          - (_managed_only_stats.results[0].stat.mode, _managed_only_stats.results[0].stat.size) == ('0600', 0)
+          - _managed_only_stats.results[1].stat.mode == '0600'
+          - lookup('file', komf_target ~ '/data/existing.json') == 'operator-data'
+
+    - name: Assert synced managed files bypass managed-only handling
       ansible.builtin.assert:
         that:
           - >-
-            (_stack_sync_managed_file_create_results.results | default([])
-            | map(attribute='item.path')
-            | intersect([
-              lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/agent-keys.yaml',
-              lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/config.conf'
-            ]) | length) == 0
-          - >-
-            (_stack_sync_managed_file_permission_results.results | default([])
-            | map(attribute='item.path')
-            | intersect([
-              lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/agent-keys.yaml',
-              lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/config.conf'
-            ]) | length) == 0
+            _stack_sync_managed_file_create_results.results | map(attribute='item.path') | list
+            == [komf_target ~ '/data/certs/absent.json', komf_target ~ '/data/existing.json']
 
     - name: Assert .j2 source files were NOT copied as static files
       ansible.builtin.stat:
@@ -552,14 +570,6 @@
           - _exact_agent_keys_stat.stat.mode == '0600'
           - exact_agent_keys_plan.stack_name == 'overmind'
           - exact_agent_keys_plan.dest_path == exact_agent_keys_target
-          - >-
-            exact_agent_keys_target not in
-            (_stack_sync_managed_file_create_results.results | default([])
-            | map(attribute='item.path') | list)
-          - >-
-            exact_agent_keys_target not in
-            (_stack_sync_managed_file_permission_results.results | default([])
-            | map(attribute='item.path') | list)
       vars:
         exact_agent_keys_plan: >-
           {{ lxc_stack_sync_manifest_plan.files_to_render
@@ -638,14 +648,6 @@
           - item.stat.mode == item.item.mode
           - exact_artifact_plan.stack_name == item.item.stack_name
           - exact_artifact_plan.dest_path == item.item.path
-          - >-
-            item.item.path not in
-            (_stack_sync_managed_file_create_results.results | default([])
-            | map(attribute='item.path') | list)
-          - >-
-            item.item.path not in
-            (_stack_sync_managed_file_permission_results.results | default([])
-            | map(attribute='item.path') | list)
       vars:
         exact_artifact_plan: >-
           {{ lxc_stack_sync_manifest_plan.files_to_copy
