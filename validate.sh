@@ -12,8 +12,9 @@ usage() {
 Usage: ./validate.sh [operation] [options]
 
 With no operation, run the comprehensive non-live handoff validation:
-repo-wide lint, the full lifecycle regression set, and the whole test suite,
-reporting both lifecycle and test results when either one fails.
+repo-wide lint, the full lifecycle regression set, and the whole test suite
+except the real Renovate compatibility gate, reporting both lifecycle and test
+results when either one fails.
 
 Operations:
   lint                        Run repo-wide production-profile lint only
@@ -25,6 +26,9 @@ Operations:
   stack <path>                Validate one repo-managed stack update policy;
                               schema-versioned JSON on stdout, diagnostics on
                               stderr
+  renovate                    Run the real pinned Renovate compatibility gate;
+                              needs npx and public registry access, and fails
+                              when the gate test is not collected
 
 Options:
   --full                      Run the full lifecycle regression set
@@ -47,7 +51,7 @@ case "${1:-}" in
         exit 0
         ;;
     "") ;;
-    lint | lifecycle | tests | stack)
+    lint | lifecycle | tests | stack | renovate)
         operation="$1"
         shift
         ;;
@@ -250,5 +254,9 @@ case "$operation" in
     stack)
         uv run --locked python -B -m stack_update_policy validate \
             --repository-root . "${stack_paths[0]}"
+        ;;
+    renovate)
+        unset PYTEST_ADDOPTS
+        uv run --locked pytest -n 0 -m renovate_compat
         ;;
 esac

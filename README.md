@@ -397,7 +397,7 @@ Run the complete non-live verification suite before handoff:
 ./validate.sh
 ```
 
-This runs the production Ansible lint gate, full credential-free lifecycle regressions, and the full Python test suite. It does not load live inventory or acquire the lifecycle lock. Route all live operations, including check-mode runs, through `./run.sh`, `./recover.sh`, or a live `./inspect.sh` operation. In pull request descriptions, report `./validate.sh` as the verification command rather than listing its internal commands.
+This runs the production Ansible lint gate, full credential-free lifecycle regressions, and the Python test suite except the real Renovate compatibility gate, which runs separately as `./validate.sh renovate`. It does not load live inventory or acquire the lifecycle lock. Route all live operations, including check-mode runs, through `./run.sh`, `./recover.sh`, or a live `./inspect.sh` operation. In pull request descriptions, report `./validate.sh` as the verification command rather than listing its internal commands.
 
 `./validate.sh` needs `/usr/sbin/sshd` (Debian package `openssh-server`) on the machine that runs it. The Proxmox trust regression starts an unprivileged `sshd` on `127.0.0.1` so the real `ssh` client decides trust; it installs nothing and fails with that path in its message when `sshd` is absent. The `workstation` guest has it because the `debian-13-standard` template it is built from ships `openssh-server`. The system `sshd` service does not need to be running.
 

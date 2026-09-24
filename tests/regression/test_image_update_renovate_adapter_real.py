@@ -9,8 +9,8 @@ import sys
 import pytest
 
 
-# The real pinned Renovate run uses Docker, network, and package caches.
-pytestmark = pytest.mark.serial
+# Runs npx against public registries, so ordinary runs exclude it.
+pytestmark = pytest.mark.renovate_compat
 
 
 ROOT = Path(__file__).resolve().parents[2]
