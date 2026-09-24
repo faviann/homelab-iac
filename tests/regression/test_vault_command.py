@@ -70,9 +70,7 @@ HOSTILE_AMBIENT_ENVIRONMENT = {
     # editor fake the fixture injects.
     "VISUAL": "/ambient/visual-editor",
     "EDITOR": "/ambient/editor",
-    # vault.sh locates the passphrase file under HOME. It must ignore the
-    # Ansible variable, but a real ansible-vault would honour it.
-    "ANSIBLE_VAULT_PASSWORD_FILE": "/ambient/vault-pass",
+    # vault.sh locates the passphrase file under HOME.
     "HOME": "/ambient/home",
     "PWD": "/ambient/pwd",
     # Stands in for the next environment read someone adds: neither injected
@@ -2129,29 +2127,32 @@ def test_ansible_vault_password_file_steers_no_operation(
     vault.write_text(VALID_YAML, encoding="utf-8")
     assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
     passphrase_before = live_passphrase_file(env).read_bytes()
-    hostile = tmp_path / "hostile-vault-pass"
+    hostile = write_source(tmp_path / "hostile-vault-pass", b"hostile-passphrase\n")
     env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(hostile)
 
     if operation == "check":
-        returncode = run_vault(repo, env, "check").returncode
+        result = run_vault(repo, env, "check")
+        returncode, output = result.returncode, result.stdout + result.stderr
     elif operation == "set":
         source = write_source(tmp_path / "secret")
-        returncode = run_vault(
+        result = run_vault(
             repo, env, "set", "vault_transferred", "--from-file", str(source),
             "--create",
-        ).returncode
+        )
+        returncode, output = result.returncode, result.stdout + result.stderr
     elif operation == "edit":
         install_editor(tmp_path, env, fake_executable)
-        returncode, _ = run_vault_tty(repo, env, [], "edit")
+        returncode, output = run_vault_tty(repo, env, [], "edit")
     elif operation == "configure":
-        returncode, _ = run_vault_tty(
+        returncode, output = run_vault_tty(
             repo, env, configure_interactions(), "configure"
         )
     else:
-        returncode = run_vault(repo, env, "rotate", "--dry-run").returncode
+        result = run_vault(repo, env, "rotate", "--dry-run")
+        returncode, output = result.returncode, result.stdout + result.stderr
 
-    assert returncode == 0
-    assert not hostile.exists()
+    assert returncode == 0, output
+    assert hostile.read_bytes() == b"hostile-passphrase\n"
     assert live_passphrase_file(env).read_bytes() == passphrase_before
     assert run_real_ansible_vault(repo, env, "view").returncode == 0
 

@@ -9,8 +9,8 @@ cd "$PROJECT_ROOT" || exit 1
 source "$PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 VAULT_FILE="$PROJECT_ROOT/inventory/vault.yml"
 PASS_FILE="$HOME/.ansible/vault-pass"
-# Overwrites any inherited value, so every ansible-vault call without an
-# explicit flag reads the standard file too.
+# ansible-vault loads this file on every call, even alongside
+# --vault-password-file, so replace any inherited value.
 export ANSIBLE_VAULT_PASSWORD_FILE="$PASS_FILE"
 TRANSACTION_WORKSPACE=""
 TRANSACTION_PUBLISH_TMP=""
@@ -658,8 +658,8 @@ rotate_passphrase() {
     }
     rotation_step "chezmoi apply"
 
-    # Authoritative check: no password-file flag, so this resolves the live
-    # passphrase file through the environment, the way a fleet run does.
+    # Authoritative check: no password-file flag, so this decrypts through the
+    # exported standard file alone, as a fleet run without an override does.
     uv run --locked ansible-vault view "$VAULT_FILE" >/dev/null 2>&1 || {
         rotation_fail "the live passphrase file cannot decrypt the vault"
         return 1
