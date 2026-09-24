@@ -17,12 +17,11 @@ credential.
 Pytest startup establishes the same boundary on its own. The repository-root
 `conftest.py` overwrites both variables with the fixture paths before
 collection, whatever the launching shell exported, so every pytest session
-rooted in this checkout and its descendant processes use the fixtures, whether
-it starts from `./validate.sh`, `tests/run_pytest.sh`, or a plain pytest
-command. The hook sits at the root rather than in `tests/` so a test tree added
-elsewhere in the checkout is covered too. Startup fails when a fixture file is
-missing. A test that needs a different controlled environment may still set
-these variables after startup, for itself or for one child process.
+rooted in this checkout and its descendant processes use the fixtures. The
+hook sits at the root rather than in `tests/` so a test tree added elsewhere in
+the checkout is covered too. Startup fails when a fixture file is missing. A
+test that needs a different controlled environment may still set these
+variables after startup, for itself or for one child process.
 
 The shared regression-test helper also asserts these fixture paths before it
 builds the locked `uv run --locked ansible-playbook` invocation. Tests that pass
