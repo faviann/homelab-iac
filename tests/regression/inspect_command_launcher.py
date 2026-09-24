@@ -150,13 +150,21 @@ def expected_graph_vars_invocations() -> list[dict[str, object]]:
 
 
 def masked_whole(value: object) -> bool:
-    """One masked string that still represents content: its alphanumerics are only ``a``/``9``."""
-    alphanumerics = {character for character in str(value) if character.isalnum()}
-    return isinstance(value, str) and bool(alphanumerics) and alphanumerics <= {"a", "9"}
+    """One string holding mask content, with every letter masked as ``a``.
+
+    Digits stay unconstrained: run-length counts are digits, and the numeric
+    fixture secrets own digit disclosure.
+    """
+    return (
+        isinstance(value, str)
+        and bool({"a", "9"} & set(value))
+        and all(character == "a" for character in value if character.isalpha())
+    )
 
 
 def assert_vars_masks_vault_derived_values_without_live_execution() -> None:
     fixture_secret = "SeCrEt42"
+    long_secret = "LongFixtureSecretValue12345678901234567890"
     diagnostic_secret = "DiagnosticSecret42"
     inventory_output = f"""---
 ordinary_value: visible
@@ -164,6 +172,7 @@ vault_feature_enabled: "true"
 vault_primary_secret: {fixture_secret}
 derived_header: Bearer {fixture_secret}
 vault_numeric_secret: 12345678
+vault_long_secret: {long_secret}
 derived_numeric_value: token=12345678
 derived_mapping:
   authorization: Bearer {fixture_secret}
@@ -195,7 +204,7 @@ derived_sequence:
         )
     if any(
         secret in output
-        for secret in (diagnostic_secret, fixture_secret, "12345678")
+        for secret in (diagnostic_secret, fixture_secret, long_secret, "12345678")
     ):
         raise AssertionError(f"vars disclosed a fixture secret:\n{output}")
     rendered_inventory = yaml.safe_load(result.stdout)
@@ -209,6 +218,7 @@ derived_sequence:
             "vault_primary_secret",
             "derived_header",
             "vault_numeric_secret",
+            "vault_long_secret",
             "derived_numeric_value",
             "derived_mapping",
             "derived_sequence",
