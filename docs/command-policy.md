@@ -278,36 +278,14 @@ Agent use of a documented raw command is a separate decision:
 | bare `./setup.sh`, `./setup.sh bootstrap` | none. Each command owns its prerequisites (ADR-0011) |
 | `ansible-galaxy collection install`, `collection list`, `role install` | none. Live commands reconcile what they consume |
 
-In a documented `./run.sh` invocation, `-e` and `--tags` appear only after
-`--`.
-
-### Text-check allowlist
-
-The guidance text check that #219 adds will look for the superseded forms in
-the table above, and for `-e` or `--tags` before `--` in a documented
-`./run.sh` invocation. It will scan only these guidance surfaces:
-
-- tracked Markdown outside `tests/`
-- `inventory/vault.yml.example`
-- `.ansible-lint`
-- comment and `msg:` text in YAML under `playbooks/` and in `site.yml`
-- string literals passed to `echo` or `printf` in tracked shell scripts
-
-Shell execution lines are not scanned. The internal-call rule governs them.
-
-Within those surfaces, a superseded form fails the check unless it appears in
-a file below and matches that file's permitted shape. The check will not
-recognize raw commands in general, and it will not look anywhere else. Review
-enforces the rest of this policy, including any raw command or superseded form
-the check does not recognize.
-
-| File | Permitted shape |
-| --- | --- |
-| `docs/command-policy.md` | every standing permission's command, and every superseded form documented here |
-| `docs/adr/*.md` | any superseded form named in a decision's reasoning |
-| `docs/ssh-key-management.md` | the `pct exec` key-injection procedure |
-| `.agents/skills/rename-stack/SKILL.md` | the `docker compose down`, `mv`, `chown -R` sequence |
-| `docs/image-update-renovate-adapter.md` | `uv run --locked python scripts/image_update_renovate_adapter.py <request.json>` |
+When editing tracked guidance, review command examples against this table and
+use the supported command for each operation it owns. In a documented
+`./run.sh` invocation, place `-e` and `--extra-vars` after `--`; never place
+`--tags` before `--`. The wrapper also rejects `--tags` after `--`, so use a
+named operation instead. Record intentional raw-command exceptions under
+Standing permissions above. This is a review rule for prose, not an automated
+text scan. Validation tests the `./run.sh` grammar, which rejects low-level
+options before `--`.
 
 ## Recorded boundaries
 
