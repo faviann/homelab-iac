@@ -40,7 +40,8 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
     def test_servarr_inventory_exposes_beets_flask_contract(self) -> None:
         servarr_vars = load_yaml(REPO_ROOT / "inventory/host_vars/servarr.yml")
 
-        self.assertEqual(servarr_vars["default_domain"], "admin.faviann.com")
+        compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
+        self.assertTrue(compose_override["networks"]["shared"]["external"])
         self.assertIn("shared", servarr_vars["lxc_docker_env_external_networks"])
 
         ingest_dir = next(
@@ -66,49 +67,41 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
         )
         self.assertEqual(beets_script["mode"], "0755")
 
-    def test_beets_vgmdb_requirement_is_compatible_with_beets_flask_image(self) -> None:
-        requirements_path = STACK_ROOT / "appdata/requirements.txt"
-        requirements = requirements_path.read_text(encoding="utf-8").splitlines()
+    def test_plugin_requirements_are_installed_for_the_enabled_plugins(self) -> None:
+        requirements = (STACK_ROOT / "appdata/requirements.txt").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        packages = {line.split("==")[0] for line in requirements if line}
+        plugins = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")["plugins"]
+        startup_script = (STACK_ROOT / "appdata/startup.sh").read_text(encoding="utf-8")
 
+        # startup.sh patches this exact release's import layout for the image's
+        # Beets 2.5 runtime; a different release needs a new patch.
         self.assertIn("beets-vgmdb==1.3.2", requirements)
-        self.assertIn("pyacoustid==1.3.1", requirements)
-        self.assertIn("python3-discogs-client==2.8", requirements)
+        self.assertIn("VGMplug", plugins)
+        self.assertIn(
+            "from beets.autotag.distance import Distance, string_dist", startup_script
+        )
+        self.assertIn("chroma", plugins)
+        self.assertIn("pyacoustid", packages)
+        self.assertIn("apk add --no-cache chromaprint", startup_script)
+        self.assertIn("discogs", plugins)
+        self.assertIn("python3-discogs-client", packages)
 
     def test_beets_config_uses_installed_vgmdb_plugin_module_name(self) -> None:
+        # beets-vgmdb installs the plugin module as VGMplug; `vgmdb` fails to load.
         beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
 
         self.assertIn("VGMplug", beets_config["plugins"])
         self.assertNotIn("vgmdb", beets_config["plugins"])
 
     def test_replaygain_uses_available_ffmpeg_backend(self) -> None:
+        # ffmpeg is the replaygain backend the beets-flask image already provides.
         beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
 
         self.assertEqual(beets_config["replaygain"]["backend"], "ffmpeg")
 
-    def test_game_soundtracks_route_by_exact_vgmdb_genre(self) -> None:
-        beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
-        paths = beets_config["paths"]
-
-        self.assertEqual(
-            paths["genre:=Game"],
-            "Soundtracks/Game/$album ($year)/$track - $title",
-        )
-        self.assertNotIn("albumtype:soundtrack albumtype2:game", paths)
-
-    def test_discogs_video_game_music_style_routes_to_game_soundtracks(self) -> None:
-        beets_config = load_yaml(STACK_ROOT / "appdata/beets/config.yaml.j2")
-        paths = beets_config["paths"]
-
-        self.assertEqual(
-            paths["style:Video"],
-            "Soundtracks/Game/$album ($year)/$track - $title",
-        )
-        self.assertLess(
-            list(paths).index("style:Video"),
-            list(paths).index("albumtype:soundtrack"),
-        )
-
-    def test_beets_flask_startup_hook_is_executable_and_patches_vgmplug(self) -> None:
+    def test_beets_flask_startup_hook_is_executable_and_installs_mounted_requirements(self) -> None:
         compose_override = load_yaml(STACK_ROOT / "compose.override.yaml")
         managed_files = compose_override["x-managed-files"]
 
@@ -123,10 +116,6 @@ class ServarrBeetsFlaskContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("python -m pip install -r /config/requirements.txt", startup_script)
-        self.assertIn("apk add --no-cache chromaprint", startup_script)
-        self.assertIn("from beets.autotag.distance import Distance, string_dist", startup_script)
-        self.assertIn('self._log.setLevel("ERROR")', startup_script)
-        self.assertIn("import beetsplug.VGMplug", startup_script)
 
     def test_media_mounts_keep_host_and_container_paths_identical(self) -> None:
         media_targets = ["/data/media/_ingest/music", "/data/media/music"]

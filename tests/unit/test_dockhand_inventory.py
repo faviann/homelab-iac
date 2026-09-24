@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import sys
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,9 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(REPO_ROOT / "playbooks/filter_plugins"))
+from compose_env import credential_is_configured  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -22,8 +26,9 @@ class DockhandInventoryTests(unittest.TestCase):
         vault_example = load_yaml(REPO_ROOT / "inventory/vault.yml.example")
         portal_vars = load_yaml(REPO_ROOT / "inventory/host_vars/portal.yml")
 
-        self.assertIn("vault_dockhand_discord_webhook_url", vault_example)
-        self.assertNotIn("vault_portal_diun_discord_webhook", vault_example)
+        example_webhook = vault_example.get("vault_dockhand_discord_webhook_url")
+        self.assertTrue(example_webhook)
+        self.assertFalse(credential_is_configured(example_webhook))
         self.assertEqual(
             portal_vars.get("dockhand_discord_webhook_url"),
             "{{ vault_dockhand_discord_webhook_url }}",

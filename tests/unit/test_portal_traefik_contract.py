@@ -87,19 +87,6 @@ def test_cloudflare_certificate_storage_is_one_coupled_contract() -> None:
     websecure_tls = static["entryPoints"]["websecure"]["http"]["tls"]
 
     assert websecure_tls["certResolver"] == "cloudflare"
-    assert websecure_tls["domains"] == [
-        {
-            "main": "faviann.com",
-            "sans": [
-                "*.faviann.com",
-                "*.admin.faviann.com",
-                "*.home.faviann.com",
-                "*.media.faviann.com",
-                "*.public.faviann.com",
-                "*.local.faviann.com",
-            ],
-        }
-    ]
     assert (
         "./appdata/traefik3/data/certs/:/var/traefik/certs/:rw"
         in traefik["volumes"]
@@ -107,12 +94,29 @@ def test_cloudflare_certificate_storage_is_one_coupled_contract() -> None:
     assert static["certificatesResolvers"]["cloudflare"]["acme"]["storage"] == (
         "/var/traefik/certs/cloudflare-acme.json"
     )
-    assert compose["x-managed-files"] == [
-        {
-            "path": "./appdata/traefik3/data/certs/cloudflare-acme.json",
-            "mode": "0600",
-        }
-    ]
+    assert {
+        "path": "./appdata/traefik3/data/certs/cloudflare-acme.json",
+        "mode": "0600",
+    } in compose["x-managed-files"]
+
+
+def test_wildcard_certificate_covers_every_access_tier() -> None:
+    # Each tier domain serves routes under a single wildcard; dropping one
+    # breaks TLS for that tier. Extra names are harmless.
+    static = load_yaml(
+        TRAEFIK_STACK / "appdata/traefik3/config/traefik.yaml"
+    )
+    (certificate,) = static["entryPoints"]["websecure"]["http"]["tls"]["domains"]
+
+    assert certificate["main"] == "faviann.com"
+    assert {
+        "*.faviann.com",
+        "*.admin.faviann.com",
+        "*.home.faviann.com",
+        "*.media.faviann.com",
+        "*.public.faviann.com",
+        "*.local.faviann.com",
+    } <= set(certificate["sans"])
 
 
 def test_protected_edge_auth_chain_keeps_its_forward_auth_address() -> None:

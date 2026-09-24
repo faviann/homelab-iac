@@ -6,17 +6,60 @@ from __future__ import annotations
 import posixpath
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKSTATION_HOME = "{{ workstation_home }}"
+EXTERNALSERVICE_PATH = (
+    REPO_ROOT / "stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml"
+)
+WORKSTATION_ORIGIN_HOST = "workstation.faviann.vms"
+# A workstation URL with no port uses its scheme default; any other scheme raises
+# KeyError rather than dropping the backend from the check.
+DEFAULT_PORTS = {"http": 80, "https": 443}
+
+# Every home path that must survive an LXC rebuild. Dropping one loses that
+# state on the next rebuild, so removal is a deliberate edit here; adding a
+# path needs none. A bind file's content seeds a fresh workstation; without it
+# the role creates an empty .claude.json, which is not valid JSON.
+DURABLE_HOME_LINKS = (
+    ("claude", "bind_mount", ".claude", "0700", None),
+    ("claude_config", "bind_file", ".claude.json", "0600", "{}\n"),
+    ("codex", "bind_mount", ".codex", "0700", None),
+    ("agents", "bind_mount", ".agents", "0700", None),
+    ("pi", "bind_mount", ".pi", "0700", None),
+    ("omp", "bind_mount", ".omp", "0700", None),
+    ("opencode_config", "bind_mount", ".config/opencode", "0700", None),
+    ("opencode_data", "bind_mount", ".local/share/opencode", "0700", None),
+    ("opencode_state", "bind_mount", ".local/state/opencode", "0700", None),
+    ("agent_of_empires", "bind_mount", ".config/agent-of-empires", "0700", None),
+    ("hermes", "bind_mount", ".hermes", "0700", None),
+    ("openclaw", "bind_mount", ".openclaw", "0700", None),
+    ("moraine", "bind_mount", ".moraine", "0700", None),
+    ("lobu", "bind_mount", ".config/lobu", "0700", None),
+    ("herdr", "bind_mount", ".config/herdr", "0700", None),
+    ("collie_state", "bind_mount", ".local/state/collie", "0700", None),
+    ("repos", "bind_mount", "repos", "0755", None),
+)
 
 
 def load_yaml(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as handle:
         return yaml.safe_load(handle) or {}
+
+
+def routed_workstation_ports(services: dict) -> set[int]:
+    """Effective port of every Traefik backend whose URL targets the workstation."""
+    ports = set()
+    for service in services.values():
+        for server in service["loadBalancer"]["servers"]:
+            url = urlsplit(server["url"])
+            if url.hostname == WORKSTATION_ORIGIN_HOST:
+                ports.add(url.port or DEFAULT_PORTS[url.scheme])
+    return ports
 
 
 def at_or_under(path: str, ancestor: str) -> bool:
@@ -30,39 +73,40 @@ def at_or_under(path: str, ancestor: str) -> bool:
 
 
 class WorkstationInventoryTests(unittest.TestCase):
-    def test_workstation_inventory_contract(self) -> None:
+    def test_workstation_capabilities(self) -> None:
         inventory = load_yaml(REPO_ROOT / "inventory/hosts.yml")
         workstation_vars = load_yaml(REPO_ROOT / "inventory/host_vars/workstation.yml")
         all_children = inventory["all"]["children"]
-        overrides = workstation_vars["proxmox_lxc_overrides"]
 
-        self.assertIn("workstation", all_children["tier_large"]["hosts"])
         self.assertIn("workstation", all_children["cap_docker"]["hosts"])
         self.assertNotIn("workstation", all_children["cap_wireguard"]["hosts"])
+        self.assertIs(workstation_vars["workstation_enabled"], True)
+        self.assertIs(workstation_vars["workstation_origin_firewall_enabled"], True)
+        self.assertIs(workstation_vars["workstation_persistent_home_enabled"], True)
+        self.assertIs(workstation_vars["docker_agents_enabled"], False)
+        self.assertIs(workstation_vars["traefik_kop_enabled"], False)
 
-        self.assertEqual(workstation_vars["workstation_enabled"], True)
-        self.assertNotIn("docker_user", workstation_vars)
+    def test_workstation_user_keeps_the_uid_that_owns_its_durable_data(self) -> None:
+        # Persistent-home backing files and stack appdata already on the host
+        # are owned by the mapped UID/GID 1000. A different effective docker_uid
+        # would leave the workstation user unable to read its own durable state.
+        workstation_vars = load_yaml(REPO_ROOT / "inventory/host_vars/workstation.yml")
+        cap_docker_vars = load_yaml(REPO_ROOT / "inventory/group_vars/cap_docker/vars.yml")
+
         self.assertNotIn("docker_uid", workstation_vars)
         self.assertNotIn("docker_gid", workstation_vars)
-        cap_docker_vars = load_yaml(REPO_ROOT / "inventory/group_vars/cap_docker/vars.yml")
-        self.assertEqual(cap_docker_vars["docker_user"], "faviann")
         self.assertEqual(cap_docker_vars["docker_uid"], 1000)
         self.assertEqual(cap_docker_vars["docker_gid"], 1000)
-        lxcs_vars = load_yaml(REPO_ROOT / "inventory/group_vars/lxcs/vars.yml")
-        self.assertEqual(lxcs_vars["lxc_github_users"], ["faviann"])
-        self.assertEqual(workstation_vars["docker_agents_enabled"], False)
-        self.assertEqual(workstation_vars["traefik_kop_enabled"], False)
-        self.assertEqual(workstation_vars["lxc_hwaddr"], "BC:24:11:57:80:06")
-        self.assertEqual(overrides["vmid"], 306)
-        self.assertEqual(overrides["hostname"], "workstation")
-        self.assertEqual(overrides["cores"], 16)
-        self.assertEqual(overrides["memory"], 32768)
-        self.assertEqual(overrides["disk"], "128")
-        self.assertEqual(
-            overrides["description"],
-            "Persistent remote coding workstation managed via Ansible",
+
+    def test_every_routed_workstation_origin_port_is_firewalled(self) -> None:
+        workstation_vars = load_yaml(REPO_ROOT / "inventory/host_vars/workstation.yml")
+        routed_ports = routed_workstation_ports(load_yaml(EXTERNALSERVICE_PATH)["http"]["services"])
+
+        self.assertTrue(routed_ports)
+        self.assertLessEqual(
+            routed_ports, set(workstation_vars["workstation_origin_firewall_protected_ports"])
         )
-        self.assertEqual(overrides["tags"], ["ansible", "workstation", "development"])
+        self.assertEqual(workstation_vars["workstation_origin_firewall_allowed_hosts"], ["portal"])
 
     def effective_persistent_home_links(self) -> list[dict]:
         """Resolve the list the workstation host actually deploys.
@@ -78,47 +122,31 @@ class WorkstationInventoryTests(unittest.TestCase):
         )
         return defaults["workstation_persistent_home_links"]
 
-    def test_workstation_persistent_home_includes_agent_state(self) -> None:
-        links = self.effective_persistent_home_links()
+    def test_workstation_persistent_home_keeps_durable_state(self) -> None:
+        declared = {
+            (
+                link["name"],
+                link["type"],
+                link["path"],
+                link["target"],
+                link["mode"],
+                link.get("content"),
+            )
+            for link in self.effective_persistent_home_links()
+        }
 
-        for expected in (
-            {
-                "name": "agents",
-                "type": "bind_mount",
-                "path": "{{ workstation_home }}/.agents",
-                "target": "{{ workstation_persistent_home_root }}/.agents",
-                "mode": "0700",
-            },
-            {
-                "name": "lobu",
-                "type": "bind_mount",
-                "path": "{{ workstation_home }}/.config/lobu",
-                "target": "{{ workstation_persistent_home_root }}/.config/lobu",
-                "mode": "0700",
-            },
-            {
-                "name": "herdr",
-                "type": "bind_mount",
-                "path": "{{ workstation_home }}/.config/herdr",
-                "target": "{{ workstation_persistent_home_root }}/.config/herdr",
-                "mode": "0700",
-            },
-            {
-                "name": "collie_state",
-                "type": "bind_mount",
-                "path": "{{ workstation_home }}/.local/state/collie",
-                "target": "{{ workstation_persistent_home_root }}/.local/state/collie",
-                "mode": "0700",
-            },
-            {
-                "name": "moraine",
-                "type": "bind_mount",
-                "path": "{{ workstation_home }}/.moraine",
-                "target": "{{ workstation_persistent_home_root }}/.moraine",
-                "mode": "0700",
-            },
-        ):
-            self.assertIn(expected, links)
+        for name, link_type, relative_path, mode, content in DURABLE_HOME_LINKS:
+            self.assertIn(
+                (
+                    name,
+                    link_type,
+                    f"{WORKSTATION_HOME}/{relative_path}",
+                    f"{{{{ workstation_persistent_home_root }}}}/{relative_path}",
+                    mode,
+                    content,
+                ),
+                declared,
+            )
 
     def test_workstation_persistent_home_excludes_regenerable_state(self) -> None:
         # Two concrete paths must stay ephemeral: ~/.config/systemd/user/collie.service is

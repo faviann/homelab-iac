@@ -85,9 +85,8 @@
               sourced, both owned by workstation_system_bin_owner.
 
         # What only the rendered artifacts can show: every variable resolved,
-        # and resolved to the right value. The scripts' own text is asserted
-        # against the templates in tests/unit/test_workstation_baseline_role.py,
-        # and their runtime behavior by the scenarios in
+        # and resolved to the right value. The scripts' runtime behavior is
+        # owned by the scenarios in
         # tests/regression/test_workstation_first_login_setup_contract.py.
         - name: Assert the rendered artifacts resolved every template variable
           ansible.builtin.assert:
