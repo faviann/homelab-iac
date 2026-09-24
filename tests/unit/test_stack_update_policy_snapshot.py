@@ -8,9 +8,6 @@ from pathlib import Path
 import pytest
 
 
-# This module contains the real GitHub-reader timeout probe.
-pytestmark = pytest.mark.serial
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -275,6 +272,8 @@ os.write(1, b"\\xffunsafe stdout")
     assert "unsafe" not in str(raised.value)
 
 
+# The elapsed-time bound is only meaningful without parallel test load.
+@pytest.mark.serial
 def test_github_reader_times_out_with_generic_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
