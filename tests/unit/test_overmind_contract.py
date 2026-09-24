@@ -135,7 +135,10 @@ class OvermindContractTests(unittest.TestCase):
             backup["admin_password"],
             overmind_vars["lxc_docker_env_stack_vars"]["overmind"]["postgres_admin_password"],
         )
-        self.assertIn(f"CREATE DATABASE {backup['database']}", str(compose["services"]["bootstrap"]["command"]))
+        self.assertIn(
+            f"SELECT 'CREATE DATABASE {backup['database']}'",
+            "\n".join(compose["services"]["bootstrap"]["command"]),
+        )
         self.assertEqual(f"mp={backup['backup_dir']}", backup_mount.split(",")[1])
 
 
