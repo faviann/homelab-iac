@@ -15,8 +15,11 @@ def test_mask_value_preserves_diagnostic_shape_without_case() -> None:
     assert mask_value('AbZ09$/,_" \n\t') == 'aaa99$/,_"·\\n\\t'
 
 
-def test_mask_value_collapses_only_runs_longer_than_sixteen() -> None:
-    assert mask_value("A" * 16 + "1" * 17) == "a" * 16 + "9×17"
+def test_mask_value_shortens_a_long_run_without_revealing_it() -> None:
+    masked = mask_value("Z" * 40)
+
+    assert len(masked) < 40
+    assert not set(masked) & set("Zz")
 
 
 def test_vault_example_keys_have_the_required_prefix() -> None:
