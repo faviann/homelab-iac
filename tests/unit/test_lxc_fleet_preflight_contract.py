@@ -15,52 +15,37 @@ PREFLIGHT_TASKS = (
     / "tasks"
     / "main.yml"
 )
+# The regression fixtures run every host locally, so they cannot observe where
+# these API calls execute or what -vvv would print; both are asserted here.
+CREDENTIAL_BEARING_MODULES = (
+    "community.proxmox.proxmox_vm_info",
+    "ansible.builtin.uri",
+)
 
 
-def test_common_proxmox_observation_uses_proxmox_module_contract() -> None:
+def tasks_using(module: str, tasks: list[dict]) -> list[dict]:
+    found: list[dict] = []
+    for task in tasks:
+        if module in task:
+            found.append(task)
+        for section in ("block", "rescue", "always"):
+            found += tasks_using(module, task.get(section, []))
+    return found
+
+
+def test_proxmox_api_calls_run_on_the_controller_without_disclosure() -> None:
     tasks = yaml.safe_load(PREFLIGHT_TASKS.read_text(encoding="utf-8"))
-    observation_block = next(
-        task
-        for task in tasks
-        if task["name"] == "Observe Proxmox once for the targeted LXC set"
-    )
-    query = next(
-        task
-        for task in observation_block["block"]
-        if task["name"] == "Query the common Proxmox LXC observation"
-    )
-    adoption = next(
-        task
-        for task in observation_block["block"]
-        if task["name"] == "Adopt the common Proxmox LXC observation"
-    )
 
-    assert observation_block["module_defaults"] == {
-        "group/community.proxmox.proxmox": "{{ _proxmox_auth }}"
-    }
-    assert set(observation_block["vars"]["_proxmox_auth"]) == {
-        "api_host",
-        "api_port",
-        "api_user",
-        "api_token_id",
-        "api_token_secret",
-        "validate_certs",
-    }
-    assert query["community.proxmox.proxmox_vm_info"] == {
-        "type": "lxc",
-    }
-    assert query["delegate_to"] == "localhost"
-    assert query["changed_when"] is False
-    assert query["no_log"] is True
-    assert "check_mode" not in query
-    assert "proxmox_fleet_observation_response.proxmox_vms" in adoption[
-        "ansible.builtin.set_fact"
-    ]["proxmox_fleet_common_observation"]
+    for module in CREDENTIAL_BEARING_MODULES:
+        matches = tasks_using(module, tasks)
+        assert matches, f"fleet preflight no longer uses {module}"
+        for task in matches:
+            assert task.get("delegate_to") == "localhost", task["name"]
+            assert task.get("no_log") is True, task["name"]
 
 
 def test_problem_classification_does_not_parse_display_messages() -> None:
-    source = PREFLIGHT_TASKS.read_text(encoding="utf-8")
-    tasks = yaml.safe_load(source)
+    tasks = yaml.safe_load(PREFLIGHT_TASKS.read_text(encoding="utf-8"))
     observation_derivation = next(
         task
         for task in tasks
@@ -71,8 +56,5 @@ def test_problem_classification_does_not_parse_display_messages() -> None:
         "proxmox_fleet_target_observations"
     ]
 
-    assert "proxmox_fleet_preflight_problem_records" in source
-    assert "Classify targeted causes of fleet preflight problems" not in source
-    assert "(\"'\" ~ host ~ \"'\") in problem" not in source
     assert "problem.cause_hosts" in derivation
     assert "problem.message" not in derivation

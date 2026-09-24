@@ -15,36 +15,45 @@
           ansible.builtin.set_fact:
             fleet_observed_failure: "{{ ansible_failed_result.msg }}"
 
+    - name: Assert the planner reached its expected outcome
+      ansible.builtin.assert:
+        that:
+          - fleet_observed_failure is not defined
+          - lxc_lifecycle_result.outcome.status == fleet_expected_status | default('validated')
+
     - name: Assert successful planners consumed the common observation
       ansible.builtin.assert:
         that:
-          - fleet_observed_failure is not defined
-          - lxc_lifecycle_result.outcome.status == 'validated'
-          - lxc_lifecycle_result.observations.before.runtime_state == fleet_expected_runtime_state
+          - lxc_lifecycle_result.observations.before.runtime_state == 'stopped'
           - proxmox_fleet_target_observations[inventory_hostname].common_observation | bool
           - proxmox_fleet_common_observation | length == 3
-      vars:
-        fleet_expected_runtime_state: stopped
-      when:
-        - fleet_expected_failure_fragments is not defined
-        - fleet_expected_status is not defined
+      when: fleet_expected_status is not defined
 
-    - name: Assert all expected fleet preflight problems were reported
+    # Structured ownership, not message text, decides which target a problem
+    # fails; each conflict must be owned by exactly its own target. Problem
+    # records live on the host that coordinated the run-once preflight.
+    - name: Assert each target owns exactly its expected identity problem
       ansible.builtin.assert:
         that:
-          - fleet_observed_failure is not defined
-          - lxc_lifecycle_result.outcome.status == 'planning_failed'
-          - item in lxc_lifecycle_result.outcome.reason
-      loop: "{{ fleet_expected_failure_fragments }}"
-      when: fleet_expected_failure_fragments is defined
+          - owned_messages | length == 1
+          - owned_messages[0] is search(hostvars[item].fleet_expected_owned_problem)
+      vars:
+        owned_messages: >-
+          {{
+            proxmox_fleet_preflight_problem_records
+            | selectattr('cause_hosts', 'equalto', [item])
+            | map(attribute='message')
+            | list
+          }}
+      loop: "{{ ansible_play_hosts_all }}"
+      when: hostvars[item].fleet_expected_owned_problem is defined
+      run_once: true
 
     - name: Assert an otherwise valid planner was blocked by its causative peer
       ansible.builtin.assert:
         that:
-          - fleet_observed_failure is not defined
-          - lxc_lifecycle_result.outcome.status == fleet_expected_status
           - fleet_expected_status_fragment in lxc_lifecycle_result.outcome.reason
-      when: fleet_expected_status is defined
+      when: fleet_expected_status_fragment is defined
 
     - name: Assert shared problems have no causative target hosts
       ansible.builtin.assert:
