@@ -150,10 +150,9 @@ def expected_graph_vars_invocations() -> list[dict[str, object]]:
 
 
 def masked_whole(value: object) -> bool:
-    """A value rendered as one masked string: letters as ``a``, digits as ``9``."""
-    return isinstance(value, str) and all(
-        character in "a9" for character in value if character.isalnum()
-    )
+    """One masked string that still represents content: its alphanumerics are only ``a``/``9``."""
+    alphanumerics = {character for character in str(value) if character.isalnum()}
+    return isinstance(value, str) and bool(alphanumerics) and alphanumerics <= {"a", "9"}
 
 
 def assert_vars_masks_vault_derived_values_without_live_execution() -> None:
