@@ -1,0 +1,31 @@
+---
+x-prereq-dirs:
+  - /ephemeral/workstation/artifacts
+
+services:
+  artifacts:
+    image: ghcr.io/static-web-server/static-web-server:2.44.0
+    restart: unless-stopped
+    user: "${PUID}:${PGID}"
+    read_only: true
+    env_file:
+      - .env
+    volumes:
+      - /ephemeral/workstation/artifacts:/srv/artifacts:ro
+      - ./appdata/config.toml:/etc/static-web-server/config.toml:ro
+    networks:
+      - shared
+    # Public and unauthenticated so external services can fetch artifacts. Only
+    # *.public resolves to the WAN address. Each publication's URL carries 96
+    # random bits and listings are off, so knowing the exact URL is the access
+    # control; the headers keep that URL out of Referer and search indexes.
+    labels:
+      traefik.enable: true
+      traefik.http.routers.artifacts.rule: Host(`artifacts.public.faviann.com`)
+      traefik.http.routers.artifacts.middlewares: artifacts-no-leak-headers
+      traefik.http.middlewares.artifacts-no-leak-headers.headers.referrerPolicy: no-referrer
+      traefik.http.middlewares.artifacts-no-leak-headers.headers.customResponseHeaders.X-Robots-Tag: noindex, nofollow
+
+networks:
+  shared:
+    external: true
