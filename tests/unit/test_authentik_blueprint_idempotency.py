@@ -162,12 +162,19 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertEqual(client.applied, ["instance-pk"])
         self.assertEqual(result["applied"][0]["action"], "applied")
 
-    def test_successful_apply_without_the_expected_hash_fails(self):
+    def test_successful_apply_without_the_expected_hash_stops_before_dependents(self):
+        self.mod.blueprint_plan = lambda flow_slugs: [
+            ("repo-auth-groups", "10-groups.yaml"),
+            ("repo-auth-roles", "20-roles.yaml"),
+        ]
         for observed_hash in ("stale-hash", None):
             with self.subTest(observed_hash=observed_hash):
-                client = groups_client(
-                    "expected-hash",
-                    groups_instance(last_applied_hash="stale-hash"),
+                client = FakeBlueprintClient(
+                    available=[
+                        {"path": GROUPS_PATH, "hash": "expected-hash"},
+                        {"path": "custom/20-roles.yaml", "hash": "roles-hash"},
+                    ],
+                    instances=[groups_instance(last_applied_hash="stale-hash")],
                     post_apply_updates={
                         "last_applied_hash": observed_hash,
                         "detail": "apply result was not persisted",
@@ -180,6 +187,7 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
                     ".*apply result was not persisted",
                 ):
                     self.mod.reconcile_blueprint_instances(client, [])
+                self.assertEqual(client.applied, ["instance-pk"])
 
     def test_final_reobservation_rejects_contradictory_evidence(self):
         for final_snapshot in (
