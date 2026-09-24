@@ -215,6 +215,16 @@
       when: lifecycle_test_case == 'execution_failure'
       run_once: true
 
+    - name: Assert a running target's guest release is observed before planning
+      ansible.builtin.assert:
+        that:
+          - hostvars.check_running.lxc_lifecycle_result.observations.before.release == '12'
+          - >-
+            hostvars.check_running.lxc_lifecycle_result.observations.before.release_probe_state
+            == 'probed'
+      when: lifecycle_test_case == 'check_running'
+      run_once: true
+
     - name: Assert a compilation failure blocks an otherwise valid target
       ansible.builtin.assert:
         that:
