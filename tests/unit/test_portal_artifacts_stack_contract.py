@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repository contract tests for the workstation artifact static server."""
+"""Repository contract tests for the portal artifact static server."""
 
 from __future__ import annotations
 
@@ -11,11 +11,9 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-STACK_ROOT = REPO_ROOT / "stacks" / "workstation" / "artifacts"
-WORKSTATION_VARS_PATH = REPO_ROOT / "inventory" / "host_vars" / "workstation.yml"
+STACK_ROOT = REPO_ROOT / "stacks" / "portal" / "artifacts"
 PUBLICATION_ROOT = "/ephemeral/workstation/artifacts"
 SERVER_CONFIG_PATH = "/etc/static-web-server/config.toml"
-ORIGIN_PORT = 19082
 
 
 def load_yaml(path: Path) -> Any:
@@ -57,18 +55,28 @@ def test_server_reads_only_the_publication_root_as_the_publishing_user() -> None
     assert server["read_only"] is True
 
 
-def test_server_listens_on_the_firewalled_host_port() -> None:
-    compose = load_yaml(STACK_ROOT / "compose.yaml")
-    server = compose["services"]["artifacts"]
-    env = load_env_template(STACK_ROOT / ".env.j2")
+def test_server_is_reachable_only_through_traefik() -> None:
+    server = load_yaml(STACK_ROOT / "compose.yaml")["services"]["artifacts"]
 
-    assert server["network_mode"] == "host"
     assert "ports" not in server
-    assert server["env_file"] == [".env"]
-    assert env["SERVER_PORT"] == str(ORIGIN_PORT)
-    assert ORIGIN_PORT in load_yaml(WORKSTATION_VARS_PATH)[
-        "workstation_origin_firewall_protected_ports"
+    assert "network_mode" not in server
+    assert server["networks"] == ["shared"]
+
+
+def test_route_is_public_without_leaking_artifact_urls() -> None:
+    labels = load_yaml(STACK_ROOT / "compose.yaml")["services"]["artifacts"][
+        "labels"
     ]
+
+    # Deliberately public: no forward auth and no local-ip-restriction, so
+    # external services can fetch artifact URLs without logging in.
+    assert labels == {
+        "traefik.enable": True,
+        "traefik.http.routers.artifacts.rule": "Host(`artifacts.public.faviann.com`)",
+        "traefik.http.routers.artifacts.middlewares": "artifacts-no-leak-headers",
+        "traefik.http.middlewares.artifacts-no-leak-headers.headers.referrerPolicy": "no-referrer",
+        "traefik.http.middlewares.artifacts-no-leak-headers.headers.customResponseHeaders.X-Robots-Tag": "noindex, nofollow",
+    }
 
 
 def test_server_serves_exact_paths_without_listing_symlinks_or_fallback() -> None:
@@ -99,24 +107,6 @@ def test_markdown_is_served_as_utf8_plain_text_and_nothing_else_changes() -> Non
                 }
             ]
         }
-    }
-
-
-def test_origin_port_is_reserved_only_for_the_artifact_server() -> None:
-    configured_paths = {
-        path.relative_to(REPO_ROOT)
-        for root in (REPO_ROOT / "inventory", REPO_ROOT / "stacks")
-        for path in root.rglob("*")
-        if path.is_file()
-        and path.name != "README.md"
-        and str(ORIGIN_PORT)
-        in path.read_text(encoding="utf-8", errors="ignore")
-    }
-
-    assert configured_paths == {
-        Path("inventory/host_vars/workstation.yml"),
-        Path("stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml"),
-        Path("stacks/workstation/artifacts/.env.j2"),
     }
 
 

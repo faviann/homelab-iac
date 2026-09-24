@@ -264,30 +264,6 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             ],
         )
 
-    def test_artifacts_external_route_contract(self) -> None:
-        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
-
-        # Deliberately public: no forward auth and no local-ip-restriction, so
-        # external services can fetch artifact URLs without logging in.
-        assert_route(
-            self,
-            config,
-            "artifacts",
-            host_rule="Host(`artifacts.public.faviann.com`)",
-            service="artifacts-workstation",
-            middlewares=["artifacts-no-leak-headers"],
-            backend="http://workstation.faviann.vms:19082",
-        )
-        self.assertEqual(
-            config["http"]["middlewares"]["artifacts-no-leak-headers"],
-            {
-                "headers": {
-                    "referrerPolicy": "no-referrer",
-                    "customResponseHeaders": {"X-Robots-Tag": "noindex, nofollow"},
-                }
-            },
-        )
-
     def test_lobu_external_route_contract(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
         routers = config["http"]["routers"]

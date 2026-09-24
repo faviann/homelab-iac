@@ -11,12 +11,13 @@ runtime:
     - docker_uid
     - docker_gid
   host_requirements:
-    external_networks: []
+    external_networks:
+      - shared
     host_directories:
       - /ephemeral/workstation/artifacts
     ownership_overrides: []
 exposure:
-  traefik: protected
+  traefik: public
   homepage_instances: []
 updates:
   mode: images
