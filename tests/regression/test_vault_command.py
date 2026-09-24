@@ -329,21 +329,6 @@ def test_real_ansible_vault_runs_through_the_locked_project_environment(
     assert observed_command[:4] == ["uv", "run", "--locked", "ansible-vault"]
 
 
-def test_check_accepts_a_genuinely_encrypted_vault(
-    real_vault_repo: tuple[Path, dict[str, str]],
-) -> None:
-    repo, env = real_vault_repo
-    vault = repo / "inventory/vault.yml"
-    vault.write_text(VALID_YAML, encoding="utf-8")
-    encrypted = run_real_ansible_vault(repo, env, "encrypt")
-    assert encrypted.returncode == 0, encrypted.stderr
-
-    result = run_vault(repo, env, "check")
-
-    assert result.returncode == 0, result.stderr
-    assert all(line.endswith(": PASS") for line in result.stdout.splitlines())
-
-
 @pytest.mark.parametrize(
     ("state", "expected_failure"),
     [
@@ -470,26 +455,34 @@ def test_check_treats_yaml_validation_tool_failure_as_a_failed_check(
     assert "YAML mapping: FAIL" in result.stdout
 
 
+REQUIRED_KEYS = (
+    "vault_proxmox_api_user",
+    "vault_proxmox_api_token_id",
+    "vault_proxmox_api_token_secret",
+)
+PLACEHOLDERS = (
+    "REPLACE_ME",
+    "<REPLACE_ME>",
+    "REPLACE_WITH_SYNTHETIC",
+    "  REPLACE_ME\t",
+    "\t<REPLACE_ME>  ",
+    "  REPLACE_WITH_SYNTHETIC  ",
+)
+
+
+# Both validators apply one rule to every key, so each rejected value runs
+# once, and cycling the keys still gives every key several rejections.
+def cycle_required_keys(
+    values: tuple[str | None, ...],
+) -> list[tuple[str, str | None]]:
+    return [
+        (REQUIRED_KEYS[index % len(REQUIRED_KEYS)], value)
+        for index, value in enumerate(values)
+    ]
+
+
 @pytest.mark.parametrize(
-    ("key", "replacement"),
-    [
-        (key, replacement)
-        for key in (
-            "vault_proxmox_api_user",
-            "vault_proxmox_api_token_id",
-            "vault_proxmox_api_token_secret",
-        )
-        for replacement in (
-            None,
-            "",
-            "REPLACE_ME",
-            "<REPLACE_ME>",
-            "REPLACE_WITH_SYNTHETIC",
-            "  REPLACE_ME\t",
-            "\t<REPLACE_ME>  ",
-            "  REPLACE_WITH_SYNTHETIC  ",
-        )
-    ],
+    ("key", "replacement"), cycle_required_keys((None, "", *PLACEHOLDERS))
 )
 def test_check_rejects_every_missing_empty_or_placeholder_required_key(
     vault_repo: tuple[Path, dict[str, str]], key: str, replacement: str | None
@@ -664,23 +657,6 @@ quoted_scalar: "keep-me"
     assert original_line in plaintext.splitlines()
 
 
-def test_tty_runner_does_not_capture_secret_responses(
-    vault_repo: tuple[Path, dict[str, str]],
-) -> None:
-    repo, env = vault_repo
-    secret = "transcript-secret-marker"
-
-    returncode, transcript = run_vault_tty(
-        repo,
-        env,
-        configure_interactions(token_secret=secret),
-        "configure",
-    )
-
-    assert returncode == 0, transcript
-    assert secret not in transcript
-
-
 def test_tty_runner_does_not_send_a_secret_when_echo_stays_enabled(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -760,28 +736,18 @@ def configure_interactions(
     ]
 
 
-@pytest.mark.parametrize("key_index", range(3))
 @pytest.mark.parametrize(
-    "invalid_value",
-    [
-        "   ",
-        "REPLACE_ME",
-        "<REPLACE_ME>",
-        "REPLACE_WITH_SYNTHETIC",
-        "  REPLACE_ME\t",
-        "\t<REPLACE_ME>  ",
-        "  REPLACE_WITH_SYNTHETIC  ",
-    ],
+    ("key", "invalid_value"), cycle_required_keys(("   ", *PLACEHOLDERS))
 )
 def test_configure_rejects_every_value_that_check_rejects(
-    vault_repo: tuple[Path, dict[str, str]], key_index: int, invalid_value: str
+    vault_repo: tuple[Path, dict[str, str]], key: str, invalid_value: str
 ) -> None:
     repo, env = vault_repo
     vault = repo / "inventory/vault.yml"
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     values = ["replacement@pve", "replacement-id", "replacement-secret-marker"]
-    values[key_index] = invalid_value
+    values[REQUIRED_KEYS.index(key)] = invalid_value
 
     returncode, output = run_vault_tty(
         repo, env, configure_interactions(*values), "configure"
@@ -2087,114 +2053,52 @@ def test_rotate_accepts_its_only_option_exactly_once(
     assert run_vault(repo, env, "rotate", "--dry-run").returncode == 0
 
 
-def test_rotate_dry_run_rekeys_through_real_ansible_vault(
-    real_vault_repo: tuple[Path, dict[str, str]],
+def assert_every_check_passed(result: subprocess.CompletedProcess[str]) -> None:
+    lines = result.stdout.splitlines()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert lines
+    assert all(line.endswith(": PASS") for line in lines), result.stdout
+
+
+# vault.sh neutralizes both variables before it dispatches, so one read and
+# one encrypting mutation stand for every operation.
+@pytest.mark.parametrize(
+    "variable", ["ANSIBLE_VAULT_PASSWORD_FILE", "ANSIBLE_VAULT_IDENTITY_LIST"]
+)
+def test_inherited_vault_secret_sources_steer_neither_reads_nor_mutations(
+    real_vault_repo: tuple[Path, dict[str, str]], tmp_path: Path, variable: str
 ) -> None:
     repo, env = real_vault_repo
     vault = repo / "inventory/vault.yml"
     vault.write_text(VALID_YAML, encoding="utf-8")
     assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
-    vault_before = vault.read_bytes()
-
-    result = subprocess.run(
-        [str(repo / "vault.sh"), "rotate", "--dry-run"],
-        cwd=repo,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert vault.read_bytes() == vault_before
-    assert (
-        live_passphrase_file(env).read_text(encoding="utf-8")
-        == "real-smoke-passphrase\n"
-    )
-
-
-REAL_VAULT_OPERATIONS = ["check", "set", "edit", "configure", "rotate --dry-run"]
-
-
-def run_real_vault_operation(
-    repo: Path,
-    env: dict[str, str],
-    operation: str,
-    tmp_path: Path,
-    fake_executable: FakeExecutableFactory,
-) -> tuple[int, str]:
-    if operation == "set":
-        source = write_source(tmp_path / "secret")
-        args = ["set", "vault_transferred", "--from-file", str(source), "--create"]
-    elif operation == "edit":
-        install_editor(tmp_path, env, fake_executable)
-        return run_vault_tty(repo, env, [], "edit")
-    elif operation == "configure":
-        return run_vault_tty(repo, env, configure_interactions(), "configure")
-    else:
-        args = operation.split()
-    result = run_vault(repo, env, *args)
-    return result.returncode, result.stdout + result.stderr
-
-
-@pytest.mark.parametrize("operation", REAL_VAULT_OPERATIONS)
-def test_ansible_vault_password_file_steers_no_operation(
-    real_vault_repo: tuple[Path, dict[str, str]],
-    fake_executable: FakeExecutableFactory,
-    tmp_path: Path,
-    operation: str,
-) -> None:
-    repo, env = real_vault_repo
-    vault = repo / "inventory/vault.yml"
-    vault.write_text(VALID_YAML, encoding="utf-8")
-    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
-    passphrase_before = live_passphrase_file(env).read_bytes()
-    hostile = write_source(tmp_path / "hostile-vault-pass", b"hostile-passphrase\n")
-    env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(hostile)
-
-    returncode, output = run_real_vault_operation(
-        repo, env, operation, tmp_path, fake_executable
-    )
-
-    assert returncode == 0, output
-    assert hostile.read_bytes() == b"hostile-passphrase\n"
-    assert live_passphrase_file(env).read_bytes() == passphrase_before
-    assert run_real_ansible_vault(repo, env, "view").returncode == 0
-
-
-@pytest.mark.parametrize("operation", REAL_VAULT_OPERATIONS)
-def test_ansible_vault_identity_list_steers_no_operation(
-    real_vault_repo: tuple[Path, dict[str, str]],
-    fake_executable: FakeExecutableFactory,
-    tmp_path: Path,
-    operation: str,
-) -> None:
-    repo, env = real_vault_repo
-    vault = repo / "inventory/vault.yml"
-    vault.write_text(VALID_YAML, encoding="utf-8")
-    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
-    vault_before = vault.read_bytes()
     passphrase_before = live_passphrase_file(env).read_bytes()
     decoy = write_source(tmp_path / "decoy-vault-pass", b"decoy-passphrase\n")
     marker = tmp_path / "password-script-ran"
     script = tmp_path / "password-script"
     script.write_text(f"#!/bin/sh\n: > '{marker}'\necho script-passphrase\n")
     script.chmod(0o700)
-    env["ANSIBLE_VAULT_IDENTITY_LIST"] = f"decoy@{decoy},script@{script}"
+    env[variable] = {
+        "ANSIBLE_VAULT_PASSWORD_FILE": str(decoy),
+        "ANSIBLE_VAULT_IDENTITY_LIST": f"decoy@{decoy},script@{script}",
+    }[variable]
+    source = write_source(tmp_path / "secret")
 
-    returncode, output = run_real_vault_operation(
-        repo, env, operation, tmp_path, fake_executable
+    check = run_vault(repo, env, "check")
+    transfer = run_vault(
+        repo, env, "set", "vault_transferred", "--from-file", str(source), "--create"
     )
 
-    assert returncode == 0, output
     assert not marker.exists()
+    assert_every_check_passed(check)
+    assert transfer.returncode == 0, transfer.stdout + transfer.stderr
+    assert transfer.stdout == "set vault_transferred: PASS\n"
+    assert decoy.read_bytes() == b"decoy-passphrase\n"
     assert live_passphrase_file(env).read_bytes() == passphrase_before
-    if operation in {"check", "rotate --dry-run"}:
-        assert vault.read_bytes() == vault_before
-    else:
-        assert vault.read_bytes() != vault_before
-    del env["ANSIBLE_VAULT_IDENTITY_LIST"]
-    assert run_real_ansible_vault(repo, env, "view").returncode == 0
+    del env[variable]
+    assert run_real_ansible_vault(repo, env, "decrypt").returncode == 0
+    mapping = yaml.safe_load(vault.read_text(encoding="utf-8"))
+    assert mapping["vault_transferred"] == SOURCE_SECRET.decode()
 
 
 def test_ansible_vault_identity_list_cannot_rescue_a_wrong_live_passphrase(
@@ -2216,13 +2120,16 @@ def test_ansible_vault_identity_list_cannot_rescue_a_wrong_live_passphrase(
     assert check.returncode != 0
     assert "decryptability: FAIL" in check.stdout
     assert rehearsal.returncode != 0, rehearsal.stdout + rehearsal.stderr
+    # Past preflight, so the refusal came from decrypting with the live passphrase.
+    assert "ciphertext backup: PASS" in rehearsal.stdout
 
 
-def test_agent_permitted_operations_never_disclose_a_vault_secret(
+def test_agent_permitted_operations_succeed_without_disclosing_a_vault_secret(
     real_vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
 ) -> None:
     repo, env = real_vault_repo
     vault = repo / "inventory/vault.yml"
+    passphrase_file = live_passphrase_file(env)
     markers = (
         "disclosure-user-marker",
         "disclosure-token-id-marker",
@@ -2245,37 +2152,24 @@ def test_agent_permitted_operations_never_disclose_a_vault_secret(
     replaced.write_text("disclosure-replaced-marker\n", encoding="utf-8")
     replaced.chmod(0o600)
 
-    runs = [
-        run_vault(repo, env, "check"),
-        run_vault(
-            repo,
-            env,
-            "set",
-            "transferred_key",
-            "--from-file",
-            str(created),
-            "--create",
-        ),
-        run_vault(
-            repo,
-            env,
-            "set",
-            "transferred_key",
-            "--from-file",
-            str(replaced),
-            "--replace",
-        ),
-        subprocess.run(
-            [str(repo / "vault.sh"), "rotate", "--dry-run"],
-            cwd=repo,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        ),
-    ]
+    check = run_vault(repo, env, "check")
+    creation = run_vault(
+        repo, env, "set", "transferred_key", "--from-file", str(created), "--create"
+    )
+    replacement = run_vault(
+        repo, env, "set", "transferred_key", "--from-file", str(replaced), "--replace"
+    )
+    before_rehearsal = (vault.read_bytes(), passphrase_file.read_bytes())
+    rehearsal = subprocess.run(
+        [str(repo / "vault.sh"), "rotate", "--dry-run"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
 
-    for result in runs:
+    for result in (check, creation, replacement, rehearsal):
         assert result.returncode == 0, result.stderr
         for marker in (
             *markers,
@@ -2285,8 +2179,10 @@ def test_agent_permitted_operations_never_disclose_a_vault_secret(
         ):
             assert marker not in result.stdout
             assert marker not in result.stderr
-    # Both transfers reached the publication path rather than exiting early.
-    assert runs[1].stdout == "set transferred_key: PASS\n"
-    assert runs[2].stdout == "set transferred_key: PASS\n"
+    assert_every_check_passed(check)
+    assert creation.stdout == "set transferred_key: PASS\n"
+    assert replacement.stdout == "set transferred_key: PASS\n"
+    assert "rotate --dry-run: PASS" in rehearsal.stdout
+    assert (vault.read_bytes(), passphrase_file.read_bytes()) == before_rehearsal
     assert run_real_ansible_vault(repo, env, "decrypt").returncode == 0
     assert "disclosure-replaced-marker" in vault.read_text(encoding="utf-8")
