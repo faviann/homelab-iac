@@ -375,13 +375,6 @@ BlueprintDumper.add_representer(FindRef, _represent_find)
 BlueprintDumper.add_representer(KeyOfRef, _represent_keyof)
 
 
-def _extract_vault_token(yaml_str: str, var_name: str) -> str:
-    data = yaml.safe_load(yaml_str)
-    if var_name not in data:
-        raise KeyError(f"{var_name} not found in vault")
-    return str(data[var_name]).strip()
-
-
 class AuthentikClient:
     def __init__(self, token: str, base_url: str):
         self.token = token
