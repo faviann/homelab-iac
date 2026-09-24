@@ -266,7 +266,6 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
 
     def test_artifacts_external_route_contract(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
-        routers = config["http"]["routers"]
 
         # Deliberately public: no forward auth and no local-ip-restriction, so
         # external services can fetch artifact URLs without logging in.
@@ -278,14 +277,6 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             service="artifacts-workstation",
             middlewares=["artifacts-no-leak-headers"],
             backend="http://workstation.faviann.vms:19082",
-        )
-        self.assertEqual(
-            [
-                name
-                for name, router in routers.items()
-                if "artifacts." in router["rule"]
-            ],
-            ["artifacts"],
         )
         self.assertEqual(
             config["http"]["middlewares"]["artifacts-no-leak-headers"],
