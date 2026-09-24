@@ -1,8 +1,7 @@
 ---
-# Cover check mode and repeat convergence for both directory and file mounts. The
-# Python driver also uses this fixture to verify file contents survive a recreated
-# home. The success fixture owns fstab coverage across the full production link set.
-- name: Test workstation persistent home idempotency
+# Check mode on a fresh home for both directory and file mounts. It is the only
+# check-mode execution of persistent_home.yml, which `./run.sh --check` reaches.
+- name: Test workstation persistent home check mode
   hosts: localhost
   connection: local
   gather_facts: false
@@ -11,8 +10,6 @@
     workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/faviann"
-    workstation_origin_firewall_nft_dir: "{{ temp_root }}/etc/nftables.d"
-    workstation_origin_firewall_service_path: "{{ temp_root }}/etc/systemd/system/workstation-origin-firewall.service"
     workstation_persistent_home_enabled: true
     workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
     workstation_persistent_home_mount_state: present

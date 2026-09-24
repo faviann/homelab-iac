@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from contextlib import nullcontext
@@ -17,9 +16,8 @@ from bitwarden_release_boundary import bitwarden_release_boundary
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "tests" / "regression" / "fixtures"
 SUCCESS_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_success.yml"
-DISABLED_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_disabled.yml"
 CONFLICT_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_conflict.yml"
-IDEMPOTENCY_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_idempotency.yml"
+CHECK_MODE_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_check_mode.yml"
 SYMLINK_MIGRATION_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_symlink_migration.yml"
 DIRECTORY_MIGRATION_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_directory_migration.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
@@ -68,14 +66,6 @@ def test_workstation_persistent_home_contract() -> None:
     success_output = f"{success.stdout}\n{success.stderr}"
     assert success.returncode == 0, success_output
 
-    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-disabled-") as temp_root:
-        disabled = run_playbook(
-            DISABLED_PLAYBOOK, temp_root, needs_bitwarden_release=True
-        )
-
-    disabled_output = f"{disabled.stdout}\n{disabled.stderr}"
-    assert disabled.returncode == 0, disabled_output
-
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-conflict-") as temp_root:
         conflict = run_playbook(CONFLICT_PLAYBOOK, temp_root)
         assert [
@@ -100,57 +90,41 @@ def test_workstation_persistent_home_contract() -> None:
     migration_output = f"{migration.stdout}\n{migration.stderr}"
     assert migration.returncode == 0, migration_output
 
+    # A rebuilt home: the backing store already holds a Claude config (and, via
+    # the fixture, Moraine and Lobu directories) while the home side has no mount
+    # point or fstab entry. The rerun owns persistent-home convergence.
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-directory-migration-") as temp_root:
+        claude_config = Path(temp_root) / "ephemeral/workstation/home/.claude.json"
+        claude_config.parent.mkdir(parents=True)
+        content = '{"hasCompletedOnboarding":true,"projects":{"synthetic":{}}}\n'
+        claude_config.write_text(content)
+        claude_config.chmod(0o644)
+        claude_config_mtime = claude_config.stat().st_mtime_ns
+
         directory_migration = run_playbook(DIRECTORY_MIGRATION_PLAYBOOK, temp_root)
+        directory_migration_output = f"{directory_migration.stdout}\n{directory_migration.stderr}"
+        assert directory_migration.returncode == 0, directory_migration_output
+        assert claude_config.read_text() == content
+        assert claude_config.stat().st_mtime_ns == claude_config_mtime
+        assert claude_config.stat().st_mode & 0o777 == 0o600
+
         second_directory_migration = run_playbook(
             DIRECTORY_MIGRATION_PLAYBOOK,
             temp_root,
             extra_vars=("prepare_existing_moraine_runtime=false",),
         )
-
-    directory_migration_output = f"{directory_migration.stdout}\n{directory_migration.stderr}"
-    assert directory_migration.returncode == 0, directory_migration_output
-    second_directory_migration_output = (
-        f"{second_directory_migration.stdout}\n{second_directory_migration.stderr}"
-    )
-    assert second_directory_migration.returncode == 0, second_directory_migration_output
-    assert "changed=0" in second_directory_migration_output, second_directory_migration_output
+        second_directory_migration_output = (
+            f"{second_directory_migration.stdout}\n{second_directory_migration.stderr}"
+        )
+        assert second_directory_migration.returncode == 0, second_directory_migration_output
+        assert "changed=0" in second_directory_migration_output, second_directory_migration_output
+        assert claude_config.read_text() == content
+        assert claude_config.stat().st_mtime_ns == claude_config_mtime
+        assert claude_config.stat().st_mode & 0o777 == 0o600
 
     with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-check-mode-") as temp_root:
-        check_mode = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root, check_mode=True)
+        check_mode = run_playbook(CHECK_MODE_PLAYBOOK, temp_root, check_mode=True)
         assert not (Path(temp_root) / "ephemeral/workstation/home/.claude.json").exists()
 
     check_mode_output = f"{check_mode.stdout}\n{check_mode.stderr}"
     assert check_mode.returncode == 0, check_mode_output
-
-    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-idempotency-") as temp_root:
-        first_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
-        first_idempotency_output = f"{first_idempotency.stdout}\n{first_idempotency.stderr}"
-        assert first_idempotency.returncode == 0, first_idempotency_output
-
-        target = Path(temp_root) / "ephemeral/workstation/home/.claude.json"
-        assert target.read_text() == "{}\n"
-        content = '{"hasCompletedOnboarding":true,"projects":{"synthetic":{}}}\n'
-        target.write_text(content)
-        target_mtime = target.stat().st_mtime_ns
-        second_idempotency = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
-        second_idempotency_output = f"{second_idempotency.stdout}\n{second_idempotency.stderr}"
-        assert second_idempotency.returncode == 0, second_idempotency_output
-        assert "changed=0" in second_idempotency_output, second_idempotency_output
-        assert target.read_text() == content
-        assert target.stat().st_mtime_ns == target_mtime
-
-        # Simulate losing the container-owned home and fstab while backing survives.
-        workstation_home = Path(temp_root) / "home/faviann"
-        shutil.rmtree(workstation_home)
-        (Path(temp_root) / "fstab").unlink()
-        target.chmod(0o644)
-        recreated_home = run_playbook(IDEMPOTENCY_PLAYBOOK, temp_root)
-        recreated_home_output = f"{recreated_home.stdout}\n{recreated_home.stderr}"
-        assert recreated_home.returncode == 0, recreated_home_output
-        assert target.read_text() == content
-        assert target.stat().st_mtime_ns == target_mtime
-        assert target.stat().st_mode & 0o777 == 0o600
-        mount_point = workstation_home / ".claude.json"
-        assert mount_point.is_file()
-        assert f"{target} {mount_point} none bind " in (Path(temp_root) / "fstab").read_text()

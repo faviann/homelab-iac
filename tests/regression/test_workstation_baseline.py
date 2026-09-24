@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test for workstation baseline inbound GitHub key population."""
+"""Regression tests for the normal workstation baseline role run."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from bitwarden_release_boundary import bitwarden_release_boundary
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUCCESS_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "workstation_baseline_github_keys_test.yml"
+SUCCESS_PLAYBOOK = REPO_ROOT / "tests" / "regression" / "fixtures" / "workstation_baseline_test.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
 
 
@@ -42,8 +42,8 @@ def run_playbook(
         )
 
 
-def test_workstation_baseline_writes_inbound_github_keys_only() -> None:
-    with tempfile.TemporaryDirectory(prefix="workstation-baseline-github-keys-success-") as temp_root:
+def test_workstation_baseline_normal_run() -> None:
+    with tempfile.TemporaryDirectory(prefix="workstation-baseline-success-") as temp_root:
         success = run_playbook(SUCCESS_PLAYBOOK, temp_root)
 
     success_output = f"{success.stdout}\n{success.stderr}"
@@ -51,7 +51,7 @@ def test_workstation_baseline_writes_inbound_github_keys_only() -> None:
 
 
 def test_workstation_baseline_rejects_bitwarden_archive_digest_mismatch() -> None:
-    with tempfile.TemporaryDirectory(prefix="workstation-baseline-github-keys-digest-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="workstation-baseline-digest-") as temp_root:
         mismatch = run_playbook(SUCCESS_PLAYBOOK, temp_root, digest_matches=False)
 
     mismatch_output = f"{mismatch.stdout}\n{mismatch.stderr}"
