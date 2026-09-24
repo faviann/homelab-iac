@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import sys
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STACK_ROOT = REPO_ROOT / "stacks/jellyfin/jellystat"
+
+sys.path.insert(0, str(REPO_ROOT / "playbooks/filter_plugins"))
+from compose_env import credential_is_configured  # noqa: E402
 
 
 def load_yaml(path: Path) -> dict:
@@ -42,15 +46,10 @@ class JellystatSecretContractTests(unittest.TestCase):
     def test_vault_example_documents_required_jellystat_keys(self) -> None:
         vault_example = load_yaml(REPO_ROOT / "inventory/vault.yml.example")
 
-        self.assertEqual(
-            vault_example.get("vault_jellystat_jwt_secret"),
-            "REPLACE_WITH_RANDOM_JWT_SECRET",
-        )
-        self.assertEqual(
-            vault_example.get("vault_jellystat_postgres_password"),
-            "REPLACE_WITH_RANDOM_DATABASE_PASSWORD",
-        )
-
+        for key in ("vault_jellystat_jwt_secret", "vault_jellystat_postgres_password"):
+            # A recognized placeholder, never a value that would render as a real secret.
+            self.assertTrue(vault_example.get(key), msg=key)
+            self.assertFalse(credential_is_configured(vault_example[key]), msg=key)
 
 if __name__ == "__main__":
     unittest.main()
