@@ -22,10 +22,12 @@ fixture, not an operator contract, and none of those paths crosses the live
 boundary. The concern has never been seen in operation. It began as a review
 hypothesis, and the confirming test set the overrides itself.
 
-When an operator overrides one of these settings, the command either fails with
-an error, such as an unresolvable module or an SSH control-socket error, or runs
-with the operator's own copies. The reconciler writes only repository paths, so
-nothing it owns is corrupted, and the decision holds without detection.
+When an operator overrides one of these settings, the command may fail with an
+error, such as an unresolvable module or an SSH control-socket error. It may
+instead run with the operator's own copies, or the override may have no effect,
+as with a custom `ControlPath` when SSH multiplexing is off. The reconciler
+writes only repository paths, so nothing it owns is corrupted, and the decision
+holds without detection.
 
 The path-drift regression in `tests/regression/test_live_dependencies.py` is
 this decision's enforcement point. It asserts that the reconciler's path
