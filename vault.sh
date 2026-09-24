@@ -9,9 +9,10 @@ cd "$PROJECT_ROOT" || exit 1
 source "$PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 VAULT_FILE="$PROJECT_ROOT/inventory/vault.yml"
 PASS_FILE="$HOME/.ansible/vault-pass"
-# ansible-vault loads this file on every call, even alongside
-# --vault-password-file, so replace any inherited value.
+# ansible-vault loads these on every call, even alongside
+# --vault-password-file, so replace or drop any inherited value.
 export ANSIBLE_VAULT_PASSWORD_FILE="$PASS_FILE"
+unset ANSIBLE_VAULT_IDENTITY_LIST
 TRANSACTION_WORKSPACE=""
 TRANSACTION_PUBLISH_TMP=""
 

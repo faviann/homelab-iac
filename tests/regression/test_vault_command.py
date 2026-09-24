@@ -2113,9 +2113,31 @@ def test_rotate_dry_run_rekeys_through_real_ansible_vault(
     )
 
 
-@pytest.mark.parametrize(
-    "operation", ["check", "set", "edit", "configure", "rotate --dry-run"]
-)
+REAL_VAULT_OPERATIONS = ["check", "set", "edit", "configure", "rotate --dry-run"]
+
+
+def run_real_vault_operation(
+    repo: Path,
+    env: dict[str, str],
+    operation: str,
+    tmp_path: Path,
+    fake_executable: FakeExecutableFactory,
+) -> tuple[int, str]:
+    if operation == "set":
+        source = write_source(tmp_path / "secret")
+        args = ["set", "vault_transferred", "--from-file", str(source), "--create"]
+    elif operation == "edit":
+        install_editor(tmp_path, env, fake_executable)
+        return run_vault_tty(repo, env, [], "edit")
+    elif operation == "configure":
+        return run_vault_tty(repo, env, configure_interactions(), "configure")
+    else:
+        args = operation.split()
+    result = run_vault(repo, env, *args)
+    return result.returncode, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("operation", REAL_VAULT_OPERATIONS)
 def test_ansible_vault_password_file_steers_no_operation(
     real_vault_repo: tuple[Path, dict[str, str]],
     fake_executable: FakeExecutableFactory,
@@ -2130,31 +2152,70 @@ def test_ansible_vault_password_file_steers_no_operation(
     hostile = write_source(tmp_path / "hostile-vault-pass", b"hostile-passphrase\n")
     env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(hostile)
 
-    if operation == "check":
-        result = run_vault(repo, env, "check")
-        returncode, output = result.returncode, result.stdout + result.stderr
-    elif operation == "set":
-        source = write_source(tmp_path / "secret")
-        result = run_vault(
-            repo, env, "set", "vault_transferred", "--from-file", str(source),
-            "--create",
-        )
-        returncode, output = result.returncode, result.stdout + result.stderr
-    elif operation == "edit":
-        install_editor(tmp_path, env, fake_executable)
-        returncode, output = run_vault_tty(repo, env, [], "edit")
-    elif operation == "configure":
-        returncode, output = run_vault_tty(
-            repo, env, configure_interactions(), "configure"
-        )
-    else:
-        result = run_vault(repo, env, "rotate", "--dry-run")
-        returncode, output = result.returncode, result.stdout + result.stderr
+    returncode, output = run_real_vault_operation(
+        repo, env, operation, tmp_path, fake_executable
+    )
 
     assert returncode == 0, output
     assert hostile.read_bytes() == b"hostile-passphrase\n"
     assert live_passphrase_file(env).read_bytes() == passphrase_before
     assert run_real_ansible_vault(repo, env, "view").returncode == 0
+
+
+@pytest.mark.parametrize("operation", REAL_VAULT_OPERATIONS)
+def test_ansible_vault_identity_list_steers_no_operation(
+    real_vault_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/vault.yml"
+    vault.write_text(VALID_YAML, encoding="utf-8")
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+    vault_before = vault.read_bytes()
+    passphrase_before = live_passphrase_file(env).read_bytes()
+    decoy = write_source(tmp_path / "decoy-vault-pass", b"decoy-passphrase\n")
+    marker = tmp_path / "password-script-ran"
+    script = tmp_path / "password-script"
+    script.write_text(f"#!/bin/sh\n: > '{marker}'\necho script-passphrase\n")
+    script.chmod(0o700)
+    env["ANSIBLE_VAULT_IDENTITY_LIST"] = f"decoy@{decoy},script@{script}"
+
+    returncode, output = run_real_vault_operation(
+        repo, env, operation, tmp_path, fake_executable
+    )
+
+    assert returncode == 0, output
+    assert not marker.exists()
+    assert live_passphrase_file(env).read_bytes() == passphrase_before
+    if operation in {"check", "rotate --dry-run"}:
+        assert vault.read_bytes() == vault_before
+    else:
+        assert vault.read_bytes() != vault_before
+    del env["ANSIBLE_VAULT_IDENTITY_LIST"]
+    assert run_real_ansible_vault(repo, env, "view").returncode == 0
+
+
+def test_ansible_vault_identity_list_cannot_rescue_a_wrong_live_passphrase(
+    real_vault_repo: tuple[Path, dict[str, str]], tmp_path: Path
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/vault.yml"
+    vault.write_text(VALID_YAML, encoding="utf-8")
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+    correct = write_source(
+        tmp_path / "correct-vault-pass", live_passphrase_file(env).read_bytes()
+    )
+    live_passphrase_file(env).write_text("wrong-passphrase\n", encoding="utf-8")
+    env["ANSIBLE_VAULT_IDENTITY_LIST"] = f"correct@{correct}"
+
+    check = run_vault(repo, env, "check")
+    rehearsal = run_vault(repo, env, "rotate", "--dry-run")
+
+    assert check.returncode != 0
+    assert "decryptability: FAIL" in check.stdout
+    assert rehearsal.returncode != 0, rehearsal.stdout + rehearsal.stderr
 
 
 def test_agent_permitted_operations_never_disclose_a_vault_secret(
