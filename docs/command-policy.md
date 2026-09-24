@@ -323,8 +323,8 @@ These are known limits, not defects waiting for a fix.
 - A secret written into a plain group or host variable file is not a vault
   value, so `./inspect.sh vars` does not mask it.
 - A vault key without the `vault_` prefix escapes the name rule.
-- A test run outside `./validate.sh` does not get the fixture inventory and
-  vault password (ADR-0008, #344).
+- A lifecycle launcher run directly, outside `./validate.sh` and pytest, does
+  not get the fixture inventory and vault password (ADR-0008).
 - A playbook is detected as live when a play targets something other than
   `localhost` or when it imports the Proxmox-host layer. A controller-only
   playbook that delegates to the Proxmox host without importing that layer is
