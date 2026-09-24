@@ -19,25 +19,26 @@ EXTERNALSERVICE_PATH = (
 
 # Every home path that must survive an LXC rebuild. Dropping one loses that
 # state on the next rebuild, so removal is a deliberate edit here; adding a
-# path needs none.
+# path needs none. A bind file's content seeds a fresh workstation; without it
+# the role creates an empty .claude.json, which is not valid JSON.
 DURABLE_HOME_LINKS = (
-    ("claude", "bind_mount", ".claude", "0700"),
-    ("claude_config", "bind_file", ".claude.json", "0600"),
-    ("codex", "bind_mount", ".codex", "0700"),
-    ("agents", "bind_mount", ".agents", "0700"),
-    ("pi", "bind_mount", ".pi", "0700"),
-    ("omp", "bind_mount", ".omp", "0700"),
-    ("opencode_config", "bind_mount", ".config/opencode", "0700"),
-    ("opencode_data", "bind_mount", ".local/share/opencode", "0700"),
-    ("opencode_state", "bind_mount", ".local/state/opencode", "0700"),
-    ("agent_of_empires", "bind_mount", ".config/agent-of-empires", "0700"),
-    ("hermes", "bind_mount", ".hermes", "0700"),
-    ("openclaw", "bind_mount", ".openclaw", "0700"),
-    ("moraine", "bind_mount", ".moraine", "0700"),
-    ("lobu", "bind_mount", ".config/lobu", "0700"),
-    ("herdr", "bind_mount", ".config/herdr", "0700"),
-    ("collie_state", "bind_mount", ".local/state/collie", "0700"),
-    ("repos", "bind_mount", "repos", "0755"),
+    ("claude", "bind_mount", ".claude", "0700", None),
+    ("claude_config", "bind_file", ".claude.json", "0600", "{}\n"),
+    ("codex", "bind_mount", ".codex", "0700", None),
+    ("agents", "bind_mount", ".agents", "0700", None),
+    ("pi", "bind_mount", ".pi", "0700", None),
+    ("omp", "bind_mount", ".omp", "0700", None),
+    ("opencode_config", "bind_mount", ".config/opencode", "0700", None),
+    ("opencode_data", "bind_mount", ".local/share/opencode", "0700", None),
+    ("opencode_state", "bind_mount", ".local/state/opencode", "0700", None),
+    ("agent_of_empires", "bind_mount", ".config/agent-of-empires", "0700", None),
+    ("hermes", "bind_mount", ".hermes", "0700", None),
+    ("openclaw", "bind_mount", ".openclaw", "0700", None),
+    ("moraine", "bind_mount", ".moraine", "0700", None),
+    ("lobu", "bind_mount", ".config/lobu", "0700", None),
+    ("herdr", "bind_mount", ".config/herdr", "0700", None),
+    ("collie_state", "bind_mount", ".local/state/collie", "0700", None),
+    ("repos", "bind_mount", "repos", "0755", None),
 )
 
 
@@ -114,11 +115,18 @@ class WorkstationInventoryTests(unittest.TestCase):
 
     def test_workstation_persistent_home_keeps_durable_state(self) -> None:
         declared = {
-            (link["name"], link["type"], link["path"], link["target"], link["mode"])
+            (
+                link["name"],
+                link["type"],
+                link["path"],
+                link["target"],
+                link["mode"],
+                link.get("content"),
+            )
             for link in self.effective_persistent_home_links()
         }
 
-        for name, link_type, relative_path, mode in DURABLE_HOME_LINKS:
+        for name, link_type, relative_path, mode, content in DURABLE_HOME_LINKS:
             self.assertIn(
                 (
                     name,
@@ -126,6 +134,7 @@ class WorkstationInventoryTests(unittest.TestCase):
                     f"{WORKSTATION_HOME}/{relative_path}",
                     f"{{{{ workstation_persistent_home_root }}}}/{relative_path}",
                     mode,
+                    content,
                 ),
                 declared,
             )
