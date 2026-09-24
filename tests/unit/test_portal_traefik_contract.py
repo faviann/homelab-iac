@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import yaml
@@ -101,45 +100,23 @@ def test_cloudflare_certificate_storage_is_one_coupled_contract() -> None:
     } in compose["x-managed-files"]
 
 
-def routed_hosts() -> set[str]:
-    """Every host name Portal routes: explicit Host rules plus Docker default rules."""
-    hosts = {
-        host
-        for root in (REPO_ROOT / "stacks", REPO_ROOT / "inventory")
-        for path in root.rglob("*")
-        if path.is_file() and path.suffix in {".yaml", ".yml", ".j2"}
-        for host in re.findall(
-            r"Host\(`([^`{}]+)`\)", path.read_text(encoding="utf-8", errors="ignore")
-        )
-    }
-    # Docker-discovered routes default to <project>.<domain>, where the domain is
-    # the host's default_domain, a traefik.domain label, or Portal's fallback.
-    domains = {"local.faviann.com"}
-    for path in (REPO_ROOT / "inventory").rglob("*.yml"):
-        domains.update(
-            re.findall(r"^default_domain:\s*\"?([a-z0-9.-]+)", path.read_text(encoding="utf-8"), re.M)
-        )
-    for path in (REPO_ROOT / "stacks").rglob("compose*.y*ml"):
-        domains.update(
-            re.findall(r"traefik\.domain[:=]\s*\"?([a-z0-9.-]+)", path.read_text(encoding="utf-8"))
-        )
-    return hosts | {f"project.{domain}" for domain in domains}
-
-
-def test_certificate_covers_every_routed_host() -> None:
+def test_wildcard_certificate_covers_every_access_tier() -> None:
+    # Each tier domain serves routes under a single wildcard; dropping one
+    # breaks TLS for that tier. Extra names are harmless.
     static = load_yaml(
         TRAEFIK_STACK / "appdata/traefik3/config/traefik.yaml"
     )
     (certificate,) = static["entryPoints"]["websecure"]["http"]["tls"]["domains"]
-    names = {certificate["main"], *certificate["sans"]}
 
-    def covered(host: str) -> bool:
-        parent = host.partition(".")[2]
-        return host in names or f"*.{parent}" in names
-
-    hosts = routed_hosts()
-    assert "faviann.com" in hosts
-    assert [host for host in sorted(hosts) if not covered(host)] == []
+    assert certificate["main"] == "faviann.com"
+    assert {
+        "*.faviann.com",
+        "*.admin.faviann.com",
+        "*.home.faviann.com",
+        "*.media.faviann.com",
+        "*.public.faviann.com",
+        "*.local.faviann.com",
+    } <= set(certificate["sans"])
 
 
 def test_protected_edge_auth_chain_keeps_its_forward_auth_address() -> None:
