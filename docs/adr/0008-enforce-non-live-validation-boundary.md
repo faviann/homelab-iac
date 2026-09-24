@@ -14,12 +14,20 @@ managed host. Play-level `connection: local` remains necessary for successful
 fixture execution. The fixture passphrase is an inert placeholder, not a
 credential.
 
-The shared regression-test helper asserts these fixture paths before it builds
-the locked `uv run --locked ansible-playbook` invocation. Tests that pass their
-own inventory must declare that exception explicitly; they still require the
-fixture vault-password file. A plain pytest invocation does not establish this
-environment, and the helper directs callers to `./validate.sh tests` when the
-boundary is absent.
+Pytest startup establishes the same boundary on its own. The repository-root
+`conftest.py` overwrites both variables with the fixture paths before
+collection, whatever the launching shell exported, so every pytest session
+rooted in this checkout and its descendant processes use the fixtures, whether
+it starts from `./validate.sh`, `tests/run_pytest.sh`, or a plain pytest
+command. The hook sits at the root rather than in `tests/` so a test tree added
+elsewhere in the checkout is covered too. Startup fails when a fixture file is
+missing. A test that needs a different controlled environment may still set
+these variables after startup, for itself or for one child process.
+
+The shared regression-test helper also asserts these fixture paths before it
+builds the locked `uv run --locked ansible-playbook` invocation. Tests that pass
+their own inventory must declare that exception explicitly; they still require
+the fixture vault-password file.
 
 Per-fixture safety was rejected because hand-written `connection: local` and
 individually supplied inventories make isolation depend on every test author.
@@ -30,8 +38,9 @@ operator credentials. Making validation fully offline was also rejected: the
 required boundary is no managed host, no vault secret, and no machine-specific
 credential; public-network reads remain permitted.
 
-This decision governs Ansible processes descended from `./validate.sh`. It does
-not claim that arbitrary direct test or launcher invocations inherit the
-fixtures, and it does not prohibit controlled fixture-local execution or
+This decision governs Ansible processes descended from `./validate.sh` or from a
+pytest session rooted in this checkout. It does not cover launchers run
+directly outside either, pytest runs that disable conftest loading, or Ansible
+run by hand, and it does not prohibit controlled fixture-local execution or
 public-network access. It changes neither live lifecycle commands nor their
 locking and wrapper safeguards.
