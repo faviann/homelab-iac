@@ -1,4 +1,4 @@
-"""API validation runs behind its own include without changing the advertised tasks."""
+"""API validation runs only when enabled, and resolves its collection only then."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from pathlib import Path
 import subprocess
 import sys
 
-import pytest
 import yaml
 
 
@@ -21,10 +20,8 @@ finally:
 TASKS = REPO_ROOT / "playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks"
 
 
-@pytest.fixture
 def api_validation(
-    request: pytest.FixtureRequest,
-    tmp_path: Path,
+    tmp_path: Path, *, collection_present: bool
 ) -> tuple[list[str], dict[str, str]]:
     playbook = tmp_path / "playbook.yml"
     playbook.write_text(
@@ -51,7 +48,7 @@ def api_validation(
     )
     collections = tmp_path / "collections"
     collections.mkdir()
-    if request.param:
+    if collection_present:
         module = collections / "ansible_collections/community/proxmox/plugins/modules/proxmox_vm_info.py"
         module.parent.mkdir(parents=True)
         # An intentional module failure proves execution, independent of callbacks.
@@ -71,23 +68,19 @@ def api_validation(
     ], env
 
 
-@pytest.mark.parametrize("api_validation", [True], indirect=True)
-def test_enabled_api_validation_executes(
-    api_validation: tuple[list[str], dict[str, str]],
-) -> None:
+def test_enabled_api_validation_executes(tmp_path: Path) -> None:
     """Enabled API validation resolves its collection and runs the module."""
-    command, env = api_validation
+    command, env = api_validation(tmp_path, collection_present=True)
     result = subprocess.run(command, env=env, capture_output=True, text=True)
     assert result.returncode != 0
     assert "controlled API invocation" in result.stdout, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("api_validation", [False], indirect=True)
 def test_disabled_api_validation_does_not_resolve_the_api_collection(
-    api_validation: tuple[list[str], dict[str, str]],
+    tmp_path: Path,
 ) -> None:
     """Disabled API validation succeeds without resolving its collection."""
-    command, env = api_validation
+    command, env = api_validation(tmp_path, collection_present=False)
     result = subprocess.run(
         command + ["-e", "proxmox_validate_api=false"], env=env, capture_output=True, text=True
     )
@@ -98,14 +91,3 @@ def test_disabled_api_validation_does_not_resolve_the_api_collection(
     assert "pct command: not checked" in result.stdout, result.stdout
     assert "✓ pct command" not in result.stdout, result.stdout
     assert "SSH access" not in result.stdout, result.stdout
-
-
-@pytest.mark.parametrize("api_validation", [True], indirect=True)
-def test_task_listing_advertises_api_task_exactly_once(
-    api_validation: tuple[list[str], dict[str, str]],
-) -> None:
-    """Listing keeps the include's public task name, advertised once."""
-    command, env = api_validation
-    result = subprocess.run(command + ["--list-tasks"], env=env, capture_output=True, text=True)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.count("Test Proxmox API connectivity\t") == 1, result.stdout

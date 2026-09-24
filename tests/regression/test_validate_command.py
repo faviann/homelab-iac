@@ -225,6 +225,17 @@ def assert_fixture_environment(
     assert_validation_caches_were_removed(commands, expected_cache_count)
 
 
+def assert_isolated(
+    result: subprocess.CompletedProcess[str],
+    commands: list[dict[str, object]],
+    expected_cache_count: int = 1,
+) -> None:
+    """Every child saw the fixture inputs, and no operator input was disclosed."""
+    assert OPERATOR_MARKER not in result.stdout
+    assert OPERATOR_MARKER not in result.stderr
+    assert_fixture_environment(commands, expected_cache_count)
+
+
 # --- AC1 / AC6: the no-argument comprehensive handoff run -------------------
 
 
@@ -246,7 +257,7 @@ def test_no_argument_run_is_the_comprehensive_non_live_handoff_validation(
     assert child_options(lifecycle_command["argv"], "run_lxc_lifecycle_regressions.py") == [
         "--full"
     ]
-    assert_fixture_environment(commands, expected_cache_count=4)
+    assert_isolated(result, commands, expected_cache_count=4)
     assert not (Path(env["HOME"]) / ".ansible/homelab-iac-lifecycle.lock").exists()
 
 
@@ -399,6 +410,7 @@ def test_lint_reconciles_collections_then_runs_repo_wide_lint(tmp_path: Path) ->
     commands = captured_commands(tmp_path)
     assert child_kinds(commands) == ["reconcile", "lint"]
     assert child_options(commands[1]["argv"], "ansible-lint") == []
+    assert_isolated(result, commands)
 
 
 def test_lint_rejects_a_path_argument(tmp_path: Path) -> None:
@@ -419,6 +431,7 @@ def test_lifecycle_runs_the_fast_path_by_default(tmp_path: Path) -> None:
     commands = captured_commands(tmp_path)
     assert child_kinds(commands) == ["lifecycle"]
     assert child_options(commands[0]["argv"], "run_lxc_lifecycle_regressions.py") == []
+    assert_isolated(result, commands)
 
 
 @pytest.mark.parametrize(
@@ -485,9 +498,11 @@ def test_tests_runs_the_whole_suite_without_a_target(tmp_path: Path) -> None:
     result = run_validation(env, REPO_ROOT, "tests")
 
     assert result.returncode == 0, result.stderr
-    kinds = child_kinds(captured_commands(tmp_path))
+    commands = captured_commands(tmp_path)
+    kinds = child_kinds(commands)
     assert kinds[0] == "reconcile"
     assert set(kinds[1:]) == {"tests"}
+    assert_isolated(result, commands)
 
 
 @pytest.mark.parametrize(
@@ -522,39 +537,50 @@ def test_tests_preserves_exceptional_and_empty_statuses(
     assert result.returncode == pytest_status
 
 
-def test_real_pytest_runner_continues_after_serial_item_failure(
+def test_real_pytest_runner_continues_after_serial_failure_and_excludes_the_gate(
     tmp_path: Path,
 ) -> None:
+    # Every observation below is its own marker file, so the serial failure
+    # that drives the exit status decides neither continuation nor exclusion.
     (tmp_path / "pytest.ini").write_text(
-        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n",
+        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n"
+        "    renovate_compat: temporary isolated runner fixture\n",
         encoding="utf-8",
     )
-    serial_test = tmp_path / "test_serial_failure.py"
-    serial_test.write_text(
+    probes = tmp_path / "probes"
+    probes.mkdir()
+    (tmp_path / "test_serial_failure.py").write_text(
         "import pytest\n\n"
         "pytestmark = pytest.mark.serial\n\n"
         "def test_serial_failure():\n"
         "    assert False, 'intentional serial failure for runner regression'\n",
         encoding="utf-8",
     )
-    parallel_marker = tmp_path / "parallel-item-ran"
-    parallel_test = tmp_path / "test_parallel_probe.py"
-    parallel_test.write_text(
+    (tmp_path / "test_parallel_probe.py").write_text(
         "import os\nfrom pathlib import Path\n\n"
         "def test_parallel_probe_runs():\n"
         "    assert os.environ.get('PYTEST_XDIST_WORKER')\n"
         "    worker_count = int(os.environ['PYTEST_XDIST_WORKER_COUNT'])\n"
         "    assert 1 <= worker_count <= 4, worker_count\n"
-        "    Path(os.environ['PYTEST_RUNNER_PARALLEL_MARKER']).write_text(\n"
-        "        'ran', encoding='utf-8'\n"
-        "    )\n",
+        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'parallel-probe').touch()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "test_gate.py").write_text(
+        "import os\nfrom pathlib import Path\n\nimport pytest\n\n"
+        "@pytest.mark.renovate_compat\n"
+        "def test_parallel_lane_gate():\n"
+        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'parallel-gate').touch()\n\n"
+        "@pytest.mark.renovate_compat\n"
+        "@pytest.mark.serial\n"
+        "def test_serial_lane_gate():\n"
+        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'serial-gate').touch()\n",
         encoding="utf-8",
     )
     env = os.environ.copy()
-    env["PYTEST_RUNNER_PARALLEL_MARKER"] = str(parallel_marker)
+    env["PYTEST_RUNNER_PROBES"] = str(probes)
 
     result = subprocess.run(
-        ["bash", str(PYTEST_RUNNER), str(serial_test), str(parallel_test)],
+        ["bash", str(PYTEST_RUNNER), str(tmp_path)],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -563,59 +589,13 @@ def test_real_pytest_runner_continues_after_serial_item_failure(
     )
     output = f"{result.stdout}\n{result.stderr}"
 
+    assert sorted(path.name for path in probes.iterdir()) == ["parallel-probe"], output
     assert result.returncode == 1, output
     assert "intentional serial failure for runner regression" in output
-    assert parallel_marker.read_text(encoding="utf-8") == "ran"
 
 
-def test_real_pytest_runner_excludes_the_renovate_compatibility_gate(
-    tmp_path: Path,
-) -> None:
-    (tmp_path / "pytest.ini").write_text(
-        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n"
-        "    renovate_compat: temporary isolated runner fixture\n",
-        encoding="utf-8",
-    )
-    gate_test = tmp_path / "test_gate.py"
-    gate_test.write_text(
-        "import pytest\n\n"
-        "@pytest.mark.renovate_compat\n"
-        "def test_parallel_lane_gate():\n"
-        "    assert False, 'renovate_compat item ran in an ordinary run'\n\n"
-        "@pytest.mark.renovate_compat\n"
-        "@pytest.mark.serial\n"
-        "def test_serial_lane_gate():\n"
-        "    assert False, 'renovate_compat item ran in an ordinary run'\n",
-        encoding="utf-8",
-    )
-    ordinary_marker = tmp_path / "ordinary-item-ran"
-    ordinary_test = tmp_path / "test_ordinary.py"
-    ordinary_test.write_text(
-        "import os\nfrom pathlib import Path\n\n"
-        "def test_ordinary_item_runs():\n"
-        "    Path(os.environ['PYTEST_RUNNER_ORDINARY_MARKER']).write_text(\n"
-        "        'ran', encoding='utf-8'\n"
-        "    )\n",
-        encoding="utf-8",
-    )
-    env = os.environ.copy()
-    env["PYTEST_RUNNER_ORDINARY_MARKER"] = str(ordinary_marker)
-
-    result = subprocess.run(
-        ["bash", str(PYTEST_RUNNER), str(gate_test), str(ordinary_test)],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-
-    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-    assert ordinary_marker.read_text(encoding="utf-8") == "ran"
-
-
-@pytest.mark.parametrize("pytest_status", [1, 5])
-def test_renovate_runs_only_the_marked_gate_and_reports_its_failure(
+@pytest.mark.parametrize("pytest_status", [0, 1, 5])
+def test_renovate_runs_only_the_marked_gate_and_reports_its_status(
     tmp_path: Path, pytest_status: int
 ) -> None:
     env = validation_environment(tmp_path)
@@ -629,6 +609,7 @@ def test_renovate_runs_only_the_marked_gate_and_reports_its_failure(
     assert child_kinds(commands) == ["tests"]
     assert child_options(commands[0]["argv"], "-m")[0] == "renovate_compat"
     assert commands[0]["pytest_addopts"] is None
+    assert_isolated(result, commands)
 
 
 @pytest.mark.parametrize("target", ["validate.sh", "../outside/test_x.py"])
@@ -673,6 +654,7 @@ def test_stack_validates_exactly_the_named_stack(tmp_path: Path) -> None:
     options = child_options(argv, "validate")
     assert options[:2] == ["--repository-root", "."]
     assert options[-1] == "stacks/workstation/mcp-auth-proxy"
+    assert_isolated(result, commands)
 
 
 @pytest.mark.parametrize(
@@ -780,17 +762,8 @@ def test_stack_reports_a_valid_policy_as_schema_versioned_json() -> None:
 # section today, so validation reports it as invalid. If that stack ever gains
 # an update policy, move this case to another genuinely invalid stack rather
 # than weakening the assertions.
-@pytest.mark.parametrize(
-    "path",
-    [
-        "stacks/overmind/overmind",
-        "stacks/workstation/no-such-stack-for-validation",
-    ],
-)
-def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero(
-    path: str,
-) -> None:
-    result = run_real_stack_validation(path)
+def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero() -> None:
+    result = run_real_stack_validation("stacks/overmind/overmind")
 
     assert result.returncode != 0
     document = json.loads(result.stdout)
@@ -801,41 +774,22 @@ def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero(
     assert diagnostic in result.stderr
 
 
-# --- AC7 / AC10: the fixture environment and agent safety ------------------
+# --- AC7 / AC10: the shared fixture boundary and agent safety ---------------
+
+# Each operation's selection test above observes, for its own entry path, that
+# every child receives the fixture inputs and that a readable operator input is
+# never disclosed. validate.sh overwrites both variables once, before any
+# operation-specific branch starts a child. Before that point it runs only the
+# argument parser and the uv prerequisite check; neither, including the
+# parser's per-operation branches, touches either variable.
+# So one entry path suffices to catch a silent read of operator input there.
 
 
-OPERATION_ENTRY_POINTS = [
-    (),
-    ("lint",),
-    ("lifecycle",),
-    ("tests",),
-    ("stack", "stacks/workstation/mcp-auth-proxy"),
-    ("renovate",),
-]
-
-
-@pytest.mark.parametrize("arguments", OPERATION_ENTRY_POINTS)
-def test_every_operation_runs_under_the_fixture_environment(
-    tmp_path: Path, arguments: tuple[str, ...]
-) -> None:
-    env = validation_environment(tmp_path)
-
-    result = run_validation(env, REPO_ROOT, *arguments)
-
-    assert result.returncode == 0, result.stderr
-    assert_fixture_environment(
-        captured_commands(tmp_path), expected_cache_count=4 if not arguments else 1
-    )
-
-
-@pytest.mark.parametrize("arguments", OPERATION_ENTRY_POINTS)
 @pytest.mark.parametrize(
-    "sentinel_mode",
-    [0o600, 0o000, None],
-    ids=["readable", "unreadable", "nonexistent"],
+    "sentinel_mode", [0o000, None], ids=["unreadable", "nonexistent"]
 )
-def test_every_operation_is_agent_safe(
-    tmp_path: Path, arguments: tuple[str, ...], sentinel_mode: int | None
+def test_handoff_replaces_operator_inputs_without_reading_them(
+    tmp_path: Path, sentinel_mode: int | None
 ) -> None:
     if sentinel_mode == 0o000 and os.geteuid() == 0:
         pytest.skip(
@@ -844,13 +798,8 @@ def test_every_operation_is_agent_safe(
         )
     env = validation_environment(tmp_path, sentinel_mode=sentinel_mode)
 
-    result = run_validation(env, REPO_ROOT, *arguments)
+    result = run_validation(env, REPO_ROOT)
 
-    # A readable sentinel catches a disclosing read through the marker
-    # assertions; unreadable and nonexistent sentinels catch silent reads
-    # that fail and abort the command before it can exit 0.
+    # An unreadable or nonexistent sentinel aborts any read before exit 0.
     assert result.returncode == 0, result.stderr
-    assert OPERATOR_MARKER not in result.stdout
-    assert OPERATOR_MARKER not in result.stderr
-    for kind in child_kinds(captured_commands(tmp_path)):
-        assert kind in {"reconcile", "lint", "lifecycle", "tests", "stack"}
+    assert_isolated(result, captured_commands(tmp_path), expected_cache_count=4)

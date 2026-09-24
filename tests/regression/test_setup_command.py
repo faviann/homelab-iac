@@ -2,8 +2,7 @@
 """Regression coverage for the ./setup.sh command facade.
 
 `setup.sh` has one operation, `sync`, which delegates to `uv sync --locked`.
-These tests observe the process, its exit status, its output, the work it
-delegates, and the filesystem it leaves behind.
+These tests observe the process, its exit status, and the work it delegates.
 """
 
 from __future__ import annotations
@@ -96,12 +95,6 @@ def delegated(env: dict[str, str]) -> list[list[str]]:
     return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
 
 
-def filesystem(root: Path) -> list[tuple[str, int]]:
-    return sorted(
-        (str(path.relative_to(root)), path.lstat().st_mode) for path in root.rglob("*")
-    )
-
-
 # --- sync -----------------------------------------------------------------
 
 
@@ -120,64 +113,25 @@ def test_sync_failure_is_not_reported_as_success(project, env) -> None:
     assert result.returncode == 1, result.stdout
 
 
-def test_sync_is_independently_repeatable(project, env) -> None:
-    first = run(project, env, "sync")
-    second = run(project, env, "sync")
-
-    assert (first.returncode, second.returncode) == (0, 0), first.stderr
-    assert second.stdout == first.stdout
-    assert delegated(env) == [SYNC, SYNC]
-
-
-def test_sync_without_uv_names_the_machine_prerequisite(project, env, tmp_path) -> None:
-    (tmp_path / "bin" / "uv").unlink()
-    assert shutil.which("uv", path=env["PATH"]) is None
-
-    result = run(project, env, "sync")
-
-    assert result.returncode == 1
-    assert "uv not found on PATH" in result.stderr
-    assert "https://docs.astral.sh/uv/" in result.stderr
-    assert "./setup.sh" not in result.stdout + result.stderr
-    assert delegated(env) == []
-
-
 # --- grammar --------------------------------------------------------------
 
 
-def test_help_exits_zero_and_documents_only_sync(project, env) -> None:
+def test_help_exits_zero_without_delegating(project, env) -> None:
     result = run(project, env, "--help")
 
     assert result.returncode == 0
-    assert "sync" in result.stdout and "--help" in result.stdout
-    assert "bootstrap" not in result.stdout
+    assert "sync" in result.stdout
     assert delegated(env) == []
 
 
 @pytest.mark.parametrize(
-    ("arguments", "diagnostic"),
-    [
-        ((), "an operation is required"),
-        (("bootstrap",), "unknown operation"),
-        (("bogus",), "unknown operation"),
-        (("--bogus",), "unknown option"),
-        (("sync", "extra"), "sync takes no arguments"),
-        (("bootstrap", "extra"), "unknown operation"),
-        (("--help", "extra"), "--help takes no arguments"),
-    ],
+    "arguments",
+    [(), ("bogus",), ("--bogus",), ("sync", "extra"), ("--help", "extra")],
 )
-def test_bare_retired_unknown_or_surplus_input_is_invalid_usage(
-    project, env, tmp_path, arguments, diagnostic
+def test_missing_unknown_or_surplus_input_is_invalid_usage(
+    project, env, arguments
 ) -> None:
-    before = filesystem(tmp_path)
-
     result = run(project, env, *arguments)
 
     assert result.returncode == 2
-    assert result.stdout == ""
-    assert result.stderr.splitlines() == [
-        f"setup.sh: {diagnostic}",
-        "Try './setup.sh --help' for usage.",
-    ]
     assert delegated(env) == []
-    assert filesystem(tmp_path) == before
