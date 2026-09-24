@@ -5,6 +5,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import sys
 import types
 import unittest
@@ -105,6 +106,30 @@ class FakeBlueprintClient:
         raise AssertionError(f"Unexpected request: {method} {path_or_url}")
 
 
+GROUPS_PATH = "custom/10-groups.yaml"
+
+
+def groups_instance(**overrides: Any) -> dict[str, Any]:
+    instance = {
+        "pk": "instance-pk",
+        "name": "repo-auth-groups",
+        "path": GROUPS_PATH,
+        "enabled": True,
+        "status": "successful",
+        "last_applied": "earlier",
+        "last_applied_hash": "abc",
+    }
+    instance.update(overrides)
+    return instance
+
+
+def groups_client(available_hash: str | None, *instances: dict[str, Any], **options: Any) -> FakeBlueprintClient:
+    available = {"path": GROUPS_PATH}
+    if available_hash is not None:
+        available["hash"] = available_hash
+    return FakeBlueprintClient(available=[available], instances=list(instances), **options)
+
+
 class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -120,20 +145,7 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.mod.ensure_navidrome_password_change_sync_binding = self.original_navidrome
 
     def test_matching_hash_skips_apply_and_reports_unchanged(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "abc"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "abc",
-                }
-            ],
-        )
+        client = groups_client("abc", groups_instance())
 
         result = self.mod.reconcile_blueprint_instances(client, [])
 
@@ -142,20 +154,7 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertEqual(result["applied"][0]["action"], "unchanged")
 
     def test_hash_mismatch_applies_and_reports_changed(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "new"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "old",
-                }
-            ],
-        )
+        client = groups_client("new", groups_instance(last_applied_hash="old"))
 
         result = self.mod.reconcile_blueprint_instances(client, [])
 
@@ -163,122 +162,47 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertEqual(client.applied, ["instance-pk"])
         self.assertEqual(result["applied"][0]["action"], "applied")
 
-    def test_successful_apply_with_stale_hash_fails(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "expected-hash"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "stale-hash",
-                }
-            ],
-            post_apply_updates={
-                "last_applied_hash": "stale-hash",
-                "detail": "apply result was not persisted",
-            },
-        )
+    def test_successful_apply_without_the_expected_hash_fails(self):
+        for observed_hash in ("stale-hash", None):
+            with self.subTest(observed_hash=observed_hash):
+                client = groups_client(
+                    "expected-hash",
+                    groups_instance(last_applied_hash="stale-hash"),
+                    post_apply_updates={
+                        "last_applied_hash": observed_hash,
+                        "detail": "apply result was not persisted",
+                    },
+                )
 
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "repo-auth-groups.*expected-hash.*stale-hash.*apply result was not persisted",
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    f"repo-auth-groups.*expected-hash.*{re.escape(repr(observed_hash))}"
+                    ".*apply result was not persisted",
+                ):
+                    self.mod.reconcile_blueprint_instances(client, [])
+
+    def test_final_reobservation_rejects_contradictory_evidence(self):
+        for final_snapshot in (
+            {"last_applied_hash": "stale-final-hash", "detail": "final snapshot did not retain the applied hash"},
+            {"status": "error", "last_applied_hash": "stale-final-hash", "detail": "final validation failed"},
         ):
-            self.mod.reconcile_blueprint_instances(client, [])
+            with self.subTest(status=final_snapshot.get("status", "successful")):
+                client = groups_client(
+                    "expected-hash",
+                    groups_instance(last_applied="later", last_applied_hash="expected-hash"),
+                    final_snapshot_updates=final_snapshot,
+                )
 
-    def test_successful_apply_with_missing_hash_fails(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "expected-hash"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "stale-hash",
-                }
-            ],
-            post_apply_updates={"last_applied_hash": None},
-        )
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "repo-auth-groups.*expected-hash.*None",
-        ):
-            self.mod.reconcile_blueprint_instances(client, [])
-
-    def test_final_successful_snapshot_with_stale_hash_fails(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "expected-hash"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "later",
-                    "last_applied_hash": "expected-hash",
-                }
-            ],
-            final_snapshot_updates={
-                "last_applied_hash": "stale-final-hash",
-                "detail": "final snapshot did not retain the applied hash",
-            },
-        )
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "repo-auth-groups.*expected-hash.*stale-final-hash.*final snapshot did not retain the applied hash",
-        ):
-            self.mod.reconcile_blueprint_instances(client, [])
-
-    def test_final_error_snapshot_includes_hashes_and_api_detail(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "expected-hash"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "later",
-                    "last_applied_hash": "expected-hash",
-                }
-            ],
-            final_snapshot_updates={
-                "status": "error",
-                "last_applied_hash": "stale-final-hash",
-                "detail": "final validation failed",
-            },
-        )
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "repo-auth-groups.*expected-hash.*stale-final-hash.*final validation failed",
-        ):
-            self.mod.reconcile_blueprint_instances(client, [])
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    f"repo-auth-groups.*expected-hash.*stale-final-hash.*{final_snapshot['detail']}",
+                ):
+                    self.mod.reconcile_blueprint_instances(client, [])
 
     def test_apply_error_includes_hashes_and_api_detail(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "expected-hash"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "stale-hash",
-                }
-            ],
+        client = groups_client(
+            "expected-hash",
+            groups_instance(last_applied_hash="stale-hash"),
             post_apply_updates={
                 "status": "error",
                 "last_applied_hash": "stale-hash",
@@ -293,19 +217,9 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
             self.mod.reconcile_blueprint_instances(client, [])
 
     def test_apply_timeout_includes_instance_and_hashes(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "expected-hash"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "stale-hash",
-                }
-            ],
+        client = groups_client(
+            "expected-hash",
+            groups_instance(last_applied_hash="stale-hash"),
             post_apply_updates={
                 "status": "pending",
                 "last_applied_hash": "stale-hash",
@@ -328,20 +242,7 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
             self.mod.time.sleep = original_sleep
 
     def test_apply_timeout_before_first_get_uses_pre_apply_diagnostics(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "expected-hash"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "stale-pre-apply-hash",
-                }
-            ],
-        )
+        client = groups_client("expected-hash", groups_instance(last_applied_hash="stale-pre-apply-hash"))
         original_time = self.mod.time.time
         clock = iter([0, 121])
         self.mod.time.time = lambda: next(clock)
@@ -361,64 +262,35 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         )
 
     def test_metadata_mismatch_updates_applies_and_reports_changed(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "abc"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": False,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "abc",
-                }
-            ],
-        )
+        client = groups_client("abc", groups_instance(enabled=False))
 
         result = self.mod.reconcile_blueprint_instances(client, [])
 
         self.assertTrue(result["changed"])
         self.assertEqual(client.updated, [("instance-pk", {
             "name": "repo-auth-groups",
-            "path": "custom/10-groups.yaml",
+            "path": GROUPS_PATH,
             "enabled": True,
         })])
         self.assertEqual(client.applied, ["instance-pk"])
         self.assertEqual(result["applied"][0]["action"], "updated+applied")
 
     def test_missing_instance_creates_applies_and_reports_changed(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "abc"}],
-            instances=[],
-        )
+        client = groups_client("abc")
 
         result = self.mod.reconcile_blueprint_instances(client, [])
 
         self.assertTrue(result["changed"])
         self.assertEqual(client.created, [{
             "name": "repo-auth-groups",
-            "path": "custom/10-groups.yaml",
+            "path": GROUPS_PATH,
             "enabled": True,
         }])
         self.assertEqual(client.applied, ["created-pk"])
         self.assertEqual(result["applied"][0]["action"], "created+applied")
 
     def test_non_success_status_applies_even_when_hash_matches(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "abc"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "error",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "abc",
-                }
-            ],
-        )
+        client = groups_client("abc", groups_instance(status="error"))
 
         result = self.mod.reconcile_blueprint_instances(client, [])
 
@@ -427,47 +299,21 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertEqual(result["applied"][0]["action"], "applied")
 
     def test_path_fallback_finds_instance_by_path_when_name_differs(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml", "hash": "abc"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups-old",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "abc",
-                }
-            ],
-        )
+        client = groups_client("abc", groups_instance(name="repo-auth-groups-old"))
 
         result = self.mod.reconcile_blueprint_instances(client, [])
 
         self.assertTrue(result["changed"])
         self.assertEqual(client.updated, [("instance-pk", {
             "name": "repo-auth-groups",
-            "path": "custom/10-groups.yaml",
+            "path": GROUPS_PATH,
             "enabled": True,
         })])
         self.assertEqual(client.applied, ["instance-pk"])
         self.assertEqual(result["applied"][0]["action"], "updated+applied")
 
     def test_none_available_hash_forces_apply(self):
-        client = FakeBlueprintClient(
-            available=[{"path": "custom/10-groups.yaml"}],
-            instances=[
-                {
-                    "pk": "instance-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/10-groups.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": None,
-                }
-            ],
-        )
+        client = groups_client(None, groups_instance(last_applied_hash=None))
 
         result = self.mod.reconcile_blueprint_instances(client, [])
 
@@ -482,19 +328,11 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         ]
         client = FakeBlueprintClient(
             available=[
-                {"path": "custom/10-groups.yaml", "hash": "groups-hash"},
+                {"path": GROUPS_PATH, "hash": "groups-hash"},
                 {"path": "custom/20-roles.yaml", "hash": "roles-hash"},
             ],
             instances=[
-                {
-                    "pk": "groups-pk",
-                    "name": "repo-auth-groups",
-                    "path": "custom/20-roles.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "old",
-                }
+                groups_instance(pk="groups-pk", path="custom/20-roles.yaml", last_applied_hash="old"),
             ],
         )
 
@@ -503,7 +341,7 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertTrue(result["changed"])
         self.assertEqual(client.updated, [("groups-pk", {
             "name": "repo-auth-groups",
-            "path": "custom/10-groups.yaml",
+            "path": GROUPS_PATH,
             "enabled": True,
         })])
         self.assertEqual(client.created, [{
@@ -581,104 +419,6 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         self.assertTrue(result["changed"])
         self.assertEqual(client.deleted, ["stale-pk"])
         self.assertEqual(result["applied"][0]["action"], "deleted-stale-instance")
-
-
-class FakeNavidromeBindingClient:
-    def __init__(self, *, binding: dict[str, Any] | None):
-        self.policy = {"pk": "policy-pk", "name": "navidrome-registration-sync-policy"}
-        self.target_pk = "target-pk"
-        self.binding = binding
-        self.created: list[dict[str, Any]] = []
-        self.updated: list[dict[str, Any]] = []
-
-    def get_paginated(self, path: str) -> list[dict[str, Any]]:
-        if path == "/api/v3/policies/all/?page_size=200":
-            return [self.policy]
-        if path == "/api/v3/policies/bindings/?page_size=500":
-            return [] if self.binding is None else [self.binding]
-        raise AssertionError(f"Unexpected paginated path: {path}")
-
-    def request_json(
-        self,
-        method: str,
-        path_or_url: str,
-        *,
-        payload: dict[str, Any] | None = None,
-    ) -> Any:
-        if method == "PATCH" and path_or_url == "/api/v3/policies/bindings/binding-pk/":
-            self.updated.append(dict(payload))
-            self.binding.update(payload)
-            return self.binding
-        if method == "POST" and path_or_url == "/api/v3/policies/bindings/":
-            self.created.append(dict(payload))
-            self.binding = {"pk": "created-binding-pk", **payload}
-            return self.binding
-        raise AssertionError(f"Unexpected request: {method} {path_or_url}")
-
-
-class NavidromeBindingChangedReportingTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.mod = load_script()
-
-    def setUp(self):
-        self.original_target = self.mod.desired_navidrome_password_change_target_pk
-        self.mod.desired_navidrome_password_change_target_pk = lambda client: client.target_pk
-
-    def tearDown(self):
-        self.mod.desired_navidrome_password_change_target_pk = self.original_target
-
-    def test_existing_matching_binding_reports_unchanged(self):
-        client = FakeNavidromeBindingClient(
-            binding={
-                "pk": "binding-pk",
-                "policy": "policy-pk",
-                "target": "target-pk",
-                "order": 0,
-                "enabled": True,
-                "negate": False,
-                "failure_result": False,
-                "timeout": 10,
-            }
-        )
-
-        result = self.mod.ensure_navidrome_password_change_sync_binding(client)
-
-        self.assertFalse(result["changed"])
-        self.assertEqual(result["action"], "unchanged")
-        self.assertEqual(client.updated, [])
-        self.assertEqual(client.created, [])
-
-    def test_existing_mismatched_binding_reports_updated(self):
-        client = FakeNavidromeBindingClient(
-            binding={
-                "pk": "binding-pk",
-                "policy": "policy-pk",
-                "target": "target-pk",
-                "order": 1,
-                "enabled": True,
-                "negate": False,
-                "failure_result": False,
-                "timeout": 10,
-            }
-        )
-
-        result = self.mod.ensure_navidrome_password_change_sync_binding(client)
-
-        self.assertTrue(result["changed"])
-        self.assertEqual(result["action"], "updated-binding")
-        self.assertEqual(client.updated[0]["order"], 0)
-        self.assertEqual(client.created, [])
-
-    def test_missing_binding_reports_created(self):
-        client = FakeNavidromeBindingClient(binding=None)
-
-        result = self.mod.ensure_navidrome_password_change_sync_binding(client)
-
-        self.assertTrue(result["changed"])
-        self.assertEqual(result["action"], "created-binding")
-        self.assertEqual(client.created[0]["policy"], "policy-pk")
-        self.assertEqual(client.created[0]["target"], "target-pk")
 
 
 class ScriptCliOutputTests(unittest.TestCase):

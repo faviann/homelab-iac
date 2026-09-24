@@ -111,6 +111,8 @@ class NavidromeBindingReconciliationTests(unittest.TestCase):
             "timeout": 10,
         })
         self.assertEqual(result["binding_pk"], "created-binding-pk")
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["action"], "created-binding")
 
     def test_leaves_matching_binding_untouched(self):
         client = FakeAuthentikClient(bindings=[{
@@ -132,6 +134,8 @@ class NavidromeBindingReconciliationTests(unittest.TestCase):
         ]
         self.assertEqual(mutating_requests, [])
         self.assertEqual(result["binding_pk"], "existing-binding-pk")
+        self.assertFalse(result["changed"])
+        self.assertEqual(result["action"], "unchanged")
 
     def test_patches_drifted_binding_fields(self):
         client = FakeAuthentikClient(bindings=[{
@@ -163,6 +167,8 @@ class NavidromeBindingReconciliationTests(unittest.TestCase):
             "timeout": 10,
         })
         self.assertEqual(result["binding_pk"], "drifted-binding-pk")
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["action"], "updated-binding")
 
     def test_missing_policy_raises_clear_error(self):
         client = FakeAuthentikClient(policies=[])
