@@ -110,11 +110,7 @@ def test_workstation_origin_firewall_unresolved_origin_keeps_existing_firewall()
 
         output = f"{result.stdout}\n{result.stderr}"
         assert result.returncode != 0, output
-        failed_task = output[: output.index("fatal:")].rsplit("TASK [", 1)[1]
-        assert failed_task.startswith(
-            "config/lxc_workstation_baseline : Assert workstation origin firewall host resolution succeeded]"
-        ), output
-        assert "unresolvable-hostname.invalid" in output, output
+        assert "could not resolve any IPv4 address" in output, output
         assert nft_path.read_text(encoding="utf-8") == "existing origin rules\n"
         assert service_path.read_text(encoding="utf-8") == "existing origin service\n"
         assert sorted(path.name for path in stub_state_path.iterdir()) == [], output

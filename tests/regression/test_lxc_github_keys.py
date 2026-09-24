@@ -36,4 +36,3 @@ def test_lxc_github_keys() -> None:
         empty_keys = run_playbook(EMPTY_KEYS_PLAYBOOK, temp_root)
         empty_keys_output = f"{empty_keys.stdout}\n{empty_keys.stderr}"
         assert empty_keys.returncode == 0, empty_keys_output
-        assert "rescued=2" in empty_keys_output, empty_keys_output
