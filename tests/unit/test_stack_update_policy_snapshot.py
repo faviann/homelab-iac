@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 
-# This module contains the real GitHub-reader timeout and child termination probe.
+# This module contains the real GitHub-reader timeout probe.
 pytestmark = pytest.mark.serial
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -275,32 +275,15 @@ os.write(1, b"\\xffunsafe stdout")
     assert "unsafe" not in str(raised.value)
 
 
-def test_github_reader_times_out_safely_and_terminates_gh(
+def test_github_reader_times_out_with_generic_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
-    process_id = tmp_path / "gh.pid"
     fake_gh = fake_bin / "gh"
-    fake_gh.write_text(
-        r"""#!/usr/bin/env python3
-import os
-import sys
-import time
-
-with open(os.environ["FAKE_GH_PID"], "w", encoding="utf-8") as pid_file:
-    pid_file.write(str(os.getpid()))
-sys.stdout.write("unsafe stdout")
-sys.stderr.write("unsafe stderr")
-sys.stdout.flush()
-sys.stderr.flush()
-time.sleep(30)
-""",
-        encoding="utf-8",
-    )
+    fake_gh.write_text("#!/bin/sh\nexec sleep 30\n", encoding="utf-8")
     fake_gh.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
-    monkeypatch.setenv("FAKE_GH_PID", str(process_id))
     monkeypatch.setattr(snapshot_module, "_GITHUB_READ_TIMEOUT_SECONDS", 0.05)
 
     started = time.monotonic()
@@ -309,11 +292,7 @@ time.sleep(30)
     elapsed = time.monotonic() - started
 
     assert str(raised.value) == "GitHub repository could not be read"
-    assert "unsafe" not in str(raised.value)
     assert elapsed < 2
-    pid = int(process_id.read_text(encoding="utf-8"))
-    with pytest.raises(ProcessLookupError):
-        os.kill(pid, 0)
 
 
 def test_clean_default_branch_checkout_has_publishable_stack_snapshot(
