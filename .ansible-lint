@@ -1,5 +1,5 @@
 ---
-# Repo-wide lint gate: `uv run --locked ansible-lint` must exit 0.
+# Repo-wide lint gate: `./validate.sh lint` must exit 0.
 profile: production
 warn_list:
   - experimental

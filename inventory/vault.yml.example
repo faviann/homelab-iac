@@ -1,16 +1,14 @@
 ---
 # Proxmox API authentication details
 #
-# This file contains sensitive credentials and should be encrypted with uv run --locked ansible-vault.
-# DO NOT commit this file unencrypted to version control.
+# inventory/vault.yml holds sensitive credentials; ./vault.sh keeps it encrypted.
+# DO NOT commit it unencrypted to version control.
 # Every top-level key must start with vault_; ./inspect.sh vars depends on this
 # contract to identify values that require masking.
 #
 # Setup instructions:
-#   1. Run ./vault.sh configure for guided credential configuration (recommended)
-#   OR
-#   2. Copy this file to vault.yml and replace the values below
-#   3. Encrypt with: uv run --locked ansible-vault encrypt --vault-password-file ~/.ansible/vault-pass inventory/vault.yml
+#   1. Run ./vault.sh configure to create the encrypted vault with the Proxmox API credentials
+#   2. Run ./vault.sh edit to add the other keys below that your hosts use
 #
 # To update credentials later:
 #   Run ./vault.sh configure for guided reconfiguration

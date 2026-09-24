@@ -252,7 +252,7 @@ Run the credential-free contract tests with the locked environment:
 To iterate on a single stack without reconciling the others:
 
 ```bash
-./run.sh --limit <host> -e stack_filter=<stack>
+./run.sh --limit <host> --stack <stack>
 ```
 
 No registration step is required; the role discovers everything under `stacks/<host>/` automatically.

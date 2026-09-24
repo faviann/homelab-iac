@@ -306,7 +306,7 @@ the check does not recognize.
 | `docs/command-policy.md` | every standing permission's command, and every superseded form documented here |
 | `docs/adr/*.md` | any superseded form named in a decision's reasoning |
 | `docs/ssh-key-management.md` | the `pct exec` key-injection procedure |
-| `.agents/skills/rename-stack/SKILL.md` | the `docker compose down`, `mv`, `chown -R` sequence, and its `-e stack_filter=` warning |
+| `.agents/skills/rename-stack/SKILL.md` | the `docker compose down`, `mv`, `chown -R` sequence |
 | `docs/image-update-renovate-adapter.md` | `uv run --locked python scripts/image_update_renovate_adapter.py <request.json>` |
 
 ## Recorded boundaries

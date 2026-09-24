@@ -20,5 +20,5 @@ Host-owned:
 ## Deploy
 
 ```bash
-./run.sh --limit public -e stack_filter=readmeabook
+./run.sh --limit public --stack readmeabook
 ```
