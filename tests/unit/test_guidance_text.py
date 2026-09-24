@@ -24,7 +24,8 @@ SUPERSEDED_FORMS = {
     "ansible-playbook, ansible-lint, or pytest run directly": (
         rf"\buv run(?:[ \t]+--?[\w-]+)*[ \t]+{_TOOL}\b"
         rf"|(?:(?<![\w./-])|(?<=bin/)){_TOOL}[ \t]+(?:-\S|\S*[/.]\S*)"
-        rf"|(?:^|(?<=`))[ \t]*(?:\.venv/bin/)?{_TOOL}[ \t]+[\w-]+(?:[ \t]+-[-\w]+)*(?=[ \t]*(?:$|`))"
+        rf"|(?:^|(?<=`))[ \t]*(?:\.venv/bin/)?{_TOOL}[ \t]+[\w-]+"
+        r"(?:[ \t]+-[^ \t`\n][^`\n]*)?(?=[ \t]*(?:$|`))"
         rf"|^[ \t]*{_TOOL}[ \t]*$"
     ),
     "ansible -m ping": r"\bansible\b[^`\n]*[ \t]-m[ \t]+ping\b",
@@ -131,11 +132,18 @@ def allowlisted_globs() -> list[str]:
         "pytest tests",
         ".venv/bin/pytest tests",
         "pytest tests -x",
+        "pytest tests -k smoke",
+        ".venv/bin/pytest tests -k smoke",
+        "pytest tests --maxfail 1",
+        "pytest tests --maxfail=1",
+        "Run `pytest tests -k smoke` to reproduce it.",
         "Run `pytest tests` to check the suite.",
         "ansible-lint playbooks",
         ".venv/bin/ansible-lint playbooks",
         "ansible-lint playbooks --strict",
+        "ansible-lint playbooks --exclude vendor",
         "ansible-playbook deploy",
+        "ansible-playbook deploy -i inventory",
         "`pytest tests/unit -x`",
         "ansible all -m ping",
         "`ansible-inventory --host auth`",
@@ -163,10 +171,14 @@ def test_superseded_form_is_reported(text: str) -> None:
         "`./run.sh --include-controller` | Manage the control node -e",
         "Do not invoke Ansible, `uv`, or `pytest` directly.",
         "pytest owns the `test_*.py` files under `tests/`",
+        "pytest tests are collected by the validation command.",
+        "pytest tests are selected with -k smoke in examples.",
         "The unit suite is collected by pytest\nfrom the test tree.",
         "Authentik blueprints use tags that ansible-lint cannot parse.",
         "ansible-lint checks playbooks for problems.",
+        "ansible-lint playbooks are documented in the policy.",
         "ansible-playbook runs a playbook from the command line.",
+        "ansible-playbook runs a playbook with -i inventory.",
         "# ansible-vault encrypted file: must start with the $ANSIBLE_VAULT header",
         "The wrapper forwards arguments after `--` to `ansible-playbook`.",
         "`--tags` and `-e` only after `--`",
