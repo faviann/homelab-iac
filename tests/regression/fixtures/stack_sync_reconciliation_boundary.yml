@@ -61,9 +61,9 @@
         mode: "0644"
         content: "kind: stack\n"
 
-    - name: Seed stack-local docs and other metadata that must stay repo-only
+    - name: Seed stack-local docs and other metadata, plus an ordinary deployable config file
       ansible.builtin.command:
-        argv: "{{ ['touch'] + repo_only_stack_files | map('regex_replace', '^', myapp_source ~ '/') | list }}"
+        argv: "{{ ['touch'] + (repo_only_stack_files + ['config.ini']) | map('regex_replace', '^', myapp_source ~ '/') | list }}"
       changed_when: true
 
     - name: Seed existing managed-only content with a divergent mode
@@ -166,8 +166,9 @@
           - not _stale_stack.stat.exists
           - (_quarantined_compose.content | b64decode | from_yaml).services.old.image == 'old:latest'
 
-    # Deployed tree: stack-local docs and metadata stay repo-only; managed-only files
-    # are created empty when absent, and existing content is kept while its mode is repaired.
+    # Deployed tree: deployable files arrive while stack-local docs and metadata stay repo-only;
+    # managed-only files are created empty when absent, and existing content is kept while its
+    # mode is repaired.
     - name: Find the deployed desired stack tree
       ansible.builtin.find:
         paths: "{{ deployed_myapp }}"
@@ -176,11 +177,11 @@
         file_type: any
       register: _deployed_myapp_tree
 
-    - name: Assert the deployed tree holds only deployable and managed-only files
+    - name: Assert deployable files arrived, repo-only files did not, and managed-only files are correct
       ansible.builtin.assert:
         that:
-          - _deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp) | sort
-            == ['compose.yaml', 'data', 'data/certs', 'data/certs/created.json', 'data/existing.json']
+          - "['compose.yaml', 'config.ini'] | difference(deployed_files) == []"
+          - "(['docs', 'stack.yaml'] + repo_only_stack_files) | intersect(deployed_files) == []"
           - (deployed_files['data/certs/created.json'].mode, deployed_files['data/certs/created.json'].size) == ('0600', 0)
           - deployed_files['data/existing.json'].mode == '0600'
           - lookup('file', deployed_myapp ~ '/data/existing.json') == 'operator-data'
