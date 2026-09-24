@@ -16,28 +16,20 @@
     PATH: "{{ fixture_system_bin }}:{{ lookup('ansible.builtin.env', 'PATH') }}"
   vars:
     docker_user: fixture-docker-user
-    expected_daemon_options_without_gpu: |-
-      {
-          "log-driver": "json-file",
-          "log-opts": {
-              "max-file": "3",
-              "max-size": "10m"
-          }
-      }
-    expected_daemon_options_with_gpu: |-
-      {
-          "log-driver": "json-file",
-          "log-opts": {
-              "max-file": "3",
-              "max-size": "10m"
-          },
-          "runtimes": {
-              "nvidia": {
-                  "args": [],
-                  "path": "nvidia-container-runtime"
-              }
-          }
-      }
+    expected_daemon_options_without_gpu:
+      log-driver: json-file
+      log-opts:
+        max-file: "3"
+        max-size: 10m
+    expected_daemon_options_with_gpu:
+      log-driver: json-file
+      log-opts:
+        max-file: "3"
+        max-size: 10m
+      runtimes:
+        nvidia:
+          args: []
+          path: nvidia-container-runtime
   tasks:
     - name: Observe daemon options across GPU states
       block:
@@ -103,8 +95,8 @@
         - name: Assert non-GPU hosts get daemon options with no runtimes key
           ansible.builtin.assert:
             that:
-              - observed['gpu_undefined.json'] == expected_daemon_options_without_gpu
-              - observed['gpu_false.json'] == expected_daemon_options_without_gpu
+              - observed['gpu_undefined.json'] | from_json == expected_daemon_options_without_gpu
+              - observed['gpu_false.json'] | from_json == expected_daemon_options_without_gpu
             fail_msg: >-
               Non-GPU daemon options changed:
               {{ observed['gpu_undefined.json'] }} / {{ observed['gpu_false.json'] }}
@@ -112,7 +104,7 @@
         - name: Assert GPU hosts get the NVIDIA runtime block in one pass
           ansible.builtin.assert:
             that:
-              - observed['gpu_true.json'] == expected_daemon_options_with_gpu
+              - observed['gpu_true.json'] | from_json == expected_daemon_options_with_gpu
             fail_msg: >-
               GPU daemon options do not match the toolkit-written shape:
               {{ observed['gpu_true.json'] }}
