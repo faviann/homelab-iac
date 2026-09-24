@@ -180,8 +180,8 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
         )
 
         # Traefik preserves Host by default, and Origin is passed through unless a
-        # headers middleware rewrites it. The exact route contract intentionally
-        # contains neither kind of rewrite.
+        # headers middleware rewrites it. Neither the service nor any middleware
+        # in collie's chain may introduce such a rewrite.
         self.assertNotEqual(
             config["http"]["services"]["collie-workstation"]["loadBalancer"].get(
                 "passHostHeader"

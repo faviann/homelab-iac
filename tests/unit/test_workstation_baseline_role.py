@@ -103,9 +103,9 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("workstation_enabled | default(false)", when_text)
 
     def test_role_wires_every_workstation_capability(self) -> None:
-        # The normal baseline regression disables packages, locale, chezmoi,
-        # Nix and lingering, so this is the only check that main.yml still
-        # installs them.
+        # The normal baseline regression disables packages, chezmoi, Nix and
+        # lingering, so this is the only check that main.yml still wires them.
+        # The other names here also have runtime owners.
         task_names = [t.get("name") for t in load_yaml(ROLE_ROOT / "tasks/main.yml")]
 
         for name in (
