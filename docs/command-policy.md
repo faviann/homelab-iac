@@ -106,12 +106,12 @@ run with a different home directory takes a different lock and is not
 coordinated. It does not coordinate two control nodes either (#174). ADR-0009
 records the split.
 
-The lock only decides whether a live run may start. Inside one admitted
-lifecycle run, `playbooks/lifecycle-lxcs.yml` executes targeted LXCs one at a
-time (`serial: 1`). The first execution failure sets a run-local fail-fast
-latch, and every later target in that run reports `not_executed` without
-acting. The latch never coordinates separate runs, and no supported command
-executes targets concurrently.
+The lock gates whether a live run may start and is held for its duration.
+Inside one admitted lifecycle run, `playbooks/lifecycle-lxcs.yml` executes
+targeted LXCs one at a time (`serial: 1`). The first execution failure sets a
+run-local fail-fast latch, and every later target in that run reports
+`not_executed` without acting. The latch never coordinates separate runs, and
+no supported command executes targets concurrently.
 
 ## Changing the command set
 

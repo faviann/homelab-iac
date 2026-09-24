@@ -8,11 +8,9 @@
     - proxmox_skip_self | default(true) | bool
     - inventory_hostname == lookup('pipe', 'hostname')
 
-# Read the shared latch once so both branch decisions below see the same value.
-# Under serial: 1 no other target can record a failure between them; the
-# snapshot keeps a caller that executes targets concurrently (such as the
-# strategy-free semantic test fixture) from publishing neither result and
-# silently keeping the planning outcome.
+# Read the latch once so both branch decisions see one value. Under serial: 1
+# this is defensive; a caller that executes targets concurrently could otherwise
+# read empty then set and publish neither result.
 - name: Resolve the fail-fast latch once for this target's execution decision
   ansible.builtin.set_fact:
     proxmox_lifecycle_execution_failure_snapshot: >-
