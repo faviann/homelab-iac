@@ -165,16 +165,29 @@ def verified_dumps(backup_dir: Path) -> list[Path]:
     return sorted(backup_dir.glob("memory-*.verified.dump"))
 
 
-def test_good_dump_is_restore_verified_and_throwaway_database_is_dropped(postgres_container: str) -> None:
+def test_verified_backup_is_published_rotated_and_throwaway_database_is_dropped(postgres_container: str) -> None:
     with tempfile.TemporaryDirectory(prefix="overmind-backup-good-") as temp_root:
         backup_dir = Path(temp_root) / "backups"
         backup_dir.mkdir()
+        # Retention reads only filenames, so seeded history stands in for earlier runs.
+        for stamp in ("20260707T000000Z", "20260707T000100Z", "20260707T000200Z"):
+            (backup_dir / f"memory-{stamp}.verified.dump").write_text("seeded history", encoding="utf-8")
 
-        run_command([str(BACKUP_SCRIPT)], env=backup_env(backup_dir, postgres_container))
+        run_command(
+            [str(BACKUP_SCRIPT)],
+            env=backup_env(
+                backup_dir,
+                postgres_container,
+                OVERMIND_BACKUP_RETAIN="2",
+                OVERMIND_BACKUP_TIMESTAMP="20260707T000300Z",
+            ),
+        )
 
-        dumps = verified_dumps(backup_dir)
-        assert len(dumps) == 1
-        assert dumps[0].stat().st_size > 0
+        assert [dump.name for dump in verified_dumps(backup_dir)] == [
+            "memory-20260707T000200Z.verified.dump",
+            "memory-20260707T000300Z.verified.dump",
+        ]
+        assert (backup_dir / "memory-20260707T000300Z.verified.dump").stat().st_size > 0
 
         probe = docker(
             "exec",
@@ -246,30 +259,6 @@ exit 0
         assert verified_dumps(backup_dir) == []
         assert curl_log.exists()
         assert "Overmind Postgres backup failed" in curl_log.read_text(encoding="utf-8")
-
-
-def test_rotation_keeps_configured_number_of_verified_dumps(postgres_container: str) -> None:
-    with tempfile.TemporaryDirectory(prefix="overmind-backup-rotate-") as temp_root:
-        backup_dir = Path(temp_root) / "backups"
-        backup_dir.mkdir()
-
-        for index in range(4):
-            run_command(
-                [str(BACKUP_SCRIPT)],
-                env=backup_env(
-                    backup_dir,
-                    postgres_container,
-                    OVERMIND_BACKUP_RETAIN="2",
-                    OVERMIND_BACKUP_TIMESTAMP=f"20260707T000{index}00Z",
-                ),
-            )
-
-        dumps = verified_dumps(backup_dir)
-        assert len(dumps) == 2
-        assert [dump.name for dump in dumps] == [
-            "memory-20260707T000200Z.verified.dump",
-            "memory-20260707T000300Z.verified.dump",
-        ]
 
 
 def write_systemctl(path: Path, exit_code: int) -> None:
