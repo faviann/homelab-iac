@@ -390,7 +390,7 @@ def test_unknown_operation_or_option_is_invalid_usage(
 # --- AC2 / AC3 / AC4: the targeted feedback operations ----------------------
 
 
-def test_lint_runs_repo_wide_lint_alone(tmp_path: Path) -> None:
+def test_lint_reconciles_collections_then_runs_repo_wide_lint(tmp_path: Path) -> None:
     env = validation_environment(tmp_path)
 
     result = run_validation(env, REPO_ROOT, "lint")
@@ -495,7 +495,7 @@ def test_tests_runs_the_whole_suite_without_a_target(tmp_path: Path) -> None:
     [
         "tests/regression/test_validate_command.py",
         "tests/regression/test_validate_command.py"
-        "::test_lint_runs_repo_wide_lint_alone",
+        "::test_lint_reconciles_collections_then_runs_repo_wide_lint",
     ],
 )
 def test_tests_forwards_an_in_tree_target(tmp_path: Path, target: str) -> None:
