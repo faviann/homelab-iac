@@ -5,3 +5,5 @@ all:
       ansible_connection: local
     portal:
       ansible_host: 127.0.0.1
+    broken-portal:
+      ansible_host: unresolvable-hostname.invalid

@@ -1,5 +1,5 @@
 ---
-- name: Test workstation origin firewall idempotency
+- name: Test workstation origin firewall tasks
   hosts: localhost
   connection: local
   gather_facts: false

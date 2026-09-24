@@ -9,7 +9,6 @@ import tempfile
 from pathlib import Path
 
 from ansible_test_helper import ansible_playbook_command
-from bitwarden_release_boundary import bitwarden_release_boundary
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -246,40 +245,25 @@ def _assert_no_direct_home_manager_activation(commands: str) -> None:
     )
 
 
-def _run_render_fixture(extra_args: list[str]) -> subprocess.CompletedProcess[str]:
+def _render_setup_artifacts(temp_root: Path) -> subprocess.CompletedProcess[str]:
+    """Render the first-login artifacts through the role's own task file.
+
+    The fixture also checks what only the rendered files can show. The
+    scenarios then exercise those files, so a regression in them shows up as
+    the behavior they assert going wrong.
+    """
     return subprocess.run(
         [
             *ANSIBLE_PLAYBOOK,
             "tests/regression/fixtures/workstation_first_login_setup_contract.yml",
-            *extra_args,
+            "-e",
+            f"temp_root={temp_root}",
         ],
         cwd=REPO_ROOT,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
-    )
-
-
-def _render_setup(temp_root: Path) -> subprocess.CompletedProcess[str]:
-    """Render the first-login artifacts by running the whole baseline role."""
-    with bitwarden_release_boundary() as bitwarden_args:
-        return _run_render_fixture(
-            ["-e", f"temp_root={temp_root}", *bitwarden_args]
-        )
-
-
-def _render_setup_artifacts(temp_root: Path) -> subprocess.CompletedProcess[str]:
-    """Render the first-login artifacts through the role's own task file.
-
-    Same production templates and install tasks as the full role, without the
-    unrelated baseline work or the static setup contract that
-    `test_workstation_first_login_setup_contract` already verifies. Scenarios
-    using this then exercise the rendered files, so a regression in them shows
-    up as the behavior they assert going wrong.
-    """
-    return _run_render_fixture(
-        ["-e", f"temp_root={temp_root}", "-e", "first_login_full_role=false"]
     )
 
 
@@ -836,7 +820,7 @@ def test_workstation_fresh_bootstrap_authenticates_git_before_cloning() -> None:
 
 def test_workstation_first_login_setup_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="workstation-first-login-setup-") as temp_root:
-        result = _render_setup(Path(temp_root))
+        result = _render_setup_artifacts(Path(temp_root))
 
         assert result.returncode == 0, result.stdout
 

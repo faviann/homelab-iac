@@ -1,5 +1,5 @@
 ---
-- name: Test workstation baseline GitHub key population
+- name: Test the normal workstation baseline
   hosts: localhost
   connection: local
   gather_facts: false
@@ -14,6 +14,9 @@
     workstation_locale_enabled: false
     workstation_chezmoi_install_enabled: false
     workstation_persistent_home_enabled: false
+    workstation_persistent_home_root: "{{ temp_root }}/ephemeral/workstation/home"
+    workstation_persistent_home_mount_state: present
+    workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_nix_install_enabled: false
     workstation_enable_linger: false
     workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
@@ -83,6 +86,9 @@
         - name: Include workstation baseline role
           ansible.builtin.include_role:
             name: config/lxc_workstation_baseline
+            # Exposes the role's default link declarations so the absence checks
+            # below cover the production list rather than a copy of it.
+            public: true
 
     - name: Stat workstation ssh directory
       ansible.builtin.stat:
@@ -138,3 +144,40 @@
           - not workstation_private_key_stat.stat.exists
           - not workstation_known_hosts_stat.stat.exists
         fail_msg: "Workstation baseline did not write only the expected inbound GitHub authorized_keys"
+
+    - name: Stat disabled persistent home paths
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: >-
+        {{
+          [workstation_persistent_home_root, workstation_persistent_home_fstab_path]
+          + (workstation_persistent_home_links | map(attribute='path') | list)
+        }}
+      register: disabled_persistent_home_paths
+
+    - name: Assert disabled persistent home created no backing, mount points, or fstab
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists
+        fail_msg: "Disabled workstation persistent home created {{ item.item }}"
+      loop: "{{ disabled_persistent_home_paths.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Stat installed first-login artifacts
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ workstation_setup_bin_path }}"
+        - "{{ workstation_setup_profile_hook_path }}"
+      register: first_login_artifacts
+
+    # The rendered content is verified by the focused first-login fixture; this
+    # run proves the baseline role installs both artifacts.
+    - name: Assert the baseline role installed the first-login command and login hook
+      ansible.builtin.assert:
+        that:
+          - first_login_artifacts.results[0].stat.isreg | default(false)
+          - first_login_artifacts.results[0].stat.mode == "0755"
+          - first_login_artifacts.results[1].stat.isreg | default(false)
+          - first_login_artifacts.results[1].stat.mode == "0644"

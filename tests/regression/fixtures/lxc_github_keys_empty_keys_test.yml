@@ -1,0 +1,85 @@
+---
+# Runs after lxc_github_keys_multi_user_dedup_test.yml in the same temp_root, so
+# authorized_keys already holds access written by the production role. Each
+# empty-keys cause must fail at its own guard and leave that access untouched.
+- name: Test lxc_github_keys refuses to replace access with an empty key set
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    lxc_ssh_user: faviann
+    lxc_ssh_uid: "{{ lookup('pipe', 'id -u') | int }}"
+    lxc_ssh_gid: "{{ lookup('pipe', 'id -g') | int }}"
+    lxc_github_keys_home: "{{ temp_root }}/home/faviann"
+    lxc_github_users:
+      - faviann
+    empty_keys_guards_observed: []
+  tasks:
+    - name: Read existing authorized_keys
+      ansible.builtin.slurp:
+        src: "{{ lxc_github_keys_home }}/.ssh/authorized_keys"
+      register: existing_authorized_keys
+
+    - name: Assert existing access is present before the failures
+      ansible.builtin.assert:
+        that:
+          - (existing_authorized_keys.content | b64decode) | length > 0
+
+    - name: Reject an empty configured user list
+      block:
+        - name: Include lxc_github_keys role with no configured users
+          ansible.builtin.include_role:
+            name: config/lxc_github_keys
+          vars:
+            lxc_github_keys_github_users: []
+      rescue:
+        - name: Read authorized_keys after empty user list
+          ansible.builtin.slurp:
+            src: "{{ lxc_github_keys_home }}/.ssh/authorized_keys"
+          register: empty_users_authorized_keys
+
+        - name: Assert the empty user list failed at its guard without touching access
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task.name == "Assert lxc_github_keys inputs are present"
+              - empty_users_authorized_keys.content == existing_authorized_keys.content
+
+        - name: Record the empty user list guard
+          ansible.builtin.set_fact:
+            empty_keys_guards_observed: "{{ empty_keys_guards_observed + ['empty_users'] }}"
+
+    - name: Place empty mock curl on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/curl"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          exit 0
+
+    - name: Reject an empty GitHub response
+      environment:
+        PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Include lxc_github_keys role with empty GitHub response
+          ansible.builtin.include_role:
+            name: config/lxc_github_keys
+      rescue:
+        - name: Read authorized_keys after empty GitHub response
+          ansible.builtin.slurp:
+            src: "{{ lxc_github_keys_home }}/.ssh/authorized_keys"
+          register: empty_response_authorized_keys
+
+        - name: Assert the empty response failed at its guard without touching access
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_task.name == "Fail if GitHub returned no SSH keys"
+              - empty_response_authorized_keys.content == existing_authorized_keys.content
+
+        - name: Record the empty response guard
+          ansible.builtin.set_fact:
+            empty_keys_guards_observed: "{{ empty_keys_guards_observed + ['empty_response'] }}"
+
+    - name: Assert both empty-key causes were rejected
+      ansible.builtin.assert:
+        that:
+          - empty_keys_guards_observed == ['empty_users', 'empty_response']

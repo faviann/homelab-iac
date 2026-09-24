@@ -23,6 +23,12 @@
         path: "{{ workstation_home }}/.config/lobu"
         target: "{{ workstation_persistent_home_root }}/.config/lobu"
         mode: "0700"
+      - name: claude_config
+        type: bind_file
+        path: "{{ workstation_home }}/.claude.json"
+        target: "{{ workstation_persistent_home_root }}/.claude.json"
+        mode: "0600"
+        content: "{}\n"
   tasks:
     - name: Prepare existing Moraine runtime for migration
       when: prepare_existing_moraine_runtime | default(true) | bool
@@ -173,4 +179,18 @@
           - >-
             workstation_persistent_home_root ~ '/.config/lobu ' ~
             workstation_home ~ '/.config/lobu none bind '
+            in persistent_home_fstab.content | b64decode
+
+    - name: Stat Claude config mount point
+      ansible.builtin.stat:
+        path: "{{ workstation_home }}/.claude.json"
+      register: claude_config_mount_point
+
+    - name: Assert Claude config file mount was restored onto the surviving backing file
+      ansible.builtin.assert:
+        that:
+          - claude_config_mount_point.stat.isreg
+          - >-
+            workstation_persistent_home_root ~ '/.claude.json ' ~
+            workstation_home ~ '/.claude.json none bind '
             in persistent_home_fstab.content | b64decode
