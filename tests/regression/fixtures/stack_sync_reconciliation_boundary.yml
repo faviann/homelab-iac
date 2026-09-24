@@ -8,7 +8,15 @@
     service_agents_enabled: false
     lxc_stack_sync_managed_assets:
       changed_results: []
-    lxc_stack_sync_deploy_exclude_regex: "^[^/]+/(README(\\..*)?|docs($|/.*)|stack\\.ya?ml|metadata\\.(ya?ml|json))$"
+    repo_only_stack_files:
+      - README.md
+      - docs/operator.md
+      - stack.yml
+      - metadata.yaml
+      - metadata.yml
+      - metadata.json
+    deployed_myapp: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp"
+    myapp_source: "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       root_docker_conf_path: "{{ temp_root }}/shared"
@@ -30,9 +38,10 @@
       loop:
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app"
-        - "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
+        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/data"
+        - "{{ lxc_docker_environment_internal.stacks_source }}/myapp/docs"
 
-    - name: Seed desired stack compose source
+    - name: Seed desired stack compose source with managed-only files
       ansible.builtin.copy:
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/compose.yaml"
         mode: "0644"
@@ -40,6 +49,28 @@
           services:
             app:
               image: myapp:latest
+          x-managed-files:
+            - path: ./data/certs/created.json
+              mode: "0600"
+            - path: ./data/existing.json
+              mode: "0600"
+
+    - name: Seed parseable stack metadata that must stay repo-only
+      ansible.builtin.copy:
+        dest: "{{ myapp_source }}/stack.yaml"
+        mode: "0644"
+        content: "kind: stack\n"
+
+    - name: Seed stack-local docs and other metadata, plus an ordinary deployable config file
+      ansible.builtin.command:
+        argv: "{{ ['touch'] + (repo_only_stack_files + ['config.ini']) | map('regex_replace', '^', myapp_source ~ '/') | list }}"
+      changed_when: true
+
+    - name: Seed existing managed-only content with a divergent mode
+      ansible.builtin.copy:
+        dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp/data/existing.json"
+        mode: "0644"
+        content: operator-data
 
     - name: Seed stale deployed stack compose file
       ansible.builtin.copy:
@@ -84,7 +115,8 @@
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
       block:
         - name: Include stack sync main tasks
-          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+          ansible.builtin.include_role:
+            name: config/lxc_stack_sync
 
     - name: Read docker call log
       ansible.builtin.slurp:
@@ -113,7 +145,8 @@
           - >-
             (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp | compose up -d')
             in (_docker_log.content | b64decode)
-        fail_msg: "Expected docker quarantine/start commands were not issued"
+          - (_docker_log.content | b64decode).splitlines() | select('search', 'compose down') | list | length == 1
+        fail_msg: "Expected docker to stop only the stale stack and start the desired stack"
 
     - name: Read quarantined compose file
       ansible.builtin.slurp:
@@ -133,12 +166,37 @@
           - not _stale_stack.stat.exists
           - (_quarantined_compose.content | b64decode | from_yaml).services.old.image == 'old:latest'
 
+    # Deployed tree: deployable files arrive while stack-local docs and metadata stay repo-only;
+    # managed-only files are created empty when absent, and existing content is kept while its
+    # mode is repaired.
+    - name: Find the deployed desired stack tree
+      ansible.builtin.find:
+        paths: "{{ deployed_myapp }}"
+        recurse: true
+        hidden: true
+        file_type: any
+      register: _deployed_myapp_tree
+
+    - name: Assert deployable files arrived, repo-only files did not, and managed-only files are correct
+      ansible.builtin.assert:
+        that:
+          - "['compose.yaml', 'config.ini'] | difference(deployed_files) == []"
+          - "(['docs', 'stack.yaml'] + repo_only_stack_files) | intersect(deployed_files) == []"
+          - (deployed_files['data/certs/created.json'].mode, deployed_files['data/certs/created.json'].size) == ('0600', 0)
+          - deployed_files['data/existing.json'].mode == '0600'
+          - lookup('file', deployed_myapp ~ '/data/existing.json') == 'operator-data'
+      vars:
+        deployed_files: >-
+          {{ dict(_deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp)
+             | zip(_deployed_myapp_tree.files)) }}
+
     - name: Reconcile again with the same desired and converged Docker state
       environment:
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
       block:
         - name: Include stack sync main tasks for the second apply
-          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+          ansible.builtin.include_role:
+            name: config/lxc_stack_sync
 
     - name: Assert converged second apply reports no change or repeated quarantine
       ansible.builtin.assert:
@@ -162,7 +220,8 @@
         PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
       block:
         - name: Include stack sync main tasks in check mode
-          ansible.builtin.include_tasks: "../../../playbooks/roles/config/lxc_stack_sync/tasks/main.yml"
+          ansible.builtin.include_role:
+            name: config/lxc_stack_sync
 
     - name: Read Docker calls after check mode
       ansible.builtin.slurp:
@@ -180,3 +239,15 @@
           discovered_stacks: [myapp]
           quarantined_stacks: []
           skipped_stacks: [myapp]
+
+    - name: Find quarantine destinations after apply, converged apply, and check mode
+      ansible.builtin.find:
+        paths: "{{ lxc_docker_environment_internal.stale_stack_quarantine_root }}"
+        file_type: directory
+      register: _quarantine_destinations
+
+    - name: Assert the stale stack was quarantined to exactly one destination
+      ansible.builtin.assert:
+        that:
+          - _quarantine_destinations.files | map(attribute='path') | map('basename') | list
+            == ['stale-app-' ~ ansible_date_time.iso8601_basic_short]

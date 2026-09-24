@@ -32,70 +32,14 @@ def run_playbook(tmp_path: Path, play: dict, *arguments: str) -> subprocess.Comp
     )
 
 
-def test_stack_filter_renders_only_selected_service_inputs(tmp_path: Path) -> None:
-    source = tmp_path / "source"
-    shared = tmp_path / "shared"
-    (shared / "stacks").mkdir(parents=True)
-    for stack in ("selected", "unselected"):
-        (source / stack).mkdir(parents=True)
-        (source / stack / "compose.yaml.j2").write_text(
-            "services: {}\nx-secret: '{{ stack_vars.value }}'\nx-prereq-dirs: ['./data']\n",
-            encoding="utf-8",
-        )
-        (source / stack / ".env.j2").write_text(
-            "VALUE={{ stack_vars.value }}\n", encoding="utf-8"
-        )
-    result = run_playbook(tmp_path, {
-        "vars": {
-            "stack_filter": "selected",
-            "lxc_docker_environment_internal": {
-                "stacks_source": str(source), "shared_mount_source": str(shared),
-                "shared_owner": os.getuid(), "shared_group": os.getgid(),
-                "docker_uid": os.getuid(), "docker_gid": os.getgid(),
-            },
-            "lxc_docker_env_stack_vars": {
-                "selected": {"value": "fixture-selected-value"},
-                "unselected": {"value": "{{ vault_unselected_service_secret }}"},
-            },
-        },
-        "tasks": [{"ansible.builtin.include_role": {
-            "name": "config/lxc_stack_sync", "tasks_from": task,
-        }} for task in ("discover", "materialize")],
-    }, "-vvv", "--diff")
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "fixture-selected-value" not in result.stdout + result.stderr
-    assert (shared / "stacks/selected/.env").read_text() == "VALUE=fixture-selected-value\n"
-    assert not (shared / "stacks/unselected").exists()
-
-
-@pytest.mark.parametrize("stack_filter", ["selected", "credential_consumer"])
-@pytest.mark.parametrize(("stack_source", "sensitive_values"), [
-    (
-        "public/readmeabook",
-        {
-            "jwt_secret": "REPLACE_ME",
-            "jwt_refresh_secret": "fixture-sensitive-refresh",
-            "config_encryption_key": "fixture-sensitive-encryption",
-            "postgres_password": "fixture-sensitive-postgres",
-        },
-    ),
-    (
-        "jellyfin/jellystat",
-        {
-            "jwt_secret": "REPLACE_WITH_RANDOM_JWT_SECRET",
-            "postgres_password": "fixture-sensitive-postgres",
-        },
-    ),
-])
-def test_real_credential_placeholder_is_rejected_only_when_selected(
-    tmp_path: Path, stack_filter: str, stack_source: str,
-    sensitive_values: dict[str, str],
-) -> None:
+def test_selected_placeholder_credential_is_rejected_before_writing(tmp_path: Path) -> None:
     stack_name = "credential_consumer"
+    sensitive_values = {
+        "jwt_secret": "REPLACE_WITH_RANDOM_JWT_SECRET",
+        "postgres_password": "fixture-sensitive-postgres",
+    }
     source = tmp_path / "source"
-    shutil.copytree(REPO_ROOT / "stacks" / stack_source, source / stack_name)
-    (source / "selected").mkdir()
-    (source / "selected/compose.yaml").write_text("services: {}\n", encoding="utf-8")
+    shutil.copytree(REPO_ROOT / "stacks/jellyfin/jellystat", source / stack_name)
     shared = tmp_path / "shared"
     (shared / "stacks").mkdir(parents=True)
 
@@ -115,7 +59,7 @@ def test_real_credential_placeholder_is_rejected_only_when_selected(
             "DOCKER_TEST_LOG": str(docker_log),
         },
         "vars": {
-            "stack_filter": stack_filter,
+            "stack_filter": stack_name,
             "default_domain": "example.invalid",
             "docker_uid": os.getuid(), "docker_gid": os.getgid(),
             "lxc_docker_environment_internal": {
@@ -130,24 +74,12 @@ def test_real_credential_placeholder_is_rejected_only_when_selected(
         "roles": ["config/lxc_stack_sync"],
     }, "-vvv", "--diff")
     output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "Required stack template inputs are missing or invalid" in output
     for value in sensitive_values.values():
-        if value != "REPLACE_ME":
-            assert value not in output
-
-    if stack_filter == stack_name:
-        assert result.returncode != 0, output
-        assert "Required stack template inputs are missing or invalid" in output
-        assert not (shared / f"stacks/{stack_name}/.env").exists()
-        assert not docker_log.exists()
-        return
-
-    assert result.returncode == 0, output
-    assert (shared / "stacks/selected/compose.yaml").exists()
+        assert value not in output
     assert not (shared / f"stacks/{stack_name}").exists()
-    assert [line for line in docker_log.read_text(encoding="utf-8").splitlines()
-            if "|compose up" in line] == [
-        f"{shared}/stacks/selected|compose up -d",
-    ]
+    assert not docker_log.exists()
 
 
 def test_unselected_optional_credential_is_not_validated_by_docker_role(tmp_path: Path) -> None:
@@ -167,8 +99,12 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     tmp_path: Path, stack_filter: str,
 ) -> None:
     source = tmp_path / "source"
-    (source / "selected").mkdir(parents=True)
-    (source / "selected/compose.yaml").write_text("services: {}\n")
+    for stack in ("selected", "unselected"):
+        (source / stack).mkdir(parents=True)
+        (source / stack / "compose.yaml.j2").write_text(
+            "services: {}\nx-secret: '{{ stack_vars.value }}'\nx-prereq-dirs: ['./data']\n"
+        )
+        (source / stack / ".env.j2").write_text("VALUE={{ stack_vars.value }}\n")
     shared = tmp_path / "shared"
     agents = shared / "stacks/docker-agents"
     agents.mkdir(parents=True)
@@ -216,12 +152,16 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
                 "name": "legacy", "dir": str(legacy), "compose_file": "compose.yml",
             }],
             "overmind_postgres_backup_enabled": True,
+            "lxc_docker_env_stack_vars": {
+                "selected": {"value": "fixture-selected-value"},
+                "unselected": {"value": "{{ vault_unselected_service_secret }}"},
+            },
         },
         "roles": ["config/lxc_docker_environment"],
         "tasks": [{"ansible.builtin.copy": {
             "content": "{{ lxc_docker_env_deployment_report | to_json }}", "dest": str(report),
         }}],
-    }, "--skip-tags", "docker_host_setup")
+    }, "--skip-tags", "docker_host_setup", "-vvv", "--diff")
     output = result.stdout + result.stderr
     assert (agents / ".env").read_text() == existing_env
     if stack_filter == "docker-agents":
@@ -233,13 +173,15 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
         return
 
     assert result.returncode == 0, output
+    assert "fixture-selected-value" not in output
+    assert not (shared / "stacks/unselected").exists()
     assert not legacy.exists()
     assert not (shared / "admin").exists()
     assert not (shared / "README.md").exists()
     assert stat.S_IMODE(shared.stat().st_mode) == 0o710
     assert stat.S_IMODE((shared / "stacks").stat().st_mode) == 0o755
     assert "TOKEN=${TOKEN}" in (agents / "compose.yml").read_text()
-    assert (shared / "stacks/selected/compose.yaml").exists()
+    assert (shared / "stacks/selected/.env").read_text() == "VALUE=fixture-selected-value\n"
     commands = docker_log.read_text().splitlines()
     assert f"{legacy}|compose down --remove-orphans" in commands
     assert [line for line in commands if "|compose up" in line] == [
@@ -248,3 +190,4 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     deployment = yaml.safe_load(report.read_text())
     assert deployment["changed"] is True
     assert deployment["discovered_stacks"] == ["selected"]
+    assert deployment["skipped_stacks"] == ["docker-agents"]

@@ -27,14 +27,12 @@
       loop:
         - "{{ lxc_docker_environment_internal.stacks_source }}/komf"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/data"
-      check_mode: false
 
     - name: Seed a regular file at the declared prereq directory path
       ansible.builtin.copy:
         content: "not-a-directory"
         dest: "{{ wrong_type_prereq_path }}"
         mode: "0644"
-      check_mode: false
 
     - name: Create compose file declaring the wrong-type prereq path
       ansible.builtin.copy:
@@ -44,7 +42,6 @@
             - ./data/uploads
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/compose.yaml"
         mode: "0644"
-      check_mode: false
 
     - name: Run actual find ops for wrong-type prereq fixture
       ansible.builtin.find:
@@ -127,6 +124,11 @@
       komf:
         komga_user: "komf-user"
         komga_password: "komf-pa$$"
+    komf_target: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf"
+    changed_prereq_paths: >-
+      {{ _lxc_docker_env_reconciliation.materialized.changed_results
+         | selectattr('changed') | selectattr('path', 'defined') | map(attribute='path')
+         | select('search', '/data/(uploads|downloads)$') | list }}
   tasks:
     - name: Create source stack layout
       ansible.builtin.file:
@@ -137,7 +139,6 @@
         - "{{ lxc_docker_environment_internal.stacks_source }}/komf"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
         - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/data"
-      check_mode: false
 
     - name: Seed an existing prereq directory with divergent metadata
       ansible.builtin.file:
@@ -146,7 +147,6 @@
         owner: "{{ ansible_user_uid }}"
         group: "{{ ansible_user_gid }}"
         mode: "0700"
-      check_mode: false
 
     - name: Create a templated Komf compose file (.j2)
       ansible.builtin.copy:
@@ -167,7 +167,6 @@
               mode: "0755"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/compose.yaml.j2"
         mode: "0644"
-      check_mode: false
 
     - name: Create a templated Komf .env.j2
       ansible.builtin.copy:
@@ -178,7 +177,6 @@
           STACK_NAME={{ '{{' }} stack_name {{ '}}' }}
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/.env.j2"
         mode: "0644"
-      check_mode: false
 
     - name: Create a templated managed file
       ansible.builtin.copy:
@@ -186,14 +184,18 @@
           agent: {{ '{{' }} stack_name {{ '}}' }}
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/agent-keys.yaml.j2"
         mode: "0644"
-      check_mode: false
 
     - name: Create a static config file
       ansible.builtin.copy:
         content: "static-config-content"
         dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/config.conf"
         mode: "0644"
-      check_mode: false
+
+    - name: Create an undeclared static file
+      ansible.builtin.copy:
+        content: "undeclared"
+        dest: "{{ lxc_docker_environment_internal.stacks_source }}/komf/undeclared.conf"
+        mode: "0600"
 
     - name: Run actual find ops to populate discover registers
       ansible.builtin.find:
@@ -227,58 +229,47 @@
       delegate_to: localhost
       become: false
 
+    # Check mode first, on a target with no materialized files, as ./run.sh --check sees it.
+    - name: Materialize in check mode
+      check_mode: true
+      block:
+        - name: Include materialize in check mode
+          ansible.builtin.include_tasks:
+            file: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
+
+    - name: Inspect targets after check-mode materialization
+      ansible.builtin.stat:
+        path: "{{ komf_target }}/{{ item }}"
+      loop: [data/uploads, data/downloads, compose.yaml, .env, agent-keys.yaml, config.conf, undeclared.conf]
+      register: _check_mode_target_stats
+
+    - name: Verify check mode reports missing prereq creation without writing targets
+      ansible.builtin.assert:
+        that:
+          - _check_mode_target_stats.results[0].stat.mode == '0700'
+          - _check_mode_target_stats.results[1:] | selectattr('stat.exists') | list == []
+          - changed_prereq_paths == [komf_target ~ '/data/downloads']
+
     - name: Include materialize
       ansible.builtin.include_tasks:
         file: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
 
     - name: Inspect prereq directory metadata after materialization
       ansible.builtin.stat:
-        path: "{{ item }}"
-      loop:
-        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/data/uploads"
-        - "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/data/downloads"
+        path: "{{ komf_target }}/data/{{ item }}"
+      loop: [uploads, downloads]
       register: _prereq_dir_stats_after
 
-    - name: Verify existing prereq metadata is preserved
+    - name: Verify existing prereq metadata is preserved and missing prereq is created
       ansible.builtin.assert:
         that:
           - _prereq_dir_stats_after.results[0].stat.mode == '0700'
           - _prereq_dir_stats_after.results[0].stat.uid == ansible_user_uid
           - _prereq_dir_stats_after.results[0].stat.gid == ansible_user_gid
-
-    - name: Verify missing prereq creation behavior
-      ansible.builtin.assert:
-        that:
-          - >-
-            _prereq_dir_stats_after.results[1].stat.exists
-            == (not ansible_check_mode)
-          - >-
-            ansible_check_mode
-            or _prereq_dir_stats_after.results[1].stat.mode == '0755'
-          - >-
-            ansible_check_mode
-            or _prereq_dir_stats_after.results[1].stat.uid == ansible_user_uid
-          - >-
-            ansible_check_mode
-            or _prereq_dir_stats_after.results[1].stat.gid == ansible_user_gid
-          - >-
-            (_lxc_docker_env_reconciliation.materialized.changed_results | default([])
-            | selectattr('path', 'defined')
-            | selectattr('path', 'equalto', lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/uploads')
-            | list
-            | length) == 0
-          - >-
-            (_lxc_docker_env_reconciliation.materialized.changed_results | default([])
-            | selectattr('path', 'defined')
-            | selectattr('path', 'equalto', lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/downloads')
-            | selectattr('changed', 'defined')
-            | selectattr('changed')
-            | list
-            | length) == 1
-
-    - name: Finish after check-mode prereq verification
-      ansible.builtin.meta: end_play
-      when: ansible_check_mode
+          - _prereq_dir_stats_after.results[1].stat.mode == '0755'
+          - _prereq_dir_stats_after.results[1].stat.uid == ansible_user_uid
+          - _prereq_dir_stats_after.results[1].stat.gid == ansible_user_gid
+          - changed_prereq_paths == [komf_target ~ '/data/downloads']
 
     - name: Assert templated files were rendered at target paths
       ansible.builtin.stat:
@@ -316,19 +307,22 @@
           - "'STACK_NAME=komf' in (_rendered_env.content | b64decode)"
         fail_msg: "stack_name or stack_vars were not substituted in rendered output"
 
-    - name: Assert static config file was copied
+    - name: Inspect declared and undeclared static copies
       ansible.builtin.stat:
-        path: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/komf/config.conf"
-      register: _static_file_stat
+        path: "{{ komf_target }}/{{ item }}"
+      loop: [config.conf, undeclared.conf]
+      register: _static_file_stats
 
-    - name: Assert static config file exists at target
+    - name: Assert static copies use declared metadata or the shared default
       ansible.builtin.assert:
         that:
-          - _static_file_stat.stat.exists
-          - _static_file_stat.stat.mode == '0755'
-        fail_msg: "Static config.conf not found at target path"
+          - _static_file_stats.results[0].stat.mode == '0755'
+          - _static_file_stats.results[1].stat.mode == '0644'
+          - _static_file_stats.results[1].stat.uid == ansible_user_uid
+          - _static_file_stats.results[1].stat.gid == ansible_user_gid
+        fail_msg: "Static copies did not receive their declared or default owner, group, and mode"
 
-    - name: Assert an undeclared synced file keeps the default mode
+    - name: Assert an undeclared rendered file keeps the default mode
       ansible.builtin.assert:
         that:
           - _rendered_file_stats.results[0].stat.mode == '0644'
@@ -377,8 +371,11 @@
             (lxc_stack_sync_manifest_plan.files_to_render
             | selectattr('relative_path', 'equalto', 'komf/agent-keys.yaml')
             | first).mode == '0600'
-          - lxc_stack_sync_manifest_plan.files_to_copy | length == 1
-          - (lxc_stack_sync_manifest_plan.files_to_copy | first).mode == '0755'
+          - lxc_stack_sync_manifest_plan.files_to_copy | length == 2
+          - >-
+            (lxc_stack_sync_manifest_plan.files_to_copy
+            | selectattr('relative_path', 'equalto', 'komf/config.conf')
+            | first).mode == '0755'
           - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/uploads')
             not in (lxc_stack_sync_manifest_plan.prereq_dirs | map(attribute='path') | list)"
           - "(lxc_docker_environment_internal.shared_mount_source ~ '/stacks/komf/data/downloads')
@@ -401,153 +398,6 @@
             | selectattr('changed')
             | list
             | length) == 0
-
-# Keep the explicit invoking-user identity on this isolated fixture path.
-- name: Test planner applies declaration ownership by resolved destination
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  vars:
-    ansible_user_uid: "{{ lookup('pipe', 'id -u') | int }}"
-    ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
-    planner_root: "{{ temp_root }}/planner-metadata"
-    lxc_docker_environment_internal:
-      shared_mount_source: "{{ planner_root }}/shared"
-      stacks_source: "{{ planner_root }}/source"
-      shared_owner: "{{ ansible_user_uid }}"
-      shared_group: "{{ ansible_user_gid }}"
-      docker_uid: "{{ ansible_user_uid }}"
-      docker_gid: "{{ ansible_user_gid }}"
-      path_ownership_overrides: []
-    _per_host_stack_metadata_files:
-      files: []
-  tasks:
-    - name: Finish before planner metadata fixture in check mode
-      ansible.builtin.meta: end_play
-      when: ansible_check_mode
-
-    - name: Create planner metadata source layout
-      ansible.builtin.file:
-        path: "{{ lxc_docker_environment_internal.stacks_source }}/metadata"
-        state: directory
-        mode: "0755"
-
-    - name: Create planner metadata compose declaration
-      ansible.builtin.copy:
-        content: |
-          ---
-          x-managed-files:
-            - path: ./declared.conf
-              owner: {{ ansible_user_uid }}
-              group: {{ ansible_user_gid }}
-              mode: "0600"
-          services: {}
-        dest: "{{ lxc_docker_environment_internal.stacks_source }}/metadata/compose.yaml"
-        mode: "0644"
-
-    - name: Create declared planner source file
-      ansible.builtin.copy:
-        content: "declared"
-        dest: "{{ lxc_docker_environment_internal.stacks_source }}/metadata/declared.conf"
-        mode: "0644"
-
-    - name: Create undeclared planner source file
-      ansible.builtin.copy:
-        content: "undeclared"
-        dest: "{{ lxc_docker_environment_internal.stacks_source }}/metadata/undeclared.conf"
-        mode: "0644"
-
-    - name: Discover planner template files
-      ansible.builtin.find:
-        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
-        patterns: "*.j2"
-        hidden: true
-        recurse: true
-        file_type: file
-      register: _per_host_j2_files
-
-    - name: Discover planner static files
-      ansible.builtin.find:
-        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
-        patterns: "*"
-        excludes: "*.j2,.gitkeep"
-        hidden: true
-        recurse: true
-        file_type: file
-      register: _per_host_static_files
-
-    - name: Discover planner directories
-      ansible.builtin.find:
-        paths: "{{ lxc_docker_environment_internal.stacks_source }}"
-        recurse: true
-        file_type: directory
-      register: _per_host_dirs
-
-    - name: Materialize synced files with planned metadata
-      ansible.builtin.include_tasks:
-        file: "../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml"
-
-    - name: Assert declaration ownership wins only for its resolved destination
-      ansible.builtin.assert:
-        that:
-          - declared_entry.owner == ansible_user_uid
-          - declared_entry.group == ansible_user_gid
-          - declared_entry.mode == '0600'
-          - undeclared_entry.owner == ansible_user_uid
-          - undeclared_entry.group == ansible_user_gid
-          - undeclared_entry.mode == '0644'
-      vars:
-        declared_entry: >-
-          {{ lxc_stack_sync_manifest_plan.files_to_copy
-             | selectattr('dest_path', 'equalto', planner_root ~ '/shared/stacks/metadata/declared.conf')
-             | first }}
-        undeclared_entry: >-
-          {{ lxc_stack_sync_manifest_plan.files_to_copy
-             | selectattr('dest_path', 'equalto', planner_root ~ '/shared/stacks/metadata/undeclared.conf')
-             | first }}
-
-    - name: Inspect materialized declared file metadata
-      ansible.builtin.stat:
-        path: "{{ planner_root }}/shared/stacks/metadata/declared.conf"
-      register: _declared_materialized_file
-
-    - name: Inspect materialized undeclared file metadata
-      ansible.builtin.stat:
-        path: "{{ planner_root }}/shared/stacks/metadata/undeclared.conf"
-      register: _undeclared_materialized_file
-
-    - name: Assert declaration metadata is applied by the sync operation
-      ansible.builtin.assert:
-        that:
-          - _declared_materialized_file.stat.exists
-          - _declared_materialized_file.stat.uid == ansible_user_uid
-          - _declared_materialized_file.stat.gid == ansible_user_gid
-          - _declared_materialized_file.stat.mode == '0600'
-          - >-
-            (_stack_sync_managed_file_create_results.results | default([])
-            | map(attribute='item.path')
-            | select('equalto', planner_root ~ '/shared/stacks/metadata/declared.conf')
-            | list
-            | length) == 0
-          - >-
-            (_stack_sync_managed_file_permission_results.results | default([])
-            | map(attribute='item.path')
-            | select('equalto', planner_root ~ '/shared/stacks/metadata/declared.conf')
-            | list
-            | length) == 0
-        fail_msg: >-
-          The synced declaration-specific owner, group, or mode was not applied directly
-          by materialization
-
-    - name: Assert shared metadata defaults are applied to undeclared copy artifacts
-      ansible.builtin.assert:
-        that:
-          - _undeclared_materialized_file.stat.exists
-          - _undeclared_materialized_file.stat.uid == ansible_user_uid
-          - _undeclared_materialized_file.stat.gid == ansible_user_gid
-          - _undeclared_materialized_file.stat.mode == '0644'
-        fail_msg: >-
-          The undeclared synced file did not retain the shared owner, group, or mode defaults
 
 - name: Prepare exact repository stack file fixtures
   hosts: localhost
@@ -572,10 +422,6 @@
     exact_post_import_source: >-
       {{ exact_source_root }}/servarr/lidarr/appdata/lidarr/scripts/beets-post-import.sh
   tasks:
-    - name: Finish before exact artifact fixture in check mode
-      ansible.builtin.meta: end_play
-      when: ansible_check_mode
-
     - name: Create per-host exact artifact source layouts
       ansible.builtin.file:
         path: "{{ item }}"
@@ -679,10 +525,6 @@
     _per_host_stack_metadata_files:
       files: []
   tasks:
-    - name: Finish before exact Overmind fixture in check mode
-      ansible.builtin.meta: end_play
-      when: ansible_check_mode
-
     - name: Publish exact Overmind discovery results
       ansible.builtin.set_fact:
         _per_host_j2_files:
@@ -753,10 +595,6 @@
     _per_host_stack_metadata_files:
       files: []
   tasks:
-    - name: Finish before exact Servarr fixture in check mode
-      ansible.builtin.meta: end_play
-      when: ansible_check_mode
-
     - name: Publish exact Servarr discovery results
       ansible.builtin.set_fact:
         _per_host_j2_files:
