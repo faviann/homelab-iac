@@ -143,8 +143,8 @@ def test_authentik_client_matches_the_proxy_configuration() -> None:
     )
     assert app["issuer_mode"] == "per_provider"
     assert app["redirect_uris"] == [f"{env['EXTERNAL_URL']}/.auth/oidc/callback"]
-    # sigbit resolves the user via the userinfo `/email` pointer.
-    assert "email" in requested_scopes
+    # The OIDC flow needs openid, and sigbit resolves the user via the userinfo `/email` pointer.
+    assert {"openid", "email"} <= requested_scopes
     assert requested_scopes <= supplied_scopes
     assert app["sub_mode"] == "user_email"
     # Authentik >= 2026.5 rejects any grant absent from the provider's list,

@@ -204,16 +204,15 @@ class RenderedOidcBlueprint:
             if entry["state"] == state and entry["identifiers"]["target"] == target
         ]
 
-    def admission(self, slug: str) -> dict[int, tuple[str, str]]:
-        """Map each enabled, non-negated binding's order to the group or policy it admits."""
-        admitted = {}
+    def admission(self, slug: str) -> list[tuple[int, str, str, bool, bool]]:
+        """Every present binding on the app as (order, kind, name, enabled, negate)."""
+        rows = []
         for binding in self.bindings(slug, "present"):
             attrs = binding["attrs"]
-            if attrs["enabled"] and not attrs["negate"]:
-                kind = "group" if "group" in attrs else "policy"
-                _tag, (_model, (_field, name)) = attrs[kind]
-                admitted[attrs["order"]] = (kind, name)
-        return admitted
+            kind = "group" if "group" in attrs else "policy"
+            _tag, (_model, (_field, name)) = attrs[kind]
+            rows.append((attrs["order"], kind, name, attrs["enabled"], attrs["negate"]))
+        return sorted(rows)
 
 
 class OidcBlueprintGenerationTests(unittest.TestCase):
@@ -302,7 +301,7 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
 
         self.assertEqual(
             blueprint.admission("test-app"),
-            {1: ("group", "media"), 2: ("group", "admins")},
+            [(1, "group", "media", True, False), (2, "group", "admins", True, False)],
         )
         self.assertEqual(
             [binding["identifiers"]["order"] for binding in blueprint.bindings("test-app", "absent")],
@@ -312,7 +311,7 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
     def test_policy_app_is_admitted_only_by_its_policy(self):
         blueprint = RenderedOidcBlueprint(self.mod, [minimal_app(policy="always-allow")])
 
-        self.assertEqual(blueprint.admission("test-app"), {0: ("policy", "always-allow")})
+        self.assertEqual(blueprint.admission("test-app"), [(0, "policy", "always-allow", True, False)])
         self.assertEqual(blueprint.bindings("test-app", "absent"), [])
 
     def test_real_manifest_validates_cleanly(self):
@@ -326,7 +325,7 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
             with self.subTest(slug=app["slug"]):
                 self.assertEqual(
                     blueprint.admission(app["slug"]),
-                    {1: ("group", app.get("group")), 2: ("group", "admins")},
+                    [(1, "group", app.get("group"), True, False), (2, "group", "admins", True, False)],
                 )
 
     def test_committed_oidc_blueprint_matches_generator(self):
