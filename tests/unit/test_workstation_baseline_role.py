@@ -221,6 +221,12 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         self.assertIn("RemainAfterExit=yes", rendered_firewall_service)
 
         unit_name = "{{ workstation_origin_firewall_service_path | basename }}"
+        # Restarting on every run would delete and reload the table, briefly
+        # opening the protected ports. Only the handler restarts, on change.
+        # The firewall regression's systemd stub reports no change either way,
+        # so it cannot see this.
+        enable_task = task_named(firewall_tasks, "Enable workstation origin firewall service")
+        self.assertEqual(enable_task["ansible.builtin.systemd"]["state"], "started")
         for task_name in (
             "Enable workstation origin firewall service",
             "Stop workstation origin firewall service when disabled",
