@@ -283,31 +283,31 @@ In a documented `./run.sh` invocation, `-e` and `--tags` appear only after
 
 ### Text-check allowlist
 
-The guidance text check that #219 adds will look for the superseded forms in
-the table above, and for `-e` or `--tags` before `--` in a documented
-`./run.sh` invocation. It will scan only these guidance surfaces:
+`tests/unit/test_guidance_text.py`, part of `./validate.sh`, looks for the
+superseded forms in the table above, and for `-e` or `--tags` before `--` in a
+documented `./run.sh` invocation. It scans only these guidance surfaces:
 
 - tracked Markdown outside `tests/`
 - `inventory/vault.yml.example`
 - `.ansible-lint`
-- comment and `msg:` text in YAML under `playbooks/` and in `site.yml`
+- comment and message (`msg:`, `fail_msg:`, `success_msg:`) text in YAML under
+  `playbooks/` and in `site.yml`
 - string literals passed to `echo` or `printf` in tracked shell scripts
 
 Shell execution lines are not scanned. The internal-call rule governs them.
 
-Within those surfaces, a superseded form fails the check unless it appears in
-a file below and matches that file's permitted shape. The check will not
-recognize raw commands in general, and it will not look anywhere else. Review
-enforces the rest of this policy, including any raw command or superseded form
-the check does not recognize.
+It matches the command shape of each form, not the tool name, so prose that
+names a tool passes. It does not recognize raw commands in general, and it
+does not look anywhere else. Review enforces the rest of this policy,
+including the standing permissions and any form the check does not recognize.
+
+A superseded form fails the check unless it appears in a file below. The check
+reads this table, so a row here is the exception.
 
 | File | Permitted shape |
 | --- | --- |
-| `docs/command-policy.md` | every standing permission's command, and every superseded form documented here |
+| `docs/command-policy.md` | every superseded form documented here |
 | `docs/adr/*.md` | any superseded form named in a decision's reasoning |
-| `docs/ssh-key-management.md` | the `pct exec` key-injection procedure |
-| `.agents/skills/rename-stack/SKILL.md` | the `docker compose down`, `mv`, `chown -R` sequence |
-| `docs/image-update-renovate-adapter.md` | `uv run --locked python scripts/image_update_renovate_adapter.py <request.json>` |
 
 ## Recorded boundaries
 
