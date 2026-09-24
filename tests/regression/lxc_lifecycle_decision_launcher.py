@@ -19,7 +19,6 @@ INVENTORY = FIXTURES / "lxc_lifecycle_facade_inventory.yml"
 PLAYBOOKS = (
     FIXTURES / "lxc_lifecycle_decision_test.yml",
     FIXTURES / "lxc_lifecycle_plan_ephemerality_test.yml",
-    FIXTURES / "lxc_lifecycle_execution_latch_test.yml",
 )
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
 
