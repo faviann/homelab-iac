@@ -256,6 +256,7 @@ case "$operation" in
             --repository-root . "${stack_paths[0]}"
         ;;
     renovate)
+        unset PYTEST_ADDOPTS
         uv run --locked pytest -n 0 -m renovate_compat
         ;;
 esac

@@ -276,7 +276,7 @@ Agent use of a documented raw command is a separate decision:
 | `ansible-vault view` | `./vault.sh check`, which verifies the vault without printing values. No operation prints decrypted contents |
 | `ansible-lint` | `./validate.sh lint` |
 | the lifecycle regression runner | `./validate.sh lifecycle [--full] [--only <launcher.py>]... [--fail-fast]` |
-| `pytest`, `python -m unittest`, or a test file run with `python` | `./validate.sh tests [<target>...]` |
+| `pytest`, `python -m unittest`, or a test file run with `python` | `./validate.sh tests [<target>...]`, or `./validate.sh renovate` for the real Renovate compatibility test |
 | `python -m stack_update_policy validate` | `./validate.sh stack <path>` |
 | `python -c "import proxmoxer, requests"` | none. `./setup.sh sync` repairs the environment it only probed |
 | `./configure-vault.sh` | `./vault.sh configure` |

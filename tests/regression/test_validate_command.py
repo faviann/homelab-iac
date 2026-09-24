@@ -46,6 +46,7 @@ with capture.open("a", encoding="utf-8") as stream:
         "cache_connection": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
         "inventory": os.environ.get("ANSIBLE_INVENTORY"),
         "lifecycle_marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
+        "pytest_addopts": os.environ.get("PYTEST_ADDOPTS"),
         "vault_password_file": os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE"),
     }) + "\\n")
 
@@ -613,6 +614,7 @@ def test_renovate_runs_only_the_marked_gate_and_reports_its_failure(
 ) -> None:
     env = validation_environment(tmp_path)
     env["VALIDATE_TEST_PYTEST_STATUS"] = str(pytest_status)
+    env["PYTEST_ADDOPTS"] = "--collect-only"
 
     result = run_validation(env, REPO_ROOT, "renovate")
 
@@ -620,6 +622,7 @@ def test_renovate_runs_only_the_marked_gate_and_reports_its_failure(
     commands = captured_commands(tmp_path)
     assert child_kinds(commands) == ["tests"]
     assert child_options(commands[0]["argv"], "-m")[0] == "renovate_compat"
+    assert commands[0]["pytest_addopts"] is None
 
 
 @pytest.mark.parametrize("target", ["validate.sh", "../outside/test_x.py"])
