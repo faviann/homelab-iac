@@ -24,6 +24,7 @@ SUPERSEDED_FORMS = {
     "ansible-playbook, ansible-lint, or pytest run directly": (
         rf"\buv run(?:[ \t]+--?[\w-]+)*[ \t]+{_TOOL}\b"
         rf"|(?:(?<![\w./-])|(?<=bin/)){_TOOL}[ \t]+(?:-\S|\S*[/.]\S*)"
+        rf"|(?:^|(?<=`))[ \t]*(?:\.venv/bin/)?{_TOOL}[ \t]+[\w-]+(?:[ \t]+-[-\w]+)*(?=[ \t]*(?:$|`))"
         rf"|^[ \t]*{_TOOL}[ \t]*$"
     ),
     "ansible -m ping": r"\bansible\b[^`\n]*[ \t]-m[ \t]+ping\b",
@@ -127,6 +128,14 @@ def allowlisted_globs() -> list[str]:
         "`.venv/bin/pytest --version`",
         "# Repo-wide lint gate: `uv run --locked ansible-lint` must exit 0.",
         "ansible-lint\n",
+        "pytest tests",
+        ".venv/bin/pytest tests",
+        "pytest tests -x",
+        "Run `pytest tests` to check the suite.",
+        "ansible-lint playbooks",
+        ".venv/bin/ansible-lint playbooks",
+        "ansible-lint playbooks --strict",
+        "ansible-playbook deploy",
         "`pytest tests/unit -x`",
         "ansible all -m ping",
         "`ansible-inventory --host auth`",
@@ -156,6 +165,8 @@ def test_superseded_form_is_reported(text: str) -> None:
         "pytest owns the `test_*.py` files under `tests/`",
         "The unit suite is collected by pytest\nfrom the test tree.",
         "Authentik blueprints use tags that ansible-lint cannot parse.",
+        "ansible-lint checks playbooks for problems.",
+        "ansible-playbook runs a playbook from the command line.",
         "# ansible-vault encrypted file: must start with the $ANSIBLE_VAULT header",
         "The wrapper forwards arguments after `--` to `ansible-playbook`.",
         "`--tags` and `-e` only after `--`",
