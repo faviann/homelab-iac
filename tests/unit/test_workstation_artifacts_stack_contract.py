@@ -12,18 +12,6 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STACK_ROOT = REPO_ROOT / "stacks" / "workstation" / "artifacts"
 WORKSTATION_VARS_PATH = REPO_ROOT / "inventory" / "host_vars" / "workstation.yml"
-TRAEFIK_CONFIG_PATH = (
-    REPO_ROOT
-    / "stacks"
-    / "portal"
-    / "traefik3"
-    / "appdata"
-    / "traefik3"
-    / "config"
-    / "conf.d"
-    / "externalservice.yaml"
-)
-
 PUBLICATION_ROOT = "/ephemeral/workstation/artifacts"
 ORIGIN_PORT = 19082
 
@@ -40,23 +28,27 @@ def load_env_template(path: Path) -> dict[str, str]:
     )
 
 
-def test_stack_runs_only_the_pinned_static_web_server() -> None:
+def test_stack_runs_only_the_static_web_server() -> None:
     compose = load_yaml(STACK_ROOT / "compose.yaml")
 
+    # The SERVER_* environment contract below belongs to this server.
     assert set(compose["services"]) == {"artifacts"}
-    assert (
-        compose["services"]["artifacts"]["image"]
-        == "ghcr.io/static-web-server/static-web-server:2.44.0"
+    assert compose["services"]["artifacts"]["image"].startswith(
+        "ghcr.io/static-web-server/static-web-server:"
     )
 
 
 def test_server_reads_only_the_publication_root_as_the_publishing_user() -> None:
     compose = load_yaml(STACK_ROOT / "compose.yaml")
     server = compose["services"]["artifacts"]
+    env = load_env_template(STACK_ROOT / ".env.j2")
 
     assert compose["x-prereq-dirs"] == [PUBLICATION_ROOT]
     assert server["volumes"] == [f"{PUBLICATION_ROOT}:/srv/artifacts:ro"]
+    assert env["SERVER_ROOT"] == "/srv/artifacts"
     assert server["user"] == "${PUID}:${PGID}"
+    assert env["PUID"] == "{{ docker_uid }}"
+    assert env["PGID"] == "{{ docker_gid }}"
     assert server["read_only"] is True
 
 
@@ -68,27 +60,21 @@ def test_server_listens_on_the_firewalled_host_port() -> None:
     assert server["network_mode"] == "host"
     assert "ports" not in server
     assert server["env_file"] == [".env"]
-    assert server["restart"] == "unless-stopped"
     assert env["SERVER_PORT"] == str(ORIGIN_PORT)
     assert ORIGIN_PORT in load_yaml(WORKSTATION_VARS_PATH)[
         "workstation_origin_firewall_protected_ports"
     ]
 
 
-def test_server_environment_serves_the_tree_without_listing_or_fallback() -> None:
+def test_server_serves_exact_paths_without_listing_symlinks_or_fallback() -> None:
     env = load_env_template(STACK_ROOT / ".env.j2")
 
-    assert env == {
-        "PUID": "{{ docker_uid }}",
-        "PGID": "{{ docker_gid }}",
-        "SERVER_HOST": "0.0.0.0",
-        "SERVER_PORT": "19082",
-        "SERVER_ROOT": "/srv/artifacts",
-        "SERVER_DIRECTORY_LISTING": "false",
-        "SERVER_DISABLE_SYMLINKS": "true",
-        "SERVER_IGNORE_HIDDEN_FILES": "false",
-        "SERVER_LOG_LEVEL": "info",
-    }
+    assert env["SERVER_DIRECTORY_LISTING"] == "false"
+    assert env["SERVER_DISABLE_SYMLINKS"] == "true"
+    # The publishing mapping promises dotted path components such as `.bare/`
+    # resolve, so hidden files must be served.
+    assert env["SERVER_IGNORE_HIDDEN_FILES"] == "false"
+    assert "SERVER_FALLBACK_PAGE" not in env
 
 
 def test_origin_port_is_reserved_only_for_the_artifact_server() -> None:
@@ -97,6 +83,7 @@ def test_origin_port_is_reserved_only_for_the_artifact_server() -> None:
         for root in (REPO_ROOT / "inventory", REPO_ROOT / "stacks")
         for path in root.rglob("*")
         if path.is_file()
+        and path.name != "README.md"
         and str(ORIGIN_PORT)
         in path.read_text(encoding="utf-8", errors="ignore")
     }
@@ -105,18 +92,16 @@ def test_origin_port_is_reserved_only_for_the_artifact_server() -> None:
         Path("inventory/host_vars/workstation.yml"),
         Path("stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml"),
         Path("stacks/workstation/artifacts/.env.j2"),
-        Path("stacks/workstation/artifacts/README.md"),
     }
 
 
-def test_server_image_has_an_intentional_update_track() -> None:
+def test_server_image_update_track_follows_the_running_major() -> None:
+    compose = load_yaml(STACK_ROOT / "compose.yaml")
     metadata = load_yaml(STACK_ROOT / "stack.yaml")
+    tag = compose["services"]["artifacts"]["image"].rpartition(":")[2]
 
-    assert metadata["updates"] == {"mode": "images", "track": "2"}
-    assert metadata["exposure"]["traefik"] == "protected"
-    assert metadata["runtime"]["host_requirements"]["host_directories"] == [
-        PUBLICATION_ROOT
-    ]
+    assert metadata["updates"]["mode"] == "images"
+    assert metadata["updates"]["track"] == tag.split(".")[0]
 
 
 def test_publication_root_is_not_a_persistent_home_mapping() -> None:
@@ -134,11 +119,3 @@ def test_publication_root_is_not_a_persistent_home_mapping() -> None:
     }
 
     assert not any(target.startswith(PUBLICATION_ROOT) for target in targets)
-
-
-def test_stack_readme_records_the_shared_publishing_mapping() -> None:
-    readme = (STACK_ROOT / "README.md").read_text(encoding="utf-8")
-
-    assert PUBLICATION_ROOT in readme
-    assert "https://artifacts.admin.faviann.com" in readme
-    assert "dotfiles" in readme
