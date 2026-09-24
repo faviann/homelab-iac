@@ -63,7 +63,7 @@ def test_only_selects_registered_launchers_in_supplied_order() -> None:
     [
         "lxc_docker_runtime_daemon_options_launcher.py",
         "lxc_nvidia_runtime_repository_launcher.py",
-        "lxc_spec_invalid_guest_bootstrap_launcher.py",
+        "lxc_spec_contract_launcher.py",
     ],
 )
 def test_expensive_ansible_launcher_is_registered_once_as_full_only(
