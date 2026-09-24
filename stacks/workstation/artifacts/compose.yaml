@@ -13,3 +13,4 @@ services:
       - .env
     volumes:
       - /ephemeral/workstation/artifacts:/srv/artifacts:ro
+      - ./appdata/config.toml:/etc/static-web-server/config.toml:ro

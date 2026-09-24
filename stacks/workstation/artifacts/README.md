@@ -18,6 +18,13 @@ the root resolves to the identical relative path under the base URL, so the serv
 serve dotted components. Only the publication tree is mounted, so nothing else is exposed
 by this.
 
+Markdown is served as `text/plain; charset=utf-8` instead of `text/markdown`, because web
+fetchers such as ChatGPT's reject `text/markdown`. `appdata/config.toml` overrides the
+`Content-Type` header for any path ending in `.md` in any letter case, and leaves every other
+type to the server's own detection. The override also applies to the 404 for a missing `.md`
+path. The server reads this file only at startup, and `docker compose up -d` does not recreate
+the container when only the file changes, so restart the container after editing it.
+
 ## Publishing mapping
 
 | Field | Value |
@@ -40,6 +47,7 @@ Stack-owned:
 
 - `compose.yaml`
 - `.env.j2`
+- `appdata/config.toml`
 - this `README.md`
 - `/ephemeral/workstation/artifacts` prereq declaration
 

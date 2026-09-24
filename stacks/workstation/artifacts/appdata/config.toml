@@ -1,0 +1,5 @@
+# Web fetchers such as ChatGPT's reject text/markdown. The glob is
+# case-sensitive while the server's MIME detection is not, so match every case.
+[[advanced.headers]]
+source = "**/*.[mM][dD]"
+headers = { Content-Type = "text/plain; charset=utf-8" }
