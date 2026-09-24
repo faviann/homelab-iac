@@ -146,6 +146,14 @@ VALIDATION_CACHE_DIR="$(mktemp -d)"
 trap 'rm -rf -- "$VALIDATION_CACHE_DIR"' EXIT
 export ANSIBLE_CACHE_PLUGIN_CONNECTION="$VALIDATION_CACHE_DIR"
 
+# Lint resolves every declared collection and the tests exercise real roles, so
+# install the whole declaration before any gate starts (issue #402).
+case "$operation" in
+    handoff | lint | tests)
+        uv run --locked python -m scripts.live_dependencies --declared-collections
+        ;;
+esac
+
 run_handoff() {
     local lint_pid="" lifecycle_pid="" pytest_pid=""
     local lint_status=0 lifecycle_status=0 pytest_status=0

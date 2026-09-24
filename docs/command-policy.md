@@ -77,6 +77,11 @@ unchanged:
 So a `2` from `./validate.sh` does not always mean invalid usage. Read stderr:
 wrapper usage errors name the command and point to `--help`.
 
+The no-argument `./validate.sh`, `lint`, and `tests` first install every
+collection pinned in `collections/requirements.yml` that is not already at its
+pin. When that fails, for example because Galaxy is unreachable, the command
+exits `1` with the reconciliation error before any gate starts.
+
 The stable interface is the documented names, operations, options, exit
 status, safety guarantees, and explicit output formats. Terminal prose is for
 people and can change. The one machine interface is the schema-versioned JSON
@@ -282,7 +287,7 @@ Agent use of a documented raw command is a separate decision:
 | `./configure-vault.sh` | `./vault.sh configure` |
 | `./rotate-vault-passphrase.sh` | `./vault.sh rotate` |
 | bare `./setup.sh`, `./setup.sh bootstrap` | none. Each command owns its prerequisites (ADR-0011) |
-| `ansible-galaxy collection install`, `collection list`, `role install` | none. Live commands reconcile what they consume |
+| `ansible-galaxy collection install`, `collection list`, `role install` | none. Live commands and `./validate.sh` reconcile what they consume |
 
 When editing tracked guidance, review command examples against this table and
 use the supported command for each operation it owns. In a documented
