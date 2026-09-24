@@ -25,6 +25,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 ## Non-negotiables
 - Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
 - Use the repository's Bash commands. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
+- When editing tracked guidance, use supported commands in examples. Never put `-e`, `--extra-vars`, or `--tags` before `--` in a documented `./run.sh` invocation; use named operations instead of `--tags`. Record intentional raw-command exceptions in the command policy.
 - Commands that consume the vault expect its passphrase at `~/.ansible/vault-pass`. `ANSIBLE_VAULT_PASSWORD_FILE` overrides that path for Ansible runs, never for `./vault.sh`.
 - Lifecycle runs skip any host whose `inventory_hostname` matches the controller's hostname. To manage the control node intentionally, run `./run.sh --include-controller`, which targets only `workstation`.
 

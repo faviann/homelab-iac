@@ -307,6 +307,18 @@ def assert_command_grammar_reports_help_and_usage_errors() -> None:
                     f"returncode={result.returncode}\n{output}"
                 )
 
+        for arguments in (
+            ("-e", "proxmox_skip_self=false"),
+            ("--extra-vars", "proxmox_skip_self=false"),
+            ("--tags", "provision"),
+        ):
+            result = run_wrapper(env, *arguments)
+            if result.returncode != 2 or (Path(temp_dir) / "capture.json").exists():
+                raise AssertionError(
+                    f"low-level option before -- was not rejected: {arguments!r}\n"
+                    f"returncode={result.returncode}\n{result.stdout}\n{result.stderr}"
+                )
+
     with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-empty-limit-") as temp_dir:
         temp_root = Path(temp_dir)
         env = wrapper_environment(temp_root)

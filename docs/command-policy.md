@@ -278,37 +278,14 @@ Agent use of a documented raw command is a separate decision:
 | bare `./setup.sh`, `./setup.sh bootstrap` | none. Each command owns its prerequisites (ADR-0011) |
 | `ansible-galaxy collection install`, `collection list`, `role install` | none. Live commands reconcile what they consume |
 
-In a documented `./run.sh` invocation, `-e` and `--tags` appear only after
-`--`.
-
-### Text-check allowlist
-
-`tests/unit/test_guidance_text.py`, part of `./validate.sh`, looks for the
-superseded forms in the table above, except bare `./setup.sh`, which fails
-with status `2` on its own. It also looks for `-e` or `--tags` before `--` in
-a documented `./run.sh` invocation. It scans only these guidance surfaces:
-
-- tracked Markdown outside `tests/`
-- `inventory/vault.yml.example`
-- `.ansible-lint`
-- comment and message (`msg:`, `fail_msg:`, `success_msg:`) text in YAML under
-  `playbooks/` and in `site.yml`
-- string literals passed to `echo` or `printf` in tracked shell scripts
-
-Shell execution lines are not scanned. The internal-call rule governs them.
-
-It matches the command shape of each form, not the tool name, so prose that
-names a tool usually passes. It does not recognize raw commands in general,
-and it does not look anywhere else. Review enforces the rest of this policy,
-including the standing permissions and any form the check does not recognize.
-
-A superseded form fails the check unless it appears in a file below. The check
-reads the File column of this table, so a row here is the exception.
-
-| File | Permitted shape |
-| --- | --- |
-| `docs/command-policy.md` | every superseded form documented here |
-| `docs/adr/*.md` | any superseded form named in a decision's reasoning |
+When editing tracked guidance, review command examples against this table and
+use the supported command for each operation it owns. In a documented
+`./run.sh` invocation, place `-e` and `--extra-vars` after `--`; never place
+`--tags` before `--`. The wrapper also rejects `--tags` after `--`, so use a
+named operation instead. Record intentional raw-command exceptions under
+Standing permissions above. This is a review rule for prose, not an automated
+text scan. Validation tests the `./run.sh` grammar, which rejects low-level
+options before `--`.
 
 ## Recorded boundaries
 
