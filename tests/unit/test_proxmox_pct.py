@@ -273,9 +273,10 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         self.assertIn("nodes/pve/a/lxc/505.conf", payload["msg"])
 
     def test_every_offered_command_reaches_the_executor_with_its_bound(self) -> None:
-        # Each row: extra params, expected executor argv prefix, expected bound.
-        # Only set's full argv is owned here; the other commands' argv shapes
-        # are owned by their own tests above and by the readiness tests.
+        # Each row: extra params, expected executor argv, expected bound.
+        # Only set's full argv is owned here; the other rows are argv prefixes
+        # whose full shapes are owned by their own tests above and by the
+        # readiness tests.
         timeout_result = {
             "stdout": "",
             "stderr": "pct command exceeded its execution timeout and was killed",
@@ -307,7 +308,7 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         # spawning a real pct.
         self.module.subprocess = None
 
-        for command, (extra, argv_prefix, bound) in dispatch.items():
+        for command, (extra, argv, bound) in dispatch.items():
             with self.subTest(command=command):
                 params = {
                     "vmid": 4242,
@@ -324,7 +325,10 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 calls = self.captured["calls"]
                 self.assertEqual(len(calls), 1)
                 cmd_args, kill_after = calls[0]
-                self.assertEqual(cmd_args[: len(argv_prefix)], argv_prefix)
+                if command == "set":
+                    self.assertEqual(cmd_args, argv)
+                else:
+                    self.assertEqual(cmd_args[: len(argv)], argv)
                 self.assertEqual(kill_after, bound)
                 self.assertIsInstance(self.exception, ModuleFail)
                 self.assertEqual(payload["rc"], self.module.TIMEOUT_RC)
