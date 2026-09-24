@@ -95,13 +95,14 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./vault.sh set <key> --from-file <path> --create\|--replace` | Only on explicit request. Move a secret file into the vault without reading it |
 | `./vault.sh rotate --dry-run` | Rehearse passphrase rotation on throwaway copies |
 | `./vault.sh configure` / `edit` / `rotate` | Human-only. Interactive credential, vault, and passphrase changes |
-| `./validate.sh` | Complete non-live verification (~7 min) — lint, full lifecycle regressions, and full pytest suite |
+| `./validate.sh` | Complete non-live verification (~7 min) — lint, full lifecycle regressions, and the pytest suite except the real Renovate gate |
 | `./validate.sh lifecycle` | Fast lifecycle feedback (~1.5 min) — semantic lifecycle facade matrix + targeted planning barrier, controlled observations only. Run while iterating on LXC lifecycle changes |
 | `./validate.sh lifecycle --only <launcher.py>` | Target one registered lifecycle launcher in the same credential-free fixture environment. Repeat `--only` to run several launchers in the supplied order |
 | `./validate.sh lifecycle --full --fail-fast` | Remediation pass — finish the concurrent fast launchers, then stop scheduling after the first observed failure. Launchers already in flight in the bounded pool still finish and are reported |
 | `./validate.sh lifecycle --full` | Full lifecycle regression set (~6.5 min) — fast path plus host-config idempotence, real role-composition wiring, fleet preflight, and contract seams. Most full-only launchers run through a bounded pool (2 at a time), so results report in completion order, not registration order. Prefer `./validate.sh` for handoff verification |
 | `./validate.sh lint` | Targeted repo-wide lint feedback (production profile). Prefer `./validate.sh` for handoff verification |
 | `./validate.sh tests [<target>...]` | Run the test suite (~7 min), optionally restricted to targets inside `tests/` (a path, optionally with a `::` node-id suffix). Targets outside the test tree are invalid usage |
+| `./validate.sh renovate` | Real pinned Renovate compatibility gate — needs `npx` and public registries. Required when a change touches the Renovate adapter, its schemas, its pin, or its contract fixture ([docs/image-update-renovate-adapter.md](docs/image-update-renovate-adapter.md)). Not part of the no-argument handoff run |
 | `./validate.sh stack <path>` | Validate one repo-managed stack's update policy — schema-versioned JSON on stdout, diagnostics on stderr. Not part of the no-argument handoff run |
 | `./setup.sh sync` | Optionally synchronize the locked Python environment ahead of use (non-interactive; no OS packages, no managed host). Every command reconciles it on its own |
 

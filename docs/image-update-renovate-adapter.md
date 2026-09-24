@@ -14,4 +14,14 @@ Run it with:
 uv run --locked python scripts/image_update_renovate_adapter.py <request.json>
 ```
 
+## Compatibility gate
+
+`./validate.sh` runs the deterministic adapter contract tests, which replace `npx` with a fake. It does not run the real pinned Renovate. That run needs `npx` and public registry access, so it is a separate gate:
+
+```bash
+./validate.sh renovate
+```
+
+Run it when a change touches `scripts/image_update_renovate_adapter.py`, the schemas under `schemas/image-update-renovate-adapter/`, the Renovate pin, or the contract fixture. Other changes do not need it. It exits non-zero when the real run fails, when `npx` or the network is unavailable, and when the gate test was not collected (`5`). When it could not run, report that the real compatibility evidence was not collected. Do not report the change as verified against Renovate.
+
 Renovate upgrades require an explicit adapter-contract review and acceptance of the credential-free contract fixture at `tests/fixtures/image_update_renovate_adapter/contract-request.json`. Changing the package pin without reviewing the exact invocation, consumed JSON records, normalization, fail-closed cases, and real-boundary fixture is unsupported.

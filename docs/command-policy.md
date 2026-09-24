@@ -19,6 +19,7 @@ of what the guards enforce.
 | | `lifecycle [--full] [--only <launcher.py>]... [--fail-fast]` | none | yes |
 | | `tests [<target>...]` | none | yes |
 | | `stack <path>` | none | yes |
+| | `renovate` | none | yes |
 | `./inspect.sh` | `credentials`, `containers` | shared | yes |
 | | `connectivity [--limit <targets>]`, `plan [--limit <targets>]` | shared | yes |
 | | `vars <host>`, `vars --graph` | none | yes |
@@ -70,6 +71,7 @@ unchanged:
 | `./validate.sh lifecycle` | `1` when a launcher fails, and `2` when the runner rejects an unregistered launcher |
 | `./validate.sh tests` | pytest's status: `1` for failed tests, `4` for a target pytest cannot load, and `5` when no test was collected |
 | `./validate.sh stack` | `1` when the stack policy is invalid |
+| `./validate.sh renovate` | pytest's status: `1` when the real Renovate run fails or cannot start, for example without `npx` or registry access, and `5` when the gate test was not collected |
 | `./validate.sh` | the status of the first failing gate, checked as lint, then lifecycle, then tests. `130` or `143` when interrupted. |
 
 So a `2` from `./validate.sh` does not always mean invalid usage. Read stderr:
@@ -247,8 +249,12 @@ Agent use of a documented raw command is a separate decision:
 - **Boundary:** observational. It queries public registries and writes
   candidate observations to stdout. It contacts no managed host.
 - **Sensitive output:** none. It strips inherited `RENOVATE_*` variables.
-- **Escalation:** agents exercise this boundary through its contract test with
-  `./validate.sh tests`, not by running the adapter.
+- **Escalation:** agents exercise this boundary through its tests, not by
+  running the adapter. `./validate.sh` runs the deterministic contract tests.
+  `./validate.sh renovate` runs the real pinned Renovate against public
+  registries, as
+  [image-update-renovate-adapter.md](image-update-renovate-adapter.md)
+  requires for adapter changes.
 
 ## Superseded forms
 
