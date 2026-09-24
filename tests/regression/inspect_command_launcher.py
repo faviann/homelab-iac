@@ -229,6 +229,20 @@ derived_sequence:
         raise AssertionError(
             f"vars did not mask {unmasked!r} as whole values:\n{result.stdout}"
         )
+    # The mask keeps diagnostic shape (ADR-0010), so it is not a fixed redaction.
+    header = rendered_inventory["derived_header"]
+    shown = f"Bearer {fixture_secret}".replace(" ", "·")
+    if len(header) != len(shown) or any(
+        masked != original
+        for masked, original in zip(header, shown)
+        if not original.isalnum()
+    ):
+        raise AssertionError(f"vars lost the shape of derived_header: {header!r}")
+    if not (
+        rendered_inventory["derived_mapping"].startswith("{")
+        and rendered_inventory["derived_sequence"].startswith("[")
+    ):
+        raise AssertionError(f"vars lost composite structure:\n{result.stdout}")
     expected_captures = expected_host_vars_invocations("fixture_host")
     if captures != expected_captures:
         raise AssertionError(
