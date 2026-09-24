@@ -266,36 +266,26 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
 
     def test_artifacts_external_route_contract(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
-        auth_config = yaml.safe_load(
-            AUTH_MIDDLEWARES_PATH.read_text(encoding="utf-8")
-        )
-        routers = config["http"]["routers"]
 
-        # The exact middleware list keeps local-ip-restriction off this router:
-        # artifact URLs are meant to open from outside the LAN, guarded by admin
-        # forward auth.
+        # Deliberately public: no forward auth and no local-ip-restriction, so
+        # external services can fetch artifact URLs without logging in.
         assert_route(
             self,
             config,
             "artifacts",
-            host_rule="Host(`artifacts.admin.faviann.com`)",
+            host_rule="Host(`artifacts.public.faviann.com`)",
             service="artifacts-workstation",
-            middlewares=["protected-edge-auth@file"],
+            middlewares=["artifacts-no-leak-headers"],
             backend="http://workstation.faviann.vms:19082",
         )
         self.assertEqual(
-            [
-                name
-                for name, router in routers.items()
-                if "artifacts.admin.faviann.com" in router["rule"]
-            ],
-            ["artifacts"],
-        )
-        self.assertEqual(
-            auth_config["http"]["middlewares"]["protected-edge-auth"]["chain"][
-                "middlewares"
-            ],
-            ["forwardAuth-authentik"],
+            config["http"]["middlewares"]["artifacts-no-leak-headers"],
+            {
+                "headers": {
+                    "referrerPolicy": "no-referrer",
+                    "customResponseHeaders": {"X-Robots-Tag": "noindex, nofollow"},
+                }
+            },
         )
 
     def test_lobu_external_route_contract(self) -> None:

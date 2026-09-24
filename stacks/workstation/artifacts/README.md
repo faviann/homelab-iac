@@ -2,7 +2,9 @@
 
 `artifacts` is a host-bound static server on the `workstation` Docker host. It serves the
 publication root written by the `publish-artifact` skill, read-only, on host port `19082`.
-Portal Traefik fronts it at `https://artifacts.admin.faviann.com` behind admin forward auth.
+Portal Traefik fronts it at `https://artifacts.public.faviann.com` with no authentication, so
+external services can fetch artifacts without logging in. Every published file is readable by
+anyone holding its URL; the random generation segment in each URL is the only access control.
 
 The container runs as the workstation user's UID/GID, so publications created under umask
 `077` stay readable without loosening their permissions. The publication mount is `:ro`,
@@ -21,7 +23,7 @@ by this.
 | Field | Value |
 | --- | --- |
 | `directory` | `/ephemeral/workstation/artifacts` |
-| `baseUrl` | `https://artifacts.admin.faviann.com` |
+| `baseUrl` | `https://artifacts.public.faviann.com` |
 
 A relative path under the directory resolves to the identical relative path under the base
 URL. This repository owns the directory, its permissions, the server, the origin

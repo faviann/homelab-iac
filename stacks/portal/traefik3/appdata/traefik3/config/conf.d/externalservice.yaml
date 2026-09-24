@@ -29,16 +29,17 @@ http:
       middlewares:
         - local-ip-restriction
 
-    # Admin-authenticated and deliberately reachable from outside the LAN, so no
-    # local-ip-restriction. Anonymous and non-admin requests are stopped by the
-    # shared admin-wildcard forward auth before any artifact byte is served.
+    # Public and unauthenticated so external services can fetch artifacts. Only
+    # *.public resolves to the WAN address. Each publication's URL carries 96
+    # random bits and listings are off, so knowing the exact URL is the access
+    # control; the headers keep that URL out of Referer and search indexes.
     artifacts:
-      rule: "Host(`artifacts.admin.faviann.com`)"
+      rule: "Host(`artifacts.public.faviann.com`)"
       entryPoints: websecure
       service: artifacts-workstation
       priority: 1000
       middlewares:
-        - protected-edge-auth@file
+        - artifacts-no-leak-headers
 
     mcp-auth-proxy:
       rule: "Host(`mcp.faviann.com`) && (Path(`/mcp`) || PathPrefix(`/.well-known/`) || PathPrefix(`/.idp/`) || PathPrefix(`/.auth/`))"
@@ -237,6 +238,11 @@ http:
         servers: []
 
   middlewares:
+    artifacts-no-leak-headers:
+      headers:
+        referrerPolicy: "no-referrer"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
     sslheader:
       headers:
         customRequestHeaders:
