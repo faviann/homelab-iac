@@ -284,8 +284,9 @@ In a documented `./run.sh` invocation, `-e` and `--tags` appear only after
 ### Text-check allowlist
 
 `tests/unit/test_guidance_text.py`, part of `./validate.sh`, looks for the
-superseded forms in the table above, and for `-e` or `--tags` before `--` in a
-documented `./run.sh` invocation. It scans only these guidance surfaces:
+superseded forms in the table above, except bare `./setup.sh`, which fails
+with status `2` on its own. It also looks for `-e` or `--tags` before `--` in
+a documented `./run.sh` invocation. It scans only these guidance surfaces:
 
 - tracked Markdown outside `tests/`
 - `inventory/vault.yml.example`
@@ -297,12 +298,12 @@ documented `./run.sh` invocation. It scans only these guidance surfaces:
 Shell execution lines are not scanned. The internal-call rule governs them.
 
 It matches the command shape of each form, not the tool name, so prose that
-names a tool passes. It does not recognize raw commands in general, and it
-does not look anywhere else. Review enforces the rest of this policy,
+names a tool usually passes. It does not recognize raw commands in general,
+and it does not look anywhere else. Review enforces the rest of this policy,
 including the standing permissions and any form the check does not recognize.
 
 A superseded form fails the check unless it appears in a file below. The check
-reads this table, so a row here is the exception.
+reads the File column of this table, so a row here is the exception.
 
 | File | Permitted shape |
 | --- | --- |

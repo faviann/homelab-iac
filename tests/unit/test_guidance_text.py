@@ -18,12 +18,13 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 POLICY = "docs/command-policy.md"
 
+_TOOL = r"(?:ansible-playbook|ansible-lint|pytest)"
 SUPERSEDED_FORMS = {
     "--tags validation, provision, or bootstrap": r"--tags[ =](?:validation|provision|bootstrap)\b",
     "ansible-playbook, ansible-lint, or pytest run directly": (
-        r"\buv run(?:[ \t]+--?[\w-]+)*[ \t]+(?:ansible-playbook|ansible-lint|pytest)\b"
-        r"|(?<![\w./-])(?:ansible-playbook|ansible-lint|pytest)"
-        r"(?:[ \t]+(?:-\S|\S*[/.]\S*)|[ \t]*$)"
+        rf"\buv run(?:[ \t]+--?[\w-]+)*[ \t]+{_TOOL}\b"
+        rf"|(?:(?<![\w./-])|(?<=bin/)){_TOOL}[ \t]+(?:-\S|\S*[/.]\S*)"
+        rf"|^[ \t]*{_TOOL}[ \t]*$"
     ),
     "ansible -m ping": r"\bansible\b[^`\n]*[ \t]-m[ \t]+ping\b",
     "ansible-inventory --host, --list, or --graph": r"\bansible-inventory\b[^`\n]*--(?:host|list|graph)\b",
@@ -120,8 +121,10 @@ def allowlisted_globs() -> list[str]:
         "Run ./run.sh --tags provision to provision only.",
         "./run.sh --limit auth \\\n  --extra-vars foo=bar",
         "Use `--tags validation` to test connectivity",
-        "uv run --locked ansible-playbook playbooks/lab-connectivity.yml",
-        "`uv run --locked ansible-playbook` runs against live hosts",
+        "uv run ansible-playbook playbooks/lab-connectivity.yml",
+        "`uv run --frozen ansible-playbook` runs against live hosts",
+        ".venv/bin/ansible-playbook bootstrap.yml",
+        "`.venv/bin/pytest --version`",
         "# Repo-wide lint gate: `uv run --locked ansible-lint` must exit 0.",
         "ansible-lint\n",
         "`pytest tests/unit -x`",
@@ -151,6 +154,7 @@ def test_superseded_form_is_reported(text: str) -> None:
         "`./run.sh --include-controller` | Manage the control node -e",
         "Do not invoke Ansible, `uv`, or `pytest` directly.",
         "pytest owns the `test_*.py` files under `tests/`",
+        "The unit suite is collected by pytest\nfrom the test tree.",
         "Authentik blueprints use tags that ansible-lint cannot parse.",
         "# ansible-vault encrypted file: must start with the $ANSIBLE_VAULT header",
         "The wrapper forwards arguments after `--` to `ansible-playbook`.",
