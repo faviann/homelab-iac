@@ -303,6 +303,8 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
             blueprint.admission("test-app"),
             [(1, "group", "media", True, False), (2, "group", "admins", True, False)],
         )
+        # The two group bindings mean "group or admins" only when any one binding suffices.
+        self.assertEqual(blueprint.application("test-app")["attrs"]["policy_engine_mode"], "any")
         self.assertEqual(
             [binding["identifiers"]["order"] for binding in blueprint.bindings("test-app", "absent")],
             [0],
@@ -327,6 +329,7 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
                     blueprint.admission(app["slug"]),
                     [(1, "group", app.get("group"), True, False), (2, "group", "admins", True, False)],
                 )
+                self.assertEqual(blueprint.application(app["slug"])["attrs"]["policy_engine_mode"], "any")
 
     def test_committed_oidc_blueprint_matches_generator(self):
         apps = self.mod.load_oidc_manifest()
