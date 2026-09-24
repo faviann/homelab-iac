@@ -11,12 +11,12 @@
     repo_only_stack_files:
       - README.md
       - docs/operator.md
-      - stack.yaml
       - stack.yml
       - metadata.yaml
       - metadata.yml
       - metadata.json
     deployed_myapp: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp"
+    myapp_source: "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ temp_root }}/shared"
       root_docker_conf_path: "{{ temp_root }}/shared"
@@ -55,12 +55,16 @@
             - path: ./data/existing.json
               mode: "0600"
 
-    - name: Seed stack-local docs and metadata that must stay repo-only
+    - name: Seed parseable stack metadata that must stay repo-only
       ansible.builtin.copy:
-        dest: "{{ lxc_docker_environment_internal.stacks_source }}/myapp/{{ item }}"
+        dest: "{{ myapp_source }}/stack.yaml"
         mode: "0644"
         content: "kind: stack\n"
-      loop: "{{ repo_only_stack_files }}"
+
+    - name: Seed stack-local docs and other metadata that must stay repo-only
+      ansible.builtin.command:
+        argv: "{{ ['touch'] + repo_only_stack_files | map('regex_replace', '^', myapp_source ~ '/') | list }}"
+      changed_when: true
 
     - name: Seed existing managed-only content with a divergent mode
       ansible.builtin.copy:
@@ -162,32 +166,28 @@
           - not _stale_stack.stat.exists
           - (_quarantined_compose.content | b64decode | from_yaml).services.old.image == 'old:latest'
 
-    # Deploy exclusions: stack-local docs and metadata are parsed or ignored, never deployed.
-    - name: Inspect deployed desired compose file and repo-only stack files
-      ansible.builtin.stat:
-        path: "{{ deployed_myapp }}/{{ item }}"
-      loop: "{{ ['compose.yaml', 'docs'] + repo_only_stack_files }}"
-      register: _deployed_myapp_files
+    # Deployed tree: stack-local docs and metadata stay repo-only; managed-only files
+    # are created empty when absent, and existing content is kept while its mode is repaired.
+    - name: Find the deployed desired stack tree
+      ansible.builtin.find:
+        paths: "{{ deployed_myapp }}"
+        recurse: true
+        hidden: true
+        file_type: any
+      register: _deployed_myapp_tree
 
-    - name: Assert only deployable stack files were materialized
+    - name: Assert the deployed tree holds only deployable and managed-only files
       ansible.builtin.assert:
         that:
-          - _deployed_myapp_files.results[0].stat.exists
-          - _deployed_myapp_files.results[1:] | selectattr('stat.exists') | list == []
-
-    # Managed-only files: created empty when absent; existing content kept while mode is repaired.
-    - name: Inspect managed-only files
-      ansible.builtin.stat:
-        path: "{{ deployed_myapp }}/{{ item }}"
-      loop: [data/certs/created.json, data/existing.json]
-      register: _managed_only_files
-
-    - name: Assert managed-only files were created or preserved with declared mode
-      ansible.builtin.assert:
-        that:
-          - _managed_only_files.results | map(attribute='stat.mode') | list == ['0600', '0600']
-          - _managed_only_files.results[0].stat.size == 0
+          - _deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp) | sort
+            == ['compose.yaml', 'data', 'data/certs', 'data/certs/created.json', 'data/existing.json']
+          - (deployed_files['data/certs/created.json'].mode, deployed_files['data/certs/created.json'].size) == ('0600', 0)
+          - deployed_files['data/existing.json'].mode == '0600'
           - lookup('file', deployed_myapp ~ '/data/existing.json') == 'operator-data'
+      vars:
+        deployed_files: >-
+          {{ dict(_deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp)
+             | zip(_deployed_myapp_tree.files)) }}
 
     - name: Reconcile again with the same desired and converged Docker state
       environment:
