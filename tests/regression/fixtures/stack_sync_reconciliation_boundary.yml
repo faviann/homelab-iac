@@ -169,9 +169,7 @@
           - "['compose.yaml', 'config.ini'] | difference(deployed_files) == []"
           - "(['docs', 'stack.yaml'] + repo_only_stack_files) | intersect(deployed_files) == []"
       vars:
-        deployed_files: >-
-          {{ dict(_deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp)
-             | zip(_deployed_myapp_tree.files)) }}
+        deployed_files: "{{ _deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp) | list }}"
 
     - name: Reconcile again with the same desired and converged Docker state
       environment:

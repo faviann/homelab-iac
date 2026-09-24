@@ -176,7 +176,7 @@
       }}
 
 # copy with force: false leaves an existing file's attributes alone, so repair them here.
-# A file copy created (or would create, in check mode) already has the declared attributes.
+# A file copy created already has the declared attributes; in check mode it does not exist yet.
 - name: Ensure managed file permissions are correct
   ansible.builtin.file:
     path: "{{ item.item.path }}"

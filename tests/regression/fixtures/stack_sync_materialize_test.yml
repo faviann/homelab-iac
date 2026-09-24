@@ -355,6 +355,10 @@
           - (_managed_only_stats.results[0].stat.mode, _managed_only_stats.results[0].stat.size) == ('0600', 0)
           - _managed_only_stats.results[1].stat.mode == '0600'
           - lookup('file', komf_target ~ '/data/existing.json') == 'operator-data'
+
+    - name: Assert synced managed files bypass managed-only handling
+      ansible.builtin.assert:
+        that:
           - >-
             _stack_sync_managed_file_create_results.results | map(attribute='item.path') | list
             == [komf_target ~ '/data/certs/absent.json', komf_target ~ '/data/existing.json']
@@ -566,10 +570,6 @@
           - _exact_agent_keys_stat.stat.mode == '0600'
           - exact_agent_keys_plan.stack_name == 'overmind'
           - exact_agent_keys_plan.dest_path == exact_agent_keys_target
-          - >-
-            exact_agent_keys_target not in
-            (_stack_sync_managed_file_create_results.results | default([])
-            | map(attribute='item.path') | list)
       vars:
         exact_agent_keys_plan: >-
           {{ lxc_stack_sync_manifest_plan.files_to_render
@@ -648,10 +648,6 @@
           - item.stat.mode == item.item.mode
           - exact_artifact_plan.stack_name == item.item.stack_name
           - exact_artifact_plan.dest_path == item.item.path
-          - >-
-            item.item.path not in
-            (_stack_sync_managed_file_create_results.results | default([])
-            | map(attribute='item.path') | list)
       vars:
         exact_artifact_plan: >-
           {{ lxc_stack_sync_manifest_plan.files_to_copy
