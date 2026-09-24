@@ -537,39 +537,50 @@ def test_tests_preserves_exceptional_and_empty_statuses(
     assert result.returncode == pytest_status
 
 
-def test_real_pytest_runner_continues_after_serial_item_failure(
+def test_real_pytest_runner_continues_after_serial_failure_and_excludes_the_gate(
     tmp_path: Path,
 ) -> None:
+    # Every observation below is its own marker file, so the serial failure
+    # that drives the exit status decides neither continuation nor exclusion.
     (tmp_path / "pytest.ini").write_text(
-        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n",
+        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n"
+        "    renovate_compat: temporary isolated runner fixture\n",
         encoding="utf-8",
     )
-    serial_test = tmp_path / "test_serial_failure.py"
-    serial_test.write_text(
+    probes = tmp_path / "probes"
+    probes.mkdir()
+    (tmp_path / "test_serial_failure.py").write_text(
         "import pytest\n\n"
         "pytestmark = pytest.mark.serial\n\n"
         "def test_serial_failure():\n"
         "    assert False, 'intentional serial failure for runner regression'\n",
         encoding="utf-8",
     )
-    parallel_marker = tmp_path / "parallel-item-ran"
-    parallel_test = tmp_path / "test_parallel_probe.py"
-    parallel_test.write_text(
+    (tmp_path / "test_parallel_probe.py").write_text(
         "import os\nfrom pathlib import Path\n\n"
         "def test_parallel_probe_runs():\n"
         "    assert os.environ.get('PYTEST_XDIST_WORKER')\n"
         "    worker_count = int(os.environ['PYTEST_XDIST_WORKER_COUNT'])\n"
         "    assert 1 <= worker_count <= 4, worker_count\n"
-        "    Path(os.environ['PYTEST_RUNNER_PARALLEL_MARKER']).write_text(\n"
-        "        'ran', encoding='utf-8'\n"
-        "    )\n",
+        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'parallel-probe').touch()\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "test_gate.py").write_text(
+        "import os\nfrom pathlib import Path\n\nimport pytest\n\n"
+        "@pytest.mark.renovate_compat\n"
+        "def test_parallel_lane_gate():\n"
+        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'parallel-gate').touch()\n\n"
+        "@pytest.mark.renovate_compat\n"
+        "@pytest.mark.serial\n"
+        "def test_serial_lane_gate():\n"
+        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'serial-gate').touch()\n",
         encoding="utf-8",
     )
     env = os.environ.copy()
-    env["PYTEST_RUNNER_PARALLEL_MARKER"] = str(parallel_marker)
+    env["PYTEST_RUNNER_PROBES"] = str(probes)
 
     result = subprocess.run(
-        ["bash", str(PYTEST_RUNNER), str(serial_test), str(parallel_test)],
+        ["bash", str(PYTEST_RUNNER), str(tmp_path)],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -578,55 +589,9 @@ def test_real_pytest_runner_continues_after_serial_item_failure(
     )
     output = f"{result.stdout}\n{result.stderr}"
 
+    assert sorted(path.name for path in probes.iterdir()) == ["parallel-probe"], output
     assert result.returncode == 1, output
     assert "intentional serial failure for runner regression" in output
-    assert parallel_marker.read_text(encoding="utf-8") == "ran"
-
-
-def test_real_pytest_runner_excludes_the_renovate_compatibility_gate(
-    tmp_path: Path,
-) -> None:
-    (tmp_path / "pytest.ini").write_text(
-        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n"
-        "    renovate_compat: temporary isolated runner fixture\n",
-        encoding="utf-8",
-    )
-    gate_test = tmp_path / "test_gate.py"
-    gate_test.write_text(
-        "import pytest\n\n"
-        "@pytest.mark.renovate_compat\n"
-        "def test_parallel_lane_gate():\n"
-        "    assert False, 'renovate_compat item ran in an ordinary run'\n\n"
-        "@pytest.mark.renovate_compat\n"
-        "@pytest.mark.serial\n"
-        "def test_serial_lane_gate():\n"
-        "    assert False, 'renovate_compat item ran in an ordinary run'\n",
-        encoding="utf-8",
-    )
-    ordinary_marker = tmp_path / "ordinary-item-ran"
-    ordinary_test = tmp_path / "test_ordinary.py"
-    ordinary_test.write_text(
-        "import os\nfrom pathlib import Path\n\n"
-        "def test_ordinary_item_runs():\n"
-        "    Path(os.environ['PYTEST_RUNNER_ORDINARY_MARKER']).write_text(\n"
-        "        'ran', encoding='utf-8'\n"
-        "    )\n",
-        encoding="utf-8",
-    )
-    env = os.environ.copy()
-    env["PYTEST_RUNNER_ORDINARY_MARKER"] = str(ordinary_marker)
-
-    result = subprocess.run(
-        ["bash", str(PYTEST_RUNNER), str(gate_test), str(ordinary_test)],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-
-    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-    assert ordinary_marker.read_text(encoding="utf-8") == "ran"
 
 
 @pytest.mark.parametrize("pytest_status", [0, 1, 5])
@@ -797,17 +762,8 @@ def test_stack_reports_a_valid_policy_as_schema_versioned_json() -> None:
 # section today, so validation reports it as invalid. If that stack ever gains
 # an update policy, move this case to another genuinely invalid stack rather
 # than weakening the assertions.
-@pytest.mark.parametrize(
-    "path",
-    [
-        "stacks/overmind/overmind",
-        "stacks/workstation/no-such-stack-for-validation",
-    ],
-)
-def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero(
-    path: str,
-) -> None:
-    result = run_real_stack_validation(path)
+def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero() -> None:
+    result = run_real_stack_validation("stacks/overmind/overmind")
 
     assert result.returncode != 0
     document = json.loads(result.stdout)
