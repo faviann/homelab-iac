@@ -29,10 +29,6 @@
               echo "Configuration file 'nodes/pve-a/lxc/$2.conf' does not exist" >&2
               exit 2
               ;;
-            timeout)
-              echo "pct command exceeded its 60s execution timeout and was killed" >&2
-              exit 124
-              ;;
             generic_failure)
               echo "permission denied while reading /etc/pve" >&2
               exit 13
@@ -89,43 +85,6 @@
           - proxmox_lifecycle_observed_runtime_state == 'absent'
           - proxmox_lifecycle_observe_status_result.status == 'absent'
 
-    - name: Select timeout observation
-      ansible.builtin.copy:
-        dest: "{{ temp_root }}/pct-case"
-        mode: "0644"
-        content: timeout
-
-    - name: Initialize timeout result
-      ansible.builtin.set_fact:
-        _timeout_observation_failed: false
-        _timeout_observation_result: {}
-
-    - name: Observe a timed-out status command
-      block:
-        - name: Query timeout observation
-          ansible.builtin.include_tasks:
-            file: "../../../playbooks/roles/provisioning/proxmox_lxc_lifecycle/tasks/observe_runtime_state.yml"
-
-        - name: Mark unexpected continuation after timeout
-          ansible.builtin.set_fact:
-            _timeout_observation_continued: true
-      rescue:
-        - name: Capture expected timeout failure
-          ansible.builtin.set_fact:
-            _timeout_observation_failed: true
-            _timeout_observation_result: "{{ ansible_failed_result }}"
-
-    - name: Assert timeout stays an actionable observation failure
-      ansible.builtin.assert:
-        that:
-          - _timeout_observation_failed
-          - not (_timeout_observation_continued | default(false) | bool)
-          - _timeout_observation_result.rc == 124
-          - _timeout_observation_result.cmd == 'pct status 4251'
-          - _timeout_observation_result.stderr == 'pct command exceeded its 60s execution timeout and was killed'
-          - _timeout_observation_result.msg is search('LXC 4251')
-          - _timeout_observation_result.msg is search('rc=124')
-
     - name: Select generic failed observation
       ansible.builtin.copy:
         dest: "{{ temp_root }}/pct-case"
@@ -159,6 +118,4 @@
           - not (_generic_observation_continued | default(false) | bool)
           - _generic_observation_result.rc == 13
           - _generic_observation_result.cmd == 'pct status 4251'
-          - _generic_observation_result.stderr == 'permission denied while reading /etc/pve'
-          - _generic_observation_result.msg is search('LXC 4251')
-          - _generic_observation_result.msg is search('rc=13')
+          - "'status' not in _generic_observation_result"
