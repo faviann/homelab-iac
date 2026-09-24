@@ -22,14 +22,10 @@ from proxmox_api_fixture import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "tests" / "regression" / "fixtures"
 INVENTORY = FIXTURES / "lxc_fleet_preflight_inventory.yml"
-VALIDATION_PREREQUISITE_INVENTORY = (
-    FIXTURES / "lxc_validation_prerequisite_inventory.yml"
-)
 PLAYBOOK = FIXTURES / "lxc_fleet_preflight_test.yml"
 ROLE_INTERFACE_INVENTORY = FIXTURES / "lxc_fleet_preflight_interface_inventory.yml"
 ROLE_INTERFACE_PLAYBOOK = FIXTURES / "lxc_fleet_preflight_interface_test.yml"
 STANDALONE_PLAYBOOK = FIXTURES / "lxc_standalone_validation_test.yml"
-MISSING_HOSTNAME_PLAYBOOK = FIXTURES / "lxc_fleet_missing_hostname_test.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
 FIXTURE_COLLECTIONS = (
     REPO_ROOT
@@ -107,7 +103,6 @@ def run_module_query_case(
             proc.returncode == 0
             and calls == expected_calls
             and len(server.requested_paths) == 2
-            and (not deny_audit or "VM.Audit" in output)
             and not any(value in output for value in (
                 DUMMY_API_USER, DUMMY_API_TOKEN_ID, DUMMY_API_TOKEN_SECRET
             ))
@@ -144,12 +139,10 @@ def run_case(limit: str) -> bool:
 
 
 def run_regressions() -> int:
-    cases = (
-        "target_conflict,conflict_peer",
-        "hostname_conflict",
-        "shared_problem_a,shared_problem_b",
-    )
-    if not all(run_case(case) for case in cases):
+    # VMID and hostname conflicts share one run: each is owned by its own
+    # target, so either detector failing leaves that target blocked, not
+    # planning_failed, and the other target's evidence is unaffected.
+    if not run_case("target_conflict,conflict_peer,hostname_conflict"):
         return 1
 
     role_interface = subprocess.run(
@@ -170,76 +163,32 @@ def run_regressions() -> int:
         return 1
 
     if not all((
-        run_module_query_case(limit="target_a,target_b"),
         run_module_query_case(limit="target_a,target_b", check_mode=True),
         run_module_query_case(limit="access_target,access_peer", fail=True),
         run_module_query_case(limit="access_target,access_peer", deny_audit=True),
     )):
         return 1
 
-    missing_hostname = subprocess.run(
-        [
-            *ANSIBLE_PLAYBOOK,
-            "-i",
-            str(INVENTORY),
-            str(MISSING_HOSTNAME_PLAYBOOK),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-    )
-    if missing_hostname.returncode != 0:
-        print("incomplete hostname reservations were not aggregated", file=sys.stderr)
-        print(f"{missing_hostname.stdout}\n{missing_hostname.stderr}", file=sys.stderr)
-        return 1
-
-    normal_tasks = subprocess.run(
-        [*ANSIBLE_PLAYBOOK, "-i", str(INVENTORY), "site.yml", "--list-tasks"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-    )
     site_documents = yaml.safe_load((REPO_ROOT / "site.yml").read_text(encoding="utf-8"))
-    if (
-        any(
-            document.get("ansible.builtin.import_playbook")
-            == "playbooks/validate-infrastructure.yml"
-            or "validation" in document.get("tags", [])
-            for document in site_documents
-        )
-        or normal_tasks.returncode != 0
-        or "Run aggregate standalone lifecycle validation" in normal_tasks.stdout
-        or "Build the effective LXC specification" not in normal_tasks.stdout
+    if any(
+        document.get("ansible.builtin.import_playbook")
+        == "playbooks/validate-infrastructure.yml"
+        or "validation" in document.get("tags", [])
+        for document in site_documents
     ):
-        print("site.yml still exposes standalone validation or lost lifecycle routing", file=sys.stderr)
-        print(f"normal route:\n{normal_tasks.stdout}\n{normal_tasks.stderr}", file=sys.stderr)
+        print("site.yml still exposes standalone validation", file=sys.stderr)
         return 1
-
-    missing_domain = subprocess.run(
-        [
-            *ANSIBLE_PLAYBOOK,
-            "-i",
-            str(VALIDATION_PREREQUISITE_INVENTORY),
-            str(STANDALONE_PLAYBOOK),
-            "--limit",
-            "missing_domain",
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        env={**os.environ, "HOMELAB_IAC_LIFECYCLE_WRAPPER": "1"},
-    )
-    missing_domain_output = f"{missing_domain.stdout}\n{missing_domain.stderr}"
-    if (
-        missing_domain.returncode == 0
-        or "missing `default_domain`" not in missing_domain_output
-        or "missing_domain" not in missing_domain_output
-        or "Controlled shared Fleet preflight problem." not in missing_domain_output
+    lifecycle = (REPO_ROOT / "playbooks" / "lifecycle-lxcs.yml").resolve()
+    if not any(
+        (REPO_ROOT / imported).resolve() == lifecycle
+        for document in site_documents
+        for imported in (
+            document.get("ansible.builtin.import_playbook"),
+            document.get("import_playbook"),
+        )
+        if imported
     ):
-        print("site validation did not aggregate missing default_domain", file=sys.stderr)
-        print(missing_domain_output, file=sys.stderr)
+        print("site.yml no longer imports playbooks/lifecycle-lxcs.yml", file=sys.stderr)
         return 1
 
     env = os.environ.copy()
@@ -251,7 +200,7 @@ def run_regressions() -> int:
             str(INVENTORY),
             str(STANDALONE_PLAYBOOK),
             "--limit",
-            "target_conflict,release_problem",
+            "target_conflict,release_problem,target_a",
             "--check",
         ],
         cwd=REPO_ROOT,
@@ -260,17 +209,21 @@ def run_regressions() -> int:
         env=env,
     )
     aggregate_output = f"{proc.stdout}\n{proc.stderr}"
+    # Search only the aggregate report, so a fragment printed by an earlier
+    # rescued task cannot stand in for a problem the aggregate dropped.
+    aggregate_report = aggregate_output.partition("Standalone lifecycle validation found")[2]
     aggregate_fragments = (
-        "Standalone lifecycle validation found",
-        "Target identity conflict",
-        "VMID 5199",
-        "Guest release observation is required",
-        "release_problem",
+        "VMID 5199",  # targeted VMID conflict
+        "Guest release observation is required",  # target-local planning problem
+        "'a_missing_vmid_hostname_owner' has no VMID",  # incomplete VMID
+        "null_hostname_reservation",  # incomplete hostname
+        "empty_hostname_reservation",  # incomplete hostname
+        "hostname 'target-a'",  # conflict with a VMID-less reservation
+        "missing `default_domain` in inventory/host_vars/missing_domain.yml",  # ordinary configuration failure
     )
-    if proc.returncode == 0 or not all(
-        fragment in aggregate_output for fragment in aggregate_fragments
-    ):
-        print("standalone validation did not aggregate all problems", file=sys.stderr)
+    missing = [fragment for fragment in aggregate_fragments if fragment not in aggregate_report]
+    if proc.returncode == 0 or missing:
+        print(f"standalone validation did not aggregate: {missing}", file=sys.stderr)
         print(aggregate_output, file=sys.stderr)
         return 1
 

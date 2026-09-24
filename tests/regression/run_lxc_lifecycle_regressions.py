@@ -81,8 +81,6 @@ FULL_ONLY_SCRIPTS = (
     "lxc_lifecycle_invalid_state_launcher.py",
     "lxc_lifecycle_guest_bootstrap_contract_launcher.py",
     "lxc_spec_contract_launcher.py",
-    "lxc_spec_invalid_guest_bootstrap_launcher.py",
-    "lxc_spec_layer_merge_launcher.py",
     "proxmox_lxc_provision_contract_launcher.py",
     "proxmox_lxc_lifecycle_configure_check_mode_absent_launcher.py",
     "proxmox_lxc_lifecycle_observation_status_launcher.py",

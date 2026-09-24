@@ -1,38 +1,41 @@
 ---
-- name: Test compiled LXC contract shape
+# Each adjacent layer pair has its own field set only in those two layers
+# (onboot, swap, cores, tags, hostname), so every neighbouring pair is
+# discriminated independently rather than hidden behind a single top-layer
+# override. memory is the intended three-layer global/group/overrides chain.
+- name: Test compiled LXC contract precedence and slices
   hosts: localhost
   connection: local
   gather_facts: false
-  vars:
+  vars: &compiler_inputs
     proxmox_default_storage: local-lvm
     proxmox_lxc_global_defaults:
       node: pve-a
       ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
-      description: global-description
-      timezone: UTC
+      onboot: false
+      swap: 1024
+      memory: 2048
     proxmox_lxc_group_defaults:
-      description: group-description
-      tags: group-managed
+      swap: 512
       cores: 2
       memory: 1024
-      swap: 512
       disk: "16"
       netif:
         net0: name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth
     proxmox_lxc_capability_defaults:
-      description: capability-description
-      onboot: false
+      cores: 4
+      tags: capability-tag
       features:
         - nesting=1
         - keyctl=1
     proxmox_lxc_overrides:
       vmid: 4201
       hostname: override-host
-      description: override-description
+      tags: override-tag
+      memory: 8192
       password: super-secret
     proxmox_lxc:
       hostname: contract-host
-      description: host-description
       pubkey: ssh-ed25519 AAAATEST contract@test
     proxmox_default_bind_mounts:
       mp0: /srv/media,mp=/media
@@ -59,49 +62,51 @@
       ansible.builtin.include_role:
         name: provisioning/lxc_spec_builder
 
-    - name: Assert compiled contract slices exist
+    - name: Assert each adjacent layer overrides the one below it
       ansible.builtin.assert:
         that:
-          - proxmox_lxc_contract.identity is mapping
-          - proxmox_lxc_contract.api_spec is mapping
-          - proxmox_lxc_contract.host_config is mapping
-          - proxmox_lxc_contract.guest_bootstrap is mapping
-          - proxmox_lxc_contract.derived_metadata is mapping
-        fail_msg: "Compiled LXC contract did not expose the expected slices"
-
-    - name: Assert identity and derived metadata are published explicitly
-      ansible.builtin.assert:
-        that:
-          - proxmox_lxc_contract.identity.vmid == 4201
-          - proxmox_lxc_contract.identity.hostname == 'contract-host'
-          - proxmox_lxc_contract.derived_metadata.desired_debian_release == '12'
-          - proxmox_lxc_contract.derived_metadata.desired_debian_release_candidates == ['12']
-        fail_msg: "Compiled LXC contract did not expose explicit identity or derived metadata"
-
-    - name: Assert API slice keeps precedence and tier-derived defaults
-      ansible.builtin.assert:
-        that:
-          - proxmox_lxc_contract.api_spec.vmid == 4201
-          - proxmox_lxc_contract.api_spec.hostname == 'contract-host'
-          - proxmox_lxc_contract.api_spec.description == 'host-description'
-          - proxmox_lxc_contract.api_spec.node == 'pve-a'
-          - proxmox_lxc_contract.api_spec.ostemplate == 'local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst'
-          - proxmox_lxc_contract.api_spec.cores == 2
-          - proxmox_lxc_contract.api_spec.memory == 1024
+          # role defaults < global
+          - proxmox_lxc_contract.api_spec.onboot == false
+          # global < group
           - proxmox_lxc_contract.api_spec.swap == 512
+          # group < capability
+          - proxmox_lxc_contract.api_spec.cores == 4
+          # capability < overrides
+          - proxmox_lxc_contract.api_spec.tags == 'override-tag'
+          # overrides < host
+          - proxmox_lxc_contract.identity.hostname == 'contract-host'
+          # overrides beat both lower memory layers
+          - proxmox_lxc_contract.api_spec.memory == 8192
+          # a lone layer still contributes
+          - proxmox_lxc_contract.api_spec.node == 'pve-a'
+          - proxmox_lxc_contract.api_spec.unprivileged == true
+        fail_msg: "Compiled LXC contract did not preserve layer precedence"
+
+    - name: Assert identity is consistent across every contract slice
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract[item].vmid == 4201
+          - proxmox_lxc_contract[item].hostname == 'contract-host'
+      loop:
+        - identity
+        - api_spec
+        - host_config
+        - guest_bootstrap
+
+    - name: Assert API slice normalization and host-only field stripping
+      ansible.builtin.assert:
+        that:
+          - proxmox_lxc_contract.api_spec.ostemplate == 'local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst'
           - proxmox_lxc_contract.api_spec.disk == 'local-lvm:16'
           - proxmox_lxc_contract.api_spec.netif.net0 is search('bridge=vmbr1')
           - proxmox_lxc_contract.api_spec.netif.net0 is search('hwaddr=AA:BB:CC:DD:EE:FF')
-          - proxmox_lxc_contract.api_spec.onboot == false
           - proxmox_lxc_contract.api_spec.password is not defined
           - proxmox_lxc_contract.api_spec.features is not defined
-        fail_msg: "API slice did not preserve precedence, tier defaults, or host-only field stripping"
+        fail_msg: "API slice did not normalize disk/MAC or strip host-only fields and the root password"
 
     - name: Assert host-config slice owns all managed host-side desired state
       ansible.builtin.assert:
         that:
-          - proxmox_lxc_contract.host_config.vmid == 4201
-          - proxmox_lxc_contract.host_config.hostname == 'contract-host'
           - proxmox_lxc_contract.host_config.bind_mounts.mp0 == '/srv/media,mp=/media'
           - proxmox_lxc_contract.host_config.bind_mounts.mp1 == '/srv/custom-config,mp=/config'
           - proxmox_lxc_contract.host_config.host_directories == proxmox_lxc_host_directories
@@ -113,10 +118,44 @@
           - proxmox_lxc_contract.host_config.lxc_disable_apparmor
         fail_msg: "Host-config slice did not capture all managed host-side desired state"
 
-    - name: Assert guest-bootstrap slice owns pubkey injection details
+    - name: Assert guest-bootstrap slice and derived metadata
       ansible.builtin.assert:
         that:
-          - proxmox_lxc_contract.guest_bootstrap.vmid == 4201
-          - proxmox_lxc_contract.guest_bootstrap.hostname == 'contract-host'
           - proxmox_lxc_contract.guest_bootstrap.pubkey == 'ssh-ed25519 AAAATEST contract@test'
-        fail_msg: "Guest-bootstrap slice did not capture the expected pubkey details"
+          - proxmox_lxc_contract.derived_metadata.desired_debian_release == '12'
+          - proxmox_lxc_contract.derived_metadata.desired_debian_release_candidates == ['12']
+        fail_msg: "Guest-bootstrap slice or derived release metadata was wrong"
+
+# The inputs above just compiled successfully and only the guest-bootstrap key
+# differs in these inputs. Play 1's facts persist on localhost, but the compiler
+# recomputes every fact it publishes, so a rejection can only come from the
+# missing key.
+- name: Reject the same inputs without a guest-bootstrap public key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    <<: *compiler_inputs
+    proxmox_lxc:
+      hostname: contract-host
+  tasks:
+    - name: Compile without a usable guest-bootstrap key
+      block:
+        - name: Build compiled LXC contract
+          ansible.builtin.include_role:
+            name: provisioning/lxc_spec_builder
+
+        - name: Record that the contract reached a consumer
+          ansible.builtin.set_fact:
+            _keyless_contract_consumed: true
+      rescue:
+        - name: Record the compiler rejection
+          ansible.builtin.set_fact:
+            _keyless_contract_rejected: true
+
+    - name: Assert the compiler rejected the contract before any consumer
+      ansible.builtin.assert:
+        that:
+          - _keyless_contract_rejected | default(false)
+          - not (_keyless_contract_consumed | default(false))
+        fail_msg: "Compiler accepted a contract without a guest-bootstrap public key"

@@ -3,6 +3,11 @@
   hosts: lxcs
   connection: local
   gather_facts: false
+  vars:
+    # Widen the managed set with untargeted configuration problems so one
+    # aggregate run reports every problem kind together.
+    proxmox_fleet_managed_hosts: >-
+      {{ groups['lxcs'] + groups['aggregate_problem_hosts'] }}
   tasks:
     - name: Run the production standalone validation seam
       ansible.builtin.include_tasks:

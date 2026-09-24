@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Regression test for the compiled LXC contract shape."""
+"""Regression test for LXC contract compilation: layer precedence, slices, and
+rejection of a contract without a guest-bootstrap public key."""
 
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ def main() -> int:
         print(output, file=sys.stderr)
         return 1
 
-    print("ok: compiled LXC contract preserves expected slices")
+    print("ok: compiled LXC contract preserves precedence and slices, and rejects a keyless contract")
     return 0
 
 

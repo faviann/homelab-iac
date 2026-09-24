@@ -51,10 +51,8 @@ all:
           proxmox_lxc:
             vmid: 5199
             hostname: target-conflict
-          fleet_expected_failure_fragments:
-            - Target identity conflict
-            - VMID 5199
-            - absent_reservation
+          fleet_expected_status: planning_failed
+          fleet_expected_owned_problem: VMID 5199
         conflict_peer:
           proxmox_lxc:
             vmid: 5204
@@ -65,49 +63,19 @@ all:
           proxmox_lxc:
             vmid: 5203
             hostname: absent-reserved
-          fleet_expected_failure_fragments:
-            - Target identity conflict
-            - hostname 'absent-reserved'
-            - absent_reservation
+          fleet_expected_status: planning_failed
+          fleet_expected_owned_problem: hostname 'absent-reserved'
         access_target:
           proxmox_lxc:
             vmid: 5103
             hostname: access-target
-          proxmox_fleet_observation_override:
-            containers: []
-            problems:
-              - Shared Proxmox access failed in the controlled observation.
-          fleet_expected_failure_fragments:
-            - Shared Proxmox access failed
+          fleet_expected_status: planning_failed
           fleet_expected_shared_problem: true
         access_peer:
           proxmox_lxc:
             vmid: 5104
             hostname: access-peer
-          fleet_expected_failure_fragments:
-            - Shared Proxmox access failed
-          fleet_expected_shared_problem: true
-        shared_problem_a:
-          proxmox_lxc:
-            vmid: 5205
-            hostname: shared-problem-a
-          proxmox_fleet_observation_override:
-            containers: []
-            problems:
-              - Shared controlled observation problem.
-          fleet_expected_failure_fragments:
-            - Shared controlled observation problem
-          fleet_expected_shared_problem: true
-        shared_problem_b:
-          proxmox_lxc:
-            vmid: 5206
-            hostname: shared-problem-b
-          proxmox_fleet_observation_override:
-            containers: []
-            problems:
-              - Shared controlled observation problem.
-          fleet_expected_failure_fragments:
-            - Shared controlled observation problem
+          fleet_expected_status: planning_failed
           fleet_expected_shared_problem: true
         release_problem:
           proxmox_lxc:
@@ -124,7 +92,9 @@ all:
           proxmox_lxc:
             vmid: 5199
             hostname: absent-reserved
-    invalid_identity_reservations:
+    # Outside lxcs, so only the aggregate run, which widens the managed set to
+    # include this group, sees these untargeted configuration problems.
+    aggregate_problem_hosts:
       hosts:
         a_missing_vmid_hostname_owner:
           proxmox_lxc:
@@ -137,3 +107,10 @@ all:
           proxmox_lxc:
             vmid: 5202
             hostname: ""
+        missing_domain:
+          docker_enabled: true
+          docker_agents_enabled: true
+          traefik_kop_enabled: true
+          proxmox_lxc:
+            vmid: 5301
+            hostname: missing-domain
