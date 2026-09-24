@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 STACK_ROOT = REPO_ROOT / "stacks" / "workstation" / "artifacts"
 WORKSTATION_VARS_PATH = REPO_ROOT / "inventory" / "host_vars" / "workstation.yml"
 PUBLICATION_ROOT = "/ephemeral/workstation/artifacts"
+SERVER_CONFIG_PATH = "/etc/static-web-server/config.toml"
 ORIGIN_PORT = 19082
 
 
@@ -44,7 +46,10 @@ def test_server_reads_only_the_publication_root_as_the_publishing_user() -> None
     env = load_env_template(STACK_ROOT / ".env.j2")
 
     assert compose["x-prereq-dirs"] == [PUBLICATION_ROOT]
-    assert server["volumes"] == [f"{PUBLICATION_ROOT}:/srv/artifacts:ro"]
+    assert server["volumes"] == [
+        f"{PUBLICATION_ROOT}:/srv/artifacts:ro",
+        f"./appdata/config.toml:{SERVER_CONFIG_PATH}:ro",
+    ]
     assert env["SERVER_ROOT"] == "/srv/artifacts"
     assert server["user"] == "${PUID}:${PGID}"
     assert env["PUID"] == "{{ docker_uid }}"
@@ -75,6 +80,26 @@ def test_server_serves_exact_paths_without_listing_symlinks_or_fallback() -> Non
     # resolve, so hidden files must be served.
     assert env["SERVER_IGNORE_HIDDEN_FILES"] == "false"
     assert "SERVER_FALLBACK_PAGE" not in env
+
+
+def test_markdown_is_served_as_utf8_plain_text_and_nothing_else_changes() -> None:
+    env = load_env_template(STACK_ROOT / ".env.j2")
+    config = tomllib.loads(
+        (STACK_ROOT / "appdata" / "config.toml").read_text(encoding="utf-8")
+    )
+
+    assert env["SERVER_CONFIG_FILE"] == SERVER_CONFIG_PATH
+    # A [general] table would silently override the SERVER_* boundary above.
+    assert config == {
+        "advanced": {
+            "headers": [
+                {
+                    "source": "**/*.[mM][dD]",
+                    "headers": {"Content-Type": "text/plain; charset=utf-8"},
+                }
+            ]
+        }
+    }
 
 
 def test_origin_port_is_reserved_only_for_the_artifact_server() -> None:
