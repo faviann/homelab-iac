@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import posixpath
-import re
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -16,6 +16,9 @@ WORKSTATION_HOME = "{{ workstation_home }}"
 EXTERNALSERVICE_PATH = (
     REPO_ROOT / "stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml"
 )
+WORKSTATION_ORIGIN_HOST = "workstation.faviann.vms"
+# An unknown scheme raises KeyError instead of dropping the backend from the check.
+DEFAULT_PORTS = {"http": 80, "https": 443}
 
 # Every home path that must survive an LXC rebuild. Dropping one loses that
 # state on the next rebuild, so removal is a deliberate edit here; adding a
@@ -45,6 +48,17 @@ DURABLE_HOME_LINKS = (
 def load_yaml(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as handle:
         return yaml.safe_load(handle) or {}
+
+
+def routed_workstation_ports(services: dict) -> set[int]:
+    """Effective port of every Traefik backend whose URL targets the workstation."""
+    ports = set()
+    for service in services.values():
+        for server in service["loadBalancer"]["servers"]:
+            url = urlsplit(server["url"])
+            if (url.hostname or "").rstrip(".") == WORKSTATION_ORIGIN_HOST:
+                ports.add(url.port or DEFAULT_PORTS[url.scheme])
+    return ports
 
 
 def at_or_under(path: str, ancestor: str) -> bool:
@@ -83,21 +97,38 @@ class WorkstationInventoryTests(unittest.TestCase):
         self.assertEqual(cap_docker_vars["docker_uid"], 1000)
         self.assertEqual(cap_docker_vars["docker_gid"], 1000)
 
+    def assert_routed_workstation_ports_firewalled(
+        self, services: dict, protected_ports: list[int]
+    ) -> None:
+        routed_ports = routed_workstation_ports(services)
+        self.assertTrue(routed_ports)
+        self.assertLessEqual(routed_ports, set(protected_ports))
+
     def test_every_routed_workstation_origin_port_is_firewalled(self) -> None:
         workstation_vars = load_yaml(REPO_ROOT / "inventory/host_vars/workstation.yml")
-        services = load_yaml(EXTERNALSERVICE_PATH)["http"]["services"]
-        routed_ports = {
-            int(match.group(1))
-            for service in services.values()
-            for server in service["loadBalancer"]["servers"]
-            if (match := re.fullmatch(r"https?://workstation\.faviann\.vms:(\d+)", server["url"]))
-        }
-
-        self.assertTrue(routed_ports)
-        self.assertLessEqual(
-            routed_ports, set(workstation_vars["workstation_origin_firewall_protected_ports"])
+        self.assert_routed_workstation_ports_firewalled(
+            load_yaml(EXTERNALSERVICE_PATH)["http"]["services"],
+            workstation_vars["workstation_origin_firewall_protected_ports"],
         )
         self.assertEqual(workstation_vars["workstation_origin_firewall_allowed_hosts"], ["portal"])
+
+    def test_unprotected_workstation_backend_fails_however_its_url_is_spelled(self) -> None:
+        # The protected sibling keeps the routed set non-empty, so only the
+        # unprotected backend can make the contract fail.
+        for url in (
+            "http://workstation.faviann.vms:12345/",
+            "https://workstation.faviann.vms:12345/app/",
+            "http://workstation.faviann.vms/app",
+        ):
+            services = {
+                name: {"loadBalancer": {"servers": [{"url": server_url}]}}
+                for name, server_url in (
+                    ("protected", "http://workstation.faviann.vms:4001"),
+                    ("unprotected", url),
+                )
+            }
+            with self.subTest(url=url), self.assertRaises(AssertionError):
+                self.assert_routed_workstation_ports_firewalled(services, [4001])
 
     def effective_persistent_home_links(self) -> list[dict]:
         """Resolve the list the workstation host actually deploys.
