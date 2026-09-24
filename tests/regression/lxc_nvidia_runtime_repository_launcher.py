@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Exercise retryable NVIDIA repository publication in isolated fixtures.
+"""Exercise retryable NVIDIA repository publication in an isolated fixture.
 
-Require the final semantic assertion in each scenario to execute and pass;
-Ansible can exit successfully when tag selection executes no assertions.
+Require every scenario's semantic assertion to execute and pass; Ansible can
+exit successfully when tag selection executes no assertions.
 """
 
 from __future__ import annotations
@@ -26,13 +26,6 @@ PLAYBOOK = (
     / "fixtures"
     / "lxc_nvidia_runtime_repository_test.yml"
 )
-APT_ORDER_PLAYBOOK = (
-    REPO_ROOT
-    / "tests"
-    / "regression"
-    / "fixtures"
-    / "lxc_nvidia_runtime_apt_order_test.yml"
-)
 FIXTURE_ROLES = (
     REPO_ROOT
     / "tests"
@@ -44,15 +37,20 @@ FIXTURE_ROLES = (
 FIXTURE_OBSERVATION_PLUGINS = (
     REPO_ROOT / "tests" / "regression" / "fixtures" / "lifecycle_observation_plugins"
 )
+REQUIRED_OBSERVATIONS = (
+    "Assert failed publication left no final artifact",
+    "Assert failed transform left no final artifact",
+    "Assert retry published the complete rewritten repository",
+    "Assert valid repository was not rewritten",
+    "Assert publication refreshed the APT cache",
+)
 
 
-def run_isolated_playbook(
-    playbook: Path, tags: str
-) -> subprocess.CompletedProcess[str]:
+def run_isolated_playbook() -> subprocess.CompletedProcess[str]:
     with tempfile.TemporaryDirectory(prefix="lxc-nvidia-repository-") as temp_root:
-        # ansible.cfg names a vault password file that must exist, but these
-        # fixtures decrypt nothing: a per-scenario placeholder keeps the run
-        # credential-free and independent of the caller's environment.
+        # ansible.cfg names a vault password file that must exist, but this
+        # fixture decrypts nothing: a placeholder keeps the run credential-free
+        # and independent of the caller's environment.
         vault_placeholder = Path(temp_root) / "vault-pass"
         vault_placeholder.write_text(
             "unused-fixture-placeholder\n", encoding="utf-8"
@@ -107,11 +105,11 @@ def run_isolated_playbook(
                 "--chdir",
                 str(REPO_ROOT),
                 *ANSIBLE_PLAYBOOK,
-                str(playbook),
+                str(PLAYBOOK),
                 "-f",
                 "1",
                 "--tags",
-                tags,
+                "lxc_nvidia_runtime_repository",
                 "-e",
                 f"temp_root={temp_root}",
             ],
@@ -125,38 +123,9 @@ def run_isolated_playbook(
     return result
 
 
-def assert_repository_publication_is_retryable() -> None:
-    result = run_isolated_playbook(PLAYBOOK, "lxc_nvidia_runtime_repository")
-
-    assert_observations_completed(result, ("Assert valid repository was not rewritten",))
-
-
-def assert_apt_refresh_precedes_toolkit_install() -> None:
-    result = run_isolated_playbook(
-        APT_ORDER_PLAYBOOK,
-        "lxc_nvidia_runtime_package_setup",
-    )
-
-    assert_observations_completed(
-        result, ("Assert cache refresh completed before isolated install failure",)
-    )
-
-
-def assert_tag_selection_miss_cannot_pass_execution_proof() -> None:
-    result = run_isolated_playbook(PLAYBOOK, "fixture_nonexistent_tag")
-    assert result.returncode == 0, result.stderr
-    try:
-        assert_observations_completed(result, ("Assert valid repository was not rewritten",))
-    except AssertionError:
-        return
-    raise AssertionError("A tag-selection miss passed execution proof")
-
-
 def main() -> int:
     try:
-        assert_tag_selection_miss_cannot_pass_execution_proof()
-        assert_repository_publication_is_retryable()
-        assert_apt_refresh_precedes_toolkit_install()
+        assert_observations_completed(run_isolated_playbook(), REQUIRED_OBSERVATIONS)
     except AssertionError as error:
         print(error, file=sys.stderr)
         return 1

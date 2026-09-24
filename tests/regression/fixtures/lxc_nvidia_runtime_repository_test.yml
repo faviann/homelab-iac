@@ -132,6 +132,10 @@
           tags: lxc_nvidia_runtime_repository
           ansible.builtin.set_fact:
             retry_published_repository: "{{ _nvidia_repo_added is changed }}"
+            retry_refreshed_apt_cache: >-
+              {{ _nvidia_apt_cache_updated is defined
+                 and _nvidia_apt_cache_updated is succeeded
+                 and _nvidia_apt_cache_updated is not skipped }}
 
         - name: Read published NVIDIA repository
           tags: lxc_nvidia_runtime_repository
@@ -178,3 +182,11 @@
                   - _nvidia_repo_added is not changed
                   - rerun_repo_stat.stat.inode == published_repo_stat.stat.inode
                 fail_msg: A valid NVIDIA repository was unnecessarily rewritten
+
+        # Asserted last so a refresh regression cannot hide the idempotence
+        # scenario; the rerun overwrites the registered refresh result.
+        - name: Assert publication refreshed the APT cache
+          tags: lxc_nvidia_runtime_repository
+          ansible.builtin.assert:
+            that: retry_refreshed_apt_cache | bool
+            fail_msg: Publishing the NVIDIA repository did not refresh the APT cache
