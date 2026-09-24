@@ -170,9 +170,22 @@ def test_verified_backup_is_published_rotated_and_throwaway_database_is_dropped(
         backup_dir = Path(temp_root) / "backups"
         backup_dir.mkdir()
         # Retention reads only filenames, so seeded history stands in for earlier runs.
-        for stamp in ("20260707T000000Z", "20260707T000100Z", "20260707T000200Z"):
-            (backup_dir / f"memory-{stamp}.verified.dump").write_text("seeded history", encoding="utf-8")
+        (backup_dir / "memory-20260707T000000Z.verified.dump").write_text("seeded history", encoding="utf-8")
+        run_command(
+            [str(BACKUP_SCRIPT)],
+            env=backup_env(
+                backup_dir,
+                postgres_container,
+                OVERMIND_BACKUP_RETAIN="2",
+                OVERMIND_BACKUP_TIMESTAMP="20260707T000200Z",
+            ),
+        )
+        assert [dump.name for dump in verified_dumps(backup_dir)] == [
+            "memory-20260707T000000Z.verified.dump",
+            "memory-20260707T000200Z.verified.dump",
+        ]
 
+        (backup_dir / "memory-20260707T000100Z.verified.dump").write_text("seeded history", encoding="utf-8")
         run_command(
             [str(BACKUP_SCRIPT)],
             env=backup_env(
@@ -182,7 +195,6 @@ def test_verified_backup_is_published_rotated_and_throwaway_database_is_dropped(
                 OVERMIND_BACKUP_TIMESTAMP="20260707T000300Z",
             ),
         )
-
         assert [dump.name for dump in verified_dumps(backup_dir)] == [
             "memory-20260707T000200Z.verified.dump",
             "memory-20260707T000300Z.verified.dump",
