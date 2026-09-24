@@ -9,6 +9,9 @@ at their exact declared pins before Ansible starts.
 role is reached only by configure-capable lifecycle operations. The lifecycle
 preflight consumes ``community.proxmox`` for every lifecycle intent.
 
+Non-live validation instead reconciles every declared collection, since lint
+resolves them all.
+
 An SSH-consuming operation also requires the machine-global controller SSH
 identity. This module verifies that identity and never creates, restores, or
 replaces it.
@@ -17,11 +20,13 @@ replaces it.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import enum
 import fcntl
 import json
 import subprocess
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -121,19 +126,19 @@ def _installed_role_version(install_path: Path, name: str) -> str | None:
 
 
 def _declared_version(
-    declared: dict[str, str], requirements: Path, playbook: str, kind: str, name: str
+    declared: dict[str, str], requirements: Path, consumer: str, kind: str, name: str
 ) -> str:
     version = declared.get(name)
     if version is None:
         raise DependencyReconciliationError(
-            f"Live playbook '{playbook}' consumes Ansible {kind} {name}, "
+            f"{consumer} consumes Ansible {kind} {name}, "
             f"which {requirements} does not pin."
         )
     return version
 
 
 def _run_galaxy(
-    project_root: Path, playbook: str, dependency: str, arguments: list[str]
+    project_root: Path, consumer: str, dependency: str, arguments: list[str]
 ) -> None:
     completed = subprocess.run(
         ["uv", "run", "--locked", "ansible-galaxy", *arguments],
@@ -142,13 +147,13 @@ def _run_galaxy(
     )
     if completed.returncode != 0:
         raise DependencyReconciliationError(
-            f"Live playbook '{playbook}' consumes {dependency}, "
+            f"{consumer} consumes {dependency}, "
             f"which ansible-galaxy failed to install (exit {completed.returncode})."
         )
 
 
 def _reconcile_collections(
-    project_root: Path, playbook: str, names: tuple[str, ...]
+    project_root: Path, consumer: str, names: tuple[str, ...]
 ) -> None:
     if not names:
         return
@@ -157,13 +162,13 @@ def _reconcile_collections(
     declared = _declared_versions(requirements, "collections")
     for name in names:
         version = _declared_version(
-            declared, requirements, playbook, "collection", name
+            declared, requirements, consumer, "collection", name
         )
         if _installed_collection_version(install_path, name) == version:
             continue
         _run_galaxy(
             project_root,
-            playbook,
+            consumer,
             f"Ansible collection {name} {version}",
             [
                 "collection",
@@ -177,14 +182,14 @@ def _reconcile_collections(
         installed = _installed_collection_version(install_path, name)
         if installed != version:
             raise DependencyReconciliationError(
-                f"Live playbook '{playbook}' consumes Ansible collection "
+                f"{consumer} consumes Ansible collection "
                 f"{name} {version}, but {install_path} holds "
                 f"{installed or 'no manifest'} after reconciliation."
             )
 
 
 def _reconcile_roles(
-    project_root: Path, playbook: str, names: tuple[str, ...]
+    project_root: Path, consumer: str, names: tuple[str, ...]
 ) -> None:
     if not names:
         return
@@ -192,19 +197,19 @@ def _reconcile_roles(
     install_path = project_root / ROLES_PATH
     declared = _declared_versions(requirements, "roles")
     for name in names:
-        version = _declared_version(declared, requirements, playbook, "role", name)
+        version = _declared_version(declared, requirements, consumer, "role", name)
         if _installed_role_version(install_path, name) == version:
             continue
         _run_galaxy(
             project_root,
-            playbook,
+            consumer,
             f"Ansible role {name} {version}",
             ["role", "install", "--force", f"{name},{version}", "-p", str(install_path)],
         )
         installed = _installed_role_version(install_path, name)
         if installed != version:
             raise DependencyReconciliationError(
-                f"Live playbook '{playbook}' consumes Ansible role {name} {version}, "
+                f"{consumer} consumes Ansible role {name} {version}, "
                 f"but {install_path} holds {installed or 'no install record'} "
                 "after reconciliation."
             )
@@ -294,28 +299,47 @@ def _ensure_ssh_control_path_parent(project_root: Path, playbook: str) -> None:
         ) from error
 
 
+@contextlib.contextmanager
+def _dependency_lock(project_root: Path) -> Iterator[None]:
+    lock_path = project_root / ".ansible/dependencies.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    # Read-only live operations share the lifecycle lock, and validation takes
+    # none, so either may otherwise run ansible-galaxy concurrently against the
+    # same worktree paths.
+    with lock_path.open("a", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        yield
+
+
 def reconcile(playbook: str, *, project_root: Path = PROJECT_ROOT) -> None:
     operation = select_operation(playbook)
     if operation.collections or operation.roles:
-        lock_path = project_root / ".ansible/dependencies.lock"
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        # Read-only live operations share the lifecycle lock and may otherwise
-        # run ansible-galaxy concurrently against the same worktree paths.
-        with lock_path.open("a", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file, fcntl.LOCK_EX)
-            _reconcile_collections(project_root, playbook, operation.collections)
-            _reconcile_roles(project_root, playbook, operation.roles)
+        consumer = f"Live playbook '{playbook}'"
+        with _dependency_lock(project_root):
+            _reconcile_collections(project_root, consumer, operation.collections)
+            _reconcile_roles(project_root, consumer, operation.roles)
     if operation.uses_ssh:
         _require_controller_identity(playbook)
         _ensure_ssh_control_path_parent(project_root, playbook)
 
 
+def reconcile_declared_collections(*, project_root: Path = PROJECT_ROOT) -> None:
+    declared = _declared_versions(project_root / COLLECTION_REQUIREMENTS, "collections")
+    with _dependency_lock(project_root):
+        _reconcile_collections(project_root, "Validation", tuple(declared))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scripts.live_dependencies")
-    parser.add_argument("--playbook", required=True)
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--playbook")
+    target.add_argument("--declared-collections", action="store_true")
     arguments = parser.parse_args(argv)
     try:
-        reconcile(arguments.playbook)
+        if arguments.declared_collections:
+            reconcile_declared_collections()
+        else:
+            reconcile(arguments.playbook)
     except UnsupportedLiveOperation as error:
         print(error, file=sys.stderr)
         return 2

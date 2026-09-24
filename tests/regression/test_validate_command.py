@@ -178,6 +178,8 @@ def captured_commands(tmp_path: Path) -> list[dict[str, object]]:
 
 
 def child_kind(argv: list[str]) -> str:
+    if "scripts.live_dependencies" in argv:
+        return "reconcile"
     if "ansible-lint" in argv:
         return "lint"
     if any(item.endswith("run_lxc_lifecycle_regressions.py") for item in argv):
@@ -235,14 +237,16 @@ def test_no_argument_run_is_the_comprehensive_non_live_handoff_validation(
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert set(child_kinds(commands)) == {"lint", "lifecycle", "tests"}
+    kinds = child_kinds(commands)
+    assert kinds[0] == "reconcile"
+    assert set(kinds[1:]) == {"lint", "lifecycle", "tests"}
     lifecycle_command = next(
         command for command in commands if child_kind(command["argv"]) == "lifecycle"
     )
     assert child_options(lifecycle_command["argv"], "run_lxc_lifecycle_regressions.py") == [
         "--full"
     ]
-    assert_fixture_environment(commands, expected_cache_count=3)
+    assert_fixture_environment(commands, expected_cache_count=4)
     assert not (Path(env["HOME"]) / ".ansible/homelab-iac-lifecycle.lock").exists()
 
 
@@ -338,7 +342,7 @@ def test_no_argument_run_stops_when_lint_fails(tmp_path: Path) -> None:
         for pgid in process_groups:
             with pytest.raises(ProcessLookupError):
                 os.killpg(pgid, 0)
-        assert_validation_caches_were_removed(captured_commands(tmp_path), 3)
+        assert_validation_caches_were_removed(captured_commands(tmp_path), 4)
     finally:
         if process.poll() is None:
             process.terminate()
@@ -386,15 +390,15 @@ def test_unknown_operation_or_option_is_invalid_usage(
 # --- AC2 / AC3 / AC4: the targeted feedback operations ----------------------
 
 
-def test_lint_runs_repo_wide_lint_alone(tmp_path: Path) -> None:
+def test_lint_reconciles_collections_then_runs_repo_wide_lint(tmp_path: Path) -> None:
     env = validation_environment(tmp_path)
 
     result = run_validation(env, REPO_ROOT, "lint")
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["lint"]
-    assert child_options(commands[0]["argv"], "ansible-lint") == []
+    assert child_kinds(commands) == ["reconcile", "lint"]
+    assert child_options(commands[1]["argv"], "ansible-lint") == []
 
 
 def test_lint_rejects_a_path_argument(tmp_path: Path) -> None:
@@ -481,8 +485,9 @@ def test_tests_runs_the_whole_suite_without_a_target(tmp_path: Path) -> None:
     result = run_validation(env, REPO_ROOT, "tests")
 
     assert result.returncode == 0, result.stderr
-    commands = captured_commands(tmp_path)
-    assert set(child_kinds(commands)) == {"tests"}
+    kinds = child_kinds(captured_commands(tmp_path))
+    assert kinds[0] == "reconcile"
+    assert set(kinds[1:]) == {"tests"}
 
 
 @pytest.mark.parametrize(
@@ -490,7 +495,7 @@ def test_tests_runs_the_whole_suite_without_a_target(tmp_path: Path) -> None:
     [
         "tests/regression/test_validate_command.py",
         "tests/regression/test_validate_command.py"
-        "::test_lint_runs_repo_wide_lint_alone",
+        "::test_lint_reconciles_collections_then_runs_repo_wide_lint",
     ],
 )
 def test_tests_forwards_an_in_tree_target(tmp_path: Path, target: str) -> None:
@@ -500,8 +505,9 @@ def test_tests_forwards_an_in_tree_target(tmp_path: Path, target: str) -> None:
 
     assert result.returncode == 0, result.stderr
     commands = captured_commands(tmp_path)
-    assert set(child_kinds(commands)) == {"tests"}
-    assert all(target in command["argv"] for command in commands)
+    assert child_kinds(commands)[0] == "reconcile"
+    assert set(child_kinds(commands[1:])) == {"tests"}
+    assert all(target in command["argv"] for command in commands[1:])
 
 
 @pytest.mark.parametrize("pytest_status", [2, 3, 5])
@@ -818,7 +824,7 @@ def test_every_operation_runs_under_the_fixture_environment(
 
     assert result.returncode == 0, result.stderr
     assert_fixture_environment(
-        captured_commands(tmp_path), expected_cache_count=3 if not arguments else 1
+        captured_commands(tmp_path), expected_cache_count=4 if not arguments else 1
     )
 
 
@@ -847,4 +853,4 @@ def test_every_operation_is_agent_safe(
     assert OPERATOR_MARKER not in result.stdout
     assert OPERATOR_MARKER not in result.stderr
     for kind in child_kinds(captured_commands(tmp_path)):
-        assert kind in {"lint", "lifecycle", "tests", "stack"}
+        assert kind in {"reconcile", "lint", "lifecycle", "tests", "stack"}
