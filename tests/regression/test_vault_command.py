@@ -54,7 +54,6 @@ INHERITED_ENVIRONMENT = frozenset(
 INJECTED_ENVIRONMENT = frozenset(
     {
         "HOME",
-        "ANSIBLE_VAULT_PASSWORD_FILE",
         "VAULT_TEST_REPO",
         "VAULT_TEST_BOUNDARY_CAPTURE",
     }
@@ -71,8 +70,7 @@ HOSTILE_AMBIENT_ENVIRONMENT = {
     # editor fake the fixture injects.
     "VISUAL": "/ambient/visual-editor",
     "EDITOR": "/ambient/editor",
-    # vault.sh reads these to locate the passphrase file and the staged home.
-    "ANSIBLE_VAULT_PASSWORD_FILE": "/ambient/vault-pass",
+    # vault.sh locates the passphrase file under HOME.
     "HOME": "/ambient/home",
     "PWD": "/ambient/pwd",
     # Stands in for the next environment read someone adds: neither injected
@@ -170,7 +168,6 @@ def vault_repo(
         {
             "HOME": str(home),
             "PATH": f"{bin_dir}:{env['PATH']}",
-            "ANSIBLE_VAULT_PASSWORD_FILE": str(home / ".ansible/vault-pass"),
             "VAULT_TEST_REPO": str(repo),
             "VAULT_TEST_BOUNDARY_CAPTURE": str(tmp_path / "boundaries.jsonl"),
         }
@@ -189,10 +186,14 @@ def real_vault_repo(
     shutil.copy2(REPO_ROOT / "uv.lock", repo / "uv.lock")
     (repo / ".venv").symlink_to(REPO_ROOT / ".venv", target_is_directory=True)
     env["PATH"] = env["PATH"].split(":", 1)[1]
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     passphrase_file.write_text("real-smoke-passphrase\n", encoding="utf-8")
     passphrase_file.chmod(0o600)
     return repo, env
+
+
+def live_passphrase_file(env: dict[str, str]) -> Path:
+    return Path(env["HOME"]) / ".ansible/vault-pass"
 
 
 def run_vault(
@@ -223,6 +224,7 @@ def run_real_ansible_vault(
             "--locked",
             "ansible-vault",
             operation,
+            f"--vault-password-file={live_passphrase_file(env)}",
             str(repo / "inventory/vault.yml"),
         ],
         cwd=repo,
@@ -288,7 +290,7 @@ def test_vault_uses_its_project_when_invoked_from_an_unrelated_directory(
     (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
-    pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    pass_file = live_passphrase_file(env)
     pass_file.write_text("synthetic-passphrase-marker\n", encoding="utf-8")
     pass_file.chmod(0o600)
     unrelated_directory = tmp_path / "unrelated"
@@ -327,18 +329,14 @@ def test_real_ansible_vault_runs_through_the_locked_project_environment(
     assert observed_command[:4] == ["uv", "run", "--locked", "ansible-vault"]
 
 
-@pytest.mark.parametrize("explicit_password_file", [False, True])
 def test_check_accepts_a_genuinely_encrypted_vault(
     real_vault_repo: tuple[Path, dict[str, str]],
-    explicit_password_file: bool,
 ) -> None:
     repo, env = real_vault_repo
     vault = repo / "inventory/vault.yml"
     vault.write_text(VALID_YAML, encoding="utf-8")
     encrypted = run_real_ansible_vault(repo, env, "encrypt")
     assert encrypted.returncode == 0, encrypted.stderr
-    if not explicit_password_file:
-        env.pop("ANSIBLE_VAULT_PASSWORD_FILE")
 
     result = run_vault(repo, env, "check")
 
@@ -372,7 +370,7 @@ def test_check_reports_each_contract_check_without_disclosing_values(
 ) -> None:
     repo, env = vault_repo
     vault = repo / "inventory/vault.yml"
-    pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    pass_file = live_passphrase_file(env)
     pass_file.write_text("synthetic-passphrase-marker\n", encoding="utf-8")
     pass_file.chmod(0o600)
     content = VALID_YAML
@@ -442,7 +440,7 @@ def test_check_rejects_a_passphrase_file_not_owned_by_the_current_user(
     (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
-    pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    pass_file = live_passphrase_file(env)
     pass_file.write_text("pass\n", encoding="utf-8")
     pass_file.chmod(0o600)
     fake_executable("stat", env)
@@ -461,7 +459,7 @@ def test_check_treats_yaml_validation_tool_failure_as_a_failed_check(
     (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
-    pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    pass_file = live_passphrase_file(env)
     pass_file.write_text("pass\n", encoding="utf-8")
     pass_file.chmod(0o600)
     fake_executable("uv", env, python_fail=True)
@@ -508,7 +506,7 @@ def test_check_rejects_every_missing_empty_or_placeholder_required_key(
     (repo / "inventory/vault.yml").write_text(
         HEADER + "\n".join(content_lines) + "\n", encoding="utf-8"
     )
-    pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    pass_file = live_passphrase_file(env)
     pass_file.write_text("pass\n", encoding="utf-8")
     pass_file.chmod(0o600)
 
@@ -533,7 +531,7 @@ def test_check_accepts_ordinary_padded_values_without_changing_them(
     vault = repo / "inventory/vault.yml"
     original = (HEADER + body).encode()
     vault.write_bytes(original)
-    pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    pass_file = live_passphrase_file(env)
     pass_file.write_text("pass\n", encoding="utf-8")
     pass_file.chmod(0o600)
 
@@ -553,7 +551,7 @@ def test_interrupted_check_removes_its_exact_plaintext_workspace(
     (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
-    pass_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    pass_file = live_passphrase_file(env)
     pass_file.write_text("synthetic-passphrase-marker\n", encoding="utf-8")
     pass_file.chmod(0o600)
     fake_executable("uv", env, view_signal=signal_number)
@@ -595,7 +593,7 @@ def test_configure_replaces_only_credentials_through_a_tty_transaction(
     vault = repo / "inventory/vault.yml"
     original = HEADER + VALID_YAML
     vault.write_text(original, encoding="utf-8")
-    Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).write_text(
+    live_passphrase_file(env).write_text(
         "synthetic-passphrase-marker\n", encoding="utf-8"
     )
     env.update(
@@ -871,7 +869,7 @@ def test_edit_presents_and_publishes_the_complete_vault(
     repo, env = vault_repo
     vault = repo / "inventory/vault.yml"
     vault.write_text(HEADER + VALID_YAML, encoding="utf-8")
-    Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).write_text(
+    live_passphrase_file(env).write_text(
         "synthetic-passphrase-marker\n", encoding="utf-8"
     )
     capture = install_editor(tmp_path, env, fake_executable)
@@ -1075,7 +1073,7 @@ def test_failed_mutation_preserves_the_original_bytes(
     original = (HEADER + body).encode()
     vault.write_bytes(original)
     passphrase = "synthetic-passphrase-marker"
-    Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).write_text(
+    live_passphrase_file(env).write_text(
         passphrase + "\n", encoding="utf-8"
     )
     if failure == "decrypt":
@@ -1577,7 +1575,7 @@ def test_failed_set_leaves_the_vault_byte_identical(
     original = (HEADER + VALID_YAML).encode()
     vault.write_bytes(original)
     passphrase = "synthetic-passphrase-marker"
-    Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).write_text(
+    live_passphrase_file(env).write_text(
         passphrase + "\n", encoding="utf-8"
     )
     source = write_source(tmp_path / "secret", AWKWARD_SECRET)
@@ -1738,7 +1736,7 @@ def rotation_repo(
     (repo / "inventory/vault.yml").write_text(
         HEADER + VALID_YAML, encoding="utf-8"
     )
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     passphrase_file.write_text(f"{OLD_PASSPHRASE}\n", encoding="utf-8")
     passphrase_file.chmod(0o600)
     item_state = tmp_path / "bitwarden-item.json"
@@ -1783,7 +1781,7 @@ def test_rotate_dry_run_rehearses_without_touching_any_real_state(
 ) -> None:
     repo, env = rotation_repo
     vault = repo / "inventory/vault.yml"
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     vault_before = vault.read_bytes()
     passphrase_before = passphrase_file.read_bytes()
 
@@ -1810,7 +1808,7 @@ def test_rotate_dry_run_recovery_never_claims_the_real_vault_was_restored(
 ) -> None:
     repo, env = rotation_repo
     vault = repo / "inventory/vault.yml"
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     vault_before = vault.read_bytes()
     fake_executable("uv", env, verify_fail=True)
 
@@ -1834,7 +1832,7 @@ def test_rotate_requires_a_typed_confirmation_before_mutating_anything(
 ) -> None:
     repo, env = rotation_repo
     vault = repo / "inventory/vault.yml"
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     vault_before = vault.read_bytes()
 
     returncode, output = rotate_on_a_tty(repo, env, answer="y")
@@ -1864,7 +1862,7 @@ def test_rotate_publishes_only_after_a_verified_local_rekey(
 ) -> None:
     repo, env = rotation_repo
     vault = repo / "inventory/vault.yml"
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     vault_before = vault.read_bytes()
 
     returncode, output = rotate_on_a_tty(repo, env)
@@ -1909,31 +1907,6 @@ def test_rotate_publishes_only_after_a_verified_local_rekey(
     assert run_vault(repo, env, "check").returncode == 0
     for marker in (OLD_PASSPHRASE, NEW_PASSPHRASE, "synthetic-token-marker"):
         assert marker not in output
-
-
-def test_real_rotation_refuses_a_non_standard_live_passphrase_file(
-    rotation_repo: tuple[Path, dict[str, str]], tmp_path: Path
-) -> None:
-    repo, env = rotation_repo
-    vault = repo / "inventory/vault.yml"
-    standard = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
-    diverted = tmp_path / "diverted-vault-pass"
-    diverted.write_text(f"{OLD_PASSPHRASE}\n", encoding="utf-8")
-    diverted.chmod(0o600)
-    env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(diverted)
-    vault_before = vault.read_bytes()
-
-    returncode, output = rotate_on_a_tty(repo, env)
-
-    assert returncode == 1, output
-    assert "standard live passphrase file" in output
-    assert vault.read_bytes() == vault_before
-    assert standard.read_text(encoding="utf-8") == f"{OLD_PASSPHRASE}\n"
-    assert diverted.read_text(encoding="utf-8") == f"{OLD_PASSPHRASE}\n"
-    assert bitwarden_item(env)["notes"] == OLD_PASSPHRASE
-    # The refusal lands before any external boundary is touched at all.
-    capture = Path(env["VAULT_TEST_BOUNDARY_CAPTURE"])
-    assert not capture.exists() or boundary_events(env) == []
 
 
 def test_rotate_unlocks_a_locked_bitwarden_session_before_publishing(
@@ -2004,7 +1977,7 @@ def test_rotate_rolls_back_when_the_publish_fails(
 ) -> None:
     repo, env = rotation_repo
     vault = repo / "inventory/vault.yml"
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     vault_before = vault.read_bytes()
     fake_executable("bw", env, edit_fail=True)
 
@@ -2026,7 +1999,7 @@ def test_rotate_rolls_forward_when_the_live_file_may_already_be_new(
 ) -> None:
     repo, env = rotation_repo
     vault = repo / "inventory/vault.yml"
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     vault_before = vault.read_bytes()
     fake_executable("chezmoi", env, fail=True)
 
@@ -2047,6 +2020,7 @@ def test_rotate_rolls_forward_when_the_live_file_may_already_be_new(
         ("BW_FIELD", "password"),
         ("VAULT_FILE", "decoy-vault.yml"),
         ("LIVE_PASS_FILE", "decoy-passphrase"),
+        ("ANSIBLE_VAULT_PASSWORD_FILE", "decoy-passphrase"),
     ],
 )
 def test_rotate_ignores_every_environment_name_that_could_redirect_it(
@@ -2056,7 +2030,7 @@ def test_rotate_ignores_every_environment_name_that_could_redirect_it(
     decoy = tmp_path / value
     env[name] = value if name.startswith("BW_") else str(decoy)
     vault = repo / "inventory/vault.yml"
-    passphrase_file = Path(env["ANSIBLE_VAULT_PASSWORD_FILE"])
+    passphrase_file = live_passphrase_file(env)
     vault_before = vault.read_bytes()
 
     returncode, output = rotate_on_a_tty(repo, env)
@@ -2134,9 +2108,53 @@ def test_rotate_dry_run_rekeys_through_real_ansible_vault(
     assert result.returncode == 0, result.stderr
     assert vault.read_bytes() == vault_before
     assert (
-        Path(env["ANSIBLE_VAULT_PASSWORD_FILE"]).read_text(encoding="utf-8")
+        live_passphrase_file(env).read_text(encoding="utf-8")
         == "real-smoke-passphrase\n"
     )
+
+
+@pytest.mark.parametrize(
+    "operation", ["check", "set", "edit", "configure", "rotate --dry-run"]
+)
+def test_ansible_vault_password_file_steers_no_operation(
+    real_vault_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/vault.yml"
+    vault.write_text(VALID_YAML, encoding="utf-8")
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+    passphrase_before = live_passphrase_file(env).read_bytes()
+    hostile = write_source(tmp_path / "hostile-vault-pass", b"hostile-passphrase\n")
+    env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(hostile)
+
+    if operation == "check":
+        result = run_vault(repo, env, "check")
+        returncode, output = result.returncode, result.stdout + result.stderr
+    elif operation == "set":
+        source = write_source(tmp_path / "secret")
+        result = run_vault(
+            repo, env, "set", "vault_transferred", "--from-file", str(source),
+            "--create",
+        )
+        returncode, output = result.returncode, result.stdout + result.stderr
+    elif operation == "edit":
+        install_editor(tmp_path, env, fake_executable)
+        returncode, output = run_vault_tty(repo, env, [], "edit")
+    elif operation == "configure":
+        returncode, output = run_vault_tty(
+            repo, env, configure_interactions(), "configure"
+        )
+    else:
+        result = run_vault(repo, env, "rotate", "--dry-run")
+        returncode, output = result.returncode, result.stdout + result.stderr
+
+    assert returncode == 0, output
+    assert hostile.read_bytes() == b"hostile-passphrase\n"
+    assert live_passphrase_file(env).read_bytes() == passphrase_before
+    assert run_real_ansible_vault(repo, env, "view").returncode == 0
 
 
 def test_agent_permitted_operations_never_disclose_a_vault_secret(

@@ -8,8 +8,9 @@ INVOCATION_DIR="$PWD"
 cd "$PROJECT_ROOT" || exit 1
 source "$PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 VAULT_FILE="$PROJECT_ROOT/inventory/vault.yml"
-STANDARD_PASS_FILE="$HOME/.ansible/vault-pass"
-PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$STANDARD_PASS_FILE}"
+PASS_FILE="$HOME/.ansible/vault-pass"
+# ansible-vault loads this file on every call, even alongside
+# --vault-password-file, so replace any inherited value.
 export ANSIBLE_VAULT_PASSWORD_FILE="$PASS_FILE"
 TRANSACTION_WORKSPACE=""
 TRANSACTION_PUBLISH_TMP=""
@@ -505,15 +506,6 @@ rotation_preflight() {
         rotation_fail "live passphrase file missing or empty: $PASS_FILE"
         return 1
     }
-    # A real rotation publishes through Bitwarden and chezmoi, which regenerate
-    # the standard path that ansible.cfg names. Rotating a passphrase file the
-    # fleet does not read would report success while that standard file stays
-    # OLD, so refuse before anything mutates. A rehearsal repoints internally.
-    [[ "$dry_run" == 1 || "$PASS_FILE" == "$STANDARD_PASS_FILE" ]] || {
-        rotation_fail \
-            "rotate requires the standard live passphrase file, not $PASS_FILE"
-        return 1
-    }
     vault_file_is_encrypted || {
         rotation_fail "vault file missing or not encrypted: $VAULT_FILE"
         return 1
@@ -666,10 +658,8 @@ rotate_passphrase() {
     }
     rotation_step "chezmoi apply"
 
-    # Authoritative check: no password-file flag, so this resolves the live
-    # passphrase file the way a fleet run does. Preflight already refused any
-    # non-standard ANSIBLE_VAULT_PASSWORD_FILE, so that is the file ansible.cfg
-    # names.
+    # Authoritative check: no password-file flag, so this decrypts through the
+    # exported standard file alone, as a fleet run without an override does.
     uv run --locked ansible-vault view "$VAULT_FILE" >/dev/null 2>&1 || {
         rotation_fail "the live passphrase file cannot decrypt the vault"
         return 1
