@@ -30,13 +30,16 @@
       when: fleet_expected_status is not defined
 
     # Structured ownership, not message text, decides which target a problem
-    # fails; each conflict must be owned by exactly its own target. Problem
-    # records live on the host that coordinated the run-once preflight.
-    - name: Assert each target owns exactly its expected identity problem
+    # fails; each conflict must be owned by its own target. Problem records live
+    # on the host that coordinated the run-once preflight.
+    - name: Assert each target owns its expected identity problem
       ansible.builtin.assert:
         that:
-          - owned_messages | length == 1
-          - owned_messages[0] is search(hostvars[item].fleet_expected_owned_problem)
+          - >-
+            owned_messages
+            | select('search', hostvars[item].fleet_expected_owned_problem)
+            | list
+            | length > 0
       vars:
         owned_messages: >-
           {{

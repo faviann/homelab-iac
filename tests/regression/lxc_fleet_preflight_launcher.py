@@ -207,7 +207,7 @@ def run_regressions() -> int:
         "null_hostname_reservation",  # incomplete hostname
         "empty_hostname_reservation",  # incomplete hostname
         "hostname 'target-a'",  # conflict with a VMID-less reservation
-        "missing_domain",  # ordinary configuration failure
+        "missing `default_domain` in inventory/host_vars/missing_domain.yml",  # ordinary configuration failure
     )
     missing = [fragment for fragment in aggregate_fragments if fragment not in aggregate_report]
     if proc.returncode == 0 or missing:

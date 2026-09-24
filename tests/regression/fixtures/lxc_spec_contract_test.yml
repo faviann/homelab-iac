@@ -1,7 +1,8 @@
 ---
-# Each precedence field below is set only in two adjacent layers, so every
-# neighbouring pair is discriminated independently rather than hidden behind a
-# single top-layer override.
+# Each adjacent layer pair has its own field set only in those two layers
+# (onboot, swap, cores, tags, hostname), so every neighbouring pair is
+# discriminated independently rather than hidden behind a single top-layer
+# override. memory is the intended three-layer global/group/overrides chain.
 - name: Test compiled LXC contract precedence and slices
   hosts: localhost
   connection: local
@@ -126,7 +127,9 @@
         fail_msg: "Guest-bootstrap slice or derived release metadata was wrong"
 
 # The inputs above just compiled successfully and only the guest-bootstrap key
-# differs here, so a rejection can only come from the missing key.
+# differs in these inputs. Play 1's facts persist on localhost, but the compiler
+# recomputes every fact it publishes, so a rejection can only come from the
+# missing key.
 - name: Reject the same inputs without a guest-bootstrap public key
   hosts: localhost
   connection: local
