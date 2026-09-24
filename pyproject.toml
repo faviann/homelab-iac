@@ -20,6 +20,7 @@ dev = ["pexpect>=4.9", "pytest>=8.0", "pytest-xdist>=3.6.0"]
 testpaths = ["tests"]
 markers = [
     "serial: uses timing or shared host resources; run exclusively",
+    "renovate_compat: runs the real pinned Renovate against public registries; only ./validate.sh renovate selects it",
 ]
 
 [tool.uv]

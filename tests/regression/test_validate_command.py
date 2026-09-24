@@ -354,7 +354,7 @@ def test_help_exits_zero_and_names_every_operation(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     output = f"{result.stdout}\n{result.stderr}"
-    for operation in ("lint", "lifecycle", "tests", "stack"):
+    for operation in ("lint", "lifecycle", "tests", "stack", "renovate"):
         assert operation in output
     assert captured_commands(tmp_path) == []
 
@@ -368,6 +368,7 @@ def test_help_exits_zero_and_names_every_operation(tmp_path: Path) -> None:
         ("lifecycle", "--bogus"),
         ("tests", "--bogus"),
         ("stack", "--bogus"),
+        ("renovate", "--bogus"),
     ],
 )
 def test_unknown_operation_or_option_is_invalid_usage(
@@ -560,6 +561,67 @@ def test_real_pytest_runner_continues_after_serial_item_failure(
     assert parallel_marker.read_text(encoding="utf-8") == "ran"
 
 
+def test_real_pytest_runner_excludes_the_renovate_compatibility_gate(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pytest.ini").write_text(
+        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n"
+        "    renovate_compat: temporary isolated runner fixture\n",
+        encoding="utf-8",
+    )
+    gate_test = tmp_path / "test_gate.py"
+    gate_test.write_text(
+        "import pytest\n\n"
+        "@pytest.mark.renovate_compat\n"
+        "def test_parallel_lane_gate():\n"
+        "    assert False, 'renovate_compat item ran in an ordinary run'\n\n"
+        "@pytest.mark.renovate_compat\n"
+        "@pytest.mark.serial\n"
+        "def test_serial_lane_gate():\n"
+        "    assert False, 'renovate_compat item ran in an ordinary run'\n",
+        encoding="utf-8",
+    )
+    ordinary_marker = tmp_path / "ordinary-item-ran"
+    ordinary_test = tmp_path / "test_ordinary.py"
+    ordinary_test.write_text(
+        "import os\nfrom pathlib import Path\n\n"
+        "def test_ordinary_item_runs():\n"
+        "    Path(os.environ['PYTEST_RUNNER_ORDINARY_MARKER']).write_text(\n"
+        "        'ran', encoding='utf-8'\n"
+        "    )\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTEST_RUNNER_ORDINARY_MARKER"] = str(ordinary_marker)
+
+    result = subprocess.run(
+        ["bash", str(PYTEST_RUNNER), str(gate_test), str(ordinary_test)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert ordinary_marker.read_text(encoding="utf-8") == "ran"
+
+
+@pytest.mark.parametrize("pytest_status", [1, 5])
+def test_renovate_runs_only_the_marked_gate_and_reports_its_failure(
+    tmp_path: Path, pytest_status: int
+) -> None:
+    env = validation_environment(tmp_path)
+    env["VALIDATE_TEST_PYTEST_STATUS"] = str(pytest_status)
+
+    result = run_validation(env, REPO_ROOT, "renovate")
+
+    assert result.returncode == pytest_status
+    commands = captured_commands(tmp_path)
+    assert child_kinds(commands) == ["tests"]
+    assert child_options(commands[0]["argv"], "-m")[0] == "renovate_compat"
+
+
 @pytest.mark.parametrize("target", ["validate.sh", "../outside/test_x.py"])
 def test_tests_rejects_a_target_outside_the_test_tree(
     tmp_path: Path, target: str
@@ -739,6 +801,7 @@ OPERATION_ENTRY_POINTS = [
     ("lifecycle",),
     ("tests",),
     ("stack", "stacks/workstation/mcp-auth-proxy"),
+    ("renovate",),
 ]
 
 
