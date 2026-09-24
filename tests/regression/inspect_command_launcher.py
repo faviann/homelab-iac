@@ -340,7 +340,7 @@ def assert_vars_graph_reports_inventory_failure_without_disclosure() -> None:
         result = run_inspect("vars", "--graph", env=env)
 
     output = f"{result.stdout}\n{result.stderr}"
-    if result.returncode == 0 or diagnostic_secret in output:
+    if result.returncode != 1 or diagnostic_secret in output:
         raise AssertionError(
             f"vars --graph did not safely report inventory failure:\n{output}"
         )

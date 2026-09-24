@@ -779,8 +779,9 @@ def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero() -> Non
 # Each operation's selection test above observes, for its own entry path, that
 # every child receives the fixture inputs and that a readable operator input is
 # never disclosed. validate.sh overwrites both variables once, before any
-# operation-specific branch starts a child; before that point it runs only the
-# argument parser and the uv prerequisite check, neither of which touches them.
+# operation-specific branch starts a child. Before that point it runs only the
+# argument parser and the uv prerequisite check; neither, including the
+# parser's per-operation branches, touches either variable.
 # So one entry path suffices to catch a silent read of operator input there.
 
 
