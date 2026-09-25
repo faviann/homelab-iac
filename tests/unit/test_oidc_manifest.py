@@ -296,6 +296,27 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
         self.assertEqual(declared["grant_types"], ["authorization_code", "refresh_token"])
         self.assertNotIn("grant_types", omitted)
 
+    def test_provider_binds_the_managed_openid_and_profile_scopes(self):
+        provider = RenderedOidcBlueprint(self.mod, [minimal_app()]).provider("test-app")["attrs"]
+
+        for scope in ("openid", "profile"):
+            with self.subTest(scope=scope):
+                self.assertIn(
+                    ("!Find", [
+                        "authentik_providers_oauth2.scopemapping",
+                        ["managed", f"goauthentik.io/providers/oauth2/scope-{scope}"],
+                    ]),
+                    provider["property_mappings"],
+                )
+
+    def test_provider_takes_its_issuer_and_subject_modes_from_the_manifest(self):
+        provider = RenderedOidcBlueprint(
+            self.mod, [minimal_app(issuer_mode="per_provider", sub_mode="user_username")]
+        ).provider("test-app")["attrs"]
+
+        self.assertEqual(provider["issuer_mode"], "per_provider")
+        self.assertEqual(provider["sub_mode"], "user_username")
+
     def test_group_app_admits_its_group_and_admins_and_removes_the_permissive_binding(self):
         blueprint = RenderedOidcBlueprint(self.mod, [minimal_app(group="media")])
 
