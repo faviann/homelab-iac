@@ -1,7 +1,7 @@
 ---
 # Role-owned release-observation boundary. Both initial inspection and
-# post-host-work refresh use this task file; the shared probe implementation is
-# injected so the role does not depend on repository-directory traversal.
+# post-host-work refresh use this task file, and both run the role's own
+# probe_lxc_release.yml.
 
 - name: Normalize release observation for desired and runtime state
   ansible.builtin.set_fact:
@@ -37,7 +37,7 @@
 
 - name: Probe the current running guest release
   ansible.builtin.include_tasks:
-    file: "{{ proxmox_lifecycle_release_probe_tasks_file }}"
+    file: probe_lxc_release.yml
   vars:
     lxc_release_probe_vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
     lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"
