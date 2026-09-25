@@ -13,6 +13,10 @@ workstation_origin_firewall_protected_ports:
   - 19081 # MCP auth proxy
 workstation_origin_firewall_allowed_hosts:
   - portal
+workstation_bw_download_url: >-
+  https://github.com/bitwarden/clients/releases/download/cli-v{{
+  workstation_bw_version }}/bw-linux-{{ workstation_bw_version }}.zip
+workstation_bw_release_api_url: "https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v{{ workstation_bw_version }}"
 # Persist selected workstation home paths across intentional LXC rebuilds.
 workstation_persistent_home_enabled: true
 

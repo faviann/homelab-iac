@@ -109,11 +109,11 @@ argument_specs:
         description: Bitwarden CLI version installed as the bootstrap-critical system binary.
       workstation_bw_download_url:
         type: str
-        required: false
+        required: true
         description: Bitwarden CLI native Linux artifact URL.
       workstation_bw_release_api_url:
         type: str
-        required: false
+        required: true
         description: GitHub release API URL used to retrieve the published digest for the Bitwarden CLI artifact.
       workstation_bw_bin_path:
         type: str

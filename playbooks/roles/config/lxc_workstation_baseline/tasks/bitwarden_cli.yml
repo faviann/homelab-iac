@@ -1,13 +1,4 @@
 ---
-- name: Assert Bitwarden CLI release metadata is configured
-  ansible.builtin.assert:
-    that:
-      - workstation_bw_release_api_url is defined
-      - workstation_bw_release_api_url | string | length > 0
-    fail_msg: >-
-      workstation_bw_release_api_url must point to the Bitwarden CLI GitHub
-      release metadata for {{ workstation_bw_download_url }} before installing bw.
-
 - name: Fetch Bitwarden CLI release metadata
   ansible.builtin.uri:
     url: "{{ workstation_bw_release_api_url }}"
