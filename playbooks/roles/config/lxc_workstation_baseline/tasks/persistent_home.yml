@@ -48,20 +48,13 @@
   changed_when: false
   failed_when: false
   check_mode: false
-  when:
-    - item.stat.exists
-    - not (item.stat.islnk | default(false))
+  when: item.stat.exists
 
 - name: Fail when workstation persistent home path conflicts with managed bind mount
   ansible.builtin.assert:
     that:
       - >-
         (not item.stat.exists)
-        or
-        (
-          item.stat.islnk | default(false)
-          and item.stat.lnk_source == item.item.target
-        )
         or
         (
           _workstation_persistent_home_mount_status.results[_workstation_persistent_home_idx].rc == 0
@@ -117,16 +110,6 @@
     group: "{{ workstation_gid }}"
     mode: "{{ item.mode }}"
   loop: "{{ workstation_persistent_home_links }}"
-
-- name: Remove legacy workstation persistent home symlinks before bind-mount migration
-  ansible.builtin.file:
-    path: "{{ item.item.path }}"
-    state: absent
-  loop: "{{ _workstation_persistent_home_paths.results }}"
-  when:
-    - item.stat.exists
-    - item.stat.islnk | default(false)
-    - item.stat.lnk_source == item.item.target
 
 - name: Ensure workstation persistent home mount points exist
   ansible.builtin.file:

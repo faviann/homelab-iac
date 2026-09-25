@@ -21,7 +21,7 @@ contents and modification times.
 
 ## The Fail-Closed Assert
 
-`playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml` refuses to mount over a home path that already exists as a plain directory or file and is neither a symlink to the target nor already a bind mount. The run fails with:
+`playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml` refuses to mount over a home path that already exists as a plain directory or file and is not already a bind mount. The run fails with:
 
 ```
 /home/faviann/.config/herdr exists and is not the managed bind mount path from

@@ -18,7 +18,6 @@ FIXTURE_ROOT = REPO_ROOT / "tests" / "regression" / "fixtures"
 SUCCESS_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_success.yml"
 CONFLICT_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_conflict.yml"
 CHECK_MODE_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_check_mode.yml"
-SYMLINK_MIGRATION_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_symlink_migration.yml"
 DIRECTORY_MIGRATION_PLAYBOOK = FIXTURE_ROOT / "workstation_persistent_home_directory_migration.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
 
@@ -83,12 +82,6 @@ def test_workstation_persistent_home_contract() -> None:
     ]
     assert all(conflict in conflict_output for conflict in expected_conflicts), conflict_output
     assert conflict_output.count("Move or migrate it manually") >= 3, conflict_output
-
-    with tempfile.TemporaryDirectory(prefix="workstation-persistent-home-symlink-migration-") as temp_root:
-        migration = run_playbook(SYMLINK_MIGRATION_PLAYBOOK, temp_root)
-
-    migration_output = f"{migration.stdout}\n{migration.stderr}"
-    assert migration.returncode == 0, migration_output
 
     # A rebuilt home: the backing store already holds a Claude config (and, via
     # the fixture, Moraine and Lobu directories) while the home side has no mount
