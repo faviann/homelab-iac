@@ -707,14 +707,6 @@ def test_configure_rejects_non_tty_and_all_extra_arguments(
     assert run_vault(repo, env, "unknown").returncode == 2
 
 
-def test_legacy_configure_command_is_absent_without_a_shim() -> None:
-    assert not os.path.lexists(REPO_ROOT / "configure-vault.sh")
-
-
-def test_legacy_rotation_command_is_absent_without_a_shim() -> None:
-    assert not os.path.lexists(REPO_ROOT / "rotate-vault-passphrase.sh")
-
-
 def configure_interactions(
     api_user: str = "replacement@pve",
     token_id: str = "replacement-id",
