@@ -127,7 +127,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     )
     docker.chmod(0o755)
     docker_log = tmp_path / "docker.log"
-    docker_log.touch()
     report = tmp_path / "report.yml"
     # Run the real role wiring and asset/stack reconciliation. Package, mount,
     # and account setup are outside this fixture; Docker commands are recorded.
@@ -164,8 +163,7 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     if stack_filter == "docker-agents":
         assert result.returncode != 0, output
         assert "Validate Dockhand Hawser variables" in output
-        assert not [line for line in docker_log.read_text().splitlines()
-                    if "|compose up" in line]
+        assert not docker_log.exists()
         assert not report.exists()
         return
 
