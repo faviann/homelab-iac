@@ -270,6 +270,29 @@ Agent use of a documented raw command is a separate decision:
   [image-update-renovate-adapter.md](image-update-renovate-adapter.md)
   requires for adapter changes.
 
+#### CLIProxy management-key hash
+
+- **Trigger:** creating or changing the CLIProxy management password before
+  a deploy, as written in
+  [the CLIProxy stack README](../stacks/overmind/cliproxy/README.md#vault-entries).
+- **Audience:** a person only. The plaintext password is theirs to choose and
+  keep.
+- **Scope:** the local workstation. It contacts no managed host and does not
+  touch the repository environment.
+
+  ```bash
+  uv run --with bcrypt --no-project python -c \
+    'import bcrypt,getpass;print(bcrypt.hashpw(getpass.getpass().encode(),bcrypt.gensalt()).decode())'
+  ```
+
+- **Boundary:** it reads the password from a prompt and prints its bcrypt hash.
+  It writes nothing.
+- **Sensitive output:** the hash, which belongs only in
+  `vault_overmind_cliproxy_management_key_hash` through `./vault.sh edit`.
+  The plaintext never appears in shell history or output.
+- **Escalation:** agents do not run it or handle the hash. They direct the
+  person to this entry.
+
 ## Superseded forms
 
 | Superseded form | Replacement |
