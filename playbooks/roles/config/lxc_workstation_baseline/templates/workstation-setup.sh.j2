@@ -244,11 +244,6 @@ install_setup_dotfiles_without_secrets() {
 
 switch_home_manager() {
   command -v nix >/dev/null 2>&1 || fail "nix missing from PATH"
-  rm -f \
-    "$WORKSTATION_HOME/.config/systemd/user/default.target.wants/aoe-serve.service" \
-    "$WORKSTATION_HOME/.config/systemd/user/sockets.target.wants/aoe-lan-proxy.socket" \
-    "$WORKSTATION_HOME/.config/systemd/user/openclaw-gateway.service" \
-    "$WORKSTATION_HOME/.config/systemd/user/default.target.wants/openclaw-gateway.service"
   if command -v home-manager >/dev/null 2>&1; then
     home-manager switch -b workstation-setup-backup --flake "$HOME_MANAGER_FLAKE_REF"
   else
@@ -260,11 +255,6 @@ activate_built_home_manager_generation() {
   local built_generation="$1"
   test -x "$built_generation/activate" \
     || fail "built Home Manager configuration has no executable activation program"
-  rm -f \
-    "$WORKSTATION_HOME/.config/systemd/user/default.target.wants/aoe-serve.service" \
-    "$WORKSTATION_HOME/.config/systemd/user/sockets.target.wants/aoe-lan-proxy.socket" \
-    "$WORKSTATION_HOME/.config/systemd/user/openclaw-gateway.service" \
-    "$WORKSTATION_HOME/.config/systemd/user/default.target.wants/openclaw-gateway.service"
   nix-env --profile "$HOME/.local/state/nix/profiles/home-manager" \
     --set "$built_generation"
   "$built_generation/activate" --driver-version 1
