@@ -115,6 +115,9 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     legacy = shared / "stacks/legacy"
     legacy.mkdir()
     (legacy / "compose.yml").write_text("services: {}\n")
+    retired = shared / "stacks/retired"
+    retired.mkdir()
+    (retired / "compose.yaml").write_text("services: {}\n")
     shared.chmod(0o710)
     (shared / "stacks").chmod(0o700)
 
@@ -182,7 +185,9 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     assert stat.S_IMODE((shared / "stacks").stat().st_mode) == 0o755
     assert "TOKEN=${TOKEN}" in (agents / "compose.yml").read_text()
     assert (shared / "stacks/selected/.env").read_text() == "VALUE=fixture-selected-value\n"
+    assert (retired / "compose.yaml").exists()
     commands = docker_log.read_text().splitlines()
+    assert not [line for line in commands if line.startswith(f"{retired}|")]
     assert f"{legacy}|compose down --remove-orphans" in commands
     assert [line for line in commands if "|compose up" in line] == [
         f"{shared}/stacks/selected|compose up -d",
@@ -190,4 +195,4 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     deployment = yaml.safe_load(report.read_text())
     assert deployment["changed"] is True
     assert deployment["discovered_stacks"] == ["selected"]
-    assert deployment["skipped_stacks"] == ["docker-agents"]
+    assert sorted(deployment["skipped_stacks"]) == ["docker-agents", "retired"]

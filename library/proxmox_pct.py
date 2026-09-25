@@ -328,16 +328,11 @@ def parse_status(stdout):
 
 def is_missing_container_status(vmid, result):
     """Recognize pct's explicit answer that the requested container is absent."""
-    match = re.fullmatch(
-        rf"Configuration file 'nodes/(?P<node>[^/']+)/lxc/"
+    return re.fullmatch(
+        rf"Configuration file 'nodes/[^/']+/lxc/"
         rf"{re.escape(str(vmid))}\.conf' does not exist",
         result['stderr'].strip()
-    )
-    if match is None:
-        return False
-
-    node = match.group('node')
-    return node not in {'.', '..'} and '\x00' not in node
+    ) is not None
 
 
 def parse_config(stdout):
