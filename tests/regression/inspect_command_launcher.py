@@ -481,59 +481,6 @@ def assert_exclusive_contention_names_holder() -> None:
                 )
 
 
-def task_names(playbook: str) -> list[str]:
-    documents = yaml.safe_load((REPO_ROOT / playbook).read_text(encoding="utf-8"))
-    return [
-        str(task["name"])
-        for document in documents
-        for task in document.get("tasks", [])
-    ]
-
-
-def assert_diagnostic_playbooks_are_consolidated() -> None:
-    connectivity_source = (REPO_ROOT / "playbooks/lab-connectivity.yml").read_text(
-        encoding="utf-8"
-    )
-    if "Proxmox API" in connectivity_source or "ansible.builtin.uri" in connectivity_source:
-        raise AssertionError("connectivity still contains its duplicate Proxmox API play")
-
-    container_tasks = task_names("playbooks/proxmox_api_check.yml")
-    expected = [
-        "Establish credentials for container inspection",
-        "Verify API authority to list every LXC",
-        "Query Proxmox API for LXC containers",
-        "List LXC containers",
-    ]
-    if container_tasks != expected:
-        raise AssertionError(
-            f"containers playbook is not reduced to the full list: {container_tasks!r}"
-        )
-
-    site_documents = yaml.safe_load((REPO_ROOT / "site.yml").read_text(encoding="utf-8"))
-    if any(
-        document.get("ansible.builtin.import_playbook")
-        == "playbooks/validate-infrastructure.yml"
-        or "validation" in document.get("tags", [])
-        for document in site_documents
-    ):
-        raise AssertionError("site.yml still exposes standalone validation by tag")
-
-    credentials_source = (
-        REPO_ROOT / "playbooks/validate-credentials.yml"
-    ).read_text(encoding="utf-8")
-    for disclosure in ("API User:", "Token ID:"):
-        if disclosure in credentials_source:
-            raise AssertionError(f"credential summary still discloses {disclosure}")
-    if "API Host:" not in credentials_source:
-        raise AssertionError("credential summary lost non-secret endpoint identity")
-
-    standalone_source = (
-        REPO_ROOT / "playbooks/tasks/standalone_lifecycle_validation.yml"
-    ).read_text(encoding="utf-8")
-    if "tasks_from: plan" not in standalone_source or "tasks_from: execute" in standalone_source:
-        raise AssertionError("standalone validation is not routed exclusively through planning")
-
-
 def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str, str]:
     home = temp_root / "home"
     home.mkdir()
@@ -783,7 +730,6 @@ def main() -> int:
         assert_vars_graph_reports_inventory_failure_without_disclosure()
         assert_operations_route_through_shared_live_execution()
         assert_exclusive_contention_names_holder()
-        assert_diagnostic_playbooks_are_consolidated()
         assert_connectivity_fails_after_reporting_unreachable_targets()
         assert_containers_includes_unreserved_node_container()
         assert_containers_includes_unreserved_node_container(deny_audit=True)

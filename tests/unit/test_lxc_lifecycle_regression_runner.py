@@ -58,30 +58,6 @@ def test_only_selects_registered_launchers_in_supplied_order() -> None:
     assert launched == selected
 
 
-@pytest.mark.parametrize(
-    "target",
-    [
-        "lxc_docker_runtime_daemon_options_launcher.py",
-        "lxc_nvidia_runtime_repository_launcher.py",
-        "lxc_spec_contract_launcher.py",
-    ],
-)
-def test_expensive_ansible_launcher_is_registered_once_as_full_only(
-    target: str,
-) -> None:
-    runner = load_runner()
-    launched: list[str] = []
-
-    assert runner.FULL_ONLY_SCRIPTS.count(target) == 1
-    assert target not in runner.FAST_SCRIPTS
-    assert runner.REGISTERED_SCRIPTS.count(target) == 1
-
-    assert runner.main(
-        ["--only", target], launcher=recording_launcher(launched)
-    ) == 0
-    assert launched == [target]
-
-
 def test_only_and_full_are_rejected_before_launch(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

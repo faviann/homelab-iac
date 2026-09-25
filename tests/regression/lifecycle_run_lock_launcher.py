@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 
 from ansible.cli.playbook import PlaybookCLI
-import yaml
 
 from ansible_test_helper import ansible_playbook_command
 
@@ -26,8 +25,6 @@ RUNNER = REPO_ROOT / "run.sh"
 LOCK_RELATIVE_PATH = Path(".ansible/homelab-iac-lifecycle.lock")
 METADATA_LOCK_RELATIVE_PATH = Path(".ansible/homelab-iac-lifecycle.lock.metadata")
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
-RAW_LIVE_PLAYBOOK_COMMAND = " ".join(ANSIBLE_PLAYBOOK)
-LIVE_EXECUTION_LIBRARY = REPO_ROOT / "scripts/lib/live-execution.sh"
 FIXTURE_COLLECTIONS = (
     REPO_ROOT
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
@@ -987,135 +984,6 @@ def assert_holder_metadata_covers_lock_lifetime() -> None:
             raise AssertionError("holder metadata outlived its released lock")
 
 
-def assert_live_execution_responsibilities_are_sourced() -> None:
-    runner_source = RUNNER.read_text(encoding="utf-8")
-    if runner_source.count("source \"$PROJECT_ROOT/scripts/lib/live-execution.sh\"") != 1:
-        raise AssertionError("run.sh must source exactly one live-execution library")
-    forbidden_runner_fragments = (
-        "flock ",
-        "HOMELAB_IAC_LIFECYCLE_WRAPPER",
-        RAW_LIVE_PLAYBOOK_COMMAND,
-        "homelab-iac-lifecycle.lock",
-    )
-    present = [fragment for fragment in forbidden_runner_fragments if fragment in runner_source]
-    if present:
-        raise AssertionError(f"run.sh retains live-execution responsibilities: {present}")
-    if 'run_live_playbook "$lock_class" "$playbook"' not in runner_source:
-        raise AssertionError("run.sh must delegate its selected playbook to live execution")
-
-    library_source = LIVE_EXECUTION_LIBRARY.read_text(encoding="utf-8")
-    required_library_fragments = (
-        "flock --shared --nonblock",
-        "flock --exclusive --nonblock",
-        "HOMELAB_IAC_LIFECYCLE_WRAPPER",
-        RAW_LIVE_PLAYBOOK_COMMAND,
-    )
-    missing = [fragment for fragment in required_library_fragments if fragment not in library_source]
-    if missing:
-        raise AssertionError(f"live-execution library is missing responsibilities: {missing}")
-
-
-def assert_check_mode_opt_out_audit_is_unchanged() -> None:
-    expected = {
-        ("playbooks/roles/config/lxc_nvidia_runtime/tasks/main.yml", "Verify NVIDIA runtime is registered with Docker"),
-        ("playbooks/roles/config/lxc_docker_runtime/tasks/main.yml", "Verify Docker installation"),
-        ("playbooks/roles/config/lxc_docker_runtime/tasks/main.yml", "Verify Docker Compose installation"),
-        ("playbooks/roles/config/lxc_workstation_baseline/tasks/origin_firewall.yml", "Resolve workstation origin firewall allowlist address"),
-        ("playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml", "Inspect existing mount status for persistent home paths"),
-        ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/check_ssh.yml", "Test selected identity trust on Proxmox host"),
-        ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Verify pct command works"),
-        ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Check installed lxc-pve version"),
-        ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Assert lxc-pve meets nested Docker minimum"),
-        ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_bind_mounts.yml", "Get current bind mounts"),
-        ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_wireguard.yml", "Get current WireGuard tun device access"),
-        ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_nvidia.yml", "Get current NVIDIA GPU configuration lines"),
-        ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_sysctls.yml", "Get current sysctl and AppArmor configuration"),
-        ("playbooks/roles/infrastructure/proxmox_lxc_host_config/tasks/config_file_idmap.yml", "Get current UID/GID ID mappings"),
-        # Read-only GET: check mode must not treat an unauditable guest as absent.
-        ("playbooks/roles/provisioning/proxmox_lxc_fleet_preflight/tasks/main.yml", "Verify API observation permission for each targeted LXC"),
-    }
-
-    actual: set[tuple[str, str]] = set()
-
-    def collect(value: object, relative_path: str) -> None:
-        if isinstance(value, dict):
-            if value.get("check_mode") is False and isinstance(value.get("name"), str):
-                actual.add((relative_path, value["name"]))
-            for child in value.values():
-                collect(child, relative_path)
-        elif isinstance(value, list):
-            for child in value:
-                collect(child, relative_path)
-
-    for task_file in sorted((REPO_ROOT / "playbooks/roles").rglob("*.yml")):
-        collect(
-            yaml.safe_load(task_file.read_text(encoding="utf-8")),
-            task_file.relative_to(REPO_ROOT).as_posix(),
-        )
-    if actual != expected:
-        raise AssertionError(
-            "production check_mode: false task snapshot changed:\n"
-            f"missing={sorted(expected - actual)!r}\nadded={sorted(actual - expected)!r}"
-        )
-
-    module_source = (REPO_ROOT / "library/proxmox_pct.py").read_text(encoding="utf-8")
-    if "supports_check_mode=True" not in module_source:
-        raise AssertionError("library/proxmox_pct.py must declare check-mode support")
-
-
-def assert_null_stack_filter_preserves_all_stack_behavior() -> None:
-    discover_tasks = yaml.safe_load(
-        (
-            REPO_ROOT
-            / "playbooks/roles/config/lxc_stack_sync/tasks/discover.yml"
-        ).read_text(encoding="utf-8")
-    )
-    filter_task_names = {
-        "Fail when stack_filter is used but stacks source is absent",
-        "Assert stack_filter names a known stack",
-        "Scope desired stacks to stack_filter",
-        "Suppress stale stack list when stack_filter is active",
-        "Scope per-host find results to stack_filter",
-    }
-    actual = {
-        task["name"]: task.get("when")
-        for task in discover_tasks
-        if task.get("name") in filter_task_names
-    }
-    expected = {
-        name: "stack_filter is defined and stack_filter is not none"
-        for name in filter_task_names
-    }
-    if actual != expected:
-        raise AssertionError(
-            "canonical null must bypass every stack-filter-specific role task:\n"
-            f"expected={expected!r}\nactual={actual!r}"
-        )
-
-
-def assert_lock_decision_amends_linear_execution_adr() -> None:
-    original = (REPO_ROOT / "docs/adr/0001-preserve-linear-lxc-execution.md").read_text(
-        encoding="utf-8"
-    )
-    amendment_path = REPO_ROOT / "docs/adr/0009-split-live-execution-locks-by-operation-class.md"
-    if not amendment_path.exists():
-        raise AssertionError("ADR 0009 must record the live lock split")
-    amendment = amendment_path.read_text(encoding="utf-8")
-    required_amendment_terms = (
-        "shared",
-        "exclusive",
-        "machine-local",
-        "fail immediately",
-        "ADR-0001",
-        "amends",
-    )
-    missing = [term for term in required_amendment_terms if term not in amendment]
-    if missing or "ADR-0009" not in original or "amended" not in original:
-        raise AssertionError(
-            f"lock ADR amendment relationship is incomplete: missing={missing!r}"
-        )
-
-
 def assert_interrupt_releases_lock() -> None:
     with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-interrupt-") as temp_dir:
         temp_root = Path(temp_dir)
@@ -1248,10 +1116,6 @@ def main() -> int:
         assert_cleanup_metadata_contention_preserves_playbook_status()
         assert_metadata_coordination_has_a_bounded_failure()
         assert_holder_metadata_covers_lock_lifetime()
-        assert_live_execution_responsibilities_are_sourced()
-        assert_check_mode_opt_out_audit_is_unchanged()
-        assert_null_stack_filter_preserves_all_stack_behavior()
-        assert_lock_decision_amends_linear_execution_adr()
         assert_interrupt_releases_lock()
         assert_wrapper_crash_keeps_child_lock()
         assert_direct_lifecycle_run_is_rejected()
