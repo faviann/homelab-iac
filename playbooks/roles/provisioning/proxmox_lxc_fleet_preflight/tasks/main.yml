@@ -195,12 +195,6 @@
   ansible.builtin.set_fact:
     proxmox_fleet_common_observation: >-
       {{ proxmox_fleet_observation_override.containers | default([]) }}
-    proxmox_fleet_preflight_problem_records: >-
-      {%- set records = proxmox_fleet_preflight_problem_records[:] -%}
-      {%- for problem in proxmox_fleet_observation_override.problems | default([]) -%}
-      {%-   set _ = records.append({'message': problem, 'cause_hosts': []}) -%}
-      {%- endfor -%}
-      {{ records }}
   when: proxmox_fleet_observation_override is not none
 
 - name: Project operator-facing fleet preflight messages

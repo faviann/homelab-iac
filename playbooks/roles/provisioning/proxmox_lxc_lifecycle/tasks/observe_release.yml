@@ -37,7 +37,7 @@
 
 - name: Probe the current running guest release
   ansible.builtin.include_tasks:
-    file: "{{ proxmox_lifecycle_release_probe_tasks_file }}"
+    file: probe_lxc_release.yml
   vars:
     lxc_release_probe_vmid: "{{ proxmox_lxc_contract.api_spec.vmid }}"
     lxc_release_probe_delegate_host: "{{ proxmox_pct_delegate_host }}"
