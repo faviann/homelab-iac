@@ -1,7 +1,7 @@
 ---
 # Role-owned release-observation boundary. Both initial inspection and
-# post-host-work refresh use this task file; the shared probe implementation is
-# injected so the role does not depend on repository-directory traversal.
+# post-host-work refresh use this task file, and both run the role's own
+# probe_lxc_release.yml.
 
 - name: Normalize release observation for desired and runtime state
   ansible.builtin.set_fact:
