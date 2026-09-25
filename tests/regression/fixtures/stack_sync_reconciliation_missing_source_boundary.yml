@@ -7,7 +7,6 @@
     PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
   vars:
     docker_agents_enabled: false
-    service_agents_enabled: false
     lxc_stack_sync_managed_assets:
       changed_results: []
     lxc_stack_sync_deploy_exclude_regex: "^[^/]+/(README(\\..*)?|docs($|/.*)|stack\\.ya?ml|metadata\\.(ya?ml|json))$"
