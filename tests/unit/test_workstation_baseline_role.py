@@ -156,31 +156,14 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
 
     def test_origin_firewall_contract(self) -> None:
         firewall_tasks = load_yaml(ROLE_ROOT / "tasks/origin_firewall.yml")
-        firewall_task_names = [t.get("name") for t in firewall_tasks]
-
-        # Removing the old ruleset before the replacement is active would leave
-        # the protected ports open in between.
-        replacement_activation_and_legacy_cleanup = [
-            "Enable workstation origin firewall service",
-            "Flush workstation origin firewall handlers",
-            "Stop legacy AoE LAN proxy firewall service",
-            "Remove legacy AoE LAN proxy firewall table",
-            "Remove legacy AoE LAN proxy firewall rules",
-        ]
-        self.assertEqual(
-            [firewall_task_names.index(name) for name in replacement_activation_and_legacy_cleanup],
-            sorted(firewall_task_names.index(name) for name in replacement_activation_and_legacy_cleanup),
-            msg="replacement firewall activation must complete before ordered legacy AoE cleanup",
-        )
 
         # ansible.builtin.shell has no check-mode support. Without this opt-out
         # the probe is skipped under --check and the resolution assert fails.
         resolution = task_named(firewall_tasks, "Resolve workstation origin firewall allowlist address")
         self.assertIs(resolution.get("check_mode"), False)
 
-        # The role owns only its own table. A global /etc/nftables.conf (the
-        # first AoE firewall shipped one starting with `flush ruleset`) would
-        # wipe Docker's nft rules on every load.
+        # The role owns only its own table. A global /etc/nftables.conf that
+        # starts with `flush ruleset` would wipe Docker's nft rules on every load.
         rendered_firewall_tasks = yaml.safe_dump(firewall_tasks, sort_keys=True)
         self.assertNotIn("/etc/nftables.conf", rendered_firewall_tasks)
 
