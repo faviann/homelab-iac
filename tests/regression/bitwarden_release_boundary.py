@@ -3,10 +3,11 @@
 
 The `config/lxc_workstation_baseline` role resolves release metadata from
 `workstation_bw_release_api_url` and fetches the archive from
-`workstation_bw_download_url`. Regression fixtures that include the whole role
-point both at this loopback boundary so no test reaches the live GitHub
-release, while the production metadata shape, checksum selection, extraction,
-and install path stay exercised.
+`workstation_bw_download_url`. The role has no default for either URL, so
+regression fixtures that run the whole role must point both at this loopback
+boundary. No test reaches the live GitHub release, while the production
+metadata shape, checksum selection, extraction, and install path stay
+exercised.
 """
 
 from __future__ import annotations
@@ -81,7 +82,7 @@ def _serve_directory(directory: Path) -> Iterator[str]:
 def bitwarden_release_boundary(*, digest_matches: bool = True) -> Iterator[list[str]]:
     """Serve a Bitwarden release over loopback and yield ansible-playbook extra-var args.
 
-    The yielded fragment overrides the role's two injection-seam variables and is
+    The yielded fragment supplies the role's two required release URLs and is
     spliced straight into an ansible-playbook command line.
 
     With `digest_matches=False` the served archive no longer hashes to the digest
