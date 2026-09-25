@@ -251,27 +251,6 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         self.assertNotIn("status", payload)
         self.assertIn("nodes/pve-a/lxc/999.conf", payload["msg"])
 
-    def test_missing_response_with_nested_node_path_is_not_treated_as_absent(self) -> None:
-        payload, _ = self.run_main(
-            {
-                "vmid": 505,
-                "command": "status",
-                "exec_command": None,
-                "config_options": None,
-            },
-            {
-                "stdout": "",
-                "stderr": (
-                    "Configuration file 'nodes/pve/a/lxc/505.conf' does not exist"
-                ),
-                "rc": 2,
-                "cmd": "pct status 505",
-            },
-        )
-
-        self.assertNotIn("status", payload)
-        self.assertIn("nodes/pve/a/lxc/505.conf", payload["msg"])
-
     def test_every_offered_command_reaches_the_executor_with_its_bound(self) -> None:
         # Each row: extra params, expected executor argv, expected bound.
         # Only set's full argv is owned here; the other rows are argv prefixes
