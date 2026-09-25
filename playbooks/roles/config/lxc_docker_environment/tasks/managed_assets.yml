@@ -1,33 +1,4 @@
 ---
-- name: Check legacy managed stack compose files
-  ansible.builtin.stat:
-    path: "{{ item.dir }}/{{ item.compose_file }}"
-  loop: "{{ lxc_docker_environment_internal.legacy_managed_stacks }}"
-  loop_control:
-    label: "{{ item.name }}"
-  register: _legacy_managed_stack_compose_files
-
-- name: Stop legacy managed stacks
-  ansible.builtin.command:
-    cmd: docker compose down --remove-orphans
-    chdir: "{{ item.item.dir }}"
-  loop: "{{ _legacy_managed_stack_compose_files.results | default([]) }}"
-  loop_control:
-    label: "{{ item.item.name }}"
-  when: item.stat.exists
-  failed_when: false
-  # One-shot migration cleanup: only runs while a legacy compose file exists.
-  changed_when: true
-
-- name: Remove legacy managed stack directories
-  ansible.builtin.file:
-    path: "{{ item.dir }}"
-    state: absent
-  loop: "{{ lxc_docker_environment_internal.legacy_managed_stacks }}"
-  loop_control:
-    label: "{{ item.name }}"
-  register: _managed_assets_legacy_stack_removals
-
 - name: Initialize portal instance host list
   ansible.builtin.set_fact:
     lxc_docker_env_portal_hosts: []
@@ -88,12 +59,6 @@
     group: "{{ lxc_docker_environment_internal.shared_group }}"
     mode: "0755"
   when: lxc_docker_env_hawser_enabled | default(false)
-
-- name: Remove legacy root admin directory
-  ansible.builtin.file:
-    path: "{{ lxc_docker_environment_internal.shared_mount_source }}/admin"
-    state: absent
-  register: _managed_assets_legacy_admin_removal
 
 - name: Remove Docker agents stack for disabled hosts
   ansible.builtin.file:
@@ -224,9 +189,7 @@
     lxc_stack_sync_managed_assets:
       changed_results: >-
         {{
-          (_managed_assets_legacy_stack_removals.results | default([]))
-          + ([_managed_assets_legacy_admin_removal] if _managed_assets_legacy_admin_removal is defined else [])
-          + ([_managed_assets_docker_agents_stack_removal] if _managed_assets_docker_agents_stack_removal is defined else [])
+          ([_managed_assets_docker_agents_stack_removal] if _managed_assets_docker_agents_stack_removal is defined else [])
           + ([_template_docker_agents_env_result] if _template_docker_agents_env_result is defined else [])
           + ([_managed_assets_docker_agents_env_removal] if _managed_assets_docker_agents_env_removal is defined else [])
           + ([_template_docker_agents_compose_result] if _template_docker_agents_compose_result is defined else [])

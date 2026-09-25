@@ -110,11 +110,7 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     agents.mkdir(parents=True)
     existing_env = "TOKEN=existing-fixture-token\n"
     (agents / ".env").write_text(existing_env)
-    (shared / "admin").mkdir()
     (shared / "README.md").write_text("obsolete deployed documentation\n")
-    legacy = shared / "stacks/legacy"
-    legacy.mkdir()
-    (legacy / "compose.yml").write_text("services: {}\n")
     retired = shared / "stacks/retired"
     retired.mkdir()
     (retired / "compose.yaml").write_text("services: {}\n")
@@ -151,9 +147,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
             "lxc_docker_env_root_docker_conf_path": str(shared),
             "lxc_docker_env_stacks_source": str(source),
             "lxc_docker_env_absent_containers": [],
-            "lxc_docker_env_legacy_managed_stacks": [{
-                "name": "legacy", "dir": str(legacy), "compose_file": "compose.yml",
-            }],
             "overmind_postgres_backup_enabled": True,
             "lxc_docker_env_stack_vars": {
                 "selected": {"value": "fixture-selected-value"},
@@ -170,16 +163,13 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     if stack_filter == "docker-agents":
         assert result.returncode != 0, output
         assert "Validate Dockhand Hawser variables" in output
-        assert not [line for line in docker_log.read_text().splitlines()
-                    if "|compose up" in line]
+        assert not docker_log.exists()
         assert not report.exists()
         return
 
     assert result.returncode == 0, output
     assert "fixture-selected-value" not in output
     assert not (shared / "stacks/unselected").exists()
-    assert not legacy.exists()
-    assert not (shared / "admin").exists()
     assert not (shared / "README.md").exists()
     assert stat.S_IMODE(shared.stat().st_mode) == 0o710
     assert stat.S_IMODE((shared / "stacks").stat().st_mode) == 0o755
@@ -188,7 +178,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     assert (retired / "compose.yaml").exists()
     commands = docker_log.read_text().splitlines()
     assert not [line for line in commands if line.startswith(f"{retired}|")]
-    assert f"{legacy}|compose down --remove-orphans" in commands
     assert [line for line in commands if "|compose up" in line] == [
         f"{shared}/stacks/selected|compose up -d",
     ]

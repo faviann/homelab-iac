@@ -370,7 +370,6 @@ class BlueprintPlanTests(unittest.TestCase):
             ("repo-auth-roles", "15-roles.yaml"),
             ("repo-auth-oidc-apps", "80-oidc-apps.yaml"),
             ("repo-auth-proxmox-oidc", "85-proxmox-oidc.yaml"),
-            ("repo-auth-legacy-cleanup", "90-cleanup-legacy.yaml"),
         ):
             with self.subTest(name=name):
                 self.assertEqual(plan.get(name), path)
@@ -385,8 +384,6 @@ class BlueprintPlanTests(unittest.TestCase):
             ("repo-auth-notifications", "repo-auth-proxmox-oidc"),
             ("repo-auth-proxmox-oidc", "repo-auth-providers"),
             ("repo-auth-outposts", "repo-auth-oidc-apps"),
-            ("repo-auth-applications", "repo-auth-legacy-cleanup"),
-            ("repo-auth-oidc-apps", "repo-auth-legacy-cleanup"),
         ):
             with self.subTest(before=before, after=after):
                 self.assertIn(before, names)

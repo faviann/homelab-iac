@@ -52,14 +52,6 @@ def test_workstation_origin_firewall_second_convergence_is_idempotent() -> None:
         temp_path = Path(temp_root)
         stub_state_path = temp_path / "stub-state"
         stub_state_path.mkdir()
-        (stub_state_path / "legacy-table").touch()
-        legacy_service = temp_path / "etc/systemd/system/workstation-aoe-proxy-firewall.service"
-        legacy_rules = temp_path / "etc/nftables.d/workstation-aoe-proxy.nft"
-        legacy_service.parent.mkdir(parents=True)
-        legacy_rules.parent.mkdir(parents=True)
-        legacy_service.write_text("legacy service\n", encoding="utf-8")
-        legacy_rules.write_text("legacy rules\n", encoding="utf-8")
-
         stub_state = str(stub_state_path)
         first = run_playbook(temp_root, stub_state)
 
@@ -70,9 +62,6 @@ def test_workstation_origin_firewall_second_convergence_is_idempotent() -> None:
         assert (stub_state_path / "apt").exists(), first_output
         assert (stub_state_path / "systemd").exists(), first_output
         assert (stub_state_path / "validated-rules").exists(), first_output
-        assert not (stub_state_path / "legacy-table").exists(), first_output
-        assert not legacy_service.exists(), first_output
-        assert not legacy_rules.exists(), first_output
 
         nft_path = temp_path / "etc/nftables.d/custom-origin.nft"
         service_path = temp_path / "etc/systemd/system/custom-origin-firewall.service"

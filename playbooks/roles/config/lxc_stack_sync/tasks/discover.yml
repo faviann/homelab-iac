@@ -115,9 +115,6 @@
       {%- if docker_agents_enabled | default(false) -%}
       {%- set _ = desired.append('docker-agents') -%}
       {%- endif -%}
-      {%- if service_agents_enabled | default(false) -%}
-      {%- set _ = desired.append('admin') -%}
-      {%- endif -%}
       {{ desired | unique }}
 
 - name: Append per-host repo stack directories to desired stack set

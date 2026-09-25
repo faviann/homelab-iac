@@ -41,47 +41,9 @@
       stale_stack_quarantine_root: "{{ lxc_docker_env_stale_stack_quarantine_root }}"
       docker_agents_stack_dir: "{{ lxc_docker_env_docker_agents_stack_dir }}"
       dockhand_hawser_stacks_source_dir: "{{ lxc_docker_env_dockhand_hawser_stacks_source_dir }}"
-      legacy_managed_stacks: "{{ lxc_docker_env_legacy_managed_stacks }}"
       docker_user: "{{ docker_user }}"
       docker_uid: "{{ docker_uid }}"
       docker_gid: "{{ docker_gid }}"
-
-- name: Check if Dockge directory exists
-  ansible.builtin.stat:
-    path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/dockge"
-  register: _dockge_dir_stat
-  tags:
-    - docker_host_setup
-
-- name: Stop Dockge before cleanup
-  ansible.builtin.command:
-    cmd: docker compose down --remove-orphans
-    chdir: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/dockge"
-  become: true
-  become_user: "{{ lxc_docker_environment_internal.docker_user }}"
-  failed_when: false
-  # One-shot migration cleanup: only runs while the legacy dir still exists.
-  changed_when: true
-  when:
-    - _dockge_dir_stat.stat.exists
-    - _dockge_dir_stat.stat.isdir
-    - not ansible_check_mode
-  tags:
-    - docker_host_setup
-
-- name: Remove Dockge directory from mounted Docker config
-  ansible.builtin.file:
-    path: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/dockge"
-    state: absent
-  tags:
-    - docker_host_setup
-
-- name: Remove Dockge directory from shared storage
-  ansible.builtin.file:
-    path: "{{ lxc_docker_environment_internal.shared_mount_source }}/dockge"
-    state: absent
-  tags:
-    - docker_host_setup
 
 - name: Ensure shared mount source directory exists on host
   ansible.builtin.file:

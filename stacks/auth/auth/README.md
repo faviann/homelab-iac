@@ -76,9 +76,6 @@ tombstones before group bindings are applied.
 intentionally unassigned by default; assign it separately only when there is a
 specific sub-admin user.
 
-`90-cleanup-legacy.yaml` removes the old `content-editors` group after
-application bindings no longer reference it.
-
 ## Deploy
 
 ```bash

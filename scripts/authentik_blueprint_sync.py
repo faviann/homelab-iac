@@ -27,9 +27,6 @@ GROUPS_FILE = BLUEPRINT_ROOT / "10-groups.yaml"
 ROLES_FILE = BLUEPRINT_ROOT / "15-roles.yaml"
 ROLES_BLUEPRINT_INSTANCE_NAME = "repo-auth-roles"
 ROLES_BLUEPRINT_DEPLOYED_NAME = str(ROLES_FILE.relative_to(BLUEPRINT_ROOT))
-LEGACY_CLEANUP_FILE = BLUEPRINT_ROOT / "90-cleanup-legacy.yaml"
-LEGACY_CLEANUP_BLUEPRINT_INSTANCE_NAME = "repo-auth-legacy-cleanup"
-LEGACY_CLEANUP_BLUEPRINT_DEPLOYED_NAME = str(LEGACY_CLEANUP_FILE.relative_to(BLUEPRINT_ROOT))
 BRAND_FLOWS_FILE = BLUEPRINT_ROOT / "24-brand-flows.yaml"
 DEFAULT_AUTH_POLICIES_FILE = BLUEPRINT_ROOT / "25-default-auth-policies.yaml"
 REGISTRATION_APPROVAL_FILE = BLUEPRINT_ROOT / "26-registration-approval-flow.yaml"
@@ -903,7 +900,6 @@ def blueprint_plan(flow_slugs: list[str]) -> list[tuple[str, str]]:
             (OIDC_BLUEPRINT_INSTANCE_NAME, OIDC_BLUEPRINT_DEPLOYED_NAME),
         ]
     )
-    steps.append((LEGACY_CLEANUP_BLUEPRINT_INSTANCE_NAME, LEGACY_CLEANUP_BLUEPRINT_DEPLOYED_NAME))
     return steps
 
 

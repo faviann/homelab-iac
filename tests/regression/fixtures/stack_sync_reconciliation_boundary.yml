@@ -5,7 +5,6 @@
   gather_facts: true
   vars:
     docker_agents_enabled: false
-    service_agents_enabled: false
     lxc_stack_sync_managed_assets:
       changed_results: []
     repo_only_stack_files:
