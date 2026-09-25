@@ -23,7 +23,6 @@
     current_group: "{{ lookup('pipe', 'id -gn') }}"
     lxc_docker_environment_role_path: "{{ playbook_dir }}/../../../playbooks/roles/config/lxc_docker_environment"
     lxc_docker_environment_internal:
-      legacy_managed_stacks: []
       shared_mount_source: "{{ temp_root }}/auth/shared"
       shared_owner: "{{ current_user }}"
       shared_group: "{{ current_group }}"
@@ -92,7 +91,6 @@
     current_group: "{{ lookup('pipe', 'id -gn') }}"
     lxc_docker_environment_role_path: "{{ playbook_dir }}/../../../playbooks/roles/config/lxc_docker_environment"
     lxc_docker_environment_internal:
-      legacy_managed_stacks: []
       shared_mount_source: "{{ temp_root }}/portal/shared"
       shared_owner: "{{ current_user }}"
       shared_group: "{{ current_group }}"

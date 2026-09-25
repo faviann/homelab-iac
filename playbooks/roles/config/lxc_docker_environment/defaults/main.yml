@@ -22,15 +22,6 @@ lxc_docker_env_dockhand_hawser_stacks_source_dir: "{{ lxc_docker_env_shared_moun
 # Quarantine location for stale managed stacks removed from source control.
 lxc_docker_env_stale_stack_quarantine_root: "{{ lxc_docker_env_shared_mount_source }}/stale-stacks"
 
-# Managed stack cleanup targets from previous layouts
-lxc_docker_env_legacy_managed_stacks:
-  - name: admin
-    dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/admin"
-    compose_file: compose.yml
-  - name: homepage-discovery
-    dir: "{{ lxc_docker_env_shared_mount_source }}/stacks/homepage-discovery"
-    compose_file: compose.yml
-
 # Per-host stacks source directory (project-relative)
 lxc_docker_env_stacks_source: "{{ playbook_dir }}/../stacks/{{ inventory_hostname }}"
 

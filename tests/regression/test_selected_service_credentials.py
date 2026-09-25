@@ -110,11 +110,7 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     agents.mkdir(parents=True)
     existing_env = "TOKEN=existing-fixture-token\n"
     (agents / ".env").write_text(existing_env)
-    (shared / "admin").mkdir()
     (shared / "README.md").write_text("obsolete deployed documentation\n")
-    legacy = shared / "stacks/legacy"
-    legacy.mkdir()
-    (legacy / "compose.yml").write_text("services: {}\n")
     retired = shared / "stacks/retired"
     retired.mkdir()
     (retired / "compose.yaml").write_text("services: {}\n")
@@ -131,6 +127,7 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     )
     docker.chmod(0o755)
     docker_log = tmp_path / "docker.log"
+    docker_log.touch()
     report = tmp_path / "report.yml"
     # Run the real role wiring and asset/stack reconciliation. Package, mount,
     # and account setup are outside this fixture; Docker commands are recorded.
@@ -151,9 +148,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
             "lxc_docker_env_root_docker_conf_path": str(shared),
             "lxc_docker_env_stacks_source": str(source),
             "lxc_docker_env_absent_containers": [],
-            "lxc_docker_env_legacy_managed_stacks": [{
-                "name": "legacy", "dir": str(legacy), "compose_file": "compose.yml",
-            }],
             "overmind_postgres_backup_enabled": True,
             "lxc_docker_env_stack_vars": {
                 "selected": {"value": "fixture-selected-value"},
@@ -178,8 +172,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     assert result.returncode == 0, output
     assert "fixture-selected-value" not in output
     assert not (shared / "stacks/unselected").exists()
-    assert not legacy.exists()
-    assert not (shared / "admin").exists()
     assert not (shared / "README.md").exists()
     assert stat.S_IMODE(shared.stat().st_mode) == 0o710
     assert stat.S_IMODE((shared / "stacks").stat().st_mode) == 0o755
@@ -188,7 +180,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     assert (retired / "compose.yaml").exists()
     commands = docker_log.read_text().splitlines()
     assert not [line for line in commands if line.startswith(f"{retired}|")]
-    assert f"{legacy}|compose down --remove-orphans" in commands
     assert [line for line in commands if "|compose up" in line] == [
         f"{shared}/stacks/selected|compose up -d",
     ]
