@@ -74,15 +74,6 @@
       }}
   when: lxc_origin_firewall_enabled | bool
 
-- name: Assert origin firewall allowlist resolved
-  ansible.builtin.assert:
-    that:
-      - lxc_origin_firewall_allowed_ipv4 | length > 0
-    fail_msg: >-
-      config/lxc_origin_firewall could not resolve any IPv4 addresses for
-      lxc_origin_firewall_allowed_hosts.
-  when: lxc_origin_firewall_enabled | bool
-
 - name: Install origin firewall package
   ansible.builtin.apt:
     name: nftables
