@@ -1,0 +1,55 @@
+---
+# Set, clear, or list the hold markers that stack sync discovery reads.
+
+- name: Find repo-managed stacks for this host
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_stacks_source }}"
+    file_type: directory
+  register: _stack_hold_known_stacks
+  delegate_to: localhost
+  become: false
+  when: stack_hold_state | default(none) == 'present'
+
+- name: Assert the hold names a repo-managed stack
+  ansible.builtin.assert:
+    that: stack_filter in known_stacks
+    fail_msg: >-
+      No stack source directory {{ lxc_docker_env_stacks_source }}/{{ stack_filter }}.
+      Known stacks: {{ known_stacks | join(', ') or 'none' }}
+  vars:
+    known_stacks: "{{ _stack_hold_known_stacks.files | map(attribute='path') | map('basename') | sort }}"
+  when: stack_hold_state | default(none) == 'present'
+
+- name: Ensure the held stack root exists
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_held_stacks_root }}"
+    state: directory
+    mode: "0755"
+  when: stack_hold_state | default(none) == 'present'
+
+- name: Set or clear the stack hold marker
+  ansible.builtin.file:
+    path: "{{ lxc_docker_env_held_stacks_root }}/{{ stack_filter }}"
+    state: "{{ 'touch' if stack_hold_state == 'present' else 'absent' }}"
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+  when: stack_hold_state is defined
+
+- name: Check the held stack root
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_env_held_stacks_root }}"
+  register: _stack_hold_root
+
+- name: Find stack hold markers
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_env_held_stacks_root }}"
+    file_type: file
+  register: _stack_hold_markers
+  when: _stack_hold_root.stat.isdir | default(false)
+
+- name: Report held stacks
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} held stacks:
+      {{ (_stack_hold_markers.files | default([]) | map(attribute='path') | map('basename') | sort | join(', ')) or 'none' }}
