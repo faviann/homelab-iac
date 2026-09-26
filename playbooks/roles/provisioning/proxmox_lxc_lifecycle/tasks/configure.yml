@@ -65,6 +65,11 @@
         name: config/lxc_workstation_baseline
       when: workstation_enabled | default(false)
 
+    - name: Configure browser device
+      ansible.builtin.include_role:
+        name: config/lxc_browser_device
+      when: browser_device_enabled | default(false)
+
     - name: Flush handlers after guest configuration
       ansible.builtin.meta: flush_handlers
 

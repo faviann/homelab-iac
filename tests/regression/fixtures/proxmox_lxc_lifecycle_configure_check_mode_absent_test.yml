@@ -29,6 +29,7 @@
     docker_enabled: true
     workstation_enabled: true
     gpu_enabled: true
+    browser_device_enabled: true
   tasks:
     - name: Include lifecycle guest configuration tasks
       ansible.builtin.include_tasks:

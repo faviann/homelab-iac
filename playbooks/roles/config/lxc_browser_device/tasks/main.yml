@@ -1,0 +1,36 @@
+---
+# The operator logs in as lxc_ssh_user at uid 1000; the browser session runs as
+# a separate account above 1000, which the idmap keeps off the fleet's shared data.
+- name: Create the operator and session accounts
+  vars:
+    lxc_browser_device_accounts:
+      - name: "{{ lxc_ssh_user }}"
+        uid: "{{ lxc_ssh_uid }}"
+        gid: "{{ lxc_ssh_gid }}"
+      - name: "{{ browser_device_session_user }}"
+        uid: "{{ browser_device_session_uid }}"
+        gid: "{{ browser_device_session_uid }}"
+  block:
+    - name: Ensure account groups exist
+      ansible.builtin.group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid }}"
+        state: present
+      loop: "{{ lxc_browser_device_accounts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Ensure accounts exist
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        uid: "{{ item.uid }}"
+        group: "{{ item.name }}"
+        shell: /bin/bash
+        state: present
+      loop: "{{ lxc_browser_device_accounts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+- name: Configure origin firewall
+  ansible.builtin.include_role:
+    name: config/lxc_origin_firewall
