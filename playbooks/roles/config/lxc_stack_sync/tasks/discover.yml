@@ -200,30 +200,75 @@
     lxc_docker_env_stale_top_level_stack_dirs: []
   when: stack_filter is defined and stack_filter is not none
 
-- name: Scope per-host find results to stack_filter
+- name: Check for held stack markers
+  ansible.builtin.stat:
+    path: "{{ lxc_docker_environment_internal.held_stacks_root }}"
+  register: _held_stacks_root
+
+- name: Find held stack markers
+  ansible.builtin.find:
+    paths: "{{ lxc_docker_environment_internal.held_stacks_root }}"
+    file_type: file
+  register: _held_stack_markers
+  when: _held_stacks_root.stat.isdir | default(false)
+
+- name: Record held stacks
+  ansible.builtin.set_fact:
+    lxc_docker_env_held_stacks: >-
+      {{ _held_stack_markers.files | default([]) | map(attribute='path') | map('basename') | sort }}
+
+- name: Refuse a stack_filter that names a held stack
+  ansible.builtin.assert:
+    that: stack_filter not in lxc_docker_env_held_stacks
+    fail_msg: >-
+      Stack '{{ stack_filter }}' is held on {{ inventory_hostname }}. Release it first with
+      ./run.sh release --limit {{ inventory_hostname }} --stack {{ stack_filter }}
+  when: stack_filter is defined and stack_filter is not none
+
+- name: Exclude held stacks from desired and stale stacks
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: >-
+      {{ lxc_docker_env_desired_top_level_stack_dirs | difference(lxc_docker_env_held_stacks) }}
+    lxc_docker_env_stale_top_level_stack_dirs: >-
+      {{ lxc_docker_env_stale_top_level_stack_dirs | difference(lxc_docker_env_held_stacks) }}
+
+- name: Scope per-host find results to desired stacks
   ansible.builtin.set_fact:
     _per_host_j2_files:
-      files: >-
-        {{
-          _per_host_j2_files.files | default([])
-          | selectattr('path', 'search', '/' ~ stack_filter ~ '/')
-          | list
-        }}
+      files: "{{ desired_j2_files }}"
     _per_host_static_files:
-      files: >-
-        {{
-          _per_host_static_files.files | default([])
-          | selectattr('path', 'search', '/' ~ stack_filter ~ '/')
-          | list
-        }}
+      files: "{{ desired_static_files }}"
     _per_host_dirs:
-      files: >-
-        {{
-          _per_host_dirs.files | default([])
-          | selectattr('path', 'search', '/' ~ stack_filter ~ '/')
-          | list
-        }}
-  when: stack_filter is defined and stack_filter is not none
+      files: "{{ desired_dirs }}"
+  vars:
+    desired_j2_files: >-
+      {%- set kept = [] -%}
+      {%- for file in _per_host_j2_files.files | default([]) -%}
+      {%- if (file.path | relpath(lxc_docker_environment_internal.stacks_source)).split('/')[0]
+        in lxc_docker_env_desired_top_level_stack_dirs -%}
+      {%- set _ = kept.append(file) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ kept }}
+    desired_static_files: >-
+      {%- set kept = [] -%}
+      {%- for file in _per_host_static_files.files | default([]) -%}
+      {%- if (file.path | relpath(lxc_docker_environment_internal.stacks_source)).split('/')[0]
+        in lxc_docker_env_desired_top_level_stack_dirs -%}
+      {%- set _ = kept.append(file) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ kept }}
+    desired_dirs: >-
+      {%- set kept = [] -%}
+      {%- for directory in _per_host_dirs.files | default([]) -%}
+      {%- if (directory.path | relpath(lxc_docker_environment_internal.stacks_source)).split('/')[0]
+        in lxc_docker_env_desired_top_level_stack_dirs -%}
+      {%- set _ = kept.append(directory) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ kept }}
+  when: _per_host_stacks_dir.stat.exists | default(false)
 
 - name: Capture stack metadata files before deploy filtering
   ansible.builtin.set_fact:

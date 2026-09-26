@@ -21,6 +21,7 @@
       root_docker_conf_path: "{{ temp_root }}/shared"
       stacks_source: "{{ temp_root }}/stacks-source"
       stale_stack_quarantine_root: "{{ temp_root }}/shared/stale-stacks"
+      held_stacks_root: "{{ temp_root }}/shared/held-stacks"
       external_networks:
         - proxy
       path_ownership_overrides: []

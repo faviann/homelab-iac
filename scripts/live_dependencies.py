@@ -72,6 +72,7 @@ LIVE_OPERATIONS: dict[str, LiveOperation] = {
     "playbooks/configure-lxcs.yml": LiveOperation(
         CONFIGURE_COLLECTIONS, CONFIGURE_ROLES, True
     ),
+    "playbooks/stack-hold.yml": LiveOperation((), (), True),
     "playbooks/validate-infrastructure.yml": LiveOperation(
         ("community.proxmox",), (), True
     ),

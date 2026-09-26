@@ -20,6 +20,7 @@
       root_docker_conf_path: "{{ temp_root }}/shared"
       stacks_source: "{{ temp_root }}/missing-source"
       stale_stack_quarantine_root: "{{ temp_root }}/shared/stale-stacks"
+      held_stacks_root: "{{ temp_root }}/shared/held-stacks"
       external_networks: []
       path_ownership_overrides: []
       shared_owner: 1000
