@@ -173,7 +173,7 @@ def test_proxy_secrets_and_trusted_source_have_render_bindings() -> None:
         assert vault_variable(proxy_stack_vars[name]) in vault_example
     assert proxy_stack_vars["trusted_proxies"] == "{{ hostvars['portal'].portal_traefik_source_cidr }}"
     assert portal_source.prefixlen == portal_source.max_prefixlen
-    assert workstation_vars["workstation_origin_firewall_allowed_hosts"] == ["portal"]
+    assert workstation_vars["lxc_origin_firewall_allowed_hosts"] == ["portal"]
 
 
 def test_public_router_selects_only_mcp_and_proxy_oauth_paths() -> None:
@@ -223,7 +223,7 @@ def test_listener_port_is_consistent_and_reserved_only_for_the_proxy() -> None:
     port = listener_port()
     workstation_vars = load_yaml(WORKSTATION_VARS_PATH)
 
-    assert port in workstation_vars["workstation_origin_firewall_protected_ports"]
+    assert port in workstation_vars["lxc_origin_firewall_protected_ports"]
 
     configured_paths = {
         path.relative_to(REPO_ROOT)

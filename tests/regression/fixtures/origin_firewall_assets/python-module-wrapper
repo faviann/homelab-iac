@@ -2,7 +2,7 @@
 set -euo pipefail
 
 module_name="$(basename "${1:?missing Ansible module path}")"
-state_root="${WORKSTATION_ORIGIN_FIREWALL_STUB_STATE:?missing stub state path}"
+state_root="${ORIGIN_FIREWALL_STUB_STATE:?missing stub state path}"
 
 case "$module_name" in
   AnsiballZ_apt.py)

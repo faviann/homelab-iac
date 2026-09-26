@@ -8,8 +8,9 @@
     workstation_uid: "{{ lookup('pipe', 'id -u') | int }}"
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
-    workstation_origin_firewall_nft_dir: "{{ temp_root }}/etc/nftables.d"
-    workstation_origin_firewall_service_path: "{{ temp_root }}/etc/systemd/system/workstation-origin-firewall.service"
+    # The firewall's disabled path stats and removes these; keep it off the real /etc.
+    lxc_origin_firewall_nft_dir: "{{ temp_root }}/etc/nftables.d"
+    lxc_origin_firewall_service_path: "{{ temp_root }}/etc/systemd/system/origin-firewall.service"
     workstation_packages: []
     workstation_locale_enabled: false
     workstation_chezmoi_install_enabled: false

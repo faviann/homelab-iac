@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Credential-free regressions for the workstation origin firewall tasks."""
+"""Credential-free regressions for the shared origin firewall role."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from ansible_test_helper import ansible_playbook_command
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "tests" / "regression" / "fixtures"
-PLAYBOOK = FIXTURE_ROOT / "workstation_origin_firewall.yml"
-INVENTORY = FIXTURE_ROOT / "workstation_origin_firewall_inventory.yml"
-STUB_ROOT = FIXTURE_ROOT / "workstation_origin_firewall_assets"
+PLAYBOOK = FIXTURE_ROOT / "origin_firewall.yml"
+INVENTORY = FIXTURE_ROOT / "origin_firewall_inventory.yml"
+STUB_ROOT = FIXTURE_ROOT / "origin_firewall_assets"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
 
 
@@ -24,7 +24,7 @@ def run_playbook(
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PATH"] = f"{STUB_ROOT / 'bin'}:{environment['PATH']}"
-    environment["WORKSTATION_ORIGIN_FIREWALL_STUB_STATE"] = stub_state
+    environment["ORIGIN_FIREWALL_STUB_STATE"] = stub_state
     command = [
         "unshare",
         "-Ur",
@@ -47,8 +47,8 @@ def run_playbook(
     )
 
 
-def test_workstation_origin_firewall_second_convergence_is_idempotent() -> None:
-    with tempfile.TemporaryDirectory(prefix="workstation-origin-firewall-idempotency-") as temp_root:
+def test_lxc_origin_firewall_second_convergence_is_idempotent() -> None:
+    with tempfile.TemporaryDirectory(prefix="origin-firewall-idempotency-") as temp_root:
         temp_path = Path(temp_root)
         stub_state_path = temp_path / "stub-state"
         stub_state_path.mkdir()
@@ -58,7 +58,7 @@ def test_workstation_origin_firewall_second_convergence_is_idempotent() -> None:
         first_output = f"{first.stdout}\n{first.stderr}"
         assert first.returncode == 0, first_output
         assert "failed=0" in first_output, first_output
-        assert "Restart workstation origin firewall" in first_output, first_output
+        assert "Restart origin firewall" in first_output, first_output
         assert (stub_state_path / "apt").exists(), first_output
         assert (stub_state_path / "systemd").exists(), first_output
         assert (stub_state_path / "validated-rules").exists(), first_output
@@ -78,8 +78,8 @@ def test_workstation_origin_firewall_second_convergence_is_idempotent() -> None:
     assert "failed=0" in second_output, second_output
 
 
-def test_workstation_origin_firewall_unresolved_origin_keeps_existing_firewall() -> None:
-    with tempfile.TemporaryDirectory(prefix="workstation-origin-firewall-resolution-") as temp_root:
+def test_lxc_origin_firewall_unresolved_origin_keeps_existing_firewall() -> None:
+    with tempfile.TemporaryDirectory(prefix="origin-firewall-resolution-") as temp_root:
         temp_path = Path(temp_root)
         stub_state_path = temp_path / "stub-state"
         stub_state_path.mkdir()
@@ -94,7 +94,7 @@ def test_workstation_origin_firewall_unresolved_origin_keeps_existing_firewall()
             temp_root,
             str(stub_state_path),
             "-e",
-            '{"workstation_origin_firewall_allowed_hosts": ["broken-portal"]}',
+            '{"lxc_origin_firewall_allowed_hosts": ["broken-portal"]}',
         )
 
         output = f"{result.stdout}\n{result.stderr}"

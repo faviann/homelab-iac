@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-state_root="${WORKSTATION_ORIGIN_FIREWALL_STUB_STATE:?missing stub state path}"
+state_root="${ORIGIN_FIREWALL_STUB_STATE:?missing stub state path}"
 
 if [[ "${1:-}" == "-c" && "${2:-}" == "-f" ]]; then
   test -f "${3:?missing ruleset path}"
