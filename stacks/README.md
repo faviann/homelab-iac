@@ -257,6 +257,27 @@ To iterate on a single stack without reconciling the others:
 
 No registration step is required; the role discovers everything under `stacks/<host>/` automatically.
 
+## Holding a Stack Out of Reconciliation
+
+A hold is persisted stop intent for one stack. It lives on the host as an empty marker file at `/shared/<host>/held-stacks/<stack>`, beside the stack directories, so it survives later syncs and host restarts.
+
+```bash
+./run.sh hold --limit <host> --stack <stack>     # set
+./run.sh held --limit <host>                     # list
+./run.sh release --limit <host> --stack <stack>  # clear
+```
+
+A sync skips a held stack. It renders, copies, starts, and quarantines nothing for it, and reports it under `skipped_stacks`. Every other stack on the host reconciles as usual. `./run.sh --limit <host> --stack <held stack>` fails until you release the hold.
+
+A hold is intent only. It stops nothing. Stop the containers and check their actual state yourself.
+
+`hold` takes the exclusive lifecycle lock. Exit 0 means no sync was running on this control node, and every later sync sees the hold. Exit 75 means another live operation on this control node holds the lock, and the message names it. Retry after it finishes. Runs from other control nodes are not coordinated.
+
+Limits:
+
+- `docker-agents` cannot be held. `lxc_docker_environment` manages it outside stack sync.
+- Ownership overrides and the `*.md` cleanup still run on every sync. They touch data ownership and repo-only docs, not Compose inputs or services.
+
 ## Traefik
 
 Some Docker hosts act as label sources for Traefik on `portal`: `traefik-kop` copies their Docker labels into portal's Redis. Stacks on the reverse-proxy host use Traefik directly.
