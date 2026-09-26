@@ -27,7 +27,7 @@ That acceptance is provisional. It holds only while the bridge is flat, and is
 expected to be retired by host-level segmentation: Proxmox firewall rules
 declared per guest alongside the rest of its provisioning, restricting 8317 to
 the Traefik origin. An in-guest nftables rule modelled on
-`workstation_origin_firewall` would close the same gap sooner, but it is
+`config/lxc_origin_firewall` would close the same gap sooner, but it is
 deliberately not built here, because rules enforced inside the guest are
 disarmed by whatever compromises the guest, and because host-level segmentation
 supersedes that role rather than extending it.
