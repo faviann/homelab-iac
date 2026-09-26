@@ -263,16 +263,18 @@ management is how a duplicate device registration happens.
   workstation LXC rebuilds. As long as that state is intact, restarting or
   rebuilding the workstation reuses the same device.
 - `faviann/dotfiles#112` installs the Lobu CLI and supervises `lobu daemon`.
-- The repository changes for `faviann/dotfiles#126` have landed and configure
-  that daemon for `https://lobu.admin.faviann.com` with an explicit non-cloud
-  context. They have not yet been applied to the live workstation; the issue
-  remains open for interactive context creation, authentication, and live
-  registration checks.
+- `faviann/dotfiles#126` is closed and applied. The supervised daemon uses
+  the stable `homelab` context for `https://lobu.admin.faviann.com`; live
+  validation confirmed it reconnects as `headless:workstation` after both a
+  SIGKILL restart and a full workstation reboot without creating a duplicate
+  device.
+- A full intentional workstation LXC destroy/recreate remains the separate
+  persistence validation from `#270`; preserve `~/.config/lobu` and verify the
+  same device identity after recreation before marking that scenario complete.
 
-Do not run `lobu login` against Lobu Cloud as part of this rollout. Register the
-device against the self-hosted origin with an explicit context
-(`lobu context ...`), so the daemon cannot silently fall back to the hosted
-default.
+For bootstrap or re-authentication, do not run `lobu login` against Lobu Cloud.
+Use the explicit self-hosted context (`lobu context ...`) so the daemon cannot
+silently fall back to the hosted default.
 
 ## Deliberate non-configuration
 
