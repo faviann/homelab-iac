@@ -1,0 +1,64 @@
+---
+# Host-specific configuration for the Broodling LXC
+# Inherits from: tier_medium, cap_docker
+
+lxc_hwaddr: "BC:24:11:3F:A7:52"
+
+docker_agents_enabled: false
+traefik_kop_enabled: false
+
+# The stack's persistent directories with the ownership the upstream deployment
+# guide requires for its service users (broodling 1654, Caddy 10443), enforced
+# on every run. The native target's state and home are provisioned once by
+# broodling_initialize.yml instead.
+lxc_docker_env_host_directories:
+  - path: /data/broodling/broodling
+    owner: "1654"
+    group: "1654"
+    mode: "0700"
+  - path: /data/broodling/broodling/repositories
+    owner: "1654"
+    group: "1654"
+    mode: "0700"
+  - path: /data/broodling/zeroshot-tls/key
+    owner: "10443"
+    group: "10443"
+    mode: "0700"
+  - path: /data/broodling/zeroshot-tls/root
+    owner: "0"
+    group: "0"
+    mode: "0755"
+  - path: /data/broodling/zeroshot-tls/data
+    owner: "10443"
+    group: "10443"
+    mode: "0700"
+  - path: /data/broodling/zeroshot-tls/config
+    owner: "10443"
+    group: "10443"
+    mode: "0700"
+
+proxmox_lxc_host_directories:
+  - path: /tank/broodling
+    owner: "100000"
+    group: "100000"
+    mode: "0755"
+
+# Replace the fleet-wide /tank mount with this LXC's own subtree.
+proxmox_lxc_bind_mounts_overrides:
+  mp3: "/tank/broodling,mp=/data/broodling"
+
+lxc_docker_env_stack_vars:
+  broodling:
+    github_token: "{{ vault_broodling_github_token }}"
+    # The shared CLIProxy client key; Broodling's gateway is cliproxy.
+    gateway_api_key: "{{ vault_overmind_cliproxy_api_key }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 309
+  hostname: broodling
+  description: "Broodling PR agent service managed via Ansible"
+  tags:
+    - ansible
+    - broodling
+    - agents

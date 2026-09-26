@@ -1,0 +1,20 @@
+# zeroshot-tls (ADR 0001): serves the DirectTarget origin and forwards to native's fixed inner
+# port over the project network. Caddy signs only with the root that `broodling-target
+# initialize-tls` created; it never generates one, so a missing or mismatched root file stops it.
+{
+	skip_install_trust
+	auto_https disable_redirects
+	pki {
+		ca local {
+			root {
+				cert /tls-root/root.crt
+				key /tls-root-key/root.key
+			}
+		}
+	}
+}
+
+zeroshot.dev.faviann.com {
+	tls internal
+	reverse_proxy zeroshot:18770
+}

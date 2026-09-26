@@ -1,0 +1,66 @@
+---
+# Explicit first initialization of the broodling stack, in the order the
+# upstream deployment guide requires: TLS root, native target state bound to
+# the origin, application store. Every helper refuses non-empty state, so on
+# an initialized installation this fails at the first step and changes nothing.
+#
+# The stack was already started once by stack sync, so broodling and
+# zeroshot-tls are in a restart loop until their state exists; `up -d` alone
+# leaves a restarting container to its backoff, hence --force-recreate.
+
+- name: Create the DirectTarget TLS root once
+  ansible.builtin.command:
+    cmd: docker compose run --rm --no-deps initialize-tls
+    chdir: "{{ broodling_stack_dir }}"
+  changed_when: true
+
+# Root-owned and private, as the upstream guide provisions them. Native then
+# relaxes the state root for its worker UIDs, so no later run enforces a mode.
+- name: Provision the native target's empty state and home
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "0"
+    group: "0"
+    mode: "0700"
+  loop:
+    - /data/broodling/zeroshot/state
+    - /data/broodling/zeroshot/home
+
+- name: Start zeroshot-tls with the root
+  ansible.builtin.command:
+    cmd: docker compose up -d --force-recreate zeroshot-tls
+    chdir: "{{ broodling_stack_dir }}"
+  changed_when: true
+
+- name: Initialize native target state through the origin
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - run
+      - --rm
+      - --no-deps
+      - --use-aliases
+      - zeroshot
+      - initialize
+      - --listen
+      - 0.0.0.0:18770
+      - --public-origin
+      - https://zeroshot.dev.faviann.com
+      - --storage
+      - /state
+    chdir: "{{ broodling_stack_dir }}"
+  changed_when: true
+
+- name: Initialize the Broodling store as the image user
+  ansible.builtin.command:
+    cmd: docker compose run --rm --no-deps broodling initialize-store /var/lib/broodling/state.sqlite3
+    chdir: "{{ broodling_stack_dir }}"
+  changed_when: true
+
+- name: Start the initialized services
+  ansible.builtin.command:
+    cmd: docker compose up -d --force-recreate broodling zeroshot
+    chdir: "{{ broodling_stack_dir }}"
+  changed_when: true
