@@ -4,7 +4,7 @@ This directory organizes inventory variables by purpose:
 
 - `all/` — shared defaults (Proxmox API credentials, host prep settings, etc.)
 - `tier_*` — resource tiers describing baseline CPU/RAM/disk for LXCs
-- `cap_*` — capability overlays layered on top of tiers (Docker, GPU, WireGuard)
+- `cap_*` — capability overlays layered on top of tiers (Docker, GPU, WireGuard, browser device)
 - `proxmox_api/` — variables for the controller host that drives API calls
 
 Each group directory contains a `vars.yml`, so the directory name matches the
