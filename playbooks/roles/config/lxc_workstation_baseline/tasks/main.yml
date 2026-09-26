@@ -52,8 +52,9 @@
     mode: "0644"
   when: workstation_locale_enabled | default(true) | bool
 
-- name: Configure workstation origin firewall
-  ansible.builtin.include_tasks: origin_firewall.yml
+- name: Configure origin firewall
+  ansible.builtin.include_role:
+    name: config/lxc_origin_firewall
 
 - name: Configure workstation persistent home mounts
   ansible.builtin.include_tasks: persistent_home.yml

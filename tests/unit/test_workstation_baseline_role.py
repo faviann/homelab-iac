@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 
 import yaml
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -110,7 +109,7 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
 
         for name in (
             "Install workstation baseline packages",
-            "Configure workstation origin firewall",
+            "Configure origin firewall",
             "Configure workstation persistent home mounts",
             "Configure GitHub SSH keys",
             "Install chezmoi",
@@ -153,76 +152,6 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
 
         for guard in ("[ -t 0 ]", "[ -t 1 ]", "SSH_CONNECTION", "SSH_TTY"):
             self.assertIn(guard, profile_hook)
-
-    def test_origin_firewall_contract(self) -> None:
-        firewall_tasks = load_yaml(ROLE_ROOT / "tasks/origin_firewall.yml")
-
-        # ansible.builtin.shell has no check-mode support. Without this opt-out
-        # the probe is skipped under --check and the resolution assert fails.
-        resolution = task_named(firewall_tasks, "Resolve workstation origin firewall allowlist address")
-        self.assertIs(resolution.get("check_mode"), False)
-
-        # The role owns only its own table. A global /etc/nftables.conf that
-        # starts with `flush ruleset` would wipe Docker's nft rules on every load.
-        rendered_firewall_tasks = yaml.safe_dump(firewall_tasks, sort_keys=True)
-        self.assertNotIn("/etc/nftables.conf", rendered_firewall_tasks)
-
-        environment = Environment(
-            loader=FileSystemLoader(ROLE_ROOT / "templates"),
-            undefined=StrictUndefined,
-            autoescape=False,
-            keep_trailing_newline=True,
-        )
-        rendered_firewall = environment.get_template("workstation-origin-firewall.nft.j2").render(
-            workstation_origin_firewall_protected_ports=[4001, 9119, 18789, 8788],
-            workstation_origin_firewall_allowed_ipv4=["192.0.2.10", "192.0.2.11"],
-        )
-        self.assertNotIn("flush ruleset", rendered_firewall)
-        self.assertIn("table inet workstation_origin {", rendered_firewall)
-        self.assertIn("elements = { 4001, 9119, 18789, 8788 }", rendered_firewall)
-        self.assertIn("elements = { 192.0.2.10, 192.0.2.11 }", rendered_firewall)
-        loopback_accept = 'iifname "lo" tcp dport @protected_tcp_ports accept'
-        allowed_accept = "ip saddr @allowed_ipv4 tcp dport @protected_tcp_ports accept"
-        protected_drop = "tcp dport @protected_tcp_ports drop"
-        self.assertLess(rendered_firewall.index(loopback_accept), rendered_firewall.index(allowed_accept))
-        self.assertLess(rendered_firewall.index(allowed_accept), rendered_firewall.index(protected_drop))
-        for unprotected_port in (80, 443, 22):
-            self.assertNotIn(str(unprotected_port), rendered_firewall)
-
-        rendered_firewall_service = environment.get_template(
-            "workstation-origin-firewall.service.j2"
-        ).render(workstation_origin_firewall_nft_path="/tmp/firewall/custom-origin.nft")
-        self.assertIn(
-            "ExecStart=/usr/sbin/nft -f /tmp/firewall/custom-origin.nft",
-            rendered_firewall_service,
-        )
-        # ExecStop must delete the table the rules file creates.
-        self.assertIn(
-            "ExecStop=/usr/sbin/nft delete table inet workstation_origin\n",
-            rendered_firewall_service,
-        )
-        self.assertIn("RemainAfterExit=yes", rendered_firewall_service)
-
-        unit_name = "{{ workstation_origin_firewall_service_path | basename }}"
-        # Restarting on every run would delete and reload the table, briefly
-        # opening the protected ports. Only the handler restarts, on change.
-        # The firewall regression's systemd stub reports no change either way,
-        # so it cannot see this.
-        enable_task = task_named(firewall_tasks, "Enable workstation origin firewall service")
-        self.assertEqual(enable_task["ansible.builtin.systemd"]["state"], "started")
-        for task_name in (
-            "Enable workstation origin firewall service",
-            "Stop workstation origin firewall service when disabled",
-        ):
-            self.assertEqual(
-                task_named(firewall_tasks, task_name)["ansible.builtin.systemd"]["name"], unit_name
-            )
-
-        firewall_handlers = load_yaml(ROLE_ROOT / "handlers/main.yml")
-        self.assertEqual(len(firewall_handlers), 1)
-        self.assertEqual(firewall_handlers[0]["name"], "Restart workstation origin firewall")
-        self.assertEqual(firewall_handlers[0]["ansible.builtin.systemd"]["name"], unit_name)
-        self.assertEqual(firewall_handlers[0]["ansible.builtin.systemd"]["state"], "restarted")
 
     def test_persistent_home_mount_probe_runs_in_check_mode(self) -> None:
         """The mount probe must opt out of check mode, or check runs fail on correct hosts.

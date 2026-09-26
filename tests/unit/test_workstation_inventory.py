@@ -81,7 +81,7 @@ class WorkstationInventoryTests(unittest.TestCase):
         self.assertIn("workstation", all_children["cap_docker"]["hosts"])
         self.assertNotIn("workstation", all_children["cap_wireguard"]["hosts"])
         self.assertIs(workstation_vars["workstation_enabled"], True)
-        self.assertIs(workstation_vars["workstation_origin_firewall_enabled"], True)
+        self.assertIs(workstation_vars["lxc_origin_firewall_enabled"], True)
         self.assertIs(workstation_vars["workstation_persistent_home_enabled"], True)
         self.assertIs(workstation_vars["docker_agents_enabled"], False)
         self.assertIs(workstation_vars["traefik_kop_enabled"], False)
@@ -104,9 +104,9 @@ class WorkstationInventoryTests(unittest.TestCase):
 
         self.assertTrue(routed_ports)
         self.assertLessEqual(
-            routed_ports, set(workstation_vars["workstation_origin_firewall_protected_ports"])
+            routed_ports, set(workstation_vars["lxc_origin_firewall_protected_ports"])
         )
-        self.assertEqual(workstation_vars["workstation_origin_firewall_allowed_hosts"], ["portal"])
+        self.assertEqual(workstation_vars["lxc_origin_firewall_allowed_hosts"], ["portal"])
 
     def effective_persistent_home_links(self) -> list[dict]:
         """Resolve the list the workstation host actually deploys.

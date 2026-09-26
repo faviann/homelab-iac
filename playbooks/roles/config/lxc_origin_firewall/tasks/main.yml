@@ -1,0 +1,176 @@
+---
+- name: Assert origin firewall inputs are valid
+  ansible.builtin.assert:
+    that:
+      - lxc_origin_firewall_protected_ports | length > 0
+      - lxc_origin_firewall_protected_ports | min | int > 0
+      - lxc_origin_firewall_protected_ports | max | int < 65536
+      - lxc_origin_firewall_protected_ports | unique | list | length == lxc_origin_firewall_protected_ports | length
+      - lxc_origin_firewall_allowed_hosts | length == 1
+    fail_msg: >-
+      config/lxc_origin_firewall requires unique protected TCP ports and exactly one allowed inventory host
+      when lxc_origin_firewall_enabled is true.
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Set origin firewall allowlist host
+  ansible.builtin.set_fact:
+    lxc_origin_firewall_allowed_host: "{{ lxc_origin_firewall_allowed_hosts | first }}"
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Assert origin firewall host exists in inventory
+  ansible.builtin.assert:
+    that:
+      - lxc_origin_firewall_allowed_host in hostvars
+    fail_msg: >-
+      config/lxc_origin_firewall cannot resolve allowed host '{{ lxc_origin_firewall_allowed_host }}'
+      because it is not present in inventory.
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Derive origin firewall allowlist endpoint
+  ansible.builtin.set_fact:
+    lxc_origin_firewall_allowed_endpoint: >-
+      {{
+        hostvars[lxc_origin_firewall_allowed_host].ansible_host
+        | default(lxc_origin_firewall_allowed_host)
+      }}
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Resolve origin firewall allowlist address
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      getent ahostsv4 {{ lxc_origin_firewall_allowed_endpoint | quote }} | awk '{print $1}' | sort -u
+    executable: /bin/bash
+  register: lxc_origin_firewall_resolution
+  failed_when: false
+  changed_when: false
+  check_mode: false
+  delegate_to: localhost
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Assert origin firewall host resolution succeeded
+  ansible.builtin.assert:
+    that:
+      - lxc_origin_firewall_resolution.rc == 0
+      - ( lxc_origin_firewall_resolution.stdout_lines | default([]) | select('match', '^[0-9]+(?:\\.[0-9]+){3}$') | list | length
+        ) > 0
+    fail_msg: >-
+      config/lxc_origin_firewall could not resolve any IPv4 address for
+      allowed host '{{ lxc_origin_firewall_allowed_host }}' using endpoint
+      '{{ lxc_origin_firewall_allowed_endpoint }}'.
+      Fix inventory ansible_host/DNS for this host before enabling
+      lxc_origin_firewall_enabled.
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Collect origin firewall IPv4 allowlist
+  ansible.builtin.set_fact:
+    lxc_origin_firewall_allowed_ipv4: >-
+      {{
+        lxc_origin_firewall_resolution.stdout_lines
+        | default([])
+        | select('match', '^[0-9]+(?:\.[0-9]+){3}$')
+        | unique
+        | list
+      }}
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Install origin firewall package
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: true
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Ensure origin firewall include directory exists
+  ansible.builtin.file:
+    path: "{{ lxc_origin_firewall_nft_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Deploy origin firewall rules
+  ansible.builtin.template:
+    src: origin-firewall.nft.j2
+    dest: "{{ lxc_origin_firewall_nft_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart origin firewall
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Validate origin firewall ruleset
+  ansible.builtin.command:
+    argv:
+      - nft
+      - -c
+      - -f
+      - "{{ lxc_origin_firewall_nft_path }}"
+  changed_when: false
+  when:
+    - lxc_origin_firewall_enabled | bool
+    - not ansible_check_mode
+
+- name: Deploy origin firewall service
+  ansible.builtin.template:
+    src: origin-firewall.service.j2
+    dest: "{{ lxc_origin_firewall_service_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart origin firewall
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Enable origin firewall service
+  ansible.builtin.systemd:
+    name: "{{ lxc_origin_firewall_service_path | basename }}"
+    daemon_reload: true
+    enabled: true
+    state: started
+  when: lxc_origin_firewall_enabled | bool
+
+- name: Flush origin firewall handlers
+  ansible.builtin.meta: flush_handlers
+  when:
+    - lxc_origin_firewall_enabled | bool
+    - not ansible_check_mode
+
+- name: Stat origin firewall unit file
+  ansible.builtin.stat:
+    path: "{{ lxc_origin_firewall_service_path }}"
+  register: _lxc_origin_firewall_service_stat
+  when: not lxc_origin_firewall_enabled | bool
+
+- name: Stop origin firewall service when disabled
+  ansible.builtin.systemd:
+    name: "{{ lxc_origin_firewall_service_path | basename }}"
+    daemon_reload: true
+    enabled: false
+    state: stopped
+  failed_when: false
+  when:
+    - not lxc_origin_firewall_enabled | bool
+    - _lxc_origin_firewall_service_stat.stat.exists | default(false)
+
+- name: Remove live origin firewall table when disabled
+  ansible.builtin.command:
+    argv: [nft, delete, table, inet, origin_firewall]
+  register: lxc_origin_firewall_delete_result
+  changed_when: lxc_origin_firewall_delete_result.rc == 0
+  failed_when: false
+  when: not lxc_origin_firewall_enabled | bool
+
+- name: Remove origin firewall artifacts when disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ lxc_origin_firewall_service_path }}"
+    - "{{ lxc_origin_firewall_nft_path }}"
+  when: not lxc_origin_firewall_enabled | bool
+
+- name: Reload systemd after origin firewall cleanup
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not lxc_origin_firewall_enabled | bool

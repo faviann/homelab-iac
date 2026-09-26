@@ -1,0 +1,7 @@
+---
+lxc_origin_firewall_enabled: false
+lxc_origin_firewall_protected_ports: []
+lxc_origin_firewall_allowed_hosts: []
+lxc_origin_firewall_nft_dir: /etc/nftables.d
+lxc_origin_firewall_nft_path: "{{ lxc_origin_firewall_nft_dir }}/origin-firewall.nft"
+lxc_origin_firewall_service_path: /etc/systemd/system/origin-firewall.service

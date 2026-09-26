@@ -1,0 +1,19 @@
+---
+argument_specs:
+  main:
+    short_description: Restrict declared TCP ports inside an LXC to loopback and one inventory host
+    options:
+      lxc_origin_firewall_enabled:
+        type: bool
+        required: false
+        description: Whether to restrict the protected ports. When false, the unit, table, and rule files are removed.
+      lxc_origin_firewall_protected_ports:
+        type: list
+        elements: int
+        required: false
+        description: TCP ports restricted to loopback and the allowed inventory host.
+      lxc_origin_firewall_allowed_hosts:
+        type: list
+        elements: str
+        required: false
+        description: Single inventory host allowed to reach the protected ports.

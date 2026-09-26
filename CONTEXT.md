@@ -124,6 +124,10 @@ _Avoid_: Ensure-running lifecycle, guest configuration
 A lifecycle run that reconciles both LXC infrastructure and guest configuration. It may start an existing stopped LXC because guest configuration requires the LXC to be running.
 _Avoid_: Provision-only lifecycle, configure-only lifecycle
 
+**Origin firewall**:
+The in-guest port allowlist that restricts declared TCP ports to loopback and exactly one inventory host. Any LXC can consume it through `config/lxc_origin_firewall`. It is enforced inside the guest, so it does not replace host-level segmentation.
+_Avoid_: Workstation firewall, host firewall, Proxmox firewall
+
 **Workstation setup marker**:
 The record written by a completed workstation setup run, holding the identity of the inputs that run applied. It is the authority consulted before any work begins, so an input the marker does not record is an input no later run can detect a change to.
 _Avoid_: Completion flag, sentinel file, done marker

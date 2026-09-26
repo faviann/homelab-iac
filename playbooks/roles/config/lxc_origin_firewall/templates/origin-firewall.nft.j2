@@ -1,12 +1,12 @@
-table inet workstation_origin {
+table inet origin_firewall {
   set allowed_ipv4 {
     type ipv4_addr
-    elements = { {% for address in workstation_origin_firewall_allowed_ipv4 %}{{ address }}{% if not loop.last %}, {% endif %}{% endfor %} }
+    elements = { {% for address in lxc_origin_firewall_allowed_ipv4 %}{{ address }}{% if not loop.last %}, {% endif %}{% endfor %} }
   }
 
   set protected_tcp_ports {
     type inet_service
-    elements = { {% for port in workstation_origin_firewall_protected_ports %}{{ port }}{% if not loop.last %}, {% endif %}{% endfor %} }
+    elements = { {% for port in lxc_origin_firewall_protected_ports %}{{ port }}{% if not loop.last %}, {% endif %}{% endfor %} }
   }
 
   chain input {

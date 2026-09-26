@@ -1,0 +1,6 @@
+---
+- name: Restart origin firewall
+  ansible.builtin.systemd:
+    name: "{{ lxc_origin_firewall_service_path | basename }}"
+    daemon_reload: true
+    state: restarted

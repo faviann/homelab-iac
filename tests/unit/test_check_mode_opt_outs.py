@@ -27,7 +27,7 @@ ACKNOWLEDGED_OPT_OUTS: dict[tuple[str, str], str] = {
         "version probe",
     ("playbooks/roles/config/lxc_nvidia_runtime/tasks/main.yml", "Verify NVIDIA runtime is registered with Docker"):
         "docker info probe",
-    ("playbooks/roles/config/lxc_workstation_baseline/tasks/origin_firewall.yml", "Resolve workstation origin firewall allowlist address"):
+    ("playbooks/roles/config/lxc_origin_firewall/tasks/main.yml", "Resolve origin firewall allowlist address"):
         "DNS lookup the firewall validation needs",
     ("playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml", "Inspect existing mount status for persistent home paths"):
         "findmnt read the mount plan needs",

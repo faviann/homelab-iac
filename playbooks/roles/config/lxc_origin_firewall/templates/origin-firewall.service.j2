@@ -1,0 +1,13 @@
+[Unit]
+Description=Origin firewall
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f {{ lxc_origin_firewall_nft_path }}
+ExecStop=/usr/sbin/nft delete table inet origin_firewall
+
+[Install]
+WantedBy=multi-user.target

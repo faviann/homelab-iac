@@ -4,14 +4,14 @@
 
 lxc_hwaddr: "BC:24:11:57:80:06"
 workstation_enabled: true
-workstation_origin_firewall_enabled: true
-workstation_origin_firewall_protected_ports:
+lxc_origin_firewall_enabled: true
+lxc_origin_firewall_protected_ports:
   - 4001 # Agent of Empires proxy
   - 9119 # Hermes dashboard
   - 18789 # OpenClaw gateway
   - 8788 # Reserved Collie origin
   - 19081 # MCP auth proxy
-workstation_origin_firewall_allowed_hosts:
+lxc_origin_firewall_allowed_hosts:
   - portal
 workstation_bw_download_url: >-
   https://github.com/bitwarden/clients/releases/download/cli-v{{
