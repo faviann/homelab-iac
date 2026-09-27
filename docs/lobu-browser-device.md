@@ -58,10 +58,9 @@ Each step is a condition to reach: on a commissioned box, confirm it and move on
 
    - The grant is bound to your personal organization. Approval returns 403 if
      that organization does not exist.
-   - Consent checks the browsed origin against `PUBLIC_GATEWAY_URL`. If they
-     disagree, approval fails. Check first that `resource` in
-     `curl -s https://lobu.admin.faviann.com/.well-known/oauth-protected-resource`
-     starts with the origin you are browsing.
+   - Approval is accepted only from the origin that serves it: the request's
+     `Origin` (or `Referer`) must match. Approve on the `/oauth/device` page
+     itself. `PUBLIC_GATEWAY_URL` plays no part in this check.
 
 3. **The sites are signed in, by hand.** Sign in inside the crawler's Chrome;
    MFA and CAPTCHA happen here. The sites are not listed in this repository:
@@ -75,8 +74,8 @@ Each step is a condition to reach: on a commissioned box, confirm it and move on
 
    A rebuild leaves the previous device row behind, offline. Ignore it: dispatch
    considers only workers inside the freshness window and treats an offline pin
-   as rebindable, a daily reaper deletes unbound rows after 30 days, and a manual
-   `DELETE` returns 409 under an active pin without revoking the device's token.
+   as rebindable, and a daily reaper deletes rows that have been unseen for 30
+   days and that nothing pins.
 
    The one real breakage is a pin you made by hand to the dead device's uuid.
    Lobu 19.2.0 does not guard against pinning a dead device, and a bad pin fails
