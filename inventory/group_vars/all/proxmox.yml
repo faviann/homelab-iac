@@ -21,7 +21,8 @@ proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zs
 
 # ==============================================================================
 # Shared Storage Configuration
-# The shared volume is mounted to all containers via config file (not mount_volumes)
+# The shared volume is mounted to all containers except browser devices via
+# config file (not mount_volumes)
 # because the volume is owned by container 200 and shared across containers
 # ==============================================================================
 proxmox_shared_volume_path: "local-zfs:subvol-200-disk-1"

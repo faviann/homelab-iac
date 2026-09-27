@@ -1,6 +1,6 @@
 ---
 # The operator logs in as lxc_ssh_user at uid 1000; the browser session runs as
-# a separate account above 1000, which the idmap keeps off the fleet's shared data.
+# a separate account.
 - name: Create the operator and session accounts
   vars:
     lxc_browser_device_accounts:

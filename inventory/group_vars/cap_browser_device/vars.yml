@@ -4,11 +4,13 @@
 
 browser_device_enabled: true
 
-# The session account stays above uid 1000. proxmox_default_idmap maps container
-# uid 1000 to the host uid that owns the fleet's shared bind mounts, and the
-# operator account keeps uid 1000.
+# The browser session runs as its own account, never the operator's uid 1000.
 browser_device_session_user: crawler
 browser_device_session_uid: 1001
+
+# No fleet bind mounts. Shared directories are 0755 and files 0644, so any uid
+# could read them; the Chrome profile stays on the root disk.
+proxmox_default_bind_mounts: {}
 
 # VNC accepts loopback and one gateway host. portal stands in until Guacamole has a host.
 lxc_origin_firewall_enabled: true
