@@ -147,10 +147,15 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://lobu.admin.faviann.com/
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'   # must be 401
 ```
 
-`resource` and `authorization_servers` in the protected-resource document come
-from `PUBLIC_GATEWAY_URL`; the authorization-server document reflects the
-request host. If they disagree, MCP requests fail as an opaque origin-trust
-rejection rather than as a routing error — check `PUBLIC_GATEWAY_URL` first.
+All three discovery values should name `https://lobu.admin.faviann.com`. With
+`AUTH_COOKIE_DOMAIN` unset, the protected-resource document comes from
+`PUBLIC_GATEWAY_URL` alone, whatever host was requested: `authorization_servers`
+is its origin and `resource` is that origin plus `/mcp`. The authorization-server
+document ignores `PUBLIC_GATEWAY_URL`: its `issuer` is always the origin that
+served the request.
+So an `issuer` naming the public origin while the protected-resource values name
+another means `PUBLIC_GATEWAY_URL` is wrong, and the protected-resource document
+is sending clients to that other origin.
 
 ## The single-user deviation
 
