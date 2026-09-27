@@ -35,20 +35,16 @@ Each step is a condition to reach: on a commissioned box, confirm it and move on
    **If the gate fails, stop.** This runbook has no second branch. Reopen
    `#369` and `#372` instead of improvising a transport.
 
-1. **You are looking at the session.** Tunnel VNC over SSH, then point a VNC
-   viewer at `localhost:5900`:
+1. **You are looking at the session.** Open
+   `https://lobu-crawler-01.admin.faviann.com/vnc.html?autoconnect=true` and sign
+   in through Authentik as a member of `admins`. noVNC asks for no VNC password.
+   If the screen is missing, check the units:
 
    ```bash
-   ssh -L 5900:localhost:5900 faviann@lobu-crawler-01.faviann.vms
+   systemctl is-active crawler-display crawler-wm crawler-browser crawler-session-view
    ```
 
-   The origin firewall accepts loopback, so the tunnel is the path until
-   Guacamole exists (`#439`). The viewer asks for no password. If the screen is
-   missing, check the units:
-
-   ```bash
-   systemctl is-active crawler-display crawler-wm crawler-browser
-   ```
+   If `portal` or `auth` is down, run `ssh -L 5900:localhost:5900 faviann@lobu-crawler-01.faviann.vms` and point a VNC viewer at `localhost:5900`.
 
 2. **The extension is paired, approved from the workstation.** The crawler shows
    a user code. Approve it in your own browser at

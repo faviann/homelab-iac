@@ -55,6 +55,19 @@ http:
       service: noop
       priority: 1002
 
+    # Session view for lobu-crawler-01 (docs/lobu-browser-device.md). The
+    # crawler's origin firewall admits portal's address, which every container
+    # here shares, so websockify also requires a Basic credential that only
+    # this router adds, after Authentik has admitted the request.
+    lobu-crawler-01:
+      rule: "Host(`lobu-crawler-01.admin.faviann.com`)"
+      entryPoints: websecure
+      service: lobu-crawler-01-session-view
+      priority: 1000
+      middlewares:
+        - protected-edge-auth@file
+        - lobu-crawler-01-session-view-auth
+
     # Shared AI provider proxy. Both the management panel and the agent API
     # live on the same port, so one LAN-restricted router covers both. The
     # service is also reachable directly at overmind.faviann.vms:8317, which
@@ -201,6 +214,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://lobu.faviann.vms:8787"
+    lobu-crawler-01-session-view:
+      loadBalancer:
+        servers:
+          - url: "http://lobu-crawler-01.faviann.vms:6080"
     cliproxy:
       loadBalancer:
         servers:
@@ -230,6 +247,12 @@ http:
       headers:
         customRequestHeaders:
           X-OpenClaw-Scopes: "operator.read,operator.write,operator.admin"
+    # Traefik renders the file provider as a Go template; the value comes
+    # from the traefik3 .env.
+    lobu-crawler-01-session-view-auth:
+      headers:
+        customRequestHeaders:
+          Authorization: 'Basic {{ env "LOBU_CRAWLER_01_SESSION_VIEW_BASIC" }}'
     collie-auth-recovery:
       redirectRegex:
         regex: "^https://collie\\.admin\\.faviann\\.com/auth/.*$"

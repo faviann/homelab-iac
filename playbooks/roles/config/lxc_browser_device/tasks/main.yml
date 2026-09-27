@@ -37,12 +37,14 @@
 
 # Nothing that locks or blanks the session is installed: no display manager,
 # screensaver, or keyring.
-- name: Install the display server, window manager, and xset
+- name: Install the display server, window manager, xset, and session view
   ansible.builtin.apt:
     name:
       - tigervnc-standalone-server
       - openbox
       - x11-xserver-utils
+      - novnc
+      - websockify
     install_recommends: false
     state: present
 
@@ -76,10 +78,13 @@
     src: "{{ item }}.service.j2"
     dest: /etc/systemd/system/{{ item }}.service
     mode: "0644"
+  # The session view unit carries the websockify credential.
+  diff: false
   loop:
     - crawler-display
     - crawler-wm
     - crawler-browser
+    - crawler-session-view
   register: _browser_device_units
 
 # Only a changed unit restarts, so a converged run leaves the session alone.
