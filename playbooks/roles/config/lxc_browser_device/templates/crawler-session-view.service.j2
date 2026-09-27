@@ -10,7 +10,8 @@ After=origin-firewall.service
 # /proc. The origin firewall still admits it only from portal.
 [Service]
 User={{ browser_device_session_user }}
-ExecStart=/usr/bin/websockify --web /usr/share/novnc --web-auth --auth-plugin BasicHTTPAuth --auth-source {{ browser_device_session_view_credential | required_credential }} {{ browser_device_session_view_port }} localhost:5900
+EnvironmentFile=/etc/crawler-session-view.env
+ExecStart=/usr/bin/websockify --web /usr/share/novnc --web-auth --auth-plugin BasicHTTPAuth --auth-source ${SESSION_VIEW_CREDENTIAL} {{ browser_device_session_view_port }} localhost:5900
 Restart=always
 
 [Install]
