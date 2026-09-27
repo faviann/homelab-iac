@@ -48,7 +48,7 @@ Secrets are only in encrypted `inventory/vault.yml` — never commit plaintext c
 | Type | Groups | Purpose |
 |------|--------|---------|
 | **Tiers** | `tier_tiny`, `tier_small`, `tier_medium`, `tier_large` | Resource allocation (mutually exclusive) |
-| **Capabilities** | `cap_docker`, `cap_gpu`, `cap_wireguard` | Sets feature flags: `docker_enabled`, `gpu_enabled`, etc. |
+| **Capabilities** | `cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_browser_device` | Sets feature flags: `docker_enabled`, `gpu_enabled`, etc. |
 | **Special** | `proxmox_api`, `lxcs` | API controller + all LXC targets |
 
 **Naming**: LXCs resolve as `{{ inventory_hostname }}.faviann.vms`

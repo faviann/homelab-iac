@@ -1,0 +1,17 @@
+---
+# Host-specific configuration for a Lobu browser device
+# Inherits from: tier_small, cap_browser_device
+
+lxc_hwaddr: "BC:24:11:99:7A:08"
+
+proxmox_lxc_overrides:
+  vmid: 309
+  hostname: lobu-crawler-01
+  # Room for Chrome and its libraries, journald's 1 GB cap, upgrade archives,
+  # and a profile whose cache sizes itself against free space.
+  disk: "16"
+  description: "Lobu browser device: one Chrome profile for one authenticated identity, managed via Ansible"
+  tags:
+    - ansible
+    - lobu
+    - browser-device

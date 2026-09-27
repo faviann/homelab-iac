@@ -2,7 +2,7 @@
 
 This inventory drives LXC automation on Proxmox. Hosts inherit variables from
 resource tiers (baseline CPU/RAM/disk) and optional capabilities (Docker,
-WireGuard, GPU).
+WireGuard, GPU, browser device).
 
 ## Resource Tiers
 
@@ -20,6 +20,7 @@ WireGuard, GPU).
 | `cap_docker` | Docker runtime, compose, docker-agents baseline, and Hawser Standard remote access | `install_docker`, `proxmox_lxc_capability_defaults.features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled`, `dockhand_hawser_token` |
 | `cap_gpu` | GPU passthrough for hardware acceleration | `enable_gpu_passthrough`, `configure_nvidia_runtime` |
 | `cap_wireguard` | WireGuard kernel support | `enable_wireguard`, `lxc_wireguard_features` |
+| `cap_browser_device` | Browser device: session accounts and a VNC origin firewall, without Docker | `browser_device_enabled`, `browser_device_session_user`, `browser_device_session_uid`, `lxc_origin_firewall_*`, `proxmox_lxc_capability_defaults.features` |
 
 `cap_docker` baseline:
 - `docker_agents_enabled: true`
@@ -37,6 +38,7 @@ and does not run Hawser because it hosts Dockhand and Traefik instead of acting 
 | `portal` | `tier_medium` | `cap_docker` | Traefik host (`traefik_kop_enabled: false`) |
 | `servarr` | `tier_medium` | `cap_docker` | Servarr application host |
 | `seedbox` | `tier_large` | `cap_docker`, `cap_wireguard` | Download/tunneled host |
+| `lobu-crawler-01` | `tier_small` | `cap_browser_device` | Browser device; not a Docker host |
 
 ## Directory Layout
 
@@ -53,11 +55,13 @@ inventory/
 |   |-- tier_small/vars.yml
 |   |-- tier_medium/vars.yml
 |   |-- tier_large/vars.yml
+|   |-- cap_browser_device/vars.yml
 |   |-- cap_docker/vars.yml
 |   |-- cap_gpu/vars.yml
 |   `-- cap_wireguard/vars.yml
 `-- host_vars/
     |-- auth.yml
+    |-- lobu-crawler-01.yml
     |-- portal.yml
     |-- seedbox.yml
     `-- servarr.yml

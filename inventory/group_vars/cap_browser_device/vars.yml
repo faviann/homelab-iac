@@ -1,0 +1,23 @@
+---
+# Capability group: browser device
+# One LXC, one Chrome profile, one authenticated identity. Not a Docker host.
+
+browser_device_enabled: true
+
+# The session account stays above uid 1000. proxmox_default_idmap maps container
+# uid 1000 to the host uid that owns the fleet's shared bind mounts, and the
+# operator account keeps uid 1000.
+browser_device_session_user: crawler
+browser_device_session_uid: 1001
+
+# VNC accepts loopback and one gateway host. portal stands in until Guacamole has a host.
+lxc_origin_firewall_enabled: true
+lxc_origin_firewall_protected_ports:
+  - 5900 # VNC display :0
+lxc_origin_firewall_allowed_hosts:
+  - portal
+
+# Chrome keeps its sandbox, which needs user namespaces. No keyctl: there is no Docker.
+proxmox_lxc_capability_defaults:
+  features:
+    - nesting=1

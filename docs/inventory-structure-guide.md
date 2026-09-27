@@ -20,6 +20,7 @@ Hosts can belong to **multiple** capability groups:
 - **cap_docker**: Docker runtime, compose, and the default-on docker-agents managed stack
 - **cap_gpu**: GPU passthrough for hardware acceleration
 - **cap_wireguard**: WireGuard kernel module access
+- **cap_browser_device**: Browser device session accounts and VNC origin firewall, without Docker
 
 Every `cap_docker` host receives Docker runtime support. By default, `docker_agents_enabled: true`
 also seeds the managed `docker-agents` stack:
@@ -77,6 +78,7 @@ required by downstream provisioning and configuration roles.
 | `cap_docker` | `docker_enabled`, `install_docker`, `docker_user`, `docker_uid`, `docker_gid`, `proxmox_lxc_capability_defaults.features`, `docker_agents_enabled`, `traefik_kop_enabled`, `dockhand_hawser_token` | `config/lxc_docker_environment`, `config/lxc_docker_runtime`, `provisioning/lxc_spec_builder` |
 | `cap_wireguard` | `wireguard_enabled` | `infrastructure/proxmox_lxc_host_config` |
 | `cap_gpu` | `gpu_enabled` | `infrastructure/proxmox_lxc_host_config` |
+| `cap_browser_device` | `browser_device_enabled`, `browser_device_session_user`, `browser_device_session_uid`, `lxc_origin_firewall_*`, `proxmox_lxc_capability_defaults.features` | `config/lxc_browser_device`, `config/lxc_origin_firewall`, `infrastructure/proxmox_lxc_host_config` |
 
 If a host should run Docker, it must be in `cap_docker` so the Docker roles and
 `lxc_spec_builder` receive the expected user and feature variables. Missing membership

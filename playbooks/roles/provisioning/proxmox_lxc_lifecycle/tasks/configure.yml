@@ -30,6 +30,13 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
 
+    # Runs before GitHub keys: it creates the operator account, and useradd
+    # leaves a home directory it did not create owned by root.
+    - name: Configure browser device
+      ansible.builtin.include_role:
+        name: config/lxc_browser_device
+      when: browser_device_enabled | default(false)
+
     - name: Configure GitHub SSH keys
       ansible.builtin.include_role:
         name: config/lxc_github_keys

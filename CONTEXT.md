@@ -124,6 +124,10 @@ _Avoid_: Ensure-running lifecycle, guest configuration
 A lifecycle run that reconciles both LXC infrastructure and guest configuration. It may start an existing stopped LXC because guest configuration requires the LXC to be running.
 _Avoid_: Provision-only lifecycle, configure-only lifecycle
 
+**Browser device**:
+One LXC holding one Chrome profile, one authenticated identity, and one query at a time. A second browser device exists for a second identity, never for capacity.
+_Avoid_: Crawler pool, browser worker, headless browser
+
 **Origin firewall**:
 The in-guest port allowlist that restricts declared TCP ports to loopback and exactly one inventory host. Any LXC can consume it through `config/lxc_origin_firewall`. It is enforced inside the guest, so it does not replace host-level segmentation.
 _Avoid_: Workstation firewall, host firewall, Proxmox firewall
