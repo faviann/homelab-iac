@@ -1,0 +1,14 @@
+[Unit]
+Description=Browser device window manager
+BindsTo=crawler-display.service
+After=crawler-display.service
+
+[Service]
+User={{ browser_device_session_user }}
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/openbox
+Restart=always
+
+# Starting the display, including its automatic restarts, starts this unit again.
+[Install]
+WantedBy=crawler-display.service

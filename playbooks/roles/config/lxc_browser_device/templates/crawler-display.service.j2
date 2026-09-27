@@ -1,0 +1,16 @@
+[Unit]
+Description=Browser device display and VNC server
+# Xvnc listens on every interface, so the origin firewall must filter 5900 first.
+After=origin-firewall.service
+
+[Service]
+User={{ browser_device_session_user }}
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/Xvnc :0 -geometry {{ browser_device_display_geometry }} -depth 24 -SecurityTypes None
+# Retrying until the X server answers also holds the window manager and
+# browser back until the display is ready.
+ExecStartPost=/bin/sh -c 'until /usr/bin/xset s off -dpms; do sleep 0.2; done'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -12,7 +12,14 @@ browser_device_session_uid: 1001
 # could read them; the Chrome profile stays on the root disk.
 proxmox_default_bind_mounts: {}
 
-# VNC accepts loopback and one gateway host. portal stands in until Guacamole has a host.
+browser_device_display_geometry: 1920x1080
+
+# Chrome installs these by managed policy on every start, including from an empty profile.
+browser_device_extension_ids:
+  - jhgcecbdpnoehfnhpdfihlchjddapepi # Owletto
+
+# VNC accepts loopback and one gateway host. portal stands in until Guacamole has a host;
+# until then, tunnel in with ssh -L 5900:localhost:5900 lobu-crawler-01.
 lxc_origin_firewall_enabled: true
 lxc_origin_firewall_protected_ports:
   - 5900 # VNC display :0
