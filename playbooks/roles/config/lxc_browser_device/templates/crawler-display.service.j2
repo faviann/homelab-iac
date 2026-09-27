@@ -1,6 +1,8 @@
 [Unit]
 Description=Browser device display and VNC server
-# Xvnc listens on every interface, so the origin firewall must filter 5900 first.
+# Xvnc listens on every interface without a password, so it runs only while
+# the origin firewall filters 5900.
+Requires=origin-firewall.service
 After=origin-firewall.service
 
 [Service]

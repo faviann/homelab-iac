@@ -1,12 +1,17 @@
 [Unit]
 Description=Origin firewall
-After=network-online.target
+After=network-online.target nftables.service
+# nftables.service flushes the whole ruleset when it stops or restarts, as its
+# package upgrade does. PartOf= takes this unit, and every unit requiring it,
+# down before the flush and brings them back after.
+PartOf=nftables.service
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/sbin/nft -f {{ lxc_origin_firewall_nft_path }}
+ExecReload=/usr/sbin/nft -f {{ lxc_origin_firewall_nft_path }}
 ExecStop=/usr/sbin/nft delete table inet origin_firewall
 
 [Install]

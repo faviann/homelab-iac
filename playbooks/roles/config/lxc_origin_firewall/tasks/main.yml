@@ -97,7 +97,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Restart origin firewall
+  notify: Reload origin firewall
   when: lxc_origin_firewall_enabled | bool
 
 - name: Validate origin firewall ruleset
@@ -119,7 +119,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Restart origin firewall
+  notify: Reload origin firewall
   when: lxc_origin_firewall_enabled | bool
 
 - name: Enable origin firewall service

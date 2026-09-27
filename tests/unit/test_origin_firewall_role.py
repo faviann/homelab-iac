@@ -70,10 +70,13 @@ class OriginFirewallRoleTests(unittest.TestCase):
             rendered_firewall_service,
         )
         self.assertIn("RemainAfterExit=yes", rendered_firewall_service)
+        # Without PartOf=, a restart of Debian's nftables.service flushes the
+        # table while this unit still reports active, so Requires= never fires.
+        self.assertIn("\nPartOf=nftables.service\n", rendered_firewall_service)
 
         unit_name = "{{ lxc_origin_firewall_service_path | basename }}"
-        # Restarting on every run would delete and reload the table, briefly
-        # opening the protected ports. Only the handler restarts, on change.
+        # Starting, not restarting, keeps a converged run from touching the
+        # table. Only the handler reloads it, on change.
         # The firewall regression's systemd stub reports no change either way,
         # so it cannot see this.
         enable_task = task_named(firewall_tasks, "Enable origin firewall service")
@@ -88,7 +91,16 @@ class OriginFirewallRoleTests(unittest.TestCase):
 
         firewall_handlers = load_yaml(ROLE_ROOT / "handlers/main.yml")
         self.assertEqual(firewall_handlers[0]["ansible.builtin.systemd"]["name"], unit_name)
-        self.assertEqual(firewall_handlers[0]["ansible.builtin.systemd"]["state"], "restarted")
+        self.assertEqual(firewall_handlers[0]["ansible.builtin.systemd"]["state"], "reloaded")
+
+    def test_vnc_display_runs_only_under_the_origin_firewall(self) -> None:
+        # Xvnc accepts unauthenticated connections on every interface. After=
+        # alone would still start it when the firewall fails to load.
+        firewall_unit = Path(load_yaml(ROLE_ROOT / "defaults/main.yml")["lxc_origin_firewall_service_path"]).name
+        display_unit = (
+            REPO_ROOT / "playbooks/roles/config/lxc_browser_device/templates/crawler-display.service.j2"
+        ).read_text(encoding="utf-8")
+        self.assertIn(f"\nRequires={firewall_unit}\n", display_unit)
 
 
 if __name__ == "__main__":
