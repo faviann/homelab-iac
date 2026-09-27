@@ -56,11 +56,8 @@ Each step is a condition to reach: on a commissioned box, confirm it and move on
    The crawler's profile holds site cookies only, never a Lobu session: control
    plane admin cookies do not belong on the box that browses the open internet.
 
-   - The grant is bound to your personal organization. Approval returns 403 if
-     that organization does not exist.
-   - Approval is accepted only from the origin that serves it: the request's
-     `Origin` (or `Referer`) must match. Approve on the `/oauth/device` page
-     itself. `PUBLIC_GATEWAY_URL` plays no part in this check.
+   The grant is bound to your personal organization. Approval returns 403 if
+   that organization does not exist.
 
 3. **The sites are signed in, by hand.** Sign in inside the crawler's Chrome;
    MFA and CAPTCHA happen here. The sites are not listed in this repository:
