@@ -147,10 +147,21 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://lobu.admin.faviann.com/
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'   # must be 401
 ```
 
-`resource` and `authorization_servers` in the protected-resource document come
-from `PUBLIC_GATEWAY_URL`; the authorization-server document reflects the
-request host. If they disagree, MCP requests fail as an opaque origin-trust
-rejection rather than as a routing error — check `PUBLIC_GATEWAY_URL` first.
+All three discovery values should name `https://lobu.admin.faviann.com`. Where
+each comes from, with `AUTH_COOKIE_DOMAIN` unset:
+
+- **`issuer`** (authorization-server document): the origin that served the
+  request, taken from Traefik's `X-Forwarded-Proto` and `X-Forwarded-Host`
+  (or `Host`). `PUBLIC_GATEWAY_URL` is ignored.
+- **`authorization_servers`** (protected-resource document): the origin of
+  `PUBLIC_GATEWAY_URL`.
+- **`resource`** (protected-resource document): the serving origin plus `/mcp`,
+  kept only when that origin equals `PUBLIC_GATEWAY_URL`'s; otherwise Lobu
+  substitutes `PUBLIC_GATEWAY_URL`'s origin. It therefore always names the
+  configured origin.
+
+A wrong `issuer` points at the proxy's forwarded headers. Wrong
+protected-resource values with a correct `issuer` point at `PUBLIC_GATEWAY_URL`.
 
 ## The single-user deviation
 
@@ -258,6 +269,10 @@ same URL independently; there is no automatic cross-repository value
 consumption. This repository does **not** write into `~/.config/lobu`. That
 directory is persisted device identity: writing to it from configuration
 management is how a duplicate device registration happens.
+
+The prohibition covers that directory's contents only. A machine without
+dotfiles may have its Lobu CLI installed and its daemon supervised from this
+repository.
 
 - `faviann/homelab-iac#270` (closed) persists `~/.config/lobu` across intentional
   workstation LXC rebuilds. As long as that state is intact, restarting or
