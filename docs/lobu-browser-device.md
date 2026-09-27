@@ -65,19 +65,25 @@ Each step is a condition to reach: on a commissioned box, confirm it and move on
    Whether a box is fully commissioned is therefore answerable only from the box.
 
 4. **The device is reachable. Stop there.** From your signed-in browser,
-   `GET https://lobu.admin.faviann.com/api/me/devices` shows the crawler's device
-   with `online: true`, which means it checked in within the last 120 seconds.
+   read `GET https://lobu.admin.faviann.com/api/me/devices` twice, at least 120
+   seconds apart. The crawler's device is the row whose `last_seen_at` moved
+   between the reads and that still shows `online: true`. Every poll moves
+   `last_seen_at`. `online: true` only means the device checked in within the
+   last 120 seconds, so one read cannot prove that the device is polling:
+   pairing refreshes the new row, and the previous row stays fresh until 120
+   seconds after the old box last checked in.
    Commissioning owns *reachable*; `faviann/skills#198` owns *working*.
 
-   A rebuild leaves the previous device row behind, offline. Ignore it: dispatch
-   considers only workers inside the freshness window and treats an offline pin
-   as rebindable, and a daily reaper deletes rows that have been unseen for 30
-   days and that nothing pins.
+   A rebuild leaves the previous device row behind. Its `last_seen_at` stops
+   moving, and it reads `online: false` once its window expires. Ignore it:
+   dispatch considers only workers inside the freshness window and treats an
+   offline pin as rebindable, and a daily reaper deletes rows that have been
+   unseen for 30 days and that nothing pins.
 
    The one real breakage is a pin you made by hand to the dead device's uuid.
    Lobu 19.2.0 does not guard against pinning a dead device, and a bad pin fails
-   silently as a run that never starts. Once the new device shows
-   `online: true`, re-point that pin at it.
+   silently as a run that never starts. Once the two reads identify the new
+   device, re-point that pin at it.
 
 ## Constraints on the operator
 
