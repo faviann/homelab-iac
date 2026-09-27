@@ -259,6 +259,10 @@ consumption. This repository does **not** write into `~/.config/lobu`. That
 directory is persisted device identity: writing to it from configuration
 management is how a duplicate device registration happens.
 
+The prohibition covers that directory's contents only. A machine without
+dotfiles may have its Lobu CLI installed and its daemon supervised from this
+repository.
+
 - `faviann/homelab-iac#270` (closed) persists `~/.config/lobu` across intentional
   workstation LXC rebuilds. As long as that state is intact, restarting or
   rebuilding the workstation reuses the same device.
