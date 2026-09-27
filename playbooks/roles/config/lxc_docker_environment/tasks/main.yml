@@ -161,6 +161,15 @@
     - overmind_postgres_backup_enabled | default(false) | bool
     - stack_filter | default(none) in [none, 'overmind']
 
+# Explicit, one-time: ./run.sh --limit broodling -- -e broodling_initialize=true
+- name: Initialize the broodling stack on explicit request
+  ansible.builtin.include_tasks: broodling_initialize.yml
+  vars:
+    broodling_stack_dir: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/broodling"
+  when:
+    - broodling_initialize | default(false) | bool
+    - "'broodling' in (lxc_docker_env_deployment_report.discovered_stacks | default([]))"
+
 - name: Seed Dockhand environments
   ansible.builtin.include_tasks: dockhand_environments.yml
   when:

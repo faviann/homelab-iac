@@ -1,0 +1,71 @@
+---
+name: broodling
+
+x-managed-files:
+  # GH_TOKEN and the gateway key. Only the broodling service reads it.
+  - path: ./broodling.env
+    mode: "0600"
+
+# faviann/broodling publishes both images per commit and selects them by
+# digest. These are the pair from revision 2c539f0164ff17dae16020ce40fb101a031b172e.
+x-target-image: &target-image ghcr.io/faviann/broodling-target@sha256:3b1f82ee6d660abe05f13588a88c71dd8776ef6aa90b0504a5f942c7036bff05
+
+services:
+  broodling:
+    image: ghcr.io/faviann/broodling@sha256:94d8acf5c182b7d46f5fb36dec9855fea491d0fe735e820b4348e5af7459e023
+    restart: unless-stopped
+    env_file: ./broodling.env
+    environment:
+      Broodling__Invocation: /etc/broodling/invocation.json
+      Broodling__RepositoryRoot: /var/lib/broodling/repositories
+    ports:
+      # Unauthenticated; the LAN is the trust boundary. Traefik reaches it here.
+      - "8080:8080"
+    volumes:
+      - /data/broodling/broodling:/var/lib/broodling
+      - ./appdata/broodling:/etc/broodling:ro
+      # The public root certificate only. Never the key or Caddy's data.
+      - /data/broodling/zeroshot-tls/root:/tls-root:ro
+
+  # The DirectTarget. Container root, Docker's default capabilities, no port:
+  # zeroshot-tls forwards the origin to its fixed inner port. Upstream
+  # readiness requires restart policy "no"; an ordinary deploy's `up -d`
+  # starts it again after a reboot.
+  zeroshot:
+    image: *target-image
+    restart: "no"
+    command: [--listen, 0.0.0.0:18770, --public-origin, https://zeroshot.dev.faviann.com, --storage, /state]
+    volumes:
+      - /data/broodling/zeroshot/state:/state
+      - /data/broodling/zeroshot/home:/home/node
+      - /data/broodling/zeroshot-tls/root:/tls-root:ro
+
+  zeroshot-tls:
+    image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    restart: unless-stopped
+    user: "10443:10443"
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    ports:
+      - "8443:443"
+    networks:
+      default:
+        aliases: [zeroshot.dev.faviann.com]
+    volumes:
+      - /data/broodling/zeroshot-tls/key:/tls-root-key:ro
+      - /data/broodling/zeroshot-tls/root:/tls-root:ro
+      - ./appdata/zeroshot-tls:/etc/caddy:ro
+      - /data/broodling/zeroshot-tls/data:/data
+      - /data/broodling/zeroshot-tls/config:/config
+
+  # One-off root helper for the explicit first initialization
+  # (`docker compose run --rm --no-deps initialize-tls`); the profile keeps it
+  # out of `up`. It refuses a non-empty key or root directory.
+  initialize-tls:
+    image: *target-image
+    profiles: [initialize]
+    network_mode: none
+    command: [initialize-tls]
+    volumes:
+      - /data/broodling/zeroshot-tls/key:/tls-root-key
+      - /data/broodling/zeroshot-tls/root:/tls-root

@@ -1,0 +1,23 @@
+---
+schema_version: 1
+kind: stack
+name: broodling
+description: Broodling PR agent service with its Zeroshot DirectTarget behind zeroshot-tls
+portability:
+  tier: host-bound-app
+  owner: stack
+runtime:
+  template_inputs:
+    - stack_vars
+  host_requirements:
+    external_networks: []
+    host_directories:
+      - /data/broodling
+      - /tank/broodling
+    ownership_overrides: []
+    bind_mounts:
+      - /tank/broodling,mp=/data/broodling
+exposure:
+  # File-routed through the portal Traefik static config (issue #354).
+  traefik: none
+  homepage_instances: []
