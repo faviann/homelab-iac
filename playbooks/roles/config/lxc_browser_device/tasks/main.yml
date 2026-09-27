@@ -1,6 +1,6 @@
 ---
 # The operator logs in as lxc_ssh_user at uid 1000; the browser session runs as
-# a separate account above 1000, which the idmap keeps off the fleet's shared data.
+# a separate account.
 - name: Create the operator and session accounts
   vars:
     lxc_browser_device_accounts:
@@ -34,3 +34,61 @@
 - name: Configure origin firewall
   ansible.builtin.include_role:
     name: config/lxc_origin_firewall
+
+# Nothing that locks or blanks the session is installed: no display manager,
+# screensaver, or keyring.
+- name: Install the display server, window manager, and xset
+  ansible.builtin.apt:
+    name:
+      - tigervnc-standalone-server
+      - openbox
+      - x11-xserver-utils
+    install_recommends: false
+    state: present
+
+- name: Check for Google Chrome
+  ansible.builtin.stat:
+    path: /usr/bin/google-chrome-stable
+  register: _browser_device_chrome
+
+# The package installs Google's signing key and apt source and rewrites that
+# source daily, so apt owns every later Chrome upgrade.
+- name: Install Google Chrome
+  ansible.builtin.apt:
+    deb: https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    install_recommends: false
+  when: not _browser_device_chrome.stat.exists
+
+- name: Ensure the Chrome managed policy directory exists
+  ansible.builtin.file:
+    path: /etc/opt/chrome/policies/managed
+    state: directory
+    mode: "0755"
+
+- name: Force-install the browser extensions
+  ansible.builtin.copy:
+    dest: /etc/opt/chrome/policies/managed/browser-device.json
+    content: "{{ {'ExtensionInstallForcelist': browser_device_extension_ids} | to_nice_json }}\n"
+    mode: "0644"
+
+- name: Install the session units
+  ansible.builtin.template:
+    src: "{{ item }}.service.j2"
+    dest: /etc/systemd/system/{{ item }}.service
+    mode: "0644"
+  loop:
+    - crawler-display
+    - crawler-wm
+    - crawler-browser
+  register: _browser_device_units
+
+# Only a changed unit restarts, so a converged run leaves the session alone.
+- name: Run the session units
+  ansible.builtin.systemd_service:
+    name: "{{ item.item }}"
+    daemon_reload: "{{ _browser_device_units is changed }}"
+    enabled: true
+    state: "{{ item.changed | ternary('restarted', 'started') }}"
+  loop: "{{ _browser_device_units.results }}"
+  loop_control:
+    label: "{{ item.item }}"

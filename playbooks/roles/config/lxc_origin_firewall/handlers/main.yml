@@ -1,6 +1,8 @@
 ---
-- name: Restart origin firewall
+# Never restart: ExecStop deletes the table, which would expose the protected
+# ports until ExecStart loads it again.
+- name: Reload origin firewall
   ansible.builtin.systemd:
     name: "{{ lxc_origin_firewall_service_path | basename }}"
     daemon_reload: true
-    state: restarted
+    state: reloaded
