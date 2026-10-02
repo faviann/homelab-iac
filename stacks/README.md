@@ -243,7 +243,8 @@ Run the credential-free contract tests with the locked environment:
 2. Add `.env` or `.env.j2` if the stack needs environment variables.
 3. For bind-mount target dirs that need pre-creation, add an `x-prereq-dirs` block to the repo-managed compose definition for the stack. Use `compose.yaml` by default. If you are intentionally preserving a vendor upstream base compose, put it in `compose.override.yaml` instead. Dirs that already contain committed config files need no entry.
 4. Add Traefik and Homepage labels only to the user-facing service.
-5. Deploy with:
+5. Add `stack.yaml` with an `updates` policy, then check the stack with `./validate.sh stack stacks/<host>/<stack>`.
+6. Deploy with:
 
 ```bash
 ./run.sh --limit <host>
@@ -414,19 +415,39 @@ TZ=America/Montreal
 HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 ```
 
+## Normalization Defaults
+
+Ordinary app stacks follow these defaults. Vendor-preserving, foundational, and VPN-namespace stacks, and the exceptions in [ADR-006](../docs/decisions/adr-006-stack-normalization-exceptions.md), may differ intentionally.
+
+| Area | Default |
+| --- | --- |
+| Labels | Map syntax |
+| Restart | `restart: unless-stopped` |
+| `container_name` | The service name, or a clearer operational name documented in the stack README |
+| `hostname` | Set only when the application needs it |
+| LSIO images | `PUID`/`PGID`/`TZ` environment variables and no `user:` directive |
+| Other images | Keep `user:` when file ownership or application behavior needs it |
+| Image tags | Keep intentional tags; pin stateful databases |
+
 ## Review Checklist
 
-1. Exposure intent is explicit.
-2. Only user-facing services carry Traefik labels.
-3. Homepage labels match the intended access tier.
-4. All bind-mount target dirs that need pre-creation are declared in `x-prereq-dirs` in the repo-managed compose definition for the stack. `compose.yaml` is the default location; vendor-preserving stacks may use `compose.override.yaml`. No `.gitkeep` files.
-5. Any new subdomain tier also updates Traefik SANs.
-6. Secrets live in vault-backed `.env.j2`, not static `.env`.
-7. Stateful databases should not use floating `latest` tags; pin them and give them a realistic `stop_grace_period`.
-8. Portability tier is clear: portable app, host-bound app, or foundational controlled migration.
-9. Host-level deployment mechanics remain in inventory/host vars, not stack metadata.
-10. Stack-local docs and `stack.yaml` contain no plaintext secrets or secret-shaped values.
-11. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans.
+1. `./validate.sh stack stacks/<host>/<stack>` exits 0.
+2. Exposure intent is explicit.
+3. Only user-facing services carry Traefik labels.
+4. Every protected router names `protected-edge-auth@file`; public and native-auth routers do not.
+5. Homepage labels match the intended access tier.
+6. All bind-mount target dirs that need pre-creation are declared in `x-prereq-dirs` in the repo-managed compose definition for the stack. `compose.yaml` is the default location; vendor-preserving stacks may use `compose.override.yaml`. No `.gitkeep` files.
+7. Routed services are reachable: label-exported routes publish a host port and name it in the `loadbalancer.server.port` label when it differs from the container port; VPN-namespace apps publish on the VPN service.
+8. External networks used in Compose are listed in the host's `lxc_docker_env_external_networks`.
+9. No two bindings on the host share the same `(host_ip, port, protocol)`.
+10. GPU configuration appears only on hosts with `gpu_enabled`.
+11. Any new subdomain tier also updates Traefik SANs.
+12. Secrets live in vault-backed `.env.j2`, not static `.env`.
+13. Stateful databases should not use floating `latest` tags; pin them and give them a realistic `stop_grace_period`.
+14. Portability tier is clear: portable app, host-bound app, or foundational controlled migration.
+15. Host-level deployment mechanics remain in inventory/host vars, not stack metadata.
+16. Stack-local docs and `stack.yaml` contain no plaintext secrets or secret-shaped values.
+17. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans, and ADR-006 exceptions keep their behavior unless the user asks to change it.
 
 ## Notes
 
