@@ -20,7 +20,7 @@ WireGuard, GPU, browser device).
 | `cap_docker` | Docker runtime, compose, docker-agents baseline, and Hawser Standard remote access | `install_docker`, `proxmox_lxc_capability_defaults.features`, `docker_user`, `docker_agents_enabled`, `traefik_kop_enabled`, `dockhand_hawser_token` |
 | `cap_gpu` | GPU passthrough for hardware acceleration | `enable_gpu_passthrough`, `configure_nvidia_runtime` |
 | `cap_wireguard` | WireGuard kernel support | `enable_wireguard`, `lxc_wireguard_features` |
-| `cap_browser_device` | Browser device: a persistent Chrome session under Xvnc behind a VNC origin firewall, without Docker or fleet bind mounts | `browser_device_enabled`, `browser_device_session_user`, `browser_device_session_uid`, `browser_device_display_geometry`, `browser_device_extension_ids`, `lxc_origin_firewall_*`, `proxmox_lxc_capability_defaults.features`, `proxmox_default_bind_mounts` |
+| `cap_browser_device` | Browser device: a persistent Chrome session under Xvnc, viewed through noVNC behind an origin firewall, without Docker or fleet bind mounts | `browser_device_enabled`, `browser_device_session_user`, `browser_device_session_uid`, `browser_device_display_geometry`, `browser_device_extension_ids`, `browser_device_session_view_port`, `lxc_origin_firewall_*`, `proxmox_lxc_capability_defaults.features`, `proxmox_default_bind_mounts` |
 
 `cap_docker` baseline:
 - `docker_agents_enabled: true`

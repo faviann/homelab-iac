@@ -37,12 +37,14 @@
 
 # Nothing that locks or blanks the session is installed: no display manager,
 # screensaver, or keyring.
-- name: Install the display server, window manager, and xset
+- name: Install the display server, window manager, xset, and session view
   ansible.builtin.apt:
     name:
       - tigervnc-standalone-server
       - openbox
       - x11-xserver-utils
+      - novnc
+      - websockify
     install_recommends: false
     state: present
 
@@ -71,6 +73,16 @@
     content: "{{ {'ExtensionInstallForcelist': browser_device_extension_ids} | to_nice_json }}\n"
     mode: "0644"
 
+# The credential stays out of the unit so systemctl show, which the systemd
+# module returns, reports only the variable name.
+- name: Install the session view credential
+  ansible.builtin.copy:
+    dest: /etc/crawler-session-view.env
+    content: "SESSION_VIEW_CREDENTIAL={{ browser_device_session_view_credential | required_credential }}\n"
+    mode: "0600"
+  no_log: true
+  register: _browser_device_session_view_env
+
 - name: Install the session units
   ansible.builtin.template:
     src: "{{ item }}.service.j2"
@@ -80,15 +92,21 @@
     - crawler-display
     - crawler-wm
     - crawler-browser
+    - crawler-session-view
   register: _browser_device_units
 
-# Only a changed unit restarts, so a converged run leaves the session alone.
+# Only a changed unit or credential restarts, so a converged run leaves the
+# session alone.
 - name: Run the session units
   ansible.builtin.systemd_service:
     name: "{{ item.item }}"
     daemon_reload: "{{ _browser_device_units is changed }}"
     enabled: true
-    state: "{{ item.changed | ternary('restarted', 'started') }}"
+    state: >-
+      {{
+        (item.changed or (item.item == 'crawler-session-view' and _browser_device_session_view_env is changed))
+        | ternary('restarted', 'started')
+      }}
   loop: "{{ _browser_device_units.results }}"
   loop_control:
     label: "{{ item.item }}"

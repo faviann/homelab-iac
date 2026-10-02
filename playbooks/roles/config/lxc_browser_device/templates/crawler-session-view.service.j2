@@ -1,0 +1,18 @@
+[Unit]
+Description=Browser device session view (noVNC over websockify)
+# websockify listens on every interface, so it runs only while the origin
+# firewall filters its port.
+Requires=origin-firewall.service
+After=origin-firewall.service
+
+# Accepted risk: websockify takes the credential only on its command line, so
+# any account on the box, the session account included, can read it from
+# /proc. The origin firewall still admits it only from portal.
+[Service]
+User={{ browser_device_session_user }}
+EnvironmentFile=/etc/crawler-session-view.env
+ExecStart=/usr/bin/websockify --web /usr/share/novnc --web-auth --auth-plugin BasicHTTPAuth --auth-source ${SESSION_VIEW_CREDENTIAL} {{ browser_device_session_view_port }} localhost:5900
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

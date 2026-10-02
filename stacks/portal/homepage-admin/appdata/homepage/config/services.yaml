@@ -16,3 +16,10 @@
 #     - My Third Service:
 #         href: http://localhost/
 #         description: Homepage is 😎
+
+# lobu-crawler-01 runs no Docker, so its session view has no labels to discover.
+- Lobu:
+    - lobu-crawler-01:
+        href: https://lobu-crawler-01.admin.faviann.com/vnc.html?autoconnect=true
+        description: Browser device session view
+        icon: novnc

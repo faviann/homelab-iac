@@ -18,11 +18,12 @@ browser_device_display_geometry: 1920x1080
 browser_device_extension_ids:
   - jhgcecbdpnoehfnhpdfihlchjddapepi # Owletto
 
-# VNC accepts loopback and one gateway host. portal stands in until Guacamole has a host;
-# until then, tunnel in with ssh -L 5900:localhost:5900 lobu-crawler-01.
+# Xvnc listens on loopback only. websockify serves the noVNC session view and
+# accepts loopback and portal, where Traefik puts Authentik in front of it.
+browser_device_session_view_port: 6080
 lxc_origin_firewall_enabled: true
 lxc_origin_firewall_protected_ports:
-  - 5900 # VNC display :0
+  - "{{ browser_device_session_view_port }}"
 lxc_origin_firewall_allowed_hosts:
   - portal
 

@@ -4,6 +4,9 @@
 
 lxc_hwaddr: "BC:24:11:99:7A:08"
 
+# user:password that websockify requires. portal's traefik3 stack sends the same value.
+browser_device_session_view_credential: "{{ vault_lobu_crawler_01_session_view_credential }}"
+
 proxmox_lxc_overrides:
   vmid: 309
   hostname: lobu-crawler-01
