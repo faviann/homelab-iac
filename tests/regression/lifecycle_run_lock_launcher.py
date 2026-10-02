@@ -31,6 +31,23 @@ FIXTURE_COLLECTIONS = (
 )
 
 
+BUSY_CHECK_DEFAULTS = (
+    "-e",
+    "lxc_busy_check_override=false",
+    "-e",
+    "lxc_busy_check_deferral_file=<deferral-file>",
+)
+
+
+def normalized_argv(argv: list[str]) -> list[str]:
+    return [
+        "lxc_busy_check_deferral_file=<deferral-file>"
+        if argument.startswith("lxc_busy_check_deferral_file=")
+        else argument
+        for argument in argv
+    ]
+
+
 def make_fake_uv(bin_dir: Path) -> None:
     fake_uv = bin_dir / "uv"
     fake_uv.write_text(
@@ -82,6 +99,15 @@ if mode in ("cleanup_contention_success", "cleanup_contention_fail"):
     metadata_file.flush()
     metadata_file.close()
     if mode == "cleanup_contention_fail":
+        raise SystemExit(42)
+if mode in ("defer", "defer_fail"):
+    deferral = next(
+        argument.split("=", 1)[1]
+        for argument in arguments
+        if argument.startswith("lxc_busy_check_deferral_file=")
+    )
+    Path(deferral).write_text("fixture-host/fixture-stack: busy\\n", encoding="utf-8")
+    if mode == "defer_fail":
         raise SystemExit(42)
 if mode == "fail":
     raise SystemExit(42)
@@ -347,6 +373,7 @@ def assert_wrapper_routes_and_propagates() -> None:
             "-e",
             "proxmox_skip_self=true",
             '--extra-vars={"stack_filter":null}',
+            *BUSY_CHECK_DEFAULTS,
         )
 
     full_defaults = canonical_defaults("full")
@@ -374,6 +401,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "proxmox_skip_self=true",
                 "-e",
                 "stack_filter=beets",
+                *BUSY_CHECK_DEFAULTS,
             ),
         ),
         (
@@ -389,6 +417,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "-e",
                 "proxmox_skip_self=false",
                 '--extra-vars={"stack_filter":null}',
+                *BUSY_CHECK_DEFAULTS,
             ),
         ),
         (
@@ -404,6 +433,17 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "-e",
                 "proxmox_skip_self=false",
                 '--extra-vars={"stack_filter":null}',
+                *BUSY_CHECK_DEFAULTS,
+            ),
+        ),
+        (
+            ("--interrupt-busy",),
+            "site.yml",
+            (
+                *full_defaults[:-4],
+                "-e",
+                "lxc_busy_check_override=true",
+                *full_defaults[-2:],
             ),
         ),
         (("-v",), "site.yml", ("-v", *full_defaults)),
@@ -444,7 +484,7 @@ def assert_wrapper_routes_and_propagates() -> None:
             expected = ["run", "--locked", "ansible-playbook", playbook, *passthrough]
             if (
                 proc.returncode != 0
-                or capture["argv"] != expected
+                or normalized_argv(capture["argv"]) != expected
                 or capture["marker"] != "1"
                 or not isinstance(capture["pid"], int)
             ):
@@ -474,7 +514,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "fixture-value",
                 *full_defaults,
             ]
-            if capture["argv"] != expected:
+            if normalized_argv(capture["argv"]) != expected:
                 raise AssertionError(
                     f"accepted safe option {option!r} was not forwarded byte-for-byte: "
                     f"{capture['argv']!r}"
@@ -585,6 +625,26 @@ def assert_wrapper_routes_and_propagates() -> None:
                 f"first={first.returncode}\n{first.stdout}\n{first.stderr}\n"
                 f"second={second.returncode}\n{second.stdout}\n{second.stderr}"
             )
+
+
+def assert_busy_check_deferral_sets_exit_status() -> None:
+    for mode, expected_status in (("success", 0), ("defer", 3), ("defer_fail", 1)):
+        with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-deferral-") as temp_dir:
+            temp_root = Path(temp_dir)
+            env = wrapper_environment(temp_root, mode=mode)
+            proc = run_wrapper(env)
+            capture = json.loads((temp_root / "capture.json").read_text(encoding="utf-8"))
+            deferral = next(
+                argument.split("=", 1)[1]
+                for argument in capture["argv"]
+                if argument.startswith("lxc_busy_check_deferral_file=")
+            )
+            if proc.returncode != expected_status or Path(deferral).exists():
+                raise AssertionError(
+                    f"deferral mode {mode} did not exit {expected_status} and remove "
+                    f"its deferral file: returncode={proc.returncode}\n"
+                    f"{proc.stdout}\n{proc.stderr}"
+                )
 
 
 def assert_contention_fails_fast() -> None:
@@ -1108,6 +1168,7 @@ def main() -> int:
         assert_prerequisite_plays_survive_lifecycle_limits()
         assert_command_grammar_reports_help_and_usage_errors()
         assert_wrapper_routes_and_propagates()
+        assert_busy_check_deferral_sets_exit_status()
         assert_contention_fails_fast()
         assert_lock_class_follows_operation_class()
         assert_contention_names_a_remaining_shared_holder()

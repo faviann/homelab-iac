@@ -20,6 +20,7 @@ Options:
   --check                 Run in check mode
   --stack <name>          Configure only the named stack
   --include-controller    Include the control node
+  --interrupt-busy        Interrupt stacks whose busy check reports busy
   -v, -vv, -vvv           Set Ansible verbosity
   --help                  Show this help
 EOF
@@ -83,6 +84,7 @@ lock_class="exclusive"
 limit_pattern=""
 stack_name=""
 include_controller=false
+interrupt_busy=false
 check_mode=false
 verbosity=()
 while (($#)); do
@@ -101,6 +103,10 @@ while (($#)); do
             ;;
         --include-controller)
             include_controller=true
+            shift
+            ;;
+        --interrupt-busy)
+            interrupt_busy=true
             shift
             ;;
         --check)
@@ -194,4 +200,18 @@ if [[ -n "$stack_name" ]]; then
 else
     arguments+=('--extra-vars={"stack_filter":null}')
 fi
+arguments+=("-e" "lxc_busy_check_override=$interrupt_busy")
+deferral_file="$(mktemp)"
+# The playbook writes one line per busy-check deferral. A successful run that
+# deferred anything exits 3, so a scheduled caller can retry later.
+finish() {
+    local status=$?
+    if ((status == 0)) && [[ -s "$deferral_file" ]]; then
+        status=3
+    fi
+    rm -f -- "$deferral_file"
+    exit "$status"
+}
+trap finish EXIT
+arguments+=("-e" "lxc_busy_check_deferral_file=$deferral_file")
 run_live_playbook "$lock_class" "$playbook" "${arguments[@]}"
