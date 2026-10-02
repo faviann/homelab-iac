@@ -17,9 +17,6 @@ lxc_docker_env_external_networks:
 
 `shared` is a host-local Docker network, not a cross-host network. Use it when one stack needs stable Docker-network access to another stack on the same LXC. A local reverse proxy reaching local services is one example; Servarr services sharing an internal app network are the same pattern.
 
-Older stacks used inconsistent legacy names for this pattern. Use `shared`, and
-normalize legacy names when behavior allows.
-
 Do not add `shared` only to support `traefik-kop`; exported labels do not make a remote host-local network reachable.
 
 ## Label-Exported Routes

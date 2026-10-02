@@ -25,8 +25,7 @@ The mechanics are non-obvious and partly automated:
 
 ## First reads
 
-- `stacks/README.md` — stack contract, portability tiers, Traefik defaults.
-- `.agents/skills/create-stack/SKILL.md` — reuse its Review Checklist on the moved stack.
+- `stacks/README.md` — stack contract, portability tiers, Traefik defaults, and the Review Checklist.
 
 ## Refuse these (foundational / OIDC-coupled)
 
@@ -69,8 +68,7 @@ generic rename cannot safely reconcile.
     the stack name.
   - homepage labels referencing the old name.
   - cross-stack references in other stacks on any host.
-- Apply the `create-stack` Review Checklist to the moved stack (Traefik labels on the user-facing service
-  only, etc.).
+- Apply the `stacks/README.md` Review Checklist to the moved stack.
 - Show the full `git diff` for approval.
 
 ### 3. Remote migration + deploy (present, run on approval — **gate 2**)
