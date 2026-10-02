@@ -459,6 +459,78 @@ def _resolve_compose(stack_root: Path, errors: list[ValidationError]) -> dict[st
     return effective
 
 
+BUSY_CHECK_KEYS = {"service", "command", "timeout"}
+BUSY_CHECK_MAX_TIMEOUT = 60
+
+
+def _declares_busy_check(path: Path) -> bool:
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return False
+    return isinstance(loaded, dict) and "x-busy-check" in loaded
+
+
+def _validate_busy_check(
+    stack_root: Path, effective: dict[str, Any], errors: list[ValidationError]
+) -> None:
+    declaring_files = [
+        name
+        for name in ("compose.yaml", "compose.yml", "compose.override.yaml", "compose.override.yml")
+        if (stack_root / name).is_file() and _declares_busy_check(stack_root / name)
+    ]
+    if len(declaring_files) > 1:
+        _error(
+            errors,
+            "busy-check",
+            "compose.x-busy-check",
+            "x-busy-check must be declared in only one Compose file",
+        )
+        return
+    if "x-busy-check" not in effective:
+        return
+    block = effective["x-busy-check"]
+    if not isinstance(block, dict) or set(block) != BUSY_CHECK_KEYS:
+        _error(
+            errors,
+            "busy-check",
+            "compose.x-busy-check",
+            "x-busy-check must contain only service, command, and timeout",
+        )
+        return
+    if not _is_nonempty_string(block["service"]) or block["service"] not in effective["services"]:
+        _error(
+            errors,
+            "busy-check",
+            "compose.x-busy-check.service",
+            "service must name a service in the effective Compose model",
+        )
+    command = block["command"]
+    if (
+        not isinstance(command, list)
+        or not command
+        or not all(_is_nonempty_string(argument) for argument in command)
+    ):
+        _error(
+            errors,
+            "busy-check",
+            "compose.x-busy-check.command",
+            "command must be a non-empty list of non-empty strings",
+        )
+    timeout = block["timeout"]
+    if (
+        not isinstance(timeout, int)
+        or isinstance(timeout, bool)
+        or not 1 <= timeout <= BUSY_CHECK_MAX_TIMEOUT
+    ):
+        _error(
+            errors,
+            "busy-check",
+            "compose.x-busy-check.timeout",
+            f"timeout must be an integer number of seconds from 1 to {BUSY_CHECK_MAX_TIMEOUT}",
+        )
+
+
 def _canonical_official_repository(value: Any) -> str | None:
     if not _is_nonempty_string(value):
         return None
@@ -1036,6 +1108,8 @@ def validate_stack(repository_root: Path, identity: str) -> StackPolicyValidatio
 
     metadata = _load_metadata(stack_root, errors)
     effective = _resolve_compose(stack_root, errors)
+    if effective is not None:
+        _validate_busy_check(stack_root, effective, errors)
     services: dict[str, dict[str, str | None]] = {}
     procedure: dict[str, str] | None = None
     vendor: dict[str, str] | None = None
