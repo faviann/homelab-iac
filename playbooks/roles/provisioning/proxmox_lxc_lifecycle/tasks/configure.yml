@@ -79,3 +79,4 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
         tasks_from: reboot
+      when: not ((lxc_busy_check_result | default({})).host_deferred | default(false) | bool)

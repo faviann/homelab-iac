@@ -1,0 +1,12 @@
+---
+# Runs the real package tasks against the apt-get double on PATH, then records
+# whether the upgrade task ran.
+- name: Run the real base-system package tasks
+  ansible.builtin.include_tasks: "{{ busy_check_repo_root }}/playbooks/roles/config/lxc_base_system/tasks/main.yml"
+
+- name: Record the package upgrade
+  ansible.builtin.lineinfile:
+    path: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events"
+    line: apt_upgrade
+  delegate_to: localhost
+  when: _apt_upgrade_result is not skipped

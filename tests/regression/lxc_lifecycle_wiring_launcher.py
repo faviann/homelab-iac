@@ -92,11 +92,13 @@ def main() -> int:
             "Compile and normalize the layered LXC specification",
             "Run fleet preflight after every target contract was compiled",
             "Compose semantic lifecycle plan",
+            "Check declared busy stacks before any interruption",
             "Execute host-side actions",
             "Re-observe current state after provisioning and host reconciliation",
             "Restore guest access after re-observation",
             "Publish lifecycle results",
             "Aggregate lifecycle summary facts from host results",
+            "Aggregate busy-check deferrals from host results",
             "Assert production lifecycle summary includes every targeted LXC",
         )
         if (

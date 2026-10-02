@@ -41,11 +41,23 @@
     - proxmox_lifecycle_intent != 'validate_only'
     - proxmox_lifecycle_execution_failure_snapshot | length == 0
   block:
+    # Runs before provision.yml because host-side reconciliation can restart or
+    # rebuild the LXC.
+    - name: Check declared busy stacks before any interruption
+      ansible.builtin.include_role:
+        name: config/lxc_busy_check
+      vars:
+        lxc_busy_check_guest_running: "{{ proxmox_lifecycle_runtime_state == 'running' }}"
+
+    # Skipped whole: host_config derives restart_required from changes made in
+    # the same run, so skipping only the restart would lose it.
     - name: Execute host-side actions
       ansible.builtin.include_tasks: provision.yml
-      when: >-
-        proxmox_lxc_lifecycle_plan.container_transition != 'none'
-        or (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
+      when:
+        - not (lxc_busy_check_result.host_deferred | bool)
+        - >-
+          proxmox_lxc_lifecycle_plan.container_transition != 'none'
+          or (proxmox_lxc_lifecycle_plan.reconcile_host_config | bool)
 
     - name: Re-observe current state after provisioning and host reconciliation
       ansible.builtin.include_tasks: reobserve.yml

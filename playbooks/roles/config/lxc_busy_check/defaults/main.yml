@@ -1,0 +1,12 @@
+---
+# True when the operator chose ./run.sh --interrupt-busy. The gate then does
+# not run, and every stack and host step proceeds as if no check was declared.
+lxc_busy_check_override: false
+
+# Callers pass the pre-action runtime observation. A guest that is not running
+# has nothing to interrupt.
+lxc_busy_check_guest_running: false
+
+# Same source stack sync reads, so a declaration protects exactly what would be synced.
+lxc_busy_check_stacks_source: >-
+  {{ lxc_docker_env_stacks_source | default(playbook_dir ~ '/../stacks/' ~ inventory_hostname) }}

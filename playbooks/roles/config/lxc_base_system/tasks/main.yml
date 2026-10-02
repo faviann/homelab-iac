@@ -25,7 +25,10 @@
     autoremove: true
     autoclean: true
   register: _apt_upgrade_result
-  when: lxc_base_system_apt_upgrade | bool
+  when:
+    - lxc_base_system_apt_upgrade | bool
+    # An upgrade can restart the Docker daemon under a busy stack.
+    - not ((lxc_busy_check_result | default({})).host_deferred | default(false) | bool)
 
 - name: Display upgrade result
   ansible.builtin.debug:

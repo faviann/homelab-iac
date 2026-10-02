@@ -1,0 +1,183 @@
+---
+- name: Seed running LXCs with deployed stacks and repo stack sources
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Model a running Debian 12 container
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ busy_check_vmid }}.{{ item.key }}"
+        content: "{{ item.value }}"
+        mode: "0600"
+      loop: "{{ {'state': 'running', 'release': '12', 'events': '', 'conf': ''} | dict2items }}"
+      delegate_to: localhost
+
+    - name: Create source and deployed stack directories
+      ansible.builtin.file:
+        path: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/{{ item.0 }}/{{ item.1 }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ ['source', 'shared/stacks'] | product(busy_check_fixture_stacks.keys() | list + ['plain']) | list }}"
+      delegate_to: localhost
+
+    - name: Write repo compose sources, declaring a busy check where the fixture has one
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/source/{{ item.key }}/compose.yaml"
+        content: >-
+          {{
+            {'services': {'worker': {'image': 'fixture/' ~ item.key ~ ':new'}}}
+            | combine({'x-busy-check': item.value} if item.value else {})
+            | to_nice_yaml
+          }}
+        mode: "0644"
+      loop: "{{ busy_check_fixture_stacks | combine({'plain': {}}) | dict2items }}"
+      delegate_to: localhost
+
+    - name: Write the compose files the running containers were started from
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/stacks/{{ item }}/compose.yaml"
+        content: "deployed-before-run\n"
+        mode: "0644"
+      loop: "{{ busy_check_fixture_stacks.keys() | list + ['plain'] }}"
+      delegate_to: localhost
+
+# The phases below mirror playbooks/lifecycle-lxcs.yml. Importing that
+# playbook would resolve roles from playbooks/roles first and bypass the
+# guest-configuration test doubles.
+- name: Initialize the targeted LXC lifecycle run
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Initialize target selection and planning state
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: initialize_planning
+
+- name: Compile every targeted LXC contract
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Compile one target-local LXC contract
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: compile_target
+
+- name: Coordinate Fleet preflight
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Run targeted-set Fleet preflight coordination
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_preflight
+      run_once: true
+
+- name: Build every targeted semantic LXC lifecycle plan
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Build one target-local semantic lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan_target
+
+- name: Coordinate the lifecycle planning barrier
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Collect every target-local planning outcome
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: coordinate_barrier
+      run_once: true
+
+- name: Publish every targeted LXC planning result
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Publish one stable semantic plan and result
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: publish_planning_result
+
+# Hosts touch only their own state, so they execute in parallel here. The
+# planning-barrier fixture covers production's serial execution.
+- name: Execute LXC lifecycle plans
+  hosts: lxcs
+  gather_facts: false
+  strategy: ansible.builtin.free
+  tasks:
+    - name: Execute one valid LXC lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: execute
+
+- name: Summarize the lifecycle run
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Summarize busy-check deferrals
+      ansible.builtin.import_role:
+        name: config/lxc_busy_check
+        tasks_from: summarize
+
+- name: Assert busy checks protected only the busy stacks and their hosts
+  hosts: lxcs
+  connection: local
+  gather_facts: false
+  vars:
+    deferred_stacks: >-
+      {{ busy_check_expected_deferrals | map('regex_replace', '^[^/]+/([^:]+):.*$', '\1') | list }}
+    host_deferred: "{{ busy_check_expected_deferrals | length > 0 }}"
+    events: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/' ~ busy_check_vmid ~ '.events').splitlines() }}"
+    docker_calls: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/docker.log').splitlines() }}"
+    shared_stacks: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/stacks"
+    host_steps: [api_reconciliation, host_reconciliation, apt_upgrade, reboot]
+  tasks:
+    - name: Assert host steps ran only on hosts without a busy stack
+      ansible.builtin.assert:
+        that: >-
+          (host_steps | intersect(events) | length == 0)
+          if host_deferred | bool
+          else (host_steps | difference(events) | length == 0)
+        fail_msg: "{{ inventory_hostname }} host steps: {{ events }}"
+
+    - name: Assert deferred stacks kept their deployed files and saw no compose command
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.file', shared_stacks ~ '/' ~ item ~ '/compose.yaml') == 'deployed-before-run'
+          - docker_calls | select('search', '^' ~ shared_stacks ~ '/' ~ item ~ ' \| compose') | list | length == 0
+        fail_msg: "{{ inventory_hostname }}/{{ item }} was touched while deferred"
+      loop: "{{ deferred_stacks }}"
+
+    - name: Assert every other stack was synced and brought up
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.file', shared_stacks ~ '/' ~ item ~ '/compose.yaml') != 'deployed-before-run'
+          - (shared_stacks ~ '/' ~ item ~ ' | compose up -d') in docker_calls
+        fail_msg: "{{ inventory_hostname }}/{{ item }} was not deployed"
+      loop: "{{ busy_check_fixture_stacks.keys() | list | difference(deferred_stacks) + ['plain'] }}"
+
+    - name: Assert only declared stacks were probed, and only without the override
+      ansible.builtin.assert:
+        that: (probe_calls | length > 0) == (item.value | length > 0 and not (lxc_busy_check_override | default(false)))
+        fail_msg: "{{ inventory_hostname }}/{{ item.key }} probe calls: {{ probe_calls }}"
+      vars:
+        probe_calls: >-
+          {{ docker_calls | select('search', '\| (ps .*project=|exec cid-)' ~ (item.key | regex_escape) ~ '( |$)') | list }}
+      loop: "{{ busy_check_fixture_stacks | combine({'plain': {}}) | dict2items }}"
+
+    - name: Read the deferral file
+      ansible.builtin.slurp:
+        src: "{{ lxc_busy_check_deferral_file }}"
+      register: busy_check_deferral_file
+      delegate_to: localhost
+      run_once: true
+
+    - name: Assert the deferral file names every deferred stack with its reason
+      ansible.builtin.assert:
+        that: >-
+          (busy_check_deferral_file.content | b64decode).splitlines() | sort
+          == groups.lxcs | map('extract', hostvars, 'busy_check_expected_deferrals') | flatten | sort
+        fail_msg: "{{ busy_check_deferral_file.content | b64decode }}"
+      run_once: true

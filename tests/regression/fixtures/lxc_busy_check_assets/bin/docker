@@ -1,0 +1,34 @@
+#!/bin/sh
+# Every Compose project has containers except undeployed-*. exec runs the
+# declared check command on the controller.
+printf '%s | %s\n' "$PWD" "$*" >> "$BUSY_CHECK_DOCKER_LOG"
+
+case "$1" in
+  ps)
+    project=
+    for argument do
+      case "$argument" in
+        label=com.docker.compose.project=*) project=${argument#label=com.docker.compose.project=} ;;
+      esac
+    done
+    case "$project" in
+      undeployed-*) ;;
+      *) echo "cid-$project" ;;
+    esac
+    ;;
+  exec)
+    shift 2
+    exec "$@"
+    ;;
+  compose)
+    [ "$2" = up ] && echo Started >&2
+    ;;
+  image)
+    echo "Total reclaimed space: 0B"
+    ;;
+  *)
+    echo "unsupported fixture docker operation: $*" >&2
+    exit 86
+    ;;
+esac
+exit 0

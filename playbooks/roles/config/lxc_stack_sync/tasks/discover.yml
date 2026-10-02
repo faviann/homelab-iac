@@ -225,6 +225,33 @@
         }}
   when: stack_filter is defined and stack_filter is not none
 
+# Runs after the stale list, so a deferred stack is neither synced, started,
+# nor quarantined: its files on disk keep matching its running containers.
+- name: Leave stacks deferred by a busy check untouched
+  ansible.builtin.set_fact:
+    lxc_docker_env_desired_top_level_stack_dirs: >-
+      {{ lxc_docker_env_desired_top_level_stack_dirs | difference(deferred) }}
+    _per_host_j2_files:
+      files: "{{ kept.j2 }}"
+    _per_host_static_files:
+      files: "{{ kept.static }}"
+    _per_host_dirs:
+      files: "{{ kept.dirs }}"
+  vars:
+    deferred: >-
+      {{ (lxc_busy_check_result | default({})).deferred_stacks | default([]) | map(attribute='stack') | list }}
+    kept: >-
+      {%- set kept = {'j2': [], 'static': [], 'dirs': []} -%}
+      {%- for kind, found in [('j2', _per_host_j2_files), ('static', _per_host_static_files), ('dirs', _per_host_dirs)] -%}
+      {%-   for file in found.files | default([]) -%}
+      {%-     if (file.path | relpath(lxc_docker_environment_internal.stacks_source)).split('/')[0] not in deferred -%}
+      {%-       set _ = kept[kind].append(file) -%}
+      {%-     endif -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ kept }}
+  when: deferred | length > 0
+
 - name: Capture stack metadata files before deploy filtering
   ansible.builtin.set_fact:
     _per_host_stack_metadata_files:

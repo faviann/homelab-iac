@@ -1,0 +1,20 @@
+---
+# Probe outcome key -> outcome. Keys come from files/busy_check_probe.sh, plus
+# unreachable, probe-failed, and malformed, which the role assigns itself.
+# Unlisted rc=<n> keys use rc=other. Only idle and not_deployed let a run proceed.
+lxc_busy_check_outcomes:
+  rc=0: {state: idle, reason: idle}
+  rc=1: {state: busy, reason: busy}
+  rc=124: {state: check_failed, reason: "timed out after {timeout}s"}
+  rc=137: {state: check_failed, reason: "timed out after {timeout}s"}
+  rc=other: {state: check_failed, reason: "exited {rc}"}
+  not-deployed: {state: not_deployed, reason: nothing deployed}
+  service-not-running: {state: check_failed, reason: service not running}
+  docker-error: {state: check_failed, reason: docker error}
+  unreachable: {state: check_failed, reason: guest unreachable}
+  probe-failed: {state: check_failed, reason: probe failed}
+  malformed: {state: check_failed, reason: malformed x-busy-check block}
+
+lxc_busy_check_deferring_states:
+  - busy
+  - check_failed

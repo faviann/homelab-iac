@@ -1,0 +1,4 @@
+---
+- name: Model an installed Docker runtime
+  ansible.builtin.debug:
+    msg: Docker runtime installed by busy-check test double

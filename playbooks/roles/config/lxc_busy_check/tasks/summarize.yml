@@ -1,0 +1,51 @@
+---
+# Run from the lifecycle summary play after every target executed. Writes one
+# line per deferred stack to lxc_busy_check_deferral_file when it is defined;
+# ./run.sh exits 3 when that file is non-empty after a successful run.
+
+- name: Aggregate busy-check deferrals from host results
+  ansible.builtin.set_fact:
+    lxc_busy_check_deferrals: >-
+      {%- set lines = [] -%}
+      {%- for host in hostvars.localhost.proxmox_lifecycle_target_hosts | default([]) -%}
+      {%-   for outcome in (hostvars[host].lxc_busy_check_result | default({})).deferred_stacks | default([]) -%}
+      {%-     set _ = lines.append(
+                host ~ '/' ~ outcome.stack ~ ': '
+                ~ ('busy' if outcome.state == 'busy' else 'check failed (' ~ outcome.reason ~ ')')
+              ) -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ lines }}
+    lxc_busy_check_deferred_hosts: >-
+      {%- set hosts = [] -%}
+      {%- for host in hostvars.localhost.proxmox_lifecycle_target_hosts | default([]) -%}
+      {%-   if (hostvars[host].lxc_busy_check_result | default({})).host_deferred | default(false) | bool -%}
+      {%-     set _ = hosts.append(host) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ hosts }}
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Report stacks and host steps deferred by busy checks
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        ['Deferred stacks:'] + hostvars.localhost.lxc_busy_check_deferrals
+        + ['Skipped host-side reconciliation, package upgrade, and reboot on: '
+           ~ hostvars.localhost.lxc_busy_check_deferred_hosts | join(', ')]
+      }}
+  when: hostvars.localhost.lxc_busy_check_deferrals | length > 0
+  run_once: true
+
+- name: Record busy-check deferrals for the run wrapper
+  ansible.builtin.copy:
+    content: "{{ hostvars.localhost.lxc_busy_check_deferrals | join('\n') }}\n"
+    dest: "{{ lxc_busy_check_deferral_file }}"
+    mode: "0600"
+  delegate_to: localhost
+  when:
+    - lxc_busy_check_deferral_file is defined
+    - hostvars.localhost.lxc_busy_check_deferrals | length > 0
+  run_once: true
