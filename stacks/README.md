@@ -8,9 +8,9 @@ Stack portability is explicit. A stack being under `stacks/<host>/<stack>/` does
 
 | Tier | Meaning | Examples | Change Style |
 | --- | --- | --- | --- |
-| Portable app stack | Normal application stack that can carry its Compose files, non-secret `.env.j2`, repo-only `README.md`, and non-secret `stack.yaml` beside the stack. | `stacks/servarr/notifiarr`, `stacks/servarr/kapowarr` | Small stack-local changes are allowed after stack sync deploy exclusions are in place. |
+| Portable app stack | Normal application stack that can carry its Compose files, non-secret `.env.j2`, repo-only `README.md`, and non-secret `stack.yaml` beside the stack. | `stacks/servarr/notifiarr`, `stacks/servarr/kapowarr` | Small stack-local changes are allowed. |
 | Host-bound app stack | App stack whose runtime depends on host-local storage, GPU, VPN, external networks, or ownership mechanics. It can still have stack-local docs/metadata, but host mechanics stay in inventory. | `stacks/jellyfin/jellyfin`, `stacks/seedbox/bittorrent` | Keep host dependencies documented in stack metadata; keep deployment mechanics in host vars. |
-| Foundational controlled migration | Cross-host or platform stack that other stacks depend on, or that has scripts with hardcoded repo paths. | `stacks/auth/auth`, `stacks/portal/traefik3`, `stacks/portal/dockhand`, `stacks/public/romm` OIDC coupling | Treat as a controlled migration with a dedicated plan. Do not use these as the first metadata/portability pilot. |
+| Foundational controlled migration | Cross-host or platform stack that other stacks depend on, or that has scripts with hardcoded repo paths. | `stacks/auth/auth`, `stacks/portal/traefik3`, `stacks/portal/dockhand`, `stacks/public/romm` OIDC coupling | Treat as a controlled migration with a dedicated plan. |
 
 Foundational stacks are intentionally less portable. Authentik/OIDC has cross-host coupling, `scripts/authentik_blueprint_sync.py` depends on the current auth stack paths, and `portal_instance` controls portal discovery, Traefik KOP behavior, Hawser inclusion, and Dockhand seeding.
 
@@ -61,7 +61,7 @@ Do not dynamically include stack-local variable files into Ansible host scope. S
 - Stack folder name becomes the Compose project name. During `.j2` rendering, the role also injects `stack_name`.
 - `.j2` files are rendered with inventory, host, group, vault variables, `stack_name`, and the current stack `stack_vars` task-scoped render data, then deployed without the `.j2` suffix.
 - Other files are copied verbatim.
-- Stack-local `README.md`, `docs/**`, `stack.yaml`, `stack.yml`, and `metadata.*` files are repo-only and are excluded from deployment.
+- Stack-local `README.md`, `docs/**`, `stack.yaml`, `stack.yml`, and `metadata.yaml`/`.yml`/`.json` files are repo-only and are excluded from deployment.
 - Do not use stack-local metadata for secrets or runtime variable injection.
 - Compose-relative persistent data should live under `./appdata/...`.
 - All bind-mount target directories must exist before first deploy. If they do not, Docker creates them as root on first start, causing permission errors for non-root container processes. Declare dirs that need pre-creation in an `x-prereq-dirs` block in the repo-managed compose definition for the stack; the Ansible role creates each missing directory on the LXC with Docker user ownership and mode `0755`. This is create-if-absent behavior: once a declared directory exists, `x-prereq-dirs` does not change its mode, owner, or group. Use `compose.yaml` by default. If the stack intentionally preserves an upstream vendor `compose.yaml`, place `x-prereq-dirs` in `compose.override.yaml` instead. This applies to empty `./appdata/` dirs, `/ephemeral/<stack>/` paths, and new `/data/` subpaths.
@@ -337,9 +337,6 @@ Also declare the external network in host vars:
 lxc_docker_env_external_networks:
   - shared
 ```
-
-Older stacks used inconsistent legacy names for this pattern. Use `shared` so
-host-local shared networks are named consistently across LXCs.
 
 Do not add `shared` only because a stack has Traefik labels or because `traefik-kop` exports those labels. Label-exported routes need a reachable published port; `shared` is only for same-LXC stack-to-stack traffic.
 
