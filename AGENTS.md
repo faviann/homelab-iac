@@ -83,6 +83,7 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./run.sh --limit <host> --stack <stack>` | Deploy one stack on a host (skips all others) |
 | `./run.sh --check` | Dry run. Shared lock |
 | `./run.sh --include-controller` | Intentionally manage the control node (`workstation`) |
+| `./run.sh --interrupt-busy` | Skip busy checks and interrupt busy stacks and their hosts deliberately |
 | `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode |
 | `./inspect.sh credentials` | Walk the Proxmox API credential and permission ladder |
 | `./inspect.sh connectivity [--limit <targets>]` | Check LXC SSH reachability; non-zero when a target is unreachable |
@@ -106,7 +107,7 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./validate.sh stack <path>` | Validate one repo-managed stack's update policy — schema-versioned JSON on stdout, diagnostics on stderr. Not part of the no-argument handoff run |
 | `./setup.sh sync` | Optionally synchronize the locked Python environment ahead of use (non-interactive; no OS packages, no managed host). Every command reconciles it on its own |
 
-**Timing**: `./run.sh` against live hosts typically takes 5–10 minutes, and `--limit` or `--stack` shortens it. Live `./inspect.sh` operations take about 10 seconds for `credentials`, `containers`, and `connectivity`, and about half a minute for a fleet-wide `plan`; a first run in a fresh worktree also reconciles dependencies. Do not assume a hang — wait for completion before acting on the result. A live command that cannot take the lock exits 75 at once, naming the holder when it is another live command; it never waits.
+**Timing**: `./run.sh` against live hosts typically takes 5–10 minutes, and `--limit` or `--stack` shortens it. Live `./inspect.sh` operations take about 10 seconds for `credentials`, `containers`, and `connectivity`, and about half a minute for a fleet-wide `plan`; a first run in a fresh worktree also reconciles dependencies. Do not assume a hang — wait for completion before acting on the result. A live command that cannot take the lock exits 75 at once, naming the holder when it is another live command; it never waits. A `./run.sh` that succeeds but defers a busy stack exits 3, which means deferred, not failed.
 
 For lifecycle-regression remediation, use repeatable `./validate.sh lifecycle --only <launcher.py>` for the shortest targeted loop and add `--fail-fast` when later selected launchers cannot provide useful evidence after a failure. `--only` accepts the registered filenames reported by the runner's actionable error, and cannot be combined with `--full`. Lifecycle launchers are the `tests/regression/*_launcher.py` files, run only by the lifecycle runner; pytest owns the `test_*.py` files under `tests/` and never collects a launcher. A targeted operation never substitutes for the full handoff run: before handoff, always run `./validate.sh` with no arguments so every handoff gate reports a result.
 

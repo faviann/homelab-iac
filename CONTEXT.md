@@ -24,6 +24,10 @@ _Avoid_: Image update plan, deployed-state snapshot, validation result
 The pair of inventory hostname and Compose project name that uniquely identifies one repo-managed stack across scans and image update proposals.
 _Avoid_: Proposal title, image name
 
+**Busy check**:
+A repo-managed stack's opt-in command, run inside one of its services before a lifecycle run would interrupt it, that answers whether the stack may be interrupted now. Only exit `0` means idle; every other answer, including no answer, defers the stack and its host's interrupting steps for that run. A stack with no deployed containers is not checked.
+_Avoid_: Health check, readiness probe, drain
+
 **Stack update policy**:
 The operator-authored rules for detecting and preparing an image update proposal for one repo-managed stack. It identifies the upstream authority and update procedure for the stack, with optional per-image update-track and compatibility rules.
 _Avoid_: Global image policy, deployment policy
