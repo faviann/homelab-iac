@@ -43,3 +43,21 @@
       Deferring {{ lxc_busy_check_result.deferred_stacks | map(attribute='stack') | join(', ') }};
       skipping host-side reconciliation, package upgrade, and reboot.
   when: lxc_busy_check_result.host_deferred | bool
+
+# ./run.sh exits 3 when this file is non-empty after a successful run.
+# throttle keeps concurrent hosts from overwriting each other's appends.
+- name: Record busy-check deferrals for the run wrapper
+  ansible.builtin.lineinfile:
+    path: "{{ lxc_busy_check_deferral_file }}"
+    line: >-
+      {{ inventory_hostname }}/{{ item.stack }}:
+      {{ 'busy' if item.state == 'busy' else 'check failed (' ~ item.reason ~ ')' }}
+    insertafter: EOF
+    create: true
+    mode: "0600"
+  loop: "{{ lxc_busy_check_result.deferred_stacks }}"
+  loop_control:
+    label: "{{ item.stack }}"
+  delegate_to: localhost
+  throttle: 1
+  when: lxc_busy_check_deferral_file is defined

@@ -639,10 +639,18 @@ def assert_busy_check_deferral_sets_exit_status() -> None:
                 for argument in capture["argv"]
                 if argument.startswith("lxc_busy_check_deferral_file=")
             )
-            if proc.returncode != expected_status or Path(deferral).exists():
+            reported = (
+                "Deferred by busy checks:\nfixture-host/fixture-stack: busy\n" in proc.stderr
+            )
+            if (
+                proc.returncode != expected_status
+                or Path(deferral).exists()
+                or reported != (expected_status == 3)
+            ):
                 raise AssertionError(
-                    f"deferral mode {mode} did not exit {expected_status} and remove "
-                    f"its deferral file: returncode={proc.returncode}\n"
+                    f"deferral mode {mode} did not exit {expected_status}, remove its "
+                    f"deferral file, and report deferrals only on exit 3: "
+                    f"returncode={proc.returncode}\n"
                     f"{proc.stdout}\n{proc.stderr}"
                 )
 

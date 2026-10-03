@@ -208,6 +208,8 @@ finish() {
     local status=$?
     if ((status == 0)) && [[ -s "$deferral_file" ]]; then
         status=3
+        echo "Deferred by busy checks:" >&2
+        cat -- "$deferral_file" >&2
     fi
     rm -f -- "$deferral_file"
     exit "$status"

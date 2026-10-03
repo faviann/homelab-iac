@@ -148,11 +148,6 @@
       delegate_facts: true
       run_once: true
 
-    - name: Summarize busy-check deferrals
-      ansible.builtin.import_role:
-        name: config/lxc_busy_check
-        tasks_from: summarize
-
     - name: Fail after publishing a blocked lifecycle summary
       ansible.builtin.fail:
         msg: >-

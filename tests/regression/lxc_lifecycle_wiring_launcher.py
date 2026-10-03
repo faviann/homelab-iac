@@ -98,7 +98,6 @@ def main() -> int:
             "Restore guest access after re-observation",
             "Publish lifecycle results",
             "Aggregate lifecycle summary facts from host results",
-            "Aggregate busy-check deferrals from host results",
             "Assert production lifecycle summary includes every targeted LXC",
         )
         if (

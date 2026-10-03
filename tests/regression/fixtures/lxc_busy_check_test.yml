@@ -110,8 +110,8 @@
         name: provisioning/proxmox_lxc_lifecycle
         tasks_from: publish_planning_result
 
-# Hosts touch only their own state, so they execute in parallel here. The
-# planning-barrier fixture covers production's serial execution.
+# Hosts share only the throttled deferral file, so they execute in parallel
+# here. The planning-barrier fixture covers production's serial execution.
 - name: Execute LXC lifecycle plans
   hosts: lxcs
   gather_facts: false
@@ -121,15 +121,6 @@
       ansible.builtin.import_role:
         name: provisioning/proxmox_lxc_lifecycle
         tasks_from: execute
-
-- name: Summarize the lifecycle run
-  hosts: lxcs
-  gather_facts: false
-  tasks:
-    - name: Summarize busy-check deferrals
-      ansible.builtin.import_role:
-        name: config/lxc_busy_check
-        tasks_from: summarize
 
 - name: Assert busy checks protected only the busy stacks and their hosts
   hosts: lxcs
