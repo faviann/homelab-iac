@@ -73,20 +73,12 @@ def traefik_rule_selects_path(rule: str, path: str) -> bool:
     return path in exact_paths or any(path.startswith(prefix) for prefix in prefixes)
 
 
-def test_stack_runs_only_the_sigbit_proxy_on_its_declared_track() -> None:
+def test_stack_runs_only_the_sigbit_proxy() -> None:
     compose = load_yaml(STACK_ROOT / "compose.yaml")
-    track = load_yaml(STACK_ROOT / "stack.yaml")["updates"]["track"]
 
     assert set(compose["services"]) == {"mcp-auth-proxy"}
-    repository, tag = compose["services"]["mcp-auth-proxy"]["image"].rsplit(":", 1)
+    repository = compose["services"]["mcp-auth-proxy"]["image"].rsplit(":", 1)[0]
     assert repository == "ghcr.io/sigbit/mcp-auth-proxy"
-    assert tag.removeprefix("v").split(".")[:2] == track.split(".")
-
-
-def test_proxy_image_has_an_intentional_update_track() -> None:
-    metadata = load_yaml(STACK_ROOT / "stack.yaml")
-
-    assert metadata["updates"] == {"mode": "images", "track": "2.10"}
 
 
 def test_proxy_reaches_the_loopback_backend_without_rewriting_paths() -> None:

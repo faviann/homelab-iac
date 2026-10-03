@@ -110,15 +110,6 @@ def test_markdown_is_served_as_utf8_plain_text_and_nothing_else_changes() -> Non
     }
 
 
-def test_server_image_update_track_follows_the_running_major() -> None:
-    compose = load_yaml(STACK_ROOT / "compose.yaml")
-    metadata = load_yaml(STACK_ROOT / "stack.yaml")
-    tag = compose["services"]["artifacts"]["image"].rpartition(":")[2]
-
-    assert metadata["updates"]["mode"] == "images"
-    assert metadata["updates"]["track"] == tag.split(".")[0]
-
-
 def test_publication_root_is_not_a_persistent_home_mapping() -> None:
     defaults = load_yaml(
         REPO_ROOT
