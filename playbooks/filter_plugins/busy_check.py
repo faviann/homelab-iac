@@ -60,6 +60,8 @@ def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
             )
     services: set[str] = set()
     blocks = []
+    # Compose names the project from a top-level name, the override's winning.
+    project = stack_dir.name
     for path in compose_paths:
         try:
             loaded = yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader)
@@ -69,10 +71,12 @@ def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
             continue
         if isinstance(loaded.get("services"), dict):
             services.update(loaded["services"])
+        if _nonempty_string(loaded.get("name")):
+            project = loaded["name"]
         if "x-busy-check" in loaded:
             blocks.append(loaded["x-busy-check"])
     if not blocks:
-        return None
+        return BusyCheckError("compose.x-busy-check", "x-busy-check must be a top-level Compose key")
     if len(blocks) > 1:
         return BusyCheckError(
             "compose.x-busy-check", "x-busy-check must be declared in only one Compose file"
@@ -97,7 +101,13 @@ def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
             "compose.x-busy-check.timeout",
             f"timeout must be an integer number of seconds from 1 to {MAX_TIMEOUT}",
         )
-    return {"stack": stack_dir.name, "service": block["service"], "command": command, "timeout": timeout}
+    return {
+        "stack": stack_dir.name,
+        "project": project,
+        "service": block["service"],
+        "command": command,
+        "timeout": timeout,
+    }
 
 
 def busy_check_declarations(stacks_source: str) -> list[dict[str, Any]]:

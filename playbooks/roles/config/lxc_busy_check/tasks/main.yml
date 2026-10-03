@@ -22,7 +22,7 @@
     argv: >-
       {{
         ['sh', '-c', lookup('ansible.builtin.file', 'busy_check_probe.sh'), 'busy-check',
-         item.stack, item.service, item.timeout | string]
+         item.project, item.service, item.timeout | string]
         + item.command
       }}
   loop: "{{ lxc_busy_check_declarations | selectattr('error', 'undefined') | list }}"

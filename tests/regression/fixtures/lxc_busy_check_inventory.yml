@@ -1,7 +1,8 @@
 ---
 # Each host carries protected stacks (busy_check_fixture_stacks entries with a
 # check) and one ordinary stack, plain. busy_check_fixture_files adds repo
-# files after those are written. busy_check_expected_deferrals lists the
+# files after those are written. busy_check_fixture_projects maps a stack to
+# the Compose project name it sets. busy_check_expected_deferrals lists the
 # deferral-file lines the host must produce.
 all:
   vars:
@@ -62,12 +63,17 @@ all:
         lxc_docker_env_stacks_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/../source"
         lxc_docker_env_shared_mount_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared"
         busy_check_fixture_files: []
+        busy_check_fixture_projects: {}
         busy_check_expected_deferrals: []
       hosts:
         busy_host:
           busy_check_vmid: 7301
           busy_check_fixture_stacks:
             busy-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}
+          busy_check_fixture_files:
+            - {stack: busy-app, name: compose.override.yaml, content: "name: busy-project\n"}
+          busy_check_fixture_projects:
+            busy-app: busy-project
           busy_check_expected_deferrals:
             - "busy_host/busy-app: busy"
         failing_host:

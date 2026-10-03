@@ -165,7 +165,8 @@
         fail_msg: "{{ inventory_hostname }}/{{ item.key }} probe calls: {{ probe_calls }}"
       vars:
         probe_calls: >-
-          {{ docker_calls | select('search', '\| (ps .*project=|exec cid-)' ~ (item.key | regex_escape) ~ '( |$)') | list }}
+          {{ docker_calls | select('search', '\| (ps .*project=|exec cid-)' ~ (probe_project | regex_escape) ~ '( |$)') | list }}
+        probe_project: "{{ busy_check_fixture_projects[item.key] | default(item.key) }}"
       loop: "{{ busy_check_fixture_stacks | combine({'plain': {}}) | dict2items }}"
 
     - name: Read the deferral file
