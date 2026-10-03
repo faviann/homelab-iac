@@ -1,8 +1,8 @@
 ---
 # Each host carries protected stacks (busy_check_fixture_stacks entries with a
-# check) and one ordinary stack, plain. busy_check_fixture_files adds or
-# replaces repo files after those are written. busy_check_expected_deferrals
-# lists the deferral-file lines the host must produce.
+# check) and one ordinary stack, plain. busy_check_fixture_files adds repo
+# files after those are written. busy_check_expected_deferrals lists the
+# deferral-file lines the host must produce.
 all:
   vars:
     proxmox_api_host: localhost
@@ -92,27 +92,17 @@ all:
           lxc_busy_check_override: true
           busy_check_fixture_stacks:
             override-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}
-        # Declarations validation rejects must fail closed at runtime too.
+        # A declaration validation rejects must fail closed at runtime too.
+        # Its command would report idle.
         invalid_host:
           busy_check_vmid: 7306
           busy_check_fixture_stacks:
             template-app: {}
-            double-app: {}
           busy_check_fixture_files:
             - stack: template-app
               name: compose.override.yaml.j2
-              content: &check |
-                x-busy-check: {service: worker, command: [sh, -c, exit 0], timeout: 5}
-            - stack: double-app
-              name: compose.yaml
               content: |
-                services: {worker: {image: fixture/double-app:new}}
                 x-busy-check: {service: worker, command: [sh, -c, exit 0], timeout: 5}
-            - stack: double-app
-              name: compose.override.yaml
-              content: *check
           busy_check_expected_deferrals:
             - "invalid_host/template-app: check failed (compose.x-busy-check:
               x-busy-check is not supported in a template (compose.override.yaml.j2))"
-            - "invalid_host/double-app: check failed (compose.x-busy-check:
-              x-busy-check must be declared in only one Compose file)"

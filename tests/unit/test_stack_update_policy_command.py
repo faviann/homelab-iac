@@ -2087,67 +2087,13 @@ def test_busy_check_declaration_in_base_or_override_is_accepted(tmp_path: Path) 
     assert run_validate(tmp_path).returncode == 0
 
 
-@pytest.mark.parametrize(
-    ("block", "path"),
-    [
-        ("x-busy-check: [app]\n", "compose.x-busy-check"),
-        (
-            'x-busy-check:\n  service: app\n  command: ["true"]\n  timeout: 10\n  url: http://app\n',
-            "compose.x-busy-check",
-        ),
-        ('x-busy-check:\n  service: app\n  command: ["true"]\n', "compose.x-busy-check"),
-        (
-            'x-busy-check:\n  service: missing\n  command: ["true"]\n  timeout: 10\n',
-            "compose.x-busy-check.service",
-        ),
-        (
-            'x-busy-check:\n  service: app\n  command: "true"\n  timeout: 10\n',
-            "compose.x-busy-check.command",
-        ),
-        (
-            "x-busy-check:\n  service: app\n  command: []\n  timeout: 10\n",
-            "compose.x-busy-check.command",
-        ),
-        (
-            'x-busy-check:\n  service: app\n  command: ["true", ""]\n  timeout: 10\n',
-            "compose.x-busy-check.command",
-        ),
-        (
-            'x-busy-check:\n  service: app\n  command: ["true"]\n  timeout: 0\n',
-            "compose.x-busy-check.timeout",
-        ),
-        (
-            'x-busy-check:\n  service: app\n  command: ["true"]\n  timeout: 61\n',
-            "compose.x-busy-check.timeout",
-        ),
-        (
-            'x-busy-check:\n  service: app\n  command: ["true"]\n  timeout: true\n',
-            "compose.x-busy-check.timeout",
-        ),
-        (
-            'x-busy-check:\n  service: app\n  command: ["true"]\n  timeout: "10"\n',
-            "compose.x-busy-check.timeout",
-        ),
-    ],
-)
-def test_malformed_busy_check_is_rejected(tmp_path: Path, block: str, path: str) -> None:
+# The parser's cases live in test_busy_check_filter.py. This proves only that
+# a rejection reaches the validator's report.
+def test_malformed_busy_check_is_reported_as_a_busy_check_error(tmp_path: Path) -> None:
     stack = write_valid_stack(tmp_path)
-    compose = (stack / "compose.yaml").read_text(encoding="utf-8")
-    (stack / "compose.yaml").write_text(compose + block, encoding="utf-8")
-
-    completed = run_validate(tmp_path)
-
-    assert completed.returncode == 1
-    assert [
-        (error["code"], error["path"]) for error in json.loads(completed.stdout)["errors"]
-    ] == [("busy-check", path)]
-
-
-def test_busy_check_declared_in_base_and_override_is_rejected(tmp_path: Path) -> None:
-    stack = write_valid_stack(tmp_path)
-    compose = (stack / "compose.yaml").read_text(encoding="utf-8")
-    (stack / "compose.yaml").write_text(compose + VALID_BUSY_CHECK, encoding="utf-8")
-    (stack / "compose.override.yaml").write_text(VALID_BUSY_CHECK, encoding="utf-8")
+    (stack / "compose.override.yaml").write_text(
+        VALID_BUSY_CHECK.replace("timeout: 10", "timeout: 61"), encoding="utf-8"
+    )
 
     completed = run_validate(tmp_path)
 
@@ -2155,23 +2101,7 @@ def test_busy_check_declared_in_base_and_override_is_rejected(tmp_path: Path) ->
     assert json.loads(completed.stdout)["errors"] == [
         {
             "code": "busy-check",
-            "message": "x-busy-check must be declared in only one Compose file",
-            "path": "compose.x-busy-check",
-        }
-    ]
-
-
-def test_busy_check_declared_in_a_template_is_rejected(tmp_path: Path) -> None:
-    stack = write_valid_stack(tmp_path)
-    (stack / "compose.override.yaml.j2").write_text(VALID_BUSY_CHECK, encoding="utf-8")
-
-    completed = run_validate(tmp_path)
-
-    assert completed.returncode == 1
-    assert json.loads(completed.stdout)["errors"] == [
-        {
-            "code": "busy-check",
-            "message": "x-busy-check is not supported in a template (compose.override.yaml.j2)",
-            "path": "compose.x-busy-check",
+            "message": "timeout must be an integer number of seconds from 1 to 60",
+            "path": "compose.x-busy-check.timeout",
         }
     ]
