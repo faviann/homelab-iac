@@ -39,6 +39,7 @@
       "description": "Vendor version pins: no digest (variants reuse the tag), resync upstream compose",
       "matchManagers": ["custom.regex"],
       "pinDigests": false,
+      "prBodyNotes": ["**Vendor stack:** read the compose diff and upstream release notes. A database image change needs upstream's migration steps."],
       "postUpgradeTasks": {
         "commands": ["sh scripts/vendor-sync.sh {{{packageFileDir}}}/compose.yaml {{{currentValue}}} {{{newValue}}}"],
         "fileFilters": ["stacks/**/compose.yaml"]

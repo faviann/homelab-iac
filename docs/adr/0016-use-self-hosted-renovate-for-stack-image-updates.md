@@ -35,7 +35,10 @@ marker URL into the same PR. The strict proof against an upstream commit that
 #96 specified is dropped: the upstream URL is trusted. Upstream formatting
 fails the lint gate, so each vendored path is excluded in `.ansible-lint` and
 `.yamllint` rather than reformatted. Renovate does not edit images inside a
-vendored file; they change only with upstream's file.
+vendored file; they change only with upstream's file. In particular, immich's
+`ghcr.io/immich-app/postgres` is not held by the database-major rule: a
+database image change arrives inside the immich version-pin PR, whose body
+asks the reviewer to read upstream's compose diff and migration steps.
 
 **Foundational hold.** Every update under `stacks/auth/` and `stacks/portal/`,
 of any type, waits for a tick on the Dependency Dashboard, because a bad

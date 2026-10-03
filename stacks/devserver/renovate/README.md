@@ -10,8 +10,9 @@ Self-hosted Renovate for this repository. The repository config is
 `docker compose up -d` starts an exited container. After that, the
 `renovate.timer` systemd unit on `devserver` runs it every Saturday at 05:00
 with `docker start --attach renovate`, so each run's output lands in the
-journal of `renovate.service`. The timer comes from `renovate_timer` in
-`inventory/host_vars/devserver.yml`.
+journal of `renovate.service`. `renovate_timer_enabled` in
+`inventory/host_vars/devserver.yml` installs the timer. Every deploy of
+`devserver` causes one extra run outside that schedule.
 
 The container needs no volume. Its cache lives in the container filesystem and
 survives between runs until the container is recreated.
@@ -25,6 +26,12 @@ token scoped to `faviann/homelab-iac` with read and write access to:
 - Pull requests
 - Issues (for the Dependency Dashboard)
 - Commit statuses (Renovate reports the 14-day release age as a status)
+
+Fine-grained tokens expire. An expired token makes Renovate fail without any
+GitHub-side signal: the Dependency Dashboard simply stops updating. Check
+`journalctl -u renovate.service` when it goes quiet, and rotate the token with
+`./vault.sh edit` (or `./vault.sh set ... --replace`), then
+`./run.sh --limit devserver`.
 
 Workflows permission is not needed while the repository has no GitHub Actions
 workflows. Store the token with `./vault.sh edit`, or with

@@ -13,8 +13,8 @@ services:
     environment:
       RENOVATE_PLATFORM: github
       RENOVATE_REPOSITORIES: faviann/homelab-iac
-      # Post-upgrade tasks may run only the vendor sync, with a stack path and
-      # two version tokens, so a crafted tag cannot smuggle in other arguments.
+      # Renovate runs no post-upgrade task unless it matches this list. The
+      # vendor sync is the only task renovate.json declares.
       RENOVATE_ALLOWED_COMMANDS: >-
         ["^sh scripts/vendor-sync\\.sh stacks/[a-z0-9/_-]+/compose\\.yaml [A-Za-z0-9._-]+ [A-Za-z0-9._-]+$$"]
       LOG_LEVEL: info
