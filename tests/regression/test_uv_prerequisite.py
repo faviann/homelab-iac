@@ -40,9 +40,10 @@ def without_uv(tmp_path: Path) -> dict[str, str]:
         shim.write_text(RECORDING_SHIM, encoding="utf-8")
         shim.chmod(0o755)
     # The ordinary commands the seams run before their uv check: dirname to find
-    # the project, and stat and id for vault.sh set's source authorization.
+    # the project, stat and id for vault.sh set's source authorization, and
+    # mktemp and rm for run.sh's busy-check deferral file.
     # PATH holds only these and the shims, so no host uv can be found.
-    for name in ("dirname", "stat", "id"):
+    for name in ("dirname", "stat", "id", "mktemp", "rm"):
         (bin_dir / name).symlink_to(shutil.which(name))
     assert shutil.which("uv", path=str(bin_dir)) is None
     (tmp_path / "home").mkdir()
