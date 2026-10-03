@@ -285,7 +285,7 @@ Limits:
 
 - A Compose project with no containers is not checked or deferred, because nothing runs that could be interrupted.
 - Check mode (`./run.sh --check`) does not run checks, so its report shows a busy stack as if it would be deployed.
-- A stack removed from the repo loses its protection with its declaration, so quarantine can stop it while it is busy.
+- A stack removed from the repo loses its protection with its declaration, so quarantine can stop it while it is busy. To retire a protected stack without risking a running job, wait until it is idle, or remove its `x-busy-check` deliberately, before deleting it.
 - A job can start between an idle answer and the interruption. That window is accepted; the check narrows it, it does not close it.
 
 ## Traefik
