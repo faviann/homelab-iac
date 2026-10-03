@@ -30,7 +30,7 @@ Copy patterns only from the docs, or from stacks that pass the README Review Che
 5. **Storage.** Classify every bind mount with the README path table. Declare each pre-created path in `x-prereq-dirs`. Ask the user to classify any other absolute path, and whether a named volume stays Docker-managed or becomes a repo-owned bind mount.
 6. **Ports.** List the host's existing bindings across `stacks/<host>/`. A new binding is free when its `(host_ip, port, protocol)` triple is unused; `443/tcp` and `443/udp` are different bindings.
 7. **Preview.** Before writing a new stack or converted Compose file, show the user the stack files, host-var changes, `x-prereq-dirs`, and vault key names.
-8. **Write.** Write the stack, including `stack.yaml` (README "Stack Metadata"). Apply the README Normalization Defaults to ordinary app stacks. Bind new secrets in `lxc_docker_env_stack_vars` to `vault_*` variables, and tell the user which vault keys to add.
+8. **Write.** Write the stack, including `stack.yaml` when there is non-secret metadata to record (README "Stack Metadata"). Apply the README Normalization Defaults to ordinary app stacks. Bind new secrets in `lxc_docker_env_stack_vars` to `vault_*` variables, and tell the user which vault keys to add.
 9. **Review.** Walk every item of the README Review Checklist against the final files. Each item passes, or is an accepted exception you name. Then run `./validate.sh` as the mechanical gate until it exits 0.
 10. **Deploy.** When the user wants it running, deploy with `./run.sh --limit <host> --stack <stack>` and confirm the containers are up.
 
