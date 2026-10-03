@@ -1,4 +1,4 @@
-"""The x-busy-check declaration contract, shared by stack validation and the lifecycle."""
+"""The x-busy-check declaration contract read by the lifecycle."""
 
 from __future__ import annotations
 

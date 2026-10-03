@@ -19,6 +19,3 @@ runtime:
 exposure:
   traefik: public
   homepage_instances: []
-updates:
-  mode: images
-  track: "2"

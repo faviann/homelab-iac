@@ -18,8 +18,6 @@ of what the guards enforce.
 | | `lint` | none | yes |
 | | `lifecycle [--full] [--only <launcher.py>]... [--fail-fast]` | none | yes |
 | | `tests [<target>...]` | none | yes |
-| | `stack <path>` | none | yes |
-| | `renovate` | none | yes |
 | `./inspect.sh` | `credentials`, `containers` | shared | yes |
 | | `connectivity [--limit <targets>]`, `plan [--limit <targets>]` | shared | yes |
 | | `vars <host>`, `vars --graph` | none | yes |
@@ -79,8 +77,6 @@ unchanged:
 | `./validate.sh lint` | `ansible-lint`'s status, for example `2` when it finds violations |
 | `./validate.sh lifecycle` | `1` when a launcher fails, and `2` when the runner rejects an unregistered launcher |
 | `./validate.sh tests` | pytest's status: `1` for failed tests, `4` for a target pytest cannot load, and `5` when no test was collected |
-| `./validate.sh stack` | `1` when the stack policy is invalid |
-| `./validate.sh renovate` | pytest's status: `1` when the real Renovate run fails or cannot start, for example without `npx` or registry access, and `5` when the gate test was not collected |
 | `./validate.sh` | the status of the first failing gate, checked as lint, then lifecycle, then tests. `130` or `143` when interrupted. |
 
 So a `2` from `./validate.sh` does not always mean invalid usage. Read stderr:
@@ -93,8 +89,7 @@ exits `1` with the reconciliation error before any gate starts.
 
 The stable interface is the documented names, operations, options, exit
 status, safety guarantees, and explicit output formats. Terminal prose is for
-people and can change. The one machine interface is the schema-versioned JSON
-that `./validate.sh stack` writes to stdout.
+people and can change.
 
 ### The lock
 
@@ -257,28 +252,6 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** when SSH fails, report that live data was not collected. Do
   not infer an answer from stale values.
 
-#### Renovate adapter
-
-- **Trigger:** maintainer work on the image-update Renovate boundary.
-- **Audience:** maintainer only. No in-repository code produces the request
-  it consumes yet, so a wrapper would wrap a caller that does not exist.
-- **Scope:** one request file, as written in
-  [image-update-renovate-adapter.md](image-update-renovate-adapter.md).
-
-  ```bash
-  uv run --locked python scripts/image_update_renovate_adapter.py <request.json>
-  ```
-
-- **Boundary:** observational. It queries public registries and writes
-  candidate observations to stdout. It contacts no managed host.
-- **Sensitive output:** none. It strips inherited `RENOVATE_*` variables.
-- **Escalation:** agents exercise this boundary through its tests, not by
-  running the adapter. `./validate.sh` runs the deterministic contract tests.
-  `./validate.sh renovate` runs the real pinned Renovate against public
-  registries, as
-  [image-update-renovate-adapter.md](image-update-renovate-adapter.md)
-  requires for adapter changes.
-
 #### CLIProxy management-key hash
 
 - **Trigger:** creating or changing the CLIProxy management password before
@@ -322,8 +295,7 @@ Agent use of a documented raw command is a separate decision:
 | `ansible-vault view` | `./vault.sh check`, which verifies the vault without printing values. No operation prints decrypted contents |
 | `ansible-lint` | `./validate.sh lint` |
 | the lifecycle regression runner | `./validate.sh lifecycle [--full] [--only <launcher.py>]... [--fail-fast]` |
-| `pytest`, `python -m unittest`, or a test file run with `python` | `./validate.sh tests [<target>...]`, or `./validate.sh renovate` for the real Renovate compatibility test |
-| `python -m stack_update_policy validate` | `./validate.sh stack <path>` |
+| `pytest`, `python -m unittest`, or a test file run with `python` | `./validate.sh tests [<target>...]` |
 | `python -c "import proxmoxer, requests"` | none. `./setup.sh sync` repairs the environment it only probed |
 | `./configure-vault.sh` | `./vault.sh configure` |
 | `./rotate-vault-passphrase.sh` | `./vault.sh rotate` |

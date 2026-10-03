@@ -18,6 +18,3 @@ exposure:
   # LAN by the local-ip-restriction middleware, not by Authentik ForwardAuth.
   traefik: public
   homepage_instances: []
-updates:
-  mode: images
-  track: "7.3"

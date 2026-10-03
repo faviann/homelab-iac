@@ -19,11 +19,9 @@ stop it even while busy. Keeping the declaration beside the services it checks
 was preferred over host variables, which would drift from the stack.
 
 The check fails closed. Exit `1` means busy, and so does any outcome the run
-cannot read as idle, a malformed block included. Stack validation and the run
-share one parser, so a block in a `.j2` template or in both the base and
-override Compose files is rejected by `./validate.sh stack` and defers its stack
-at runtime. Neither side can read a declaration the other ignores or reads
-differently. An unknown answer must not authorize an interruption. The one
+cannot read as idle, a malformed block included. A block in a `.j2` template
+or in both the base and override Compose files is malformed and defers its
+stack at runtime. An unknown answer must not authorize an interruption. The one
 exception is a Compose project with no containers. Nothing runs that could be
 interrupted, so that stack deploys normally.
 
