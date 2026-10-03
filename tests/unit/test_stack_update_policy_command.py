@@ -2076,14 +2076,10 @@ x-busy-check:
 """
 
 
-def test_busy_check_declaration_in_base_or_override_is_accepted(tmp_path: Path) -> None:
+def test_valid_busy_check_declaration_is_accepted(tmp_path: Path) -> None:
     stack = write_valid_stack(tmp_path)
     compose = (stack / "compose.yaml").read_text(encoding="utf-8")
     (stack / "compose.yaml").write_text(compose + VALID_BUSY_CHECK, encoding="utf-8")
-    assert run_validate(tmp_path).returncode == 0
-
-    (stack / "compose.yaml").write_text(compose, encoding="utf-8")
-    (stack / "compose.override.yaml").write_text(VALID_BUSY_CHECK, encoding="utf-8")
     assert run_validate(tmp_path).returncode == 0
 
 

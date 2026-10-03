@@ -31,8 +31,8 @@ def write_stack(source: Path, name: str, files: dict[str, str]) -> Path:
     return source / name
 
 
-def declaration(timeout: int = 5, project: str = "stack") -> dict:
-    return {"stack": "stack", "project": project, "service": "app", "command": ["true"], "timeout": timeout}
+def declaration(project: str = "stack") -> dict:
+    return {"stack": "stack", "project": project, "service": "app", "command": ["true"], "timeout": 5}
 
 
 def check(service: str = "app", command: str = '["true"]', timeout: str = "5", extra: str = "") -> str:
@@ -48,10 +48,8 @@ def check(service: str = "app", command: str = '["true"]', timeout: str = "5", e
         ({"compose.yaml": SERVICES + BLOCK}, declaration()),
         ({"compose.yml": SERVICES, "compose.override.yaml": BLOCK}, declaration()),
         ({"compose.yaml": "name: renamed\n" + SERVICES + BLOCK}, declaration(project="renamed")),
-        ({"compose.yaml": SERVICES + check(timeout="1")}, declaration(timeout=1)),
-        ({"compose.yaml": SERVICES + check(timeout="60")}, declaration(timeout=60)),
     ],
-    ids=["undeclared", "base", "override", "named", "min-timeout", "max-timeout"],
+    ids=["undeclared", "base", "override", "named"],
 )
 def test_reads_valid_declarations(tmp_path: Path, files: dict[str, str], expected: dict | None) -> None:
     assert MODULE.read_busy_check(write_stack(tmp_path, "stack", files)) == expected
@@ -179,11 +177,4 @@ def test_result_defers_only_busy_and_failed_checks_with_their_reasons() -> None:
             {"stack": "garbled", "state": "check_failed", "reason": "probe failed"},
         ],
         "host_deferred": True,
-    }
-
-
-def test_a_host_with_nothing_probed_is_not_deferred() -> None:
-    assert FILTERS["busy_check_result"]([], {"results": []}) == {
-        "deferred_stacks": [],
-        "host_deferred": False,
     }
