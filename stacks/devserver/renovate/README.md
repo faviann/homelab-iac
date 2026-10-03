@@ -21,9 +21,7 @@ item is created by the next run, within six hours. Items held only by the
 schedule are listed under "Awaiting Schedule", and ticking one creates it
 early.
 
-The six-hour sleep is shorter than the window on purpose. A daily loop drifts
-later by one run's duration each day, so two consecutive runs could straddle
-Saturday and skip a week.
+The loop sleeps six hours, so every Saturday window gets several runs.
 
 The container needs no volume. Its cache lives in the container filesystem and
 survives restarts until the container is recreated.
@@ -55,6 +53,8 @@ workflows. Store the token with `./vault.sh edit`, or with
 ./run.sh --limit devserver
 ```
 
-The first run onboards nothing, because `renovate.json` already exists. It
-opens the Dependency Dashboard issue and the first pin-digest PRs. Updates
-under `stacks/auth/` and `stacks/portal/` wait for a tick on the dashboard.
+The first run onboards nothing, because `renovate.json` already exists. Unless
+you deploy on a Saturday (Montreal time), it only builds the Dependency
+Dashboard. Digest-pin and other new PRs open in the Saturday window, or at the
+next run after you tick them under "Awaiting Schedule". Updates under
+`stacks/auth/` and `stacks/portal/` also need their tick.
