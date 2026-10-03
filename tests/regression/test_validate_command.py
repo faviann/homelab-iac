@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 import pytest
-import yaml
 
 
 # This module covers signal cleanup, timed supervision, and checkout boundaries.
@@ -46,7 +45,6 @@ with capture.open("a", encoding="utf-8") as stream:
         "cache_connection": os.environ.get("ANSIBLE_CACHE_PLUGIN_CONNECTION"),
         "inventory": os.environ.get("ANSIBLE_INVENTORY"),
         "lifecycle_marker": os.environ.get("HOMELAB_IAC_LIFECYCLE_WRAPPER"),
-        "pytest_addopts": os.environ.get("PYTEST_ADDOPTS"),
         "vault_password_file": os.environ.get("ANSIBLE_VAULT_PASSWORD_FILE"),
     }) + "\\n")
 
@@ -184,8 +182,6 @@ def child_kind(argv: list[str]) -> str:
         return "lint"
     if any(item.endswith("run_lxc_lifecycle_regressions.py") for item in argv):
         return "lifecycle"
-    if "stack_update_policy" in argv:
-        return "stack"
     if "pytest" in argv:
         return "tests"
     return f"unrecognized:{' '.join(argv)}"
@@ -370,7 +366,7 @@ def test_help_exits_zero_and_names_every_operation(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     output = f"{result.stdout}\n{result.stderr}"
-    for operation in ("lint", "lifecycle", "tests", "stack", "renovate"):
+    for operation in ("lint", "lifecycle", "tests"):
         assert operation in output
     assert captured_commands(tmp_path) == []
 
@@ -383,8 +379,6 @@ def test_help_exits_zero_and_names_every_operation(tmp_path: Path) -> None:
         ("lint", "--bogus"),
         ("lifecycle", "--bogus"),
         ("tests", "--bogus"),
-        ("stack", "--bogus"),
-        ("renovate", "--bogus"),
     ],
 )
 def test_unknown_operation_or_option_is_invalid_usage(
@@ -537,14 +531,11 @@ def test_tests_preserves_exceptional_and_empty_statuses(
     assert result.returncode == pytest_status
 
 
-def test_real_pytest_runner_continues_after_serial_failure_and_excludes_the_gate(
-    tmp_path: Path,
-) -> None:
-    # Every observation below is its own marker file, so the serial failure
-    # that drives the exit status decides neither continuation nor exclusion.
+def test_real_pytest_runner_continues_after_serial_failure(tmp_path: Path) -> None:
+    # The parallel probe is its own marker file, so the serial failure that
+    # drives the exit status does not decide continuation.
     (tmp_path / "pytest.ini").write_text(
-        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n"
-        "    renovate_compat: temporary isolated runner fixture\n",
+        "[pytest]\nmarkers =\n    serial: temporary isolated runner fixture\n",
         encoding="utf-8",
     )
     probes = tmp_path / "probes"
@@ -565,17 +556,6 @@ def test_real_pytest_runner_continues_after_serial_failure_and_excludes_the_gate
         "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'parallel-probe').touch()\n",
         encoding="utf-8",
     )
-    (tmp_path / "test_gate.py").write_text(
-        "import os\nfrom pathlib import Path\n\nimport pytest\n\n"
-        "@pytest.mark.renovate_compat\n"
-        "def test_parallel_lane_gate():\n"
-        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'parallel-gate').touch()\n\n"
-        "@pytest.mark.renovate_compat\n"
-        "@pytest.mark.serial\n"
-        "def test_serial_lane_gate():\n"
-        "    (Path(os.environ['PYTEST_RUNNER_PROBES']) / 'serial-gate').touch()\n",
-        encoding="utf-8",
-    )
     env = os.environ.copy()
     env["PYTEST_RUNNER_PROBES"] = str(probes)
 
@@ -594,24 +574,6 @@ def test_real_pytest_runner_continues_after_serial_failure_and_excludes_the_gate
     assert "intentional serial failure for runner regression" in output
 
 
-@pytest.mark.parametrize("pytest_status", [0, 1, 5])
-def test_renovate_runs_only_the_marked_gate_and_reports_its_status(
-    tmp_path: Path, pytest_status: int
-) -> None:
-    env = validation_environment(tmp_path)
-    env["VALIDATE_TEST_PYTEST_STATUS"] = str(pytest_status)
-    env["PYTEST_ADDOPTS"] = "--collect-only"
-
-    result = run_validation(env, REPO_ROOT, "renovate")
-
-    assert result.returncode == pytest_status
-    commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["tests"]
-    assert child_options(commands[0]["argv"], "-m")[0] == "renovate_compat"
-    assert commands[0]["pytest_addopts"] is None
-    assert_isolated(result, commands)
-
-
 @pytest.mark.parametrize("target", ["validate.sh", "../outside/test_x.py"])
 def test_tests_rejects_a_target_outside_the_test_tree(
     tmp_path: Path, target: str
@@ -622,39 +584,6 @@ def test_tests_rejects_a_target_outside_the_test_tree(
 
     assert result.returncode == 2, result.stdout
     assert captured_commands(tmp_path) == []
-
-
-@pytest.mark.parametrize(
-    "paths",
-    [(), ("stacks/workstation/mcp-auth-proxy", "stacks/workstation/another")],
-)
-def test_stack_requires_exactly_one_stack_path(
-    tmp_path: Path, paths: tuple[str, ...]
-) -> None:
-    env = validation_environment(tmp_path)
-
-    result = run_validation(env, REPO_ROOT, "stack", *paths)
-
-    assert result.returncode == 2, result.stdout
-    assert captured_commands(tmp_path) == []
-
-
-def test_stack_validates_exactly_the_named_stack(tmp_path: Path) -> None:
-    env = validation_environment(tmp_path)
-
-    result = run_validation(
-        env, REPO_ROOT, "stack", "stacks/workstation/mcp-auth-proxy"
-    )
-
-    assert result.returncode == 0, result.stderr
-    commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["stack"]
-    argv = commands[0]["argv"]
-    assert argv[argv.index("python") + 1] == "-B"
-    options = child_options(argv, "validate")
-    assert options[:2] == ["--repository-root", "."]
-    assert options[-1] == "stacks/workstation/mcp-auth-proxy"
-    assert_isolated(result, commands)
 
 
 @pytest.mark.parametrize(
@@ -677,20 +606,7 @@ def test_a_help_suffixed_argument_is_still_judged_by_its_own_branch(
     assert captured_commands(tmp_path) == []
 
 
-def test_a_help_suffixed_stack_path_stays_a_stack_path(tmp_path: Path) -> None:
-    env = validation_environment(tmp_path)
-
-    result = run_validation(env, REPO_ROOT, "stack", "stacks/a/b:--help")
-
-    assert result.returncode == 0, result.stderr
-    commands = captured_commands(tmp_path)
-    assert child_kinds(commands) == ["stack"]
-    assert commands[0]["argv"][-1] == "stacks/a/b:--help"
-
-
-@pytest.mark.parametrize(
-    "operation", ["lint", "lifecycle", "tests", "stack"]
-)
+@pytest.mark.parametrize("operation", ["lint", "lifecycle", "tests"])
 def test_help_after_any_operation_exits_zero(
     tmp_path: Path, operation: str
 ) -> None:
@@ -715,63 +631,6 @@ def test_an_unusable_test_target_reports_the_commands_own_usage_error(
     assert result.stderr.startswith("validate.sh: test target outside tests/")
     assert "realpath" not in result.stderr
     assert captured_commands(tmp_path) == []
-
-
-# --- AC5: the stack update policy machine interface ------------------------
-
-
-# These real-stack checks need the Compose CLI, not a Docker daemon: the
-# validator uses `config --format json --no-interpolate --no-env-resolution`.
-# This repository-wide dependency predates PR #243; issue #240 reports 59 unit
-# tests sharing it. Keeping the real CLI avoids a fake that must
-# mirror production services. ADR-0008 permits it: the non-live boundary is no
-# managed host, no vault secret, and no machine-specific credential.
-def run_real_stack_validation(path: str) -> subprocess.CompletedProcess[str]:
-    manifest = REPO_ROOT / path / "stack.yaml"
-    if manifest.is_file():
-        metadata = yaml.safe_load(manifest.read_text(encoding="utf-8"))
-        updates = metadata.get("updates")
-        mode = updates.get("mode") if isinstance(updates, dict) else None
-        # Guard before launching: vendor mode can clone an upstream repository.
-        assert mode in (None, "images"), (
-            f"AC5 stack {path} acquired update mode {mode!r}; "
-            "this command-contract coverage requires network-free validation"
-        )
-    return subprocess.run(
-        [str(RUNNER), "stack", path],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-        timeout=120,
-    )
-
-
-def test_stack_reports_a_valid_policy_as_schema_versioned_json() -> None:
-    result = run_real_stack_validation("stacks/workstation/mcp-auth-proxy")
-
-    assert result.returncode == 0, result.stderr
-    document = json.loads(result.stdout)
-    assert document["schema_version"] == 1
-    assert document["valid"] is True
-    assert "stacks/workstation/mcp-auth-proxy" in result.stderr
-
-
-# The frozen validation surface for issue #213 names stacks/overmind/overmind
-# as the invalid-contract instance: its stack.yaml carries no `updates:`
-# section today, so validation reports it as invalid. If that stack ever gains
-# an update policy, move this case to another genuinely invalid stack rather
-# than weakening the assertions.
-def test_stack_reports_an_invalid_contract_on_stderr_and_exits_non_zero() -> None:
-    result = run_real_stack_validation("stacks/overmind/overmind")
-
-    assert result.returncode != 0
-    document = json.loads(result.stdout)
-    assert document["schema_version"] == 1
-    assert document["valid"] is False
-    assert document["errors"]
-    diagnostic = document["errors"][0]["message"]
-    assert diagnostic in result.stderr
 
 
 # --- AC7 / AC10: the shared fixture boundary and agent safety ---------------
