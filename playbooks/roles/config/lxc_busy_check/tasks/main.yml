@@ -15,7 +15,7 @@
     - not (lxc_busy_check_override | bool)
     - not (ansible_check_mode | bool)
     - docker_enabled | default(false) | bool
-    - lxc_busy_check_guest_running | bool
+    - lxc_busy_check_applies | bool
 
 - name: Run each declared busy check inside its service
   ansible.builtin.command:

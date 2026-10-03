@@ -2,7 +2,8 @@
 # Each host carries protected stacks (busy_check_fixture_stacks entries with a
 # check) and one ordinary stack, plain. busy_check_fixture_files adds repo
 # files after those are written. busy_check_expected_deferrals lists the
-# deferral-file lines the host must produce.
+# deferral-file lines the host must produce. busy_check_removed plans the
+# host's removal instead of its configuration.
 all:
   vars:
     proxmox_api_host: localhost
@@ -39,8 +40,9 @@ all:
             - {vmid: 7304, name: undeclared-host, status: running}
             - {vmid: 7305, name: override-host, status: running}
             - {vmid: 7306, name: invalid-host, status: running}
+            - {vmid: 7307, name: remove-host, status: running}
         proxmox_lxc:
-          state: present
+          state: "{{ 'absent' if busy_check_removed else 'present' }}"
           vmid: "{{ busy_check_vmid }}"
           hostname: "{{ inventory_hostname | replace('_', '-') }}"
           node: pve-a
@@ -63,6 +65,7 @@ all:
         lxc_docker_env_shared_mount_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared"
         busy_check_fixture_files: []
         busy_check_expected_deferrals: []
+        busy_check_removed: false
       hosts:
         busy_host:
           busy_check_vmid: 7301
@@ -108,3 +111,13 @@ all:
           busy_check_expected_deferrals:
             - "invalid_host/template-app: check failed (compose.x-busy-check:
               x-busy-check is not supported in a template (compose.override.yaml.j2))"
+        # Removal retires the LXC, so a busy stack must not hold it back.
+        remove_host:
+          busy_check_vmid: 7307
+          busy_check_removed: true
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: false
+            allow_destructive_transitions: true
+          busy_check_fixture_stacks:
+            remove-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}

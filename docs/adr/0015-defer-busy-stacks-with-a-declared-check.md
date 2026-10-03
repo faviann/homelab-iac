@@ -38,6 +38,8 @@ lost. Other stacks and hosts still converge. `./run.sh` exits `3` when a
 successful run deferred anything, so a scheduled caller can tell "retry later"
 from success and failure without parsing logs.
 `./run.sh --interrupt-busy` skips the checks for a deliberate interruption.
+Removing an LXC skips the checks too, because removal retires the host, while a
+rebuild stays protected.
 
 The check is a command, not a URL. A command covers an app with an HTTP status
 endpoint through `curl` or similar, and also covers apps with only a lock file

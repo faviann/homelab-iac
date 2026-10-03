@@ -42,12 +42,17 @@
     - proxmox_lifecycle_execution_failure_snapshot | length == 0
   block:
     # Runs before provision.yml because host-side reconciliation can restart or
-    # rebuild the LXC.
+    # rebuild the LXC. Removing the LXC retires it, so busy checks do not hold
+    # a removal back; a rebuild stays protected.
     - name: Check declared busy stacks before any interruption
       ansible.builtin.include_role:
         name: config/lxc_busy_check
       vars:
-        lxc_busy_check_guest_running: "{{ proxmox_lifecycle_runtime_state == 'running' }}"
+        lxc_busy_check_applies: >-
+          {{
+            proxmox_lifecycle_runtime_state == 'running'
+            and proxmox_lxc_lifecycle_plan.container_transition != 'remove'
+          }}
 
     # Skipped whole: host_config derives restart_required from changes made in
     # the same run, so skipping only the restart would lose it.

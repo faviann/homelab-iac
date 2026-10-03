@@ -135,6 +135,12 @@
     shared_stacks: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/stacks"
     host_steps: [api_reconciliation, host_reconciliation, docker_runtime, nvidia_runtime, apt_upgrade, reboot]
   tasks:
+    - name: Assert a planned removal went ahead despite a busy stack
+      ansible.builtin.assert:
+        that: "'container_transition' in events"
+        fail_msg: "{{ inventory_hostname }} removal events: {{ events }}"
+      when: busy_check_removed
+
     - name: Assert host steps ran only on hosts without a busy stack
       ansible.builtin.assert:
         that: >-
@@ -142,6 +148,7 @@
           if host_deferred | bool
           else (host_steps | difference(events) | length == 0)
         fail_msg: "{{ inventory_hostname }} host steps: {{ events }}"
+      when: not busy_check_removed
 
     - name: Assert deferred stacks kept their deployed files and saw no compose command
       ansible.builtin.assert:
@@ -158,10 +165,13 @@
           - (shared_stacks ~ '/' ~ item ~ ' | compose -p ' ~ item ~ ' up -d') in docker_calls
         fail_msg: "{{ inventory_hostname }}/{{ item }} was not deployed"
       loop: "{{ busy_check_fixture_stacks.keys() | list | difference(deferred_stacks) + ['plain'] }}"
+      when: not busy_check_removed
 
     - name: Assert only declared stacks were probed, and only without the override
       ansible.builtin.assert:
-        that: (probe_calls | length > 0) == (item.value | length > 0 and not (lxc_busy_check_override | default(false)))
+        that: >-
+          (probe_calls | length > 0)
+          == (item.value | length > 0 and not (lxc_busy_check_override | default(false)) and not busy_check_removed)
         fail_msg: "{{ inventory_hostname }}/{{ item.key }} probe calls: {{ probe_calls }}"
       vars:
         probe_calls: >-
