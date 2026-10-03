@@ -1982,6 +1982,9 @@ def test_documented_module_command_leaves_its_repository_byte_for_byte_unchanged
     package.mkdir(parents=True)
     for source in (REPO_ROOT / "stack_update_policy").glob("*.py"):
         shutil.copy2(source, package / source.name)
+    filter_plugins = repository / "playbooks/filter_plugins"
+    filter_plugins.mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / "playbooks/filter_plugins/busy_check.py", filter_plugins)
     write_valid_stack(repository)
     assert not list(repository.rglob("__pycache__"))
     assert not list(repository.rglob("*.pyc"))

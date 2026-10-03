@@ -2,83 +2,20 @@
 # Busy-check gate. Publishes lxc_busy_check_result:
 #   {deferred_stacks: [{stack, state, reason}], host_deferred: bool}
 # Declarations are read on the controller, so a host without them runs no
-# remote command.
+# remote command. Only idle and not_deployed let a stack proceed.
 
-- name: Start with no busy-check deferrals
+- name: Start with no busy-check declarations
   ansible.builtin.set_fact:
-    lxc_busy_check_result:
-      deferred_stacks: []
-      host_deferred: false
     lxc_busy_check_declarations: []
-    lxc_busy_check_malformed_stacks: []
-    lxc_busy_check_probes: {}
 
 - name: Read busy-check declarations from the repo stack source
+  ansible.builtin.set_fact:
+    lxc_busy_check_declarations: "{{ lxc_busy_check_stacks_source | busy_check_declarations }}"
   when:
     - not (lxc_busy_check_override | bool)
     - not (ansible_check_mode | bool)
     - docker_enabled | default(false) | bool
     - lxc_busy_check_guest_running | bool
-  block:
-    - name: Find repo compose files that can declare a busy check
-      ansible.builtin.find:
-        paths: "{{ lxc_busy_check_stacks_source }}"
-        patterns: [compose.yaml, compose.yml, compose.override.yaml, compose.override.yml]
-        recurse: true
-        depth: 2
-      register: lxc_busy_check_compose_files
-      delegate_to: localhost
-      become: false
-
-    # Override files are read last, so their block wins.
-    - name: Parse busy-check declarations
-      ansible.builtin.set_fact:
-        lxc_busy_check_declarations: "{{ parsed | selectattr('valid') | map(attribute='declaration') | list }}"
-        lxc_busy_check_malformed_stacks: "{{ parsed | rejectattr('valid') | map(attribute='stack') | list }}"
-      vars:
-        compose_paths: >-
-          {{
-            lxc_busy_check_compose_files.files | map(attribute='path')
-            | select('search', '/compose\.ya?ml$') | sort
-            + lxc_busy_check_compose_files.files | map(attribute='path')
-            | select('search', '/compose\.override\.ya?ml$') | sort
-          }}
-        parsed: >-
-          {%- set blocks = {} -%}
-          {%- for path in compose_paths -%}
-          {%-   set compose = lookup('ansible.builtin.file', path) | from_yaml -%}
-          {%-   if compose is mapping and 'x-busy-check' in compose -%}
-          {%-     set _ = blocks.update({path | dirname | basename: compose['x-busy-check']}) -%}
-          {%-   endif -%}
-          {%- endfor -%}
-          {%- set entries = [] -%}
-          {%- for stack, block in blocks | dictsort -%}
-          {%-   set valid = (
-            block is mapping
-            and block.keys() | sort == ['command', 'service', 'timeout']
-            and block.service is string
-            and block.service | trim | length > 0
-            and block.command is sequence
-            and block.command is not string
-            and block.command is not mapping
-            and block.command | length > 0
-            and block.command | reject('string') | list | length == 0
-            and block.command | map('trim') | select('equalto', '') | list | length == 0
-            and block.timeout is integer
-            and 1 <= block.timeout <= 60
-          ) -%}
-          {%-   set _ = entries.append({
-            'stack': stack,
-            'valid': valid,
-            'declaration': {
-              'stack': stack,
-              'service': block.service,
-              'command': block.command,
-              'timeout': block.timeout
-            } if valid else {}
-          }) -%}
-          {%- endfor -%}
-          {{ entries }}
 
 - name: Run each declared busy check inside its service
   ansible.builtin.command:
@@ -88,7 +25,7 @@
          item.stack, item.service, item.timeout | string]
         + item.command
       }}
-  loop: "{{ lxc_busy_check_declarations }}"
+  loop: "{{ lxc_busy_check_declarations | selectattr('error', 'undefined') | list }}"
   loop_control:
     label: "{{ item.stack }}"
   register: lxc_busy_check_probes
@@ -98,42 +35,29 @@
 
 - name: Publish the busy-check result
   ansible.builtin.set_fact:
-    lxc_busy_check_result: >-
-      {%- set observed = [] -%}
-      {%- for stack in lxc_busy_check_malformed_stacks -%}
-      {%-   set _ = observed.append({'stack': stack, 'key': 'malformed', 'timeout': '', 'detail': ''}) -%}
+    lxc_busy_check_result:
+      deferred_stacks: "{{ deferred }}"
+      host_deferred: "{{ deferred | length > 0 }}"
+  vars:
+    outcomes: >-
+      {%- set outcomes = [] -%}
+      {%- for entry in lxc_busy_check_declarations | selectattr('error', 'defined') -%}
+      {%-   set _ = outcomes.append({'stack': entry.stack, 'state': 'check_failed', 'reason': entry.error}) -%}
       {%- endfor -%}
       {%- for probe in lxc_busy_check_probes.results | default([]) -%}
+      {%-   set lines = probe.stdout_lines | default([]) -%}
       {%-   if probe.unreachable | default(false) -%}
-      {%-     set key = 'unreachable' -%}
-      {%-     set detail = '' -%}
-      {%-   elif probe.rc | default(-1) != 0 -%}
-      {%-     set key = 'probe-failed' -%}
-      {%-     set detail = probe.stderr | default(probe.msg | default('')) -%}
+      {%-     set state, reason = 'check_failed', 'guest unreachable' -%}
+      {%-   elif probe.rc | default(-1) != 0 or (lines | first | default('')) not in ['idle', 'busy', 'check_failed', 'not_deployed'] -%}
+      {%-     set detail = probe.stderr | default(probe.msg | default('')) | trim -%}
+      {%-     set state, reason = 'check_failed', 'probe failed' ~ (': ' ~ detail if detail else '') -%}
       {%-   else -%}
-      {%-     set key = probe.stdout_lines[0] | default('probe-failed') -%}
-      {%-     set detail = probe.stdout_lines[1:] | join(' ') -%}
+      {%-     set state, reason = lines[0], lines[1:] | join(' ') -%}
       {%-   endif -%}
-      {%-   set _ = observed.append({
-        'stack': probe.item.stack,
-        'key': key,
-        'timeout': probe.item.timeout | string,
-        'detail': detail | trim | truncate(200)
-      }) -%}
+      {%-   set _ = outcomes.append({'stack': probe.item.stack, 'state': state, 'reason': reason | trim | truncate(200)}) -%}
       {%- endfor -%}
-      {%- set outcomes = [] -%}
-      {%- for entry in observed -%}
-      {%-   set outcome = lxc_busy_check_outcomes[entry.key] | default(lxc_busy_check_outcomes['rc=other']) -%}
-      {%-   set reason = outcome.reason
-        | replace('{timeout}', entry.timeout)
-        | replace('{rc}', entry.key | regex_replace('^rc=', '')) -%}
-      {%-   if outcome.state == 'check_failed' and entry.detail | length > 0 -%}
-      {%-     set reason = reason ~ ': ' ~ entry.detail -%}
-      {%-   endif -%}
-      {%-   set _ = outcomes.append({'stack': entry.stack, 'state': outcome.state, 'reason': reason}) -%}
-      {%- endfor -%}
-      {%- set deferred = outcomes | selectattr('state', 'in', lxc_busy_check_deferring_states) | list -%}
-      {{ {'deferred_stacks': deferred, 'host_deferred': deferred | length > 0} }}
+      {{ outcomes }}
+    deferred: "{{ outcomes | selectattr('state', 'in', ['busy', 'check_failed']) | list }}"
 
 - name: Report busy-check deferrals for this host
   ansible.builtin.debug:
