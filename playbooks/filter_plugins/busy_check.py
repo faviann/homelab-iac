@@ -44,8 +44,6 @@ def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
             )
     services: set[str] = set()
     blocks = []
-    # Compose names the project from a top-level name, the override's winning.
-    project = stack_dir.name
     for path in compose_paths:
         try:
             loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -55,8 +53,6 @@ def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
             continue
         if isinstance(loaded.get("services"), dict):
             services.update(loaded["services"])
-        if _nonempty_string(loaded.get("name")):
-            project = loaded["name"]
         if "x-busy-check" in loaded:
             blocks.append(loaded["x-busy-check"])
     if not blocks:
@@ -87,7 +83,6 @@ def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
         )
     return {
         "stack": stack_dir.name,
-        "project": project,
         "service": block["service"],
         "command": command,
         "timeout": timeout,

@@ -1,7 +1,7 @@
 #!/bin/sh
-# Every Compose project has containers except undeployed-* and busy-app,
-# whose stack names its project busy-project. exec runs the declared check
-# command on the controller.
+# Every Compose project has containers except undeployed-* and busy-project,
+# the top-level name: busy-app sets, which stack sync's -p overrides. exec
+# runs the declared check command on the controller.
 printf '%s | %s\n' "$PWD" "$*" >> "$BUSY_CHECK_DOCKER_LOG"
 
 case "$1" in
@@ -13,7 +13,7 @@ case "$1" in
       esac
     done
     case "$project" in
-      undeployed-* | busy-app) ;;
+      undeployed-* | busy-project) ;;
       *) echo "cid-$project" ;;
     esac
     ;;
@@ -22,7 +22,7 @@ case "$1" in
     exec "$@"
     ;;
   compose)
-    [ "$2" = up ] && echo Started >&2
+    [ "$4" = up ] && echo Started >&2
     ;;
   image)
     echo "Total reclaimed space: 0B"

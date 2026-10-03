@@ -29,9 +29,11 @@
   register: _stack_sync_image_prune
   changed_when: "'Total reclaimed space: 0B' not in _stack_sync_image_prune.stdout"
 
+# -p pins the project to the stack folder, so a top-level name: or an .env
+# COMPOSE_PROJECT_NAME cannot move the stack away from what busy checks probe.
 - name: Ensure all stacks are running
   ansible.builtin.command:
-    cmd: docker compose up -d
+    argv: [docker, compose, -p, "{{ item.path | dirname | basename }}", up, -d]
     chdir: "{{ item.path | dirname }}"
   loop: "{{ _stack_compose_files.files | default([]) }}"
   loop_control:

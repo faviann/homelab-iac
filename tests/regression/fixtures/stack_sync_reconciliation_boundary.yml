@@ -75,15 +75,15 @@
         content: |
           #!/bin/sh
           printf '%s | %s\n' "$PWD" "$*" >> "{{ temp_root }}/docker-calls.log"
-          case "$1 $2" in
-            "network create")
+          case "$*" in
+            "network create "*)
               if [ -e "{{ temp_root }}/proxy-network" ]; then
                 echo "network already exists" >&2
                 exit 1
               fi
               touch "{{ temp_root }}/proxy-network"
               ;;
-            "compose up")
+            "compose -p myapp up "*)
               if [ -e "{{ temp_root }}/myapp-running" ]; then
                 echo "Running" >&2
               else
@@ -91,7 +91,7 @@
                 echo "Started" >&2
               fi
               ;;
-            "image prune")
+            "image prune "*)
               echo "Total reclaimed space: 0B"
               ;;
           esac
@@ -126,13 +126,13 @@
       ansible.builtin.assert:
         that:
           - >-
-            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/stale-app | compose down --remove-orphans')
+            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/stale-app | compose -p stale-app down --remove-orphans')
             in (_docker_log.content | b64decode)
           - "'network create proxy' in (_docker_log.content | b64decode)"
           - >-
-            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp | compose up -d')
+            (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/myapp | compose -p myapp up -d')
             in (_docker_log.content | b64decode)
-          - (_docker_log.content | b64decode).splitlines() | select('search', 'compose down') | list | length == 1
+          - (_docker_log.content | b64decode).splitlines() | select('search', 'compose -p [^ ]+ down') | list | length == 1
         fail_msg: "Expected docker to stop only the stale stack and start the desired stack"
 
     - name: Read quarantined compose file

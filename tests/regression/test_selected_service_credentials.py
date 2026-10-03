@@ -178,8 +178,8 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     assert (retired / "compose.yaml").exists()
     commands = docker_log.read_text().splitlines()
     assert not [line for line in commands if line.startswith(f"{retired}|")]
-    assert [line for line in commands if "|compose up" in line] == [
-        f"{shared}/stacks/selected|compose up -d",
+    assert [line for line in commands if line.endswith(" up -d")] == [
+        f"{shared}/stacks/selected|compose -p selected up -d",
     ]
     deployment = yaml.safe_load(report.read_text())
     assert deployment["changed"] is True

@@ -11,7 +11,7 @@
 
 - name: Stop stale deployed top-level stack projects
   ansible.builtin.command:
-    cmd: docker compose down --remove-orphans
+    argv: [docker, compose, -p, "{{ item.path | basename }}", down, --remove-orphans]
     chdir: "{{ item.path }}"
   loop: "{{ _deployed_top_level_stack_dirs.files | default([]) }}"
   loop_control:

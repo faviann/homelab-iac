@@ -31,8 +31,8 @@ def write_stack(source: Path, name: str, files: dict[str, str]) -> Path:
     return source / name
 
 
-def declaration(project: str = "stack") -> dict:
-    return {"stack": "stack", "project": project, "service": "app", "command": ["true"], "timeout": 5}
+def declaration() -> dict:
+    return {"stack": "stack", "service": "app", "command": ["true"], "timeout": 5}
 
 
 def check(service: str = "app", command: str = '["true"]', timeout: str = "5", extra: str = "") -> str:
@@ -47,9 +47,8 @@ def check(service: str = "app", command: str = '["true"]', timeout: str = "5", e
         ({"compose.yaml": SERVICES}, None),
         ({"compose.yaml": SERVICES + BLOCK}, declaration()),
         ({"compose.yml": SERVICES, "compose.override.yaml": BLOCK}, declaration()),
-        ({"compose.yaml": "name: renamed\n" + SERVICES + BLOCK}, declaration(project="renamed")),
     ],
-    ids=["undeclared", "base", "override", "named"],
+    ids=["undeclared", "base", "override"],
 )
 def test_reads_valid_declarations(tmp_path: Path, files: dict[str, str], expected: dict | None) -> None:
     assert MODULE.read_busy_check(write_stack(tmp_path, "stack", files)) == expected
@@ -135,7 +134,7 @@ def test_declarations_list_each_declaring_stack_or_its_error(tmp_path: Path) -> 
     (tmp_path / "README.md").write_text("not a stack\n", encoding="utf-8")
 
     assert FILTERS["busy_check_declarations"](str(tmp_path)) == [
-        {"stack": "declared", "project": "declared", "service": "app", "command": ["true"], "timeout": 5},
+        {"stack": "declared", "service": "app", "command": ["true"], "timeout": 5},
         {"stack": "rejected", "error": "compose: compose.yaml could not be read as YAML"},
     ]
 

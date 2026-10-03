@@ -155,7 +155,7 @@
       ansible.builtin.assert:
         that:
           - lookup('ansible.builtin.file', shared_stacks ~ '/' ~ item ~ '/compose.yaml') != 'deployed-before-run'
-          - (shared_stacks ~ '/' ~ item ~ ' | compose up -d') in docker_calls
+          - (shared_stacks ~ '/' ~ item ~ ' | compose -p ' ~ item ~ ' up -d') in docker_calls
         fail_msg: "{{ inventory_hostname }}/{{ item }} was not deployed"
       loop: "{{ busy_check_fixture_stacks.keys() | list | difference(deferred_stacks) + ['plain'] }}"
 
@@ -165,8 +165,7 @@
         fail_msg: "{{ inventory_hostname }}/{{ item.key }} probe calls: {{ probe_calls }}"
       vars:
         probe_calls: >-
-          {{ docker_calls | select('search', '\| (ps .*project=|exec cid-)' ~ (probe_project | regex_escape) ~ '( |$)') | list }}
-        probe_project: "{{ busy_check_fixture_projects[item.key] | default(item.key) }}"
+          {{ docker_calls | select('search', '\| (ps .*project=|exec cid-)' ~ (item.key | regex_escape) ~ '( |$)') | list }}
       loop: "{{ busy_check_fixture_stacks | combine({'plain': {}}) | dict2items }}"
 
     - name: Read the deferral file
