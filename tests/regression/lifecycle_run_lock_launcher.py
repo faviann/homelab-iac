@@ -31,7 +31,13 @@ FIXTURE_COLLECTIONS = (
 )
 
 
-DEFERRAL_FILE = ("-e", "lxc_busy_check_deferral_file=<deferral-file>")
+def busy_check_defaults(override: str = "false") -> tuple[str, ...]:
+    return (
+        "-e",
+        f"lxc_busy_check_override={override}",
+        "-e",
+        "lxc_busy_check_deferral_file=<deferral-file>",
+    )
 
 
 def normalized_argv(argv: list[str]) -> list[str]:
@@ -368,7 +374,7 @@ def assert_wrapper_routes_and_propagates() -> None:
             "-e",
             "proxmox_skip_self=true",
             '--extra-vars={"stack_filter":null}',
-            *DEFERRAL_FILE,
+            *busy_check_defaults(),
         )
 
     full_defaults = canonical_defaults("full")
@@ -396,7 +402,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "proxmox_skip_self=true",
                 "-e",
                 "stack_filter=beets",
-                *DEFERRAL_FILE,
+                *busy_check_defaults(),
             ),
         ),
         (
@@ -412,7 +418,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "-e",
                 "proxmox_skip_self=false",
                 '--extra-vars={"stack_filter":null}',
-                *DEFERRAL_FILE,
+                *busy_check_defaults(),
             ),
         ),
         (
@@ -428,7 +434,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "-e",
                 "proxmox_skip_self=false",
                 '--extra-vars={"stack_filter":null}',
-                *DEFERRAL_FILE,
+                *busy_check_defaults(),
             ),
         ),
         (
@@ -442,9 +448,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "-e",
                 "proxmox_skip_self=true",
                 '--extra-vars={"stack_filter":null}',
-                "-e",
-                "lxc_busy_check_override=true",
-                *DEFERRAL_FILE,
+                *busy_check_defaults("true"),
             ),
         ),
         (("-v",), "site.yml", ("-v", *full_defaults)),
@@ -459,6 +463,7 @@ def assert_wrapper_routes_and_propagates() -> None:
         (("--", "--extra-vars", "{harmless: true}"), "site.yml", ("--extra-vars", "{harmless: true}", *full_defaults)),
         (("--", "-e", "@vaulted-vars.yml"), "site.yml", ("-e", "@vaulted-vars.yml", *full_defaults)),
         (("--", "-e", "proxmox_lifecycle_intent=configure_only"), "site.yml", ("-e", "proxmox_lifecycle_intent=configure_only", *full_defaults)),
+        (("--", "-e", "lxc_busy_check_override=true"), "site.yml", ("-e", "lxc_busy_check_override=true", *full_defaults)),
         (("--", "-e", "prerequisite_target_pattern=workstation"), "site.yml", ("-e", "prerequisite_target_pattern=workstation", *full_defaults)),
         (("--", '--extra-vars={"stack_filter":"beets","proxmox_skip_self":false}'), "site.yml", ('--extra-vars={"stack_filter":"beets","proxmox_skip_self":false}', *full_defaults)),
         (("--", "--private-key", "/tmp/fixture-key"), "site.yml", ("--private-key", "/tmp/fixture-key", *full_defaults)),
