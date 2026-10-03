@@ -17,7 +17,10 @@ host variables, which would drift from the stack.
 
 The check fails closed. Exit `1` means busy, and any other status, a timeout, a
 missing running container, a Docker error, an unreachable guest, or a malformed
-block counts as busy too. An unknown answer must not authorize an interruption.
+block counts as busy too. Stack validation and the run share one parser, so a
+block in a `.j2` template or in both the base and override Compose files is
+rejected by `./validate.sh stack` and defers its stack at runtime. Neither side
+can read a declaration the other ignores or reads differently. An unknown answer must not authorize an interruption.
 The one exception is a Compose project with no containers. Nothing runs that
 could be interrupted, so that stack deploys normally.
 

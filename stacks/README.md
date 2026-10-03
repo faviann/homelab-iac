@@ -275,9 +275,9 @@ x-busy-check:
 - `command` is a non-empty list of strings, run with `docker exec` in a running container of that service. Nothing quotes or parses it. Use `["sh", "-c", "..."]` when you need a shell, or call the app's status endpoint from a command, for example with `curl`.
 - `timeout` is whole seconds, from 1 to 60.
 
-`./validate.sh stack` rejects any other shape.
+`./validate.sh stack` rejects any other shape, a block in a `.j2` template, and a block in both the base and the override. The run reads declarations with the same parser, so a declaration the validator rejects defers its stack as a failed check.
 
-Before any step that could interrupt the stack, the run executes the check. Exit `0` means idle, and the run proceeds. Exit `1` means busy. Any other exit status, a timeout, a service with no running container, a Docker error, an unreachable LXC, or a malformed block counts as busy too. The check fails closed.
+Before any step that could interrupt the stack, the run executes the check. Exit `0` means idle, and the run proceeds. Exit `1` means busy. Any other exit status, a timeout, a service with no running container, a Docker error, an unreachable LXC, or a block the validator would reject counts as busy too. The check fails closed.
 
 A busy stack is skipped for that run. Its files are not synced or rendered, it is not brought up or recreated, and quarantine does not take it down. Its host also skips host-side reconciliation, the package upgrade, and the reboot. Everything else still runs. The run reports each deferred stack with its reason, and `./run.sh` exits `3` when it deferred anything and nothing failed. A scheduled caller can treat `3` as "retry later". `./run.sh --interrupt-busy` skips the checks and interrupts deliberately.
 
