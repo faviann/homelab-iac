@@ -2159,3 +2159,19 @@ def test_busy_check_declared_in_base_and_override_is_rejected(tmp_path: Path) ->
             "path": "compose.x-busy-check",
         }
     ]
+
+
+def test_busy_check_declared_in_a_template_is_rejected(tmp_path: Path) -> None:
+    stack = write_valid_stack(tmp_path)
+    (stack / "compose.override.yaml.j2").write_text(VALID_BUSY_CHECK, encoding="utf-8")
+
+    completed = run_validate(tmp_path)
+
+    assert completed.returncode == 1
+    assert json.loads(completed.stdout)["errors"] == [
+        {
+            "code": "busy-check",
+            "message": "x-busy-check is not supported in a template (compose.override.yaml.j2)",
+            "path": "compose.x-busy-check",
+        }
+    ]

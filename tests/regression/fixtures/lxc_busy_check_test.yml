@@ -33,6 +33,16 @@
       loop: "{{ busy_check_fixture_stacks | combine({'plain': {}}) | dict2items }}"
       delegate_to: localhost
 
+    - name: Write the extra repo files the fixture asks for
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/source/{{ item.stack }}/{{ item.name }}"
+        content: "{{ item.content }}"
+        mode: "0644"
+      loop: "{{ busy_check_fixture_files }}"
+      loop_control:
+        label: "{{ item.stack }}/{{ item.name }}"
+      delegate_to: localhost
+
     - name: Write the compose files the running containers were started from
       ansible.builtin.copy:
         dest: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/stacks/{{ item }}/compose.yaml"
