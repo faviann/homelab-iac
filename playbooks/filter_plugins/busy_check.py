@@ -22,22 +22,6 @@ class BusyCheckError(NamedTuple):
     message: str
 
 
-class _ComposeLoader(yaml.SafeLoader):
-    pass
-
-
-def _untagged(loader: yaml.SafeLoader, suffix: str, node: yaml.Node) -> Any:
-    if isinstance(node, yaml.MappingNode):
-        return loader.construct_mapping(node, deep=True)
-    if isinstance(node, yaml.SequenceNode):
-        return loader.construct_sequence(node, deep=True)
-    return loader.construct_scalar(node)
-
-
-# Compose's own tags (!reset, !override) are valid and must not make a stack unreadable.
-_ComposeLoader.add_multi_constructor("!", _untagged)
-
-
 def _nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
@@ -64,7 +48,7 @@ def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
     project = stack_dir.name
     for path in compose_paths:
         try:
-            loaded = yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader)
+            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, yaml.YAMLError):
             return BusyCheckError("compose", f"{path.name} could not be read as YAML")
         if not isinstance(loaded, dict):
@@ -142,7 +126,7 @@ def busy_check_result(declarations: list[dict[str, Any]], probes: dict[str, Any]
     ]
     outcomes += [(probe["item"]["stack"], *_probe_outcome(probe)) for probe in probes.get("results", [])]
     deferred = [
-        {"stack": stack, "state": state, "reason": reason.strip()[:200]}
+        {"stack": stack, "state": state, "reason": reason.strip()}
         for stack, state, reason in outcomes
         if state in ("busy", "check_failed")
     ]

@@ -14,8 +14,6 @@
   when:
     - proxmox_lxc_lifecycle_plan.configure_guest | bool
     - not (ansible_check_mode | bool and proxmox_lifecycle_runtime_state != 'running')
-  vars:
-    proxmox_lifecycle_host_deferred: "{{ (lxc_busy_check_result | default({})).host_deferred | default(false) | bool }}"
   block:
     - name: Ensure container is accessible via SSH
       ansible.builtin.wait_for_connection:
@@ -37,7 +35,7 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
         tasks_from: upgrade
-      when: not (proxmox_lifecycle_host_deferred | bool)
+      when: not (lxc_busy_check_result.host_deferred | bool)
 
     # Runs before GitHub keys: it creates the operator account, and useradd
     # leaves a home directory it did not create owned by root.
@@ -61,14 +59,14 @@
         name: config/lxc_docker_runtime
       when:
         - docker_enabled | default(false)
-        - not (proxmox_lifecycle_host_deferred | bool)
+        - not (lxc_busy_check_result.host_deferred | bool)
 
     - name: Configure NVIDIA GPU runtime
       ansible.builtin.include_role:
         name: config/lxc_nvidia_runtime
       when:
         - gpu_enabled | default(false)
-        - not (proxmox_lifecycle_host_deferred | bool)
+        - not (lxc_busy_check_result.host_deferred | bool)
 
     - name: Configure Docker environment
       ansible.builtin.include_role:
@@ -94,4 +92,4 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
         tasks_from: reboot
-      when: not (proxmox_lifecycle_host_deferred | bool)
+      when: not (lxc_busy_check_result.host_deferred | bool)

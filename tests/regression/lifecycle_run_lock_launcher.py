@@ -31,12 +31,7 @@ FIXTURE_COLLECTIONS = (
 )
 
 
-BUSY_CHECK_DEFAULTS = (
-    "-e",
-    "lxc_busy_check_override=false",
-    "-e",
-    "lxc_busy_check_deferral_file=<deferral-file>",
-)
+DEFERRAL_FILE = ("-e", "lxc_busy_check_deferral_file=<deferral-file>")
 
 
 def normalized_argv(argv: list[str]) -> list[str]:
@@ -373,7 +368,7 @@ def assert_wrapper_routes_and_propagates() -> None:
             "-e",
             "proxmox_skip_self=true",
             '--extra-vars={"stack_filter":null}',
-            *BUSY_CHECK_DEFAULTS,
+            *DEFERRAL_FILE,
         )
 
     full_defaults = canonical_defaults("full")
@@ -401,7 +396,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "proxmox_skip_self=true",
                 "-e",
                 "stack_filter=beets",
-                *BUSY_CHECK_DEFAULTS,
+                *DEFERRAL_FILE,
             ),
         ),
         (
@@ -417,7 +412,7 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "-e",
                 "proxmox_skip_self=false",
                 '--extra-vars={"stack_filter":null}',
-                *BUSY_CHECK_DEFAULTS,
+                *DEFERRAL_FILE,
             ),
         ),
         (
@@ -433,17 +428,23 @@ def assert_wrapper_routes_and_propagates() -> None:
                 "-e",
                 "proxmox_skip_self=false",
                 '--extra-vars={"stack_filter":null}',
-                *BUSY_CHECK_DEFAULTS,
+                *DEFERRAL_FILE,
             ),
         ),
         (
             ("--interrupt-busy",),
             "site.yml",
             (
-                *full_defaults[:-4],
+                "-e",
+                "prerequisite_target_pattern=localhost",
+                "-e",
+                "proxmox_lifecycle_intent=full",
+                "-e",
+                "proxmox_skip_self=true",
+                '--extra-vars={"stack_filter":null}',
                 "-e",
                 "lxc_busy_check_override=true",
-                *full_defaults[-2:],
+                *DEFERRAL_FILE,
             ),
         ),
         (("-v",), "site.yml", ("-v", *full_defaults)),

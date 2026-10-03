@@ -13,19 +13,19 @@ the controller from the stack source, so a stack or host without one costs no
 remote command and behaves exactly as before. A stack opts in by having a
 line that starts with `x-busy-check:` in a Compose file or template. A stack
 without one is not parsed for a busy check, so a broken Compose file in it
-still fails the run as it did before, rather than being deferred. A stack removed from the
-repository takes its declaration with it, so quarantine can stop it even while
-busy. Keeping the declaration beside the services it checks was preferred over
-host variables, which would drift from the stack.
+still fails the run as it did before, rather than being deferred. A stack
+removed from the repository takes its declaration with it, so quarantine can
+stop it even while busy. Keeping the declaration beside the services it checks
+was preferred over host variables, which would drift from the stack.
 
-The check fails closed. Exit `1` means busy, and any other status, a timeout, a
-missing running container, a Docker error, an unreachable guest, or a malformed
-block counts as busy too. Stack validation and the run share one parser, so a
-block in a `.j2` template or in both the base and override Compose files is
-rejected by `./validate.sh stack` and defers its stack at runtime. Neither side
-can read a declaration the other ignores or reads differently. An unknown answer must not authorize an interruption.
-The one exception is a Compose project with no containers. Nothing runs that
-could be interrupted, so that stack deploys normally.
+The check fails closed. Exit `1` means busy, and so does any outcome the run
+cannot read as idle, a malformed block included. Stack validation and the run
+share one parser, so a block in a `.j2` template or in both the base and
+override Compose files is rejected by `./validate.sh stack` and defers its stack
+at runtime. Neither side can read a declaration the other ignores or reads
+differently. An unknown answer must not authorize an interruption. The one
+exception is a Compose project with no containers. Nothing runs that could be
+interrupted, so that stack deploys normally.
 
 A busy stack is skipped whole: no file sync, no `compose up`, no quarantine.
 Syncing files without restarting would leave the files on disk out of step with

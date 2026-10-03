@@ -50,9 +50,8 @@ def check(service: str = "app", command: str = '["true"]', timeout: str = "5", e
         ({"compose.yaml": "name: renamed\n" + SERVICES + BLOCK}, declaration(project="renamed")),
         ({"compose.yaml": SERVICES + check(timeout="1")}, declaration(timeout=1)),
         ({"compose.yaml": SERVICES + check(timeout="60")}, declaration(timeout=60)),
-        ({"compose.yaml": SERVICES + BLOCK + "x-ports: !reset []\n"}, declaration()),
     ],
-    ids=["undeclared", "base", "override", "named", "min-timeout", "max-timeout", "compose-tags"],
+    ids=["undeclared", "base", "override", "named", "min-timeout", "max-timeout"],
 )
 def test_reads_valid_declarations(tmp_path: Path, files: dict[str, str], expected: dict | None) -> None:
     assert MODULE.read_busy_check(write_stack(tmp_path, "stack", files)) == expected
@@ -165,7 +164,6 @@ def test_result_defers_only_busy_and_failed_checks_with_their_reasons() -> None:
             probe("gone", unreachable=True),
             probe("crashed", rc=127, stderr="sh: docker: not found\n"),
             probe("garbled", stdout="who knows", stderr=""),
-            probe("noisy", stdout="check_failed\n" + "x" * 300),
         ]
     }
 
@@ -179,7 +177,6 @@ def test_result_defers_only_busy_and_failed_checks_with_their_reasons() -> None:
             {"stack": "crashed", "state": "check_failed",
              "reason": "probe failed: sh: docker: not found"},
             {"stack": "garbled", "state": "check_failed", "reason": "probe failed"},
-            {"stack": "noisy", "state": "check_failed", "reason": "x" * 200},
         ],
         "host_deferred": True,
     }

@@ -200,7 +200,9 @@ if [[ -n "$stack_name" ]]; then
 else
     arguments+=('--extra-vars={"stack_filter":null}')
 fi
-arguments+=("-e" "lxc_busy_check_override=$interrupt_busy")
+if $interrupt_busy; then
+    arguments+=("-e" "lxc_busy_check_override=true")
+fi
 deferral_file="$(mktemp)"
 # The playbook writes one line per busy-check deferral. A successful run that
 # deferred anything exits 3, so a scheduled caller can retry later.

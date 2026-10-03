@@ -74,7 +74,7 @@ unchanged:
 | Command | Failure statuses |
 | --- | --- |
 | `./setup.sh`, `./vault.sh` | `1` |
-| `./run.sh`, `./recover.sh`, live `./inspect.sh` operations | `1` when the playbook fails. A dependency reconciliation failure passes its own status through, usually `1`. `./run.sh` exits `3`, not a failure, when a successful run deferred a busy stack. |
+| `./run.sh`, `./recover.sh`, live `./inspect.sh` operations | `1` when the playbook fails. A dependency reconciliation failure passes its own status through, usually `1`. |
 | `./inspect.sh vars` | `1` |
 | `./validate.sh lint` | `ansible-lint`'s status, for example `2` when it finds violations |
 | `./validate.sh lifecycle` | `1` when a launcher fails, and `2` when the runner rejects an unregistered launcher |
