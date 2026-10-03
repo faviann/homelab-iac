@@ -260,7 +260,7 @@ No registration step is required; the role discovers everything under `stacks/<h
 
 ## Busy Checks
 
-A lifecycle run can interrupt a stack: `docker compose up -d` recreates changed services, a package upgrade can restart the Docker daemon, and a reboot or host-side reconciliation restarts the LXC. A stack that runs long jobs can declare a busy check so the run leaves it alone while it reports busy.
+A lifecycle run can interrupt a stack: `docker compose up -d` recreates changed services, Docker runtime changes or a package upgrade can restart the Docker daemon, and a reboot or host-side reconciliation restarts the LXC. A stack that runs long jobs can declare a busy check so the run leaves it alone while it reports busy.
 
 Declare it as a top-level block in `compose.yaml`, or in `compose.override.yaml` for a vendor-preserving stack. Declare it in one file only, and never in a `.j2` template:
 
@@ -279,7 +279,7 @@ x-busy-check:
 
 Before any step that could interrupt the stack, the run executes the check. Exit `0` means idle, and the run proceeds. Exit `1` means busy. Any other exit status, a timeout, a service with no running container, a Docker error, an unreachable LXC, or a block the validator would reject counts as busy too. The check fails closed.
 
-A busy stack is skipped for that run. Its files are not synced or rendered, it is not brought up or recreated, and quarantine does not take it down. Its host also skips host-side reconciliation, the package upgrade, and the reboot. Everything else still runs. The run reports each deferred stack with its reason, and `./run.sh` exits `3` when it deferred anything and nothing failed. A scheduled caller can treat `3` as "retry later". `./run.sh --interrupt-busy` skips the checks and interrupts deliberately.
+A busy stack is skipped for that run. Its files are not synced or rendered, it is not brought up or recreated, and quarantine does not take it down. Its host also skips host-side reconciliation, Docker and NVIDIA runtime configuration, the package upgrade, and the reboot. Everything else still runs. The run reports each deferred stack with its reason, and `./run.sh` exits `3` when it deferred anything and nothing failed. A scheduled caller can treat `3` as "retry later". `./run.sh --interrupt-busy` skips the checks and interrupts deliberately.
 
 Limits:
 

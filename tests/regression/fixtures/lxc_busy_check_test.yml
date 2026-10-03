@@ -133,7 +133,7 @@
     events: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/' ~ busy_check_vmid ~ '.events').splitlines() }}"
     docker_calls: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/docker.log').splitlines() }}"
     shared_stacks: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/stacks"
-    host_steps: [api_reconciliation, host_reconciliation, apt_upgrade, reboot]
+    host_steps: [api_reconciliation, host_reconciliation, docker_runtime, nvidia_runtime, apt_upgrade, reboot]
   tasks:
     - name: Assert host steps ran only on hosts without a busy stack
       ansible.builtin.assert:

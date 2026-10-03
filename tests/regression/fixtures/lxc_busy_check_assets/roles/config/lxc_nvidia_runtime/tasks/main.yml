@@ -1,6 +1,6 @@
 ---
-- name: Record the Docker runtime configuration
+- name: Record the NVIDIA runtime configuration
   ansible.builtin.lineinfile:
     path: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events"
-    line: docker_runtime
+    line: nvidia_runtime
   delegate_to: localhost

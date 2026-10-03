@@ -52,6 +52,7 @@ all:
             net0: name=eth0,bridge=vmbr0,ip=dhcp
           pubkey: ssh-ed25519 AAAAABUSYCHECK lifecycle@test
         docker_enabled: true
+        gpu_enabled: true
         proxmox_lxc_capability_defaults:
           features:
             - nesting=1

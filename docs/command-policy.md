@@ -61,9 +61,10 @@ another live operation holds the lock. The live operations are every
 `75`. `0` means success.
 
 `./run.sh` also exits `3` when the playbook succeeded but a busy check deferred
-at least one stack, along with that host's package upgrade, reboot, and
-host-side reconciliation. `3` means "deferred, not failed": run it again later.
-A failed run exits `1` even when it also deferred something. See
+at least one stack, along with that host's host-side reconciliation, Docker
+and NVIDIA runtime configuration, package upgrade, and reboot. `3` means
+"deferred, not failed": run it again later. A failed run exits `1` even when it
+also deferred something. See
 [stacks/README.md](../stacks/README.md#busy-checks).
 
 Every other non-zero status is a failure, and its value depends on the

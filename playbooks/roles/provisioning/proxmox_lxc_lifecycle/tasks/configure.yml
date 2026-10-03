@@ -14,6 +14,8 @@
   when:
     - proxmox_lxc_lifecycle_plan.configure_guest | bool
     - not (ansible_check_mode | bool and proxmox_lifecycle_runtime_state != 'running')
+  vars:
+    proxmox_lifecycle_host_deferred: "{{ (lxc_busy_check_result | default({})).host_deferred | default(false) | bool }}"
   block:
     - name: Ensure container is accessible via SSH
       ansible.builtin.wait_for_connection:
@@ -45,15 +47,21 @@
       ansible.builtin.include_role:
         name: config/lxc_logging_config
 
+    # Both can restart Docker under a busy stack. Skipped whole: a changed
+    # option is not seen again next run, so skipping only the restart loses it.
     - name: Install Docker runtime
       ansible.builtin.include_role:
         name: config/lxc_docker_runtime
-      when: docker_enabled | default(false)
+      when:
+        - docker_enabled | default(false)
+        - not (proxmox_lifecycle_host_deferred | bool)
 
     - name: Configure NVIDIA GPU runtime
       ansible.builtin.include_role:
         name: config/lxc_nvidia_runtime
-      when: gpu_enabled | default(false)
+      when:
+        - gpu_enabled | default(false)
+        - not (proxmox_lifecycle_host_deferred | bool)
 
     - name: Configure Docker environment
       ansible.builtin.include_role:
@@ -79,4 +87,4 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
         tasks_from: reboot
-      when: not ((lxc_busy_check_result | default({})).host_deferred | default(false) | bool)
+      when: not (proxmox_lifecycle_host_deferred | bool)

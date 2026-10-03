@@ -1,12 +1,12 @@
 # Defer busy stacks with a declared check
 
 A lifecycle run can interrupt any container: `docker compose up -d` recreates
-changed services, quarantine runs `docker compose down`, a package upgrade can
-restart the Docker daemon, and a reboot or host-side reconciliation restarts
-the LXC. A stack that runs long jobs can now declare an `x-busy-check` in its
-repo Compose file. Before any of those steps, the run executes the declared
-command inside the named service. Exit `0` means idle. Anything else defers the
-stack for that run.
+changed services, quarantine runs `docker compose down`, Docker runtime changes
+or a package upgrade can restart the Docker daemon, and a reboot or host-side
+reconciliation restarts the LXC. A stack that runs long jobs can now declare an
+`x-busy-check` in its repo Compose file. Before any of those steps, the run
+executes the declared command inside the named service. Exit `0` means idle.
+Anything else defers the stack for that run.
 
 The check is opt-in and declared in the repository. Declarations are read on
 the controller from the stack source, so a stack or host without one costs no
@@ -27,12 +27,13 @@ could be interrupted, so that stack deploys normally.
 A busy stack is skipped whole: no file sync, no `compose up`, no quarantine.
 Syncing files without restarting would leave the files on disk out of step with
 the running containers. The host's interrupting steps are skipped too:
-host-side reconciliation, the package upgrade, and the reboot. Host-side
-reconciliation is skipped entirely rather than only its restart, because it
-derives the need to restart from changes made in the same run, and a skipped
-restart would be lost. Other stacks and hosts still converge. `./run.sh` exits
-`3` when a successful run deferred anything, so a scheduled caller can tell
-"retry later" from success and failure without parsing logs.
+host-side reconciliation, Docker and NVIDIA runtime configuration, the package
+upgrade, and the reboot. Host-side reconciliation and runtime configuration are
+skipped entirely rather than only their restarts, because each derives the need
+to restart from changes made in the same run, and a skipped restart would be
+lost. Other stacks and hosts still converge. `./run.sh` exits `3` when a
+successful run deferred anything, so a scheduled caller can tell "retry later"
+from success and failure without parsing logs.
 `./run.sh --interrupt-busy` skips the checks for a deliberate interruption.
 
 The check is a command, not a URL. A command covers an app with an HTTP status

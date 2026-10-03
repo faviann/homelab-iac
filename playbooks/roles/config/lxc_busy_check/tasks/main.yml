@@ -41,7 +41,8 @@
   ansible.builtin.debug:
     msg: >-
       Deferring {{ lxc_busy_check_result.deferred_stacks | map(attribute='stack') | join(', ') }};
-      skipping host-side reconciliation, package upgrade, and reboot.
+      skipping host-side reconciliation, Docker and NVIDIA runtime configuration,
+      package upgrade, and reboot.
   when: lxc_busy_check_result.host_deferred | bool
 
 # ./run.sh exits 3 when this file is non-empty after a successful run.
