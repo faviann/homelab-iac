@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Renovate run
+
+[Timer]
+OnCalendar={{ renovate_timer.calendar }}
+Persistent=true
+Unit=renovate.service
+
+[Install]
+WantedBy=timers.target

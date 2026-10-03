@@ -1,0 +1,80 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["docker-compose", "custom.regex"],
+  "pinDigests": true,
+  "prHourlyLimit": 0,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Immich version pin; the vendor sync follows it",
+      "managerFilePatterns": ["/(^|/)\\.env\\.j2$/"],
+      "matchStrings": ["IMMICH_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "ghcr.io/immich-app/immich-server",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Authentik version pin; the vendor sync follows it",
+      "managerFilePatterns": ["/(^|/)\\.env\\.j2$/"],
+      "matchStrings": ["AUTHENTIK_TAG=(?<currentValue>\\S+)"],
+      "depNameTemplate": "ghcr.io/goauthentik/server",
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "One PR per stack folder",
+      "matchFileNames": ["stacks/**"],
+      "groupName": "stack images",
+      "additionalBranchPrefix": "{{packageFileDir}}-",
+      "commitMessageTopic": "images in {{packageFileDir}}"
+    },
+    {
+      "description": "Vendored compose files change only through the vendor sync",
+      "matchFileNames": ["stacks/auth/auth/compose.yaml", "stacks/public/immich/compose.yaml"],
+      "enabled": false
+    },
+    {
+      "description": "Vendor version pins: no digest (variants reuse the tag), resync upstream compose",
+      "matchManagers": ["custom.regex"],
+      "pinDigests": false,
+      "postUpgradeTasks": {
+        "commands": ["sh scripts/vendor-sync.sh {{{packageFileDir}}}/compose.yaml {{{currentValue}}} {{{newValue}}}"],
+        "fileFilters": ["stacks/**/compose.yaml"]
+      }
+    },
+    {
+      "description": "Application majors: labelled PR after 14 days, never automerged",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major"],
+      "minimumReleaseAge": "14 days"
+    },
+    {
+      "description": "Database majors need a dump and restore, not a tag change",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/postgres/", "/pgvector/", "/mariadb/", "/valkey/", "/redis/"],
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+      "dependencyDashboardApproval": true,
+      "prBodyNotes": ["**Database major:** the data directory must be migrated with a dump and restore (or `pg_upgrade`). Changing the tag alone will not start on the old data."]
+    },
+    {
+      "description": "Foundational stacks: every update is a deliberate tick",
+      "matchFileNames": ["stacks/auth/**", "stacks/portal/**"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Linuxserver fake majors: old tags that sort above current releases",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["lscr.io/linuxserver/qbittorrent"],
+      "allowedVersions": "<14"
+    },
+    {
+      "description": "Linuxserver fake majors: old tags that sort above current releases",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["lscr.io/linuxserver/lidarr"],
+      "allowedVersions": "<8"
+    }
+  ]
+}

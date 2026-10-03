@@ -1,0 +1,20 @@
+---
+# One-shot Renovate run against this repository; the repository config is
+# renovate.json at the repo root. A deploy runs it once (`docker compose up -d`
+# starts the exited container), and the renovate systemd timer runs it weekly
+# with `docker start --attach renovate`.
+services:
+  renovate:
+    image: ghcr.io/renovatebot/renovate:44.132.4
+    container_name: renovate
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      RENOVATE_PLATFORM: github
+      RENOVATE_REPOSITORIES: faviann/homelab-iac
+      # Post-upgrade tasks may run only the vendor sync, with a stack path and
+      # two version tokens, so a crafted tag cannot smuggle in other arguments.
+      RENOVATE_ALLOWED_COMMANDS: >-
+        ["^sh scripts/vendor-sync\\.sh stacks/[a-z0-9/_-]+/compose\\.yaml [A-Za-z0-9._-]+ [A-Za-z0-9._-]+$$"]
+      LOG_LEVEL: info

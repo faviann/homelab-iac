@@ -35,6 +35,7 @@ and does not run Hawser because it hosts Dockhand and Traefik instead of acting 
 | Host | Tier | Capability Groups | Notes |
 |------|------|-------------------|-------|
 | `auth` | `tier_small` | `cap_docker` | Auth stack host |
+| `devserver` | `tier_small` | `cap_docker` | Developer tooling: Renovate |
 | `portal` | `tier_medium` | `cap_docker` | Traefik host (`traefik_kop_enabled: false`) |
 | `servarr` | `tier_medium` | `cap_docker` | Servarr application host |
 | `seedbox` | `tier_large` | `cap_docker`, `cap_wireguard` | Download/tunneled host |
@@ -61,6 +62,7 @@ inventory/
 |   `-- cap_wireguard/vars.yml
 `-- host_vars/
     |-- auth.yml
+    |-- devserver.yml
     |-- lobu-crawler-01.yml
     |-- portal.yml
     |-- seedbox.yml

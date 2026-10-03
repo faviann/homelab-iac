@@ -1,0 +1,8 @@
+[Unit]
+Description=Renovate run against the homelab-iac repository
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker start --attach {{ renovate_timer.container_name }}
