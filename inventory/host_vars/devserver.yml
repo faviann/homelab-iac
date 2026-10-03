@@ -11,8 +11,6 @@ lxc_docker_env_stack_vars:
     # stacks/devserver/renovate/README.md.
     token: "{{ vault_renovate_token }}"
 
-renovate_timer_enabled: true
-
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 310

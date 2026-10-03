@@ -6,16 +6,27 @@ Self-hosted Renovate for this repository. The repository config is
 
 ## How it runs
 
-`renovate` is a one-shot container. A deploy starts it once, because
-`docker compose up -d` starts an exited container. After that, the
-`renovate.timer` systemd unit on `devserver` runs it every Saturday at 05:00
-with `docker start --attach renovate`, so each run's output lands in the
-journal of `renovate.service`. `renovate_timer_enabled` in
-`inventory/host_vars/devserver.yml` installs the timer. Every deploy of
-`devserver` causes one extra run outside that schedule.
+`renovate` is a long-running service. Its command loops under the image's own
+entrypoint: run Renovate, sleep six hours, repeat. A failed run is logged and
+the loop carries on. A deploy that recreates the container, or a restart, runs
+Renovate immediately. Read the runs with `docker logs renovate`.
+
+Every run looks up all images and refreshes the Dependency Dashboard. The
+weekly window is `schedule` in `renovate.json`: all of Saturday, Montreal time.
+Outside it, Renovate creates no new branch or PR. A PR that already exists is
+still rebased and updated by any run.
+
+A tick on the Dependency Dashboard does not wait for the window. The ticked
+item is created by the next run, within six hours. Items held only by the
+schedule are listed under "Awaiting Schedule", and ticking one creates it
+early.
+
+The six-hour sleep is shorter than the window on purpose. A daily loop drifts
+later by one run's duration each day, so two consecutive runs could straddle
+Saturday and skip a week.
 
 The container needs no volume. Its cache lives in the container filesystem and
-survives between runs until the container is recreated.
+survives restarts until the container is recreated.
 
 ## Token
 
@@ -29,7 +40,7 @@ token scoped to `faviann/homelab-iac` with read and write access to:
 
 Fine-grained tokens expire. An expired token makes Renovate fail without any
 GitHub-side signal: the Dependency Dashboard simply stops updating. Check
-`journalctl -u renovate.service` when it goes quiet, and rotate the token with
+`docker logs renovate` when it goes quiet, and rotate the token with
 `./vault.sh edit` (or `./vault.sh set ... --replace`), then
 `./run.sh --limit devserver`.
 

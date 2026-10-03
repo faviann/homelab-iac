@@ -1,7 +1,7 @@
 # Use self-hosted Renovate for stack image updates
 
 Stack image updates are proposed by Renovate, self-hosted on the `devserver`
-LXC and run weekly by a systemd timer, instead of the custom planning pipeline
+LXC as a long-running service, instead of the custom planning pipeline
 specified in #96. Renovate scans the GitHub default branch, opens one PR per
 stack folder, and owns PR refresh, closure, deduplication and the Dependency
 Dashboard. Merging a PR is the update decision; deploying it is still
@@ -10,6 +10,16 @@ Dashboard. Merging a PR is the update decision; deploying it is still
 The custom pipeline was rejected because nearly all of its specified surface
 (plan files, checksums, issue lifecycle, change classification) re-implemented
 what Renovate already does, and none of it existed yet.
+
+The service runs Renovate in a loop inside its own container every six hours,
+and the weekly window is Renovate's `schedule` option in `renovate.json`
+(Saturday, Montreal time). #453 specified a host systemd timer instead. The
+loop was chosen so that everything lives in the stack folder and
+`renovate.json`, with no host units to install or clean up later. Runs outside
+the window only look up images, refresh the Dependency Dashboard and keep
+existing PRs current; new branches and PRs open in the window, or at the next
+run after a dashboard tick. A deploy or restart of the container triggers an
+immediate run.
 
 ## Accepted trade-offs
 
@@ -20,7 +30,7 @@ what Renovate already does, and none of it existed yet.
   routine, low-confidence and assisted classification.
 - Floating tags such as `latest` become `latest@sha256:...` rather than a
   readable version. Switching an image to a real version tag is the remedy.
-- Scans run weekly, not only on demand. A deploy of `devserver` also runs one.
+- Scans run every six hours and open new PRs weekly, not only on demand.
 - Release notes appear in the PR for a person to read. Nothing assesses them.
 
 ## Rules that follow

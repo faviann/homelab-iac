@@ -3,6 +3,8 @@
   "extends": ["config:recommended"],
   "enabledManagers": ["docker-compose", "custom.regex"],
   "pinDigests": true,
+  "timezone": "America/Montreal",
+  "schedule": ["* * * * 6"],
   "prHourlyLimit": 0,
   "customManagers": [
     {

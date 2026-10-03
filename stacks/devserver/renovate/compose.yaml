@@ -1,13 +1,16 @@
 ---
-# One-shot Renovate run against this repository; the repository config is
-# renovate.json at the repo root. A deploy runs it once (`docker compose up -d`
-# starts the exited container), and the renovate systemd timer runs it weekly
-# with `docker start --attach renovate`.
+# Long-running Renovate against this repository; the repository config,
+# including the weekly Saturday window, is renovate.json at the repo root.
+# The command loops under the image's own entrypoint: run Renovate, sleep six
+# hours, repeat. A failed run does not end the loop. A start or restart runs
+# immediately. Sleeping in the background lets the TERM trap stop the
+# container at once instead of after Docker's 10-second kill timeout.
 services:
   renovate:
     image: ghcr.io/renovatebot/renovate:44.132.4
     container_name: renovate
-    restart: "no"
+    restart: unless-stopped
+    command: ["bash", "-c", "trap exit TERM; while :; do renovate; sleep 21600 & wait; done"]
     env_file:
       - .env
     environment:

@@ -161,12 +161,6 @@
     - overmind_postgres_backup_enabled | default(false) | bool
     - stack_filter | default(none) in [none, 'overmind']
 
-- name: Configure the weekly Renovate run
-  ansible.builtin.include_tasks: renovate_timer.yml
-  when:
-    - renovate_timer_enabled | default(false) | bool
-    - stack_filter | default(none) in [none, 'renovate']
-
 - name: Seed Dockhand environments
   ansible.builtin.include_tasks: dockhand_environments.yml
   when:

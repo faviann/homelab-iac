@@ -139,7 +139,7 @@ No registration step is required; the role discovers everything under `stacks/<h
 
 ## Image Updates
 
-Renovate opens image update PRs against this repository once a week. It runs on `devserver` (`stacks/devserver/renovate/`), and its repository config is [`renovate.json`](../renovate.json). [ADR-0016](../docs/adr/0016-use-self-hosted-renovate-for-stack-image-updates.md) records why.
+Renovate opens image update PRs against this repository on Saturdays. It runs as a service on `devserver` (`stacks/devserver/renovate/`), looping every six hours, and its repository config, including the weekly `schedule` window, is [`renovate.json`](../renovate.json). Runs outside the window still refresh the Dependency Dashboard and existing PRs, and a dashboard tick takes effect at the next run. [ADR-0016](../docs/adr/0016-use-self-hosted-renovate-for-stack-image-updates.md) records why.
 
 - Every image reference in a stack's Compose files is tracked. A reference that contains a variable is skipped, except the vendor version pins below.
 - Updates are grouped into one PR per stack folder. Majors get a separate PR per folder.
