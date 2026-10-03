@@ -217,13 +217,15 @@ Test connectivity:
 ### Running the Lifecycle
 
 ```bash
-./run.sh                                  # full lifecycle for every LXC
-./run.sh provision                        # create or update LXCs only
-./run.sh configure                        # in-container configuration only
-./run.sh --limit portal                   # one host (Ansible limit grammar)
-./run.sh --limit portal --stack traefik3  # one stack on one host
-./run.sh --check                          # dry run
-./inspect.sh plan                         # report planning problems without running anything
+./run.sh                                   # full lifecycle for every LXC
+./run.sh provision                         # create or update LXCs only
+./run.sh configure                         # in-container configuration only
+./run.sh --limit portal                    # one host (Ansible limit grammar)
+./run.sh --limit portal --stack traefik3   # one stack on one host
+./run.sh --check                           # dry run
+./run.sh hold --limit lobu --stack lobu    # later syncs leave this stack alone
+./run.sh release --limit lobu --stack lobu # return it to normal reconciliation
+./inspect.sh plan                          # report planning problems without running anything
 ```
 
 A full run verifies control node prerequisites, **verifies that the Proxmox

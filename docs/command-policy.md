@@ -26,7 +26,8 @@ of what the guards enforce.
 | `./recover.sh` | `ssh-keys [--limit <targets>]` | exclusive | human-only |
 | | `proxmox-host-ssh` | exclusive | human-only |
 | `./run.sh` | *(default)* `full`, `provision`, `configure` | exclusive | yes |
-| | any form with `--check` | shared | yes |
+| | `hold`, `release` | exclusive | yes |
+| | `held`, any form with `--check` | shared | yes |
 
 `./run.sh` options: `--limit <targets>` (Ansible limit grammar), `--check`,
 `--stack <name>`, `--include-controller`, and `-v`, `-vv`, or `-vvv`. Every

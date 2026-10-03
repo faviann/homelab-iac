@@ -39,6 +39,7 @@
       root_docker_conf_path: "{{ lxc_docker_env_root_docker_conf_path }}"
       stacks_source: "{{ lxc_docker_env_stacks_source }}"
       stale_stack_quarantine_root: "{{ lxc_docker_env_stale_stack_quarantine_root }}"
+      held_stacks_root: "{{ lxc_docker_env_held_stacks_root }}"
       docker_agents_stack_dir: "{{ lxc_docker_env_docker_agents_stack_dir }}"
       dockhand_hawser_stacks_source_dir: "{{ lxc_docker_env_dockhand_hawser_stacks_source_dir }}"
       docker_user: "{{ docker_user }}"

@@ -20,6 +20,16 @@ Directory creation versus modification and network/startup classifications are
 not published. Prerequisite directory observations remain necessary to reject
 non-directory paths and preserve metadata on existing directories.
 
+## Held stacks
+
+Discovery reads one marker file per held stack from
+`lxc_docker_environment_internal.held_stacks_root`. A held stack is removed from
+the desired and stale sets, so the run renders, copies, starts, and quarantines
+nothing for it. It appears in `skipped_stacks` when its deployed directory has a
+Compose file. A `stack_filter` that names a held stack fails discovery. The
+per-host source registers are narrowed to the remaining desired stacks before
+planning.
+
 ## ComposeManifestPlanner Contract
 
 `tasks/planner.yml` turns discovered per-host stack sources into one execution plan published as `lxc_stack_sync_manifest_plan`.

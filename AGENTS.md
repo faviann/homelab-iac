@@ -82,6 +82,9 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./run.sh --limit <targets>` | Target hosts with Ansible limit grammar |
 | `./run.sh --limit <host> --stack <stack>` | Deploy one stack on a host (skips all others) |
 | `./run.sh --check` | Dry run. Shared lock |
+| `./run.sh hold --limit <host> --stack <stack>` | Persist stop intent for one stack. Exclusive lock. Later syncs skip it, and `--stack <that stack>` fails until release. Intent only; stops nothing |
+| `./run.sh held --limit <host>` | List held stacks. Shared lock |
+| `./run.sh release --limit <host> --stack <stack>` | Clear a stack's stop intent. Exclusive lock. The next sync reconciles it again |
 | `./run.sh --include-controller` | Intentionally manage the control node (`workstation`) |
 | `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode |
 | `./inspect.sh credentials` | Walk the Proxmox API credential and permission ladder |

@@ -1,0 +1,18 @@
+---
+# Sets, clears, or lists persisted per-stack stop intent (a hold). Stack sync
+# leaves a held stack alone until it is released.
+#
+# Run it through ./run.sh hold|release|held. Direct invocation fails the
+# controller prerequisite, which requires the serializing wrapper.
+
+- name: Validate control node health
+  ansible.builtin.import_playbook: controller-prerequisites.yml
+
+- name: Hold, release, or list stack holds
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Apply the requested stack hold
+      ansible.builtin.include_role:
+        name: config/lxc_docker_environment
+        tasks_from: stack_hold

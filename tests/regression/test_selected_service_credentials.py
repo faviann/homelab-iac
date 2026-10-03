@@ -64,6 +64,7 @@ def test_selected_placeholder_credential_is_rejected_before_writing(tmp_path: Pa
             "docker_uid": os.getuid(), "docker_gid": os.getgid(),
             "lxc_docker_environment_internal": {
                 "stacks_source": str(source), "shared_mount_source": str(shared),
+                "held_stacks_root": str(shared / "held-stacks"),
                 "root_docker_conf_path": str(shared), "external_networks": [],
                 "shared_owner": os.getuid(), "shared_group": os.getgid(),
                 "docker_uid": os.getuid(), "docker_gid": os.getgid(),

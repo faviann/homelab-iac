@@ -9,16 +9,21 @@ source "$PROJECT_ROOT/scripts/lib/live-execution.sh"
 usage() {
     cat <<'EOF'
 Usage: ./run.sh [full|provision|configure] [options] [-- ansible-arguments]
+       ./run.sh hold|release --limit <targets> --stack <name> [options]
+       ./run.sh held --limit <targets> [options]
 
 Operations:
   full       Run the full lifecycle (default)
   provision  Run the provision-only lifecycle
   configure  Run the configure-only lifecycle
+  hold       Persist stop intent for one stack; later syncs leave it alone
+  release    Clear a stack's stop intent so syncs reconcile it again
+  held       List held stacks (shared lock)
 
 Options:
   --limit <targets>       Select hosts with Ansible limit grammar
   --check                 Run in check mode
-  --stack <name>          Configure only the named stack
+  --stack <name>          Configure, hold, or release only the named stack
   --include-controller    Include the control node
   -v, -vv, -vvv           Set Ansible verbosity
   --help                  Show this help
@@ -53,6 +58,7 @@ inspect_passthrough_short_options() {
 
 playbook="site.yml"
 lifecycle_intent="full"
+stack_hold_operation=""
 case "${1:-}" in
     full)
         shift
@@ -65,6 +71,11 @@ case "${1:-}" in
     configure)
         playbook="playbooks/configure-lxcs.yml"
         lifecycle_intent="configure_only"
+        shift
+        ;;
+    hold|release|held)
+        playbook="playbooks/stack-hold.yml"
+        stack_hold_operation="$1"
         shift
         ;;
     --help)
@@ -166,6 +177,19 @@ for ((index = 0; index < ${#passthrough[@]}; index++)); do
     esac
 done
 
+case "$stack_hold_operation" in
+    hold|release)
+        [[ -n "$stack_name" ]] || usage_error "$stack_hold_operation requires --stack"
+        ;;
+    held)
+        [[ -z "$stack_name" ]] || usage_error "held does not take --stack"
+        lock_class="shared"
+        ;;
+esac
+if [[ -n "$stack_hold_operation" ]] && [[ -z "$limit_pattern" ]] && ! $include_controller; then
+    usage_error "$stack_hold_operation requires --limit or --include-controller"
+fi
+
 arguments=("${verbosity[@]}" "${passthrough[@]}")
 if $include_controller; then
     arguments+=("--limit" "workstation")
@@ -183,12 +207,22 @@ else
     prerequisite_target_pattern="localhost"
 fi
 arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
-arguments+=("-e" "proxmox_lifecycle_intent=$lifecycle_intent")
-if $include_controller; then
-    arguments+=("-e" "proxmox_skip_self=false")
-else
-    arguments+=("-e" "proxmox_skip_self=true")
-fi
+case "$stack_hold_operation" in
+    "")
+        arguments+=("-e" "proxmox_lifecycle_intent=$lifecycle_intent")
+        if $include_controller; then
+            arguments+=("-e" "proxmox_skip_self=false")
+        else
+            arguments+=("-e" "proxmox_skip_self=true")
+        fi
+        ;;
+    hold)
+        arguments+=("-e" "stack_hold_state=present")
+        ;;
+    release)
+        arguments+=("-e" "stack_hold_state=absent")
+        ;;
+esac
 if [[ -n "$stack_name" ]]; then
     arguments+=("-e" "stack_filter=$stack_name")
 else

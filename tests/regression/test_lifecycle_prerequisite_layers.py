@@ -30,6 +30,7 @@ L1_ONLY_CONSUMERS = {
     Path("playbooks/lab-connectivity.yml"),
     Path("playbooks/proxmox_api_check.yml"),
     PROXMOX_HOST_LAYER,
+    Path("playbooks/stack-hold.yml"),
     Path("playbooks/validate-credentials.yml"),
 }
 PlaybookGraph = dict[Path, list[dict[str, object]]]

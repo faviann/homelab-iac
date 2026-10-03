@@ -288,6 +288,9 @@ def assert_command_grammar_reports_help_and_usage_errors() -> None:
             or "full" not in help_output
             or "provision" not in help_output
             or "configure" not in help_output
+            or "hold" not in help_output
+            or "release" not in help_output
+            or "held" not in help_output
         ):
             raise AssertionError(f"help did not describe lifecycle operations:\n{help_output}")
 
@@ -308,11 +311,16 @@ def assert_command_grammar_reports_help_and_usage_errors() -> None:
             ("-e", "proxmox_skip_self=false"),
             ("--extra-vars", "proxmox_skip_self=false"),
             ("--tags", "provision"),
+            ("hold", "--stack", "app"),
+            ("hold", "--limit", "collie"),
+            ("release", "--stack", "app"),
+            ("held", "--stack", "app"),
+            ("held",),
         ):
             result = run_wrapper(env, *arguments)
             if result.returncode != 2 or (Path(temp_dir) / "capture.json").exists():
                 raise AssertionError(
-                    f"low-level option before -- was not rejected: {arguments!r}\n"
+                    f"invalid operation arguments were not rejected: {arguments!r}\n"
                     f"returncode={result.returncode}\n{result.stdout}\n{result.stderr}"
                 )
 
@@ -429,6 +437,21 @@ def assert_wrapper_routes_and_propagates() -> None:
         (("provision", "--limit", "collie"), "playbooks/provision-lxcs.yml", ("--limit", "collie", *collie_provision_defaults)),
         (("configure", "--limit", "collie"), "playbooks/configure-lxcs.yml", ("--limit", "collie", *collie_configure_defaults)),
         (("configure", "--", "--diff", "-e", "harmless=true"), "playbooks/configure-lxcs.yml", ("--diff", "-e", "harmless=true", *configure_defaults)),
+        (
+            ("hold", "--limit", "collie", "--stack", "app"),
+            "playbooks/stack-hold.yml",
+            ("--limit", "collie", "-e", "prerequisite_target_pattern=collie", "-e", "stack_hold_state=present", "-e", "stack_filter=app"),
+        ),
+        (
+            ("release", "--limit", "collie", "--stack", "app"),
+            "playbooks/stack-hold.yml",
+            ("--limit", "collie", "-e", "prerequisite_target_pattern=collie", "-e", "stack_hold_state=absent", "-e", "stack_filter=app"),
+        ),
+        (
+            ("held", "--limit", "collie"),
+            "playbooks/stack-hold.yml",
+            ("--limit", "collie", "-e", "prerequisite_target_pattern=collie", '--extra-vars={"stack_filter":null}'),
+        ),
     )
     for arguments, playbook, passthrough in cases:
         with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-routing-") as temp_dir:
@@ -620,6 +643,10 @@ def assert_lock_class_follows_operation_class() -> None:
         (fcntl.LOCK_SH, ("configure",), 75),
         (fcntl.LOCK_SH, ("--check",), 0),
         (fcntl.LOCK_EX, ("--check",), 75),
+        (fcntl.LOCK_SH, ("hold", "--limit", "collie", "--stack", "app"), 75),
+        (fcntl.LOCK_SH, ("release", "--limit", "collie", "--stack", "app"), 75),
+        (fcntl.LOCK_SH, ("held", "--limit", "collie"), 0),
+        (fcntl.LOCK_EX, ("held", "--limit", "collie"), 75),
     )
     for held_class, arguments, expected_returncode in cases:
         with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-lock-class-") as temp_dir:
