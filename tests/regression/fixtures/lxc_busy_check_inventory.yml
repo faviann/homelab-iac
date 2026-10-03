@@ -80,9 +80,13 @@ all:
           busy_check_fixture_stacks:
             exit3-app: {service: worker, command: [sh, -c, exit 3], timeout: 5}
             timeout-app: {service: worker, command: [sleep, "30"], timeout: 1}
+            stopped-app: {service: worker, command: [sh, -c, exit 0], timeout: 5}
+            docker-error-app: {service: worker, command: [sh, -c, exit 0], timeout: 5}
           busy_check_expected_deferrals:
             - "failing_host/exit3-app: check failed (exited 3)"
             - "failing_host/timeout-app: check failed (timed out after 1s)"
+            - "failing_host/stopped-app: check failed (service not running)"
+            - "failing_host/docker-error-app: check failed (docker error: Cannot connect to the Docker daemon)"
         idle_host:
           busy_check_vmid: 7303
           busy_check_fixture_stacks:

@@ -1,19 +1,24 @@
 #!/bin/sh
 # Every Compose project has containers except undeployed-* and busy-project,
-# the top-level name: busy-app sets, which stack sync's -p overrides. exec
+# the top-level name: busy-app sets, which stack sync's -p overrides.
+# stopped-* has no running container, and ps fails for docker-error-*. exec
 # runs the declared check command on the controller.
 printf '%s | %s\n' "$PWD" "$*" >> "$BUSY_CHECK_DOCKER_LOG"
 
 case "$1" in
   ps)
     project=
+    running=
     for argument do
       case "$argument" in
         label=com.docker.compose.project=*) project=${argument#label=com.docker.compose.project=} ;;
+        status=running) running=1 ;;
       esac
     done
     case "$project" in
       undeployed-* | busy-project) ;;
+      docker-error-*) echo "Cannot connect to the Docker daemon" >&2; exit 1 ;;
+      stopped-*) [ -n "$running" ] || echo "cid-$project" ;;
       *) echo "cid-$project" ;;
     esac
     ;;
