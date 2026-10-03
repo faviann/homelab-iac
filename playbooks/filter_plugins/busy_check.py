@@ -11,6 +11,7 @@ import yaml
 COMPOSE_FILES = ("compose.yaml", "compose.yml", "compose.override.yaml", "compose.override.yml")
 KEYS = {"service", "command", "timeout"}
 MAX_TIMEOUT = 60
+PROBE_STATES = ("idle", "busy", "check_failed", "not_deployed")
 
 
 class BusyCheckError(NamedTuple):
@@ -106,6 +107,33 @@ def busy_check_declarations(stacks_source: str) -> list[dict[str, Any]]:
     return entries
 
 
+def _probe_outcome(probe: dict[str, Any]) -> tuple[str, str]:
+    lines = probe.get("stdout_lines") or [""]
+    if probe.get("unreachable"):
+        return "check_failed", "guest unreachable"
+    if probe.get("rc") != 0 or lines[0] not in PROBE_STATES:
+        detail = probe.get("stderr", probe.get("msg", "")).strip()
+        return "check_failed", "probe failed" + (f": {detail}" if detail else "")
+    return lines[0], " ".join(lines[1:])
+
+
+def busy_check_result(declarations: list[dict[str, Any]], probes: dict[str, Any]) -> dict[str, Any]:
+    """The gate's result from parser entries and the probe task's registered loop result."""
+    outcomes = [
+        (entry["stack"], "check_failed", entry["error"]) for entry in declarations if "error" in entry
+    ]
+    outcomes += [(probe["item"]["stack"], *_probe_outcome(probe)) for probe in probes.get("results", [])]
+    deferred = [
+        {"stack": stack, "state": state, "reason": reason.strip()[:200]}
+        for stack, state, reason in outcomes
+        if state in ("busy", "check_failed")
+    ]
+    return {"deferred_stacks": deferred, "host_deferred": bool(deferred)}
+
+
 class FilterModule:
     def filters(self) -> dict[str, object]:
-        return {"busy_check_declarations": busy_check_declarations}
+        return {
+            "busy_check_declarations": busy_check_declarations,
+            "busy_check_result": busy_check_result,
+        }

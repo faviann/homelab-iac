@@ -35,29 +35,7 @@
 
 - name: Publish the busy-check result
   ansible.builtin.set_fact:
-    lxc_busy_check_result:
-      deferred_stacks: "{{ deferred }}"
-      host_deferred: "{{ deferred | length > 0 }}"
-  vars:
-    outcomes: >-
-      {%- set outcomes = [] -%}
-      {%- for entry in lxc_busy_check_declarations | selectattr('error', 'defined') -%}
-      {%-   set _ = outcomes.append({'stack': entry.stack, 'state': 'check_failed', 'reason': entry.error}) -%}
-      {%- endfor -%}
-      {%- for probe in lxc_busy_check_probes.results | default([]) -%}
-      {%-   set lines = probe.stdout_lines | default([]) -%}
-      {%-   if probe.unreachable | default(false) -%}
-      {%-     set state, reason = 'check_failed', 'guest unreachable' -%}
-      {%-   elif probe.rc | default(-1) != 0 or (lines | first | default('')) not in ['idle', 'busy', 'check_failed', 'not_deployed'] -%}
-      {%-     set detail = probe.stderr | default(probe.msg | default('')) | trim -%}
-      {%-     set state, reason = 'check_failed', 'probe failed' ~ (': ' ~ detail if detail else '') -%}
-      {%-   else -%}
-      {%-     set state, reason = lines[0], lines[1:] | join(' ') -%}
-      {%-   endif -%}
-      {%-   set _ = outcomes.append({'stack': probe.item.stack, 'state': state, 'reason': reason | trim | truncate(200)}) -%}
-      {%- endfor -%}
-      {{ outcomes }}
-    deferred: "{{ outcomes | selectattr('state', 'in', ['busy', 'check_failed']) | list }}"
+    lxc_busy_check_result: "{{ lxc_busy_check_declarations | busy_check_result(lxc_busy_check_probes) }}"
 
 - name: Report busy-check deferrals for this host
   ansible.builtin.debug:
