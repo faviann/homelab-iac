@@ -58,9 +58,6 @@ all:
             - nesting=1
             - keyctl=1
         docker_agents_enabled: false
-        lxc_base_system_install_essentials: false
-        lxc_base_system_apt_update_cache: false
-        lxc_base_system_apt_upgrade: true
         # Unnormalized like production's playbook_dir/../stacks default.
         lxc_docker_env_stacks_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/../source"
         lxc_docker_env_shared_mount_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared"

@@ -1,0 +1,4 @@
+---
+- name: Model completed package upgrade
+  ansible.builtin.debug:
+    msg: Package upgrade completed by facade test double

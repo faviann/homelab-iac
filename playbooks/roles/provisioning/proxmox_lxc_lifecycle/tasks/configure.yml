@@ -32,6 +32,13 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
 
+    # An upgrade can restart the Docker daemon under a busy stack.
+    - name: Upgrade packages
+      ansible.builtin.include_role:
+        name: config/lxc_base_system
+        tasks_from: upgrade
+      when: not (proxmox_lifecycle_host_deferred | bool)
+
     # Runs before GitHub keys: it creates the operator account, and useradd
     # leaves a home directory it did not create owned by root.
     - name: Configure browser device

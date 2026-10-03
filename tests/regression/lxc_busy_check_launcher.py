@@ -47,8 +47,6 @@ def main() -> int:
                 "-e",
                 f"lifecycle_test_state_dir={state_dir}",
                 "-e",
-                f"busy_check_repo_root={REPO_ROOT}",
-                "-e",
                 f"lxc_busy_check_deferral_file={state_dir / 'deferrals'}",
             ],
             cwd=REPO_ROOT,
