@@ -60,7 +60,8 @@ all:
         lxc_base_system_install_essentials: false
         lxc_base_system_apt_update_cache: false
         lxc_base_system_apt_upgrade: true
-        lxc_docker_env_stacks_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/source"
+        # Unnormalized like production's playbook_dir/../stacks default.
+        lxc_docker_env_stacks_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/../source"
         lxc_docker_env_shared_mount_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared"
         busy_check_fixture_files: []
         busy_check_expected_deferrals: []
