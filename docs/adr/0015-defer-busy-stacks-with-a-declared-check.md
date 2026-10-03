@@ -10,7 +10,10 @@ Anything else defers the stack for that run.
 
 The check is opt-in and declared in the repository. Declarations are read on
 the controller from the stack source, so a stack or host without one costs no
-remote command and behaves exactly as before. A stack removed from the
+remote command and behaves exactly as before. A stack opts in by having a
+line that starts with `x-busy-check:` in a Compose file or template. A stack
+without one is not parsed for a busy check, so a broken Compose file in it
+still fails the run as it did before, rather than being deferred. A stack removed from the
 repository takes its declaration with it, so quarantine can stop it even while
 busy. Keeping the declaration beside the services it checks was preferred over
 host variables, which would drift from the stack.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -11,6 +12,8 @@ import yaml
 COMPOSE_FILES = ("compose.yaml", "compose.yml", "compose.override.yaml", "compose.override.yml")
 KEYS = {"service", "command", "timeout"}
 MAX_TIMEOUT = 60
+# A top-level key at the start of a line is how a stack opts in.
+DECLARATION = re.compile(r"^x-busy-check\s*:", re.MULTILINE)
 PROBE_STATES = ("idle", "busy", "check_failed", "not_deployed")
 
 
@@ -41,22 +44,27 @@ def _nonempty_string(value: Any) -> bool:
 
 def read_busy_check(stack_dir: Path) -> dict[str, Any] | BusyCheckError | None:
     """Return the stack's normalized declaration, None when it has none, or why it is invalid."""
-    for template in sorted(stack_dir.glob("compose*.j2")):
-        if "x-busy-check" in template.read_text(encoding="utf-8", errors="replace"):
+    def declares(path: Path) -> bool:
+        return bool(DECLARATION.search(path.read_text(encoding="utf-8", errors="replace")))
+
+    # A stack that never opts in keeps its pre-feature path, even when its Compose files are broken.
+    compose_paths = [stack_dir / name for name in COMPOSE_FILES if (stack_dir / name).is_file()]
+    templates = sorted(stack_dir.glob("compose*.j2"))
+    if not any(map(declares, compose_paths + templates)):
+        return None
+    for template in templates:
+        if declares(template):
             return BusyCheckError(
                 "compose.x-busy-check",
                 f"x-busy-check is not supported in a template ({template.name})",
             )
     services: set[str] = set()
     blocks = []
-    for name in COMPOSE_FILES:
-        path = stack_dir / name
-        if not path.is_file():
-            continue
+    for path in compose_paths:
         try:
             loaded = yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader)
         except (OSError, UnicodeError, yaml.YAMLError):
-            return BusyCheckError("compose", f"{name} could not be read as YAML")
+            return BusyCheckError("compose", f"{path.name} could not be read as YAML")
         if not isinstance(loaded, dict):
             continue
         if isinstance(loaded.get("services"), dict):

@@ -277,7 +277,7 @@ x-busy-check:
 
 `./validate.sh stack` rejects any other shape, a block in a `.j2` template, and a block in both the base and the override. The run reads declarations with the same parser, so a declaration the validator rejects defers its stack as a failed check.
 
-Before any step that could interrupt the stack, the run executes the check. Exit `0` means idle, and the run proceeds. Exit `1` means busy. Any other exit status, a timeout, a service with no running container, a Docker error, an unreachable LXC, or a block the validator would reject counts as busy too. The check fails closed.
+Before any step that could interrupt the stack, the run executes the check. Exit `0` means idle, and the run proceeds. Exit `1` means busy. Any other exit status, a timeout, a service with no running container, a Docker error, an unreachable LXC, or a block the validator would reject counts as busy too. The check fails closed. A stack opts in with a line that starts with `x-busy-check:`. A stack without one is never parsed for a busy check, so its Compose errors fail the run as before.
 
 A busy stack is skipped for that run. Its files are not synced or rendered, it is not brought up or recreated, and quarantine does not take it down. Its host also skips host-side reconciliation, Docker and NVIDIA runtime configuration, the package upgrade, and the reboot. Everything else still runs. The run reports each deferred stack with its reason, and `./run.sh` exits `3` when it deferred anything and nothing failed. A scheduled caller can treat `3` as "retry later". `./run.sh --interrupt-busy` skips the checks and interrupts deliberately.
 

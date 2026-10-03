@@ -107,7 +107,7 @@ def test_reads_valid_declarations(tmp_path: Path, files: dict[str, str], expecte
             "x-busy-check must be declared in only one Compose file",
         ),
         (
-            {"compose.yaml": "services: [\n"},
+            {"compose.yaml": SERVICES + BLOCK + "services: [\n"},
             "compose",
             "compose.yaml could not be read as YAML",
         ),
@@ -121,8 +121,14 @@ def test_rejects_malformed_declarations(
 
 def test_declarations_list_each_declaring_stack_or_its_error(tmp_path: Path) -> None:
     write_stack(tmp_path, "declared", {"compose.yaml": SERVICES + BLOCK})
-    write_stack(tmp_path, "rejected", {"compose.yaml": "services: [\n"})
+    write_stack(tmp_path, "rejected", {"compose.yaml": BLOCK + "services: [\n"})
     write_stack(tmp_path, "undeclared", {"compose.yaml": SERVICES})
+    write_stack(tmp_path, "undeclared-broken", {"compose.yaml": "services: [\n"})
+    write_stack(
+        tmp_path,
+        "undeclared-template",
+        {"compose.yaml": SERVICES, "compose.override.yaml.j2": "# no x-busy-check here\n"},
+    )
     (tmp_path / "README.md").write_text("not a stack\n", encoding="utf-8")
 
     assert FILTERS["busy_check_declarations"](str(tmp_path)) == [
