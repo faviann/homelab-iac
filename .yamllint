@@ -5,6 +5,8 @@ ignore: |
   .ansible/
   collections/
   stacks/auth/auth/appdata/authentik/blueprints/
+  stacks/auth/auth/compose.yaml
+  stacks/public/immich/compose.yaml
 rules:
   line-length:
     max: 140

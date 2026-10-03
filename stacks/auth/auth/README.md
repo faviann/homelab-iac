@@ -1,8 +1,9 @@
 # Authentik Stack
 
 Authentik is a foundational identity stack on the `auth` Docker host. Its base
-`compose.yaml` intentionally stays close to upstream Authentik shape, while
-repo-owned behavior lives in the override layer.
+`compose.yaml` is upstream's file byte-for-byte below a `# vendor:` marker, and
+the version is pinned by `AUTHENTIK_TAG` in `.env.j2`. Repo-owned behavior lives
+in the override layer. See [Vendor Stacks](../../README.md#vendor-stacks).
 
 ## Normalization Boundary
 
@@ -10,7 +11,7 @@ This stack intentionally does not follow every ordinary app-stack default.
 
 Preserve:
 
-- Do not force full contract normalization into `compose.yaml`.
+- Do not edit `compose.yaml`. The vendor sync replaces it whole.
 - Do not remove `env_file:` from the upstream-shaped base compose.
 - Do not force `container_name` into upstream services.
 - Do not convert or remove the base named volume solely for style; runtime

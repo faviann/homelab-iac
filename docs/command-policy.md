@@ -275,6 +275,25 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** agents do not run it or handle the hash. They direct the
   person to this entry.
 
+#### Vendor compose sync
+
+- **Trigger:** resyncing a vendored `compose.yaml` with upstream, as written in
+  [stacks/README.md](../stacks/README.md#vendor-stacks). Renovate runs the same
+  script as a post-upgrade task when it bumps a vendor pin.
+- **Audience:** agents and people.
+- **Scope:** one vendored `compose.yaml` in the local checkout. It contacts no
+  managed host.
+
+  ```bash
+  sh scripts/vendor-sync.sh stacks/<host>/<stack>/compose.yaml
+  ```
+
+- **Boundary:** it downloads the URL on the file's first line and rewrites that
+  file. It changes nothing else.
+- **Sensitive output:** none. The marker URL is public.
+- **Escalation:** a download failure leaves the file unchanged. Report it
+  rather than editing the vendored file by hand.
+
 ## Superseded forms
 
 | Superseded form | Replacement |
