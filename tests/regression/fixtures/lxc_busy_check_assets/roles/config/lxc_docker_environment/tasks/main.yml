@@ -1,0 +1,19 @@
+---
+# Skips the privileged Docker host setup and runs the real stack sync.
+- name: Build the Docker environment contract for stack sync
+  ansible.builtin.set_fact:
+    lxc_docker_environment_internal:
+      external_networks: []
+      path_ownership_overrides: []
+      shared_mount_source: "{{ lxc_docker_env_shared_mount_source }}"
+      root_docker_conf_path: "{{ lxc_docker_env_shared_mount_source }}"
+      stacks_source: "{{ lxc_docker_env_stacks_source }}"
+      stale_stack_quarantine_root: "{{ lxc_docker_env_shared_mount_source }}/stale-stacks"
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+      docker_uid: "{{ ansible_user_uid }}"
+      docker_gid: "{{ ansible_user_gid }}"
+
+- name: Reconcile repo-managed stacks
+  ansible.builtin.include_role:
+    name: config/lxc_stack_sync

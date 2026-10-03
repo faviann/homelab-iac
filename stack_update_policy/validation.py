@@ -13,6 +13,8 @@ from urllib.parse import unquote, urlsplit
 
 import yaml
 
+from playbooks.filter_plugins.busy_check import BusyCheckError, read_busy_check
+
 
 PORTABILITY_TIERS = {"portable-app", "host-bound-app", "foundational-controlled-migration"}
 TRAEFIK_EXPOSURES = {"none", "protected", "public"}
@@ -457,6 +459,12 @@ def _resolve_compose(stack_root: Path, errors: list[ValidationError]) -> dict[st
             )
             return None
     return effective
+
+
+def _validate_busy_check(stack_root: Path, errors: list[ValidationError]) -> None:
+    outcome = read_busy_check(stack_root)
+    if isinstance(outcome, BusyCheckError):
+        _error(errors, "busy-check", outcome.path, outcome.message)
 
 
 def _canonical_official_repository(value: Any) -> str | None:
@@ -1036,6 +1044,8 @@ def validate_stack(repository_root: Path, identity: str) -> StackPolicyValidatio
 
     metadata = _load_metadata(stack_root, errors)
     effective = _resolve_compose(stack_root, errors)
+    if effective is not None:
+        _validate_busy_check(stack_root, errors)
     services: dict[str, dict[str, str | None]] = {}
     procedure: dict[str, str] | None = None
     vendor: dict[str, str] | None = None

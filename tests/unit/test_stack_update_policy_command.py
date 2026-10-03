@@ -1982,6 +1982,9 @@ def test_documented_module_command_leaves_its_repository_byte_for_byte_unchanged
     package.mkdir(parents=True)
     for source in (REPO_ROOT / "stack_update_policy").glob("*.py"):
         shutil.copy2(source, package / source.name)
+    filter_plugins = repository / "playbooks/filter_plugins"
+    filter_plugins.mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / "playbooks/filter_plugins/busy_check.py", filter_plugins)
     write_valid_stack(repository)
     assert not list(repository.rglob("__pycache__"))
     assert not list(repository.rglob("*.pyc"))
@@ -2063,3 +2066,38 @@ def test_documented_module_command_leaves_its_repository_byte_for_byte_unchanged
         )
         == before_status
     )
+
+
+VALID_BUSY_CHECK = """\
+x-busy-check:
+  service: app
+  command: ["sh", "-c", "test ! -e /tmp/job"]
+  timeout: 10
+"""
+
+
+def test_valid_busy_check_declaration_is_accepted(tmp_path: Path) -> None:
+    stack = write_valid_stack(tmp_path)
+    compose = (stack / "compose.yaml").read_text(encoding="utf-8")
+    (stack / "compose.yaml").write_text(compose + VALID_BUSY_CHECK, encoding="utf-8")
+    assert run_validate(tmp_path).returncode == 0
+
+
+# The parser's cases live in test_busy_check_filter.py. This proves only that
+# a rejection reaches the validator's report.
+def test_malformed_busy_check_is_reported_as_a_busy_check_error(tmp_path: Path) -> None:
+    stack = write_valid_stack(tmp_path)
+    (stack / "compose.override.yaml").write_text(
+        VALID_BUSY_CHECK.replace("timeout: 10", "timeout: 61"), encoding="utf-8"
+    )
+
+    completed = run_validate(tmp_path)
+
+    assert completed.returncode == 1
+    assert json.loads(completed.stdout)["errors"] == [
+        {
+            "code": "busy-check",
+            "message": "timeout must be an integer number of seconds from 1 to 60",
+            "path": "compose.x-busy-check.timeout",
+        }
+    ]

@@ -8,7 +8,7 @@ then published after reconciliation with exactly these fields:
 | Field | Diagnostic use |
 |-------|----------------|
 | `changed` | Indicates whether managed assets, materialization, quarantine, or network/stack startup reported a change; a converged apply reports `false`. |
-| `discovered_stacks` | Lists the desired stacks selected for reconciliation, after any `stack_filter`, so an operator can verify the run's scope. |
+| `discovered_stacks` | Lists the desired stacks selected for reconciliation, after any `stack_filter` and without stacks a busy check deferred, so an operator can verify the run's scope. |
 | `quarantined_stacks` | Identifies stale stacks moved into quarantine for operator investigation or recovery. |
 | `skipped_stacks` | Identifies discovered Compose projects whose startup was skipped, including command skips in check mode or projects outside the selected scope. |
 

@@ -30,6 +30,13 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
 
+    # An upgrade can restart the Docker daemon under a busy stack.
+    - name: Upgrade packages
+      ansible.builtin.include_role:
+        name: config/lxc_base_system
+        tasks_from: upgrade
+      when: not (lxc_busy_check_result.host_deferred | bool)
+
     # Runs before GitHub keys: it creates the operator account, and useradd
     # leaves a home directory it did not create owned by root.
     - name: Configure browser device
@@ -45,15 +52,21 @@
       ansible.builtin.include_role:
         name: config/lxc_logging_config
 
+    # Both can restart Docker under a busy stack. Skipped whole: a changed
+    # option is not seen again next run, so skipping only the restart loses it.
     - name: Install Docker runtime
       ansible.builtin.include_role:
         name: config/lxc_docker_runtime
-      when: docker_enabled | default(false)
+      when:
+        - docker_enabled | default(false)
+        - not (lxc_busy_check_result.host_deferred | bool)
 
     - name: Configure NVIDIA GPU runtime
       ansible.builtin.include_role:
         name: config/lxc_nvidia_runtime
-      when: gpu_enabled | default(false)
+      when:
+        - gpu_enabled | default(false)
+        - not (lxc_busy_check_result.host_deferred | bool)
 
     - name: Configure Docker environment
       ansible.builtin.include_role:
@@ -79,3 +92,4 @@
       ansible.builtin.include_role:
         name: config/lxc_base_system
         tasks_from: reboot
+      when: not (lxc_busy_check_result.host_deferred | bool)

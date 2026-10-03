@@ -1,0 +1,64 @@
+---
+# Busy-check gate. Publishes lxc_busy_check_result:
+#   {deferred_stacks: [{stack, state, reason}], host_deferred: bool}
+# Declarations are read on the controller, so a host without them runs no
+# remote command. Only idle and not_deployed let a stack proceed.
+
+- name: Start with no busy-check declarations
+  ansible.builtin.set_fact:
+    lxc_busy_check_declarations: []
+
+- name: Read busy-check declarations from the repo stack source
+  ansible.builtin.set_fact:
+    lxc_busy_check_declarations: "{{ lxc_busy_check_stacks_source | busy_check_declarations }}"
+  when:
+    - not (lxc_busy_check_override | bool)
+    - not (ansible_check_mode | bool)
+    - docker_enabled | default(false) | bool
+    - lxc_busy_check_applies | bool
+
+- name: Run each declared busy check inside its service
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['sh', '-c', lookup('ansible.builtin.file', 'busy_check_probe.sh'), 'busy-check',
+         item.stack, item.service, item.timeout | string]
+        + item.command
+      }}
+  loop: "{{ lxc_busy_check_declarations | selectattr('error', 'undefined') | list }}"
+  loop_control:
+    label: "{{ item.stack }}"
+  register: lxc_busy_check_probes
+  changed_when: false
+  failed_when: false
+  ignore_unreachable: true
+
+- name: Publish the busy-check result
+  ansible.builtin.set_fact:
+    lxc_busy_check_result: "{{ lxc_busy_check_declarations | busy_check_result(lxc_busy_check_probes) }}"
+
+- name: Report busy-check deferrals for this host
+  ansible.builtin.debug:
+    msg: >-
+      Deferring {{ lxc_busy_check_result.deferred_stacks | map(attribute='stack') | join(', ') }};
+      skipping host-side reconciliation, Docker and NVIDIA runtime configuration,
+      package upgrade, and reboot.
+  when: lxc_busy_check_result.host_deferred | bool
+
+# ./run.sh exits 3 when this file is non-empty after a successful run.
+# throttle keeps concurrent hosts from overwriting each other's appends.
+- name: Record busy-check deferrals for the run wrapper
+  ansible.builtin.lineinfile:
+    path: "{{ lxc_busy_check_deferral_file }}"
+    line: >-
+      {{ inventory_hostname }}/{{ item.stack }}:
+      {{ 'busy' if item.state == 'busy' else 'check failed (' ~ item.reason ~ ')' }}
+    insertafter: EOF
+    create: true
+    mode: "0600"
+  loop: "{{ lxc_busy_check_result.deferred_stacks }}"
+  loop_control:
+    label: "{{ item.stack }}"
+  delegate_to: localhost
+  throttle: 1
+  when: lxc_busy_check_deferral_file is defined

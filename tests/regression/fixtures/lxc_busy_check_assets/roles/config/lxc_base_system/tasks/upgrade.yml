@@ -1,0 +1,6 @@
+---
+- name: Record the package upgrade
+  ansible.builtin.lineinfile:
+    path: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events"
+    line: apt_upgrade
+  delegate_to: localhost

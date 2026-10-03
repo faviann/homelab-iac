@@ -95,6 +95,7 @@ FULL_ONLY_SCRIPTS = (
     "lxc_docker_runtime_daemon_options_launcher.py",
     "lxc_nvidia_runtime_repository_launcher.py",
     "lxc_lifecycle_wiring_launcher.py",
+    "lxc_busy_check_launcher.py",
     "proxmox_lxc_host_config_result_launcher.py",
     "hawser_standard_remote_default_launcher.py",
     "controller_prerequisite_fact_cache_launcher.py",

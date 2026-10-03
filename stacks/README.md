@@ -39,7 +39,7 @@ Stack-owned files:
 - committed app config under `appdata/`
 - stack-local `README.md` and files under `docs/`
 - non-secret `stack.yaml` metadata
-- Compose extension blocks such as `x-prereq-dirs` and `x-managed-files`
+- Compose extension blocks such as `x-prereq-dirs`, `x-managed-files`, and `x-busy-check`
 
 Host/inventory-owned settings:
 
@@ -58,7 +58,7 @@ Host/inventory-owned settings:
 Do not dynamically include stack-local variable files into Ansible host scope. Stack metadata is non-secret role data; templates still render from normal Ansible inventory, group, host, and vault variables plus the injected `stack_name`.
 
 - Host folder must match `inventory_hostname`.
-- Stack folder name becomes the Compose project name. During `.j2` rendering, the role also injects `stack_name`.
+- Stack folder name is the Compose project name. The role pins it with `docker compose -p`, so do not set a top-level `name:` in repo-owned Compose files. Vendor files may keep upstream's. During `.j2` rendering, the role also injects `stack_name`.
 - `.j2` files are rendered with inventory, host, group, vault variables, `stack_name`, and the current stack `stack_vars` task-scoped render data, then deployed without the `.j2` suffix.
 - Other files are copied verbatim.
 - Stack-local `README.md`, `docs/**`, `stack.yaml`, `stack.yml`, and `metadata.yaml`/`.yml`/`.json` files are repo-only and are excluded from deployment.
@@ -258,6 +258,37 @@ To iterate on a single stack without reconciling the others:
 
 No registration step is required; the role discovers everything under `stacks/<host>/` automatically.
 
+## Busy Checks
+
+A lifecycle run can interrupt a stack: `docker compose up -d` recreates changed services, Docker runtime changes or a package upgrade can restart the Docker daemon, and a reboot or host-side reconciliation restarts the LXC. A stack that runs long jobs can declare a busy check so the run leaves it alone while it reports busy.
+
+Declare it as a top-level block in `compose.yaml`, or in `compose.override.yaml` for a vendor-preserving stack. Declare it in one file only, and never in a `.j2` template:
+
+```yaml
+x-busy-check:
+  service: worker
+  command: ["sh", "-c", "test ! -e /tmp/job.lock"]
+  timeout: 10
+```
+
+- `service` names a service in the stack.
+- `command` is a non-empty list of strings, run with `docker exec` in a running container of that service. Nothing quotes or parses it. Use `["sh", "-c", "..."]` when you need a shell, or call the app's status endpoint from a command, for example with `curl`.
+- `timeout` is whole seconds, from 1 to 60.
+
+`./validate.sh stack` rejects any other shape, a block in a `.j2` template, and a block in both the base and the override. The run reads declarations with the same parser, so a declaration the validator rejects defers its stack as a failed check.
+
+Before any step that could interrupt the stack, the run executes the check. Exit `0` means idle, and the run proceeds. Exit `1` means busy. Any other exit status, a timeout, a service with no running container, a Docker error, an unreachable LXC, or a block the validator would reject counts as busy too. The check fails closed. A stack opts in with a line that starts with `x-busy-check:`. A stack without one is never parsed for a busy check, so its Compose errors fail the run as before.
+
+A busy stack is skipped for that run. Its files are not synced or rendered, it is not brought up or recreated, and quarantine does not take it down. Its host also skips host-side reconciliation, Docker and NVIDIA runtime configuration, the package upgrade, and the reboot. Everything else still runs. The run reports each deferred stack with its reason, and `./run.sh` exits `3` when it deferred anything and nothing failed. A scheduled caller can treat `3` as "retry later". `./run.sh --interrupt-busy` skips the checks and interrupts deliberately.
+
+Limits:
+
+- A Compose project with no containers is not checked or deferred, because nothing runs that could be interrupted.
+- Removing an LXC (`state: absent`) does not run checks, because removal retires the host. A rebuild stays protected.
+- Check mode (`./run.sh --check`) does not run checks, so its report shows a busy stack as if it would be deployed.
+- A stack removed from the repo loses its protection with its declaration, so quarantine can stop it while it is busy. To retire a protected stack without risking a running job, wait until it is idle, or remove its `x-busy-check` deliberately, before deleting it.
+- A job can start between an idle answer and the interruption. That window is accepted; the check narrows it, it does not close it.
+
 ## Traefik
 
 Some Docker hosts act as label sources for Traefik on `portal`: `traefik-kop` copies their Docker labels into portal's Redis. Stacks on the reverse-proxy host use Traefik directly.
@@ -445,6 +476,7 @@ Ordinary app stacks follow these defaults. Vendor-preserving, foundational, and 
 15. Host-level deployment mechanics remain in inventory/host vars, not stack metadata.
 16. Stack-local docs and `stack.yaml` contain no plaintext secrets or secret-shaped values.
 17. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans, and ADR-006 exceptions keep their behavior unless the user asks to change it.
+18. A stack whose jobs must not be interrupted declares one `x-busy-check` in a non-templated Compose file, and its command exits `0` only when idle and `1` only when busy.
 
 ## Notes
 

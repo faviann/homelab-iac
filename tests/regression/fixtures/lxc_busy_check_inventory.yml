@@ -1,0 +1,127 @@
+---
+# Each host carries protected stacks (busy_check_fixture_stacks entries with a
+# check) and one ordinary stack, plain. busy_check_fixture_files adds repo
+# files after those are written. busy_check_expected_deferrals lists the
+# deferral-file lines the host must produce. busy_check_removed plans the
+# host's removal instead of its configuration.
+all:
+  vars:
+    proxmox_api_host: localhost
+    proxmox_api_user: fixture@pam
+    proxmox_api_token_id: fixture
+    proxmox_api_token_secret: "controlled-api-token"
+    proxmox_verify_ssl: false
+    proxmox_validate_pct: false
+  children:
+    lxcs:
+      vars:
+        ansible_connection: local
+        proxmox_skip_self: false
+        proxmox_lxc_controller_pubkey_enabled: false
+        proxmox_lxc_host_config_enabled: true
+        proxmox_lxc_host_config_become: false
+        proxmox_lxc_host_config_path_root: "{{ lifecycle_test_state_dir }}"
+        proxmox_pct_delegate_host: localhost
+        proxmox_api_delegate_host: localhost
+        proxmox_default_storage: local-lvm
+        proxmox_default_bind_mounts: {}
+        proxmox_default_idmap: []
+        proxmox_lxc_disable_root_password: true
+        proxmox_lifecycle_intent: full
+        proxmox_lifecycle_policy:
+          strict_validation: false
+          rebuild_on_release_mismatch: false
+          allow_destructive_transitions: false
+        proxmox_fleet_observation_override:
+          containers:
+            - {vmid: 7301, name: busy-host, status: running}
+            - {vmid: 7302, name: failing-host, status: running}
+            - {vmid: 7303, name: idle-host, status: running}
+            - {vmid: 7304, name: undeclared-host, status: running}
+            - {vmid: 7305, name: override-host, status: running}
+            - {vmid: 7306, name: invalid-host, status: running}
+            - {vmid: 7307, name: remove-host, status: running}
+        proxmox_lxc:
+          state: "{{ 'absent' if busy_check_removed else 'present' }}"
+          vmid: "{{ busy_check_vmid }}"
+          hostname: "{{ inventory_hostname | replace('_', '-') }}"
+          node: pve-a
+          ostemplate: local:vztmpl/debian-12-standard_12.2-1_amd64.tar.zst
+          cores: 1
+          memory: 128
+          disk: 4
+          netif:
+            net0: name=eth0,bridge=vmbr0,ip=dhcp
+          pubkey: ssh-ed25519 AAAAABUSYCHECK lifecycle@test
+        docker_enabled: true
+        gpu_enabled: true
+        proxmox_lxc_capability_defaults:
+          features:
+            - nesting=1
+            - keyctl=1
+        docker_agents_enabled: false
+        # Unnormalized like production's playbook_dir/../stacks default.
+        lxc_docker_env_stacks_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/../source"
+        lxc_docker_env_shared_mount_source: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared"
+        busy_check_fixture_files: []
+        busy_check_expected_deferrals: []
+        busy_check_removed: false
+      hosts:
+        busy_host:
+          busy_check_vmid: 7301
+          busy_check_fixture_stacks:
+            busy-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}
+          busy_check_fixture_files:
+            - {stack: busy-app, name: compose.override.yaml, content: "name: busy-project\n"}
+          busy_check_expected_deferrals:
+            - "busy_host/busy-app: busy"
+        failing_host:
+          busy_check_vmid: 7302
+          busy_check_fixture_stacks:
+            exit3-app: {service: worker, command: [sh, -c, exit 3], timeout: 5}
+            timeout-app: {service: worker, command: [sleep, "30"], timeout: 1}
+            stopped-app: {service: worker, command: [sh, -c, exit 0], timeout: 5}
+            docker-error-app: {service: worker, command: [sh, -c, exit 0], timeout: 5}
+          busy_check_expected_deferrals:
+            - "failing_host/exit3-app: check failed (exited 3)"
+            - "failing_host/timeout-app: check failed (timed out after 1s)"
+            - "failing_host/stopped-app: check failed (service not running)"
+            - "failing_host/docker-error-app: check failed (docker error: Cannot connect to the Docker daemon)"
+        idle_host:
+          busy_check_vmid: 7303
+          busy_check_fixture_stacks:
+            idle-app: {service: worker, command: [sh, -c, exit 0], timeout: 5}
+            undeployed-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}
+        undeclared_host:
+          busy_check_vmid: 7304
+          busy_check_fixture_stacks:
+            undeclared-app: {}
+        override_host:
+          busy_check_vmid: 7305
+          lxc_busy_check_override: true
+          busy_check_fixture_stacks:
+            override-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}
+        # A declaration validation rejects must fail closed at runtime too.
+        # Its command would report idle.
+        invalid_host:
+          busy_check_vmid: 7306
+          busy_check_fixture_stacks:
+            template-app: {}
+          busy_check_fixture_files:
+            - stack: template-app
+              name: compose.override.yaml.j2
+              content: |
+                x-busy-check: {service: worker, command: [sh, -c, exit 0], timeout: 5}
+          busy_check_expected_deferrals:
+            - "invalid_host/template-app: check failed (compose.x-busy-check:
+              x-busy-check is not supported in a template (compose.override.yaml.j2))"
+        # Removal retires the LXC, so a busy stack must not hold it back.
+        remove_host:
+          busy_check_vmid: 7307
+          busy_check_removed: true
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: false
+            allow_destructive_transitions: true
+          busy_check_fixture_stacks:
+            remove-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}

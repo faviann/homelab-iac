@@ -29,8 +29,10 @@ of what the guards enforce.
 | | any form with `--check` | shared | yes |
 
 `./run.sh` options: `--limit <targets>` (Ansible limit grammar), `--check`,
-`--stack <name>`, `--include-controller`, and `-v`, `-vv`, or `-vvv`. Every
-command answers `--help` with its operations.
+`--stack <name>`, `--include-controller`, `--interrupt-busy`, and `-v`, `-vv`,
+or `-vvv`. `--interrupt-busy` skips every declared busy check, so busy stacks
+and their hosts are interrupted as if no check were declared. Every command
+answers `--help` with its operations.
 
 A human-only operation prompts at a terminal, changes the vault, or enrolls
 trust on managed infrastructure, so a person runs it. "On explicit request"
@@ -57,6 +59,13 @@ another live operation holds the lock. The live operations are every
 `./run.sh` and `./recover.sh` form and every `./inspect.sh` operation except
 `vars`, which reads only local inventory, takes no lock, and never returns
 `75`. `0` means success.
+
+`./run.sh` also exits `3` when the playbook succeeded but a busy check deferred
+at least one stack, along with that host's host-side reconciliation, Docker
+and NVIDIA runtime configuration, package upgrade, and reboot. `3` means
+"deferred, not failed": run it again later. A failed run exits `1` even when it
+also deferred something. See
+[stacks/README.md](../stacks/README.md#busy-checks).
 
 Every other non-zero status is a failure, and its value depends on the
 command. Some operations pass the status of the tool they run through
