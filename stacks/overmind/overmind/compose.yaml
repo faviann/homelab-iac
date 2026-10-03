@@ -1,6 +1,4 @@
 ---
-name: overmind
-
 x-prereq-dirs:
   - /data/overmind/postgres/pgdata
 

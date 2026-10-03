@@ -1,6 +1,4 @@
 ---
-name: cliproxy
-
 x-managed-files:
   # config.yaml carries the client API key and the management key hash, so it
   # must not land at the default 0644.

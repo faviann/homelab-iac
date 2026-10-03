@@ -1,6 +1,4 @@
 ---
-name: lobu
-
 x-prereq-dirs:
   - ./appdata/postgres
   - ./appdata/workspaces

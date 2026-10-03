@@ -58,7 +58,7 @@ Host/inventory-owned settings:
 Do not dynamically include stack-local variable files into Ansible host scope. Stack metadata is non-secret role data; templates still render from normal Ansible inventory, group, host, and vault variables plus the injected `stack_name`.
 
 - Host folder must match `inventory_hostname`.
-- Stack folder name becomes the Compose project name. During `.j2` rendering, the role also injects `stack_name`.
+- Stack folder name is the Compose project name. The role pins it with `docker compose -p`, so do not set a top-level `name:` in repo-owned Compose files. Vendor files may keep upstream's. During `.j2` rendering, the role also injects `stack_name`.
 - `.j2` files are rendered with inventory, host, group, vault variables, `stack_name`, and the current stack `stack_vars` task-scoped render data, then deployed without the `.j2` suffix.
 - Other files are copied verbatim.
 - Stack-local `README.md`, `docs/**`, `stack.yaml`, `stack.yml`, and `metadata.yaml`/`.yml`/`.json` files are repo-only and are excluded from deployment.
