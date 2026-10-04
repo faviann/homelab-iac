@@ -61,6 +61,11 @@ proxmox_lxc_global_defaults:
   node: "{{ proxmox_default_node }}"
   tags:
     - ansible
+  # Debian 13's journald exits with 243/CREDENTIALS in an unprivileged
+  # container without nesting. A capability layer that sets features
+  # replaces this list, so it must repeat nesting=1.
+  features:
+    - nesting=1
 
 # ==============================================================================
 # Host Configuration Settings

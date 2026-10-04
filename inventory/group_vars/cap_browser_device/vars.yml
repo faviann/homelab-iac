@@ -26,8 +26,3 @@ lxc_origin_firewall_protected_ports:
   - "{{ browser_device_session_view_port }}"
 lxc_origin_firewall_allowed_hosts:
   - portal
-
-# Chrome keeps its sandbox, which needs user namespaces. No keyctl: there is no Docker.
-proxmox_lxc_capability_defaults:
-  features:
-    - nesting=1
