@@ -12,6 +12,8 @@ all:
         proxmox_lxc_host_config_become: false
         proxmox_pct_delegate_host: localhost
         proxmox_api_delegate_host: localhost
+        # The lxc-info double answers the first address query empty.
+        proxmox_lifecycle_guest_address_delay: 0
         proxmox_default_storage: local-lvm
         proxmox_default_bind_mounts: {}
         proxmox_default_idmap: []
@@ -29,6 +31,7 @@ all:
           proxmox_lifecycle_intent: full
           lifecycle_desired_state: present
           lifecycle_runtime_state: absent
+          lifecycle_guest_address: 192.0.2.41
           lifecycle_actual_release: ""
           lifecycle_release_probe_state: absent
           lifecycle_seed_release: "12"
@@ -46,6 +49,32 @@ all:
           lifecycle_expected_events:
             - api_reconciliation
             - container_transition
+            - host_reconciliation
+            - runtime_refresh
+            - release_refresh
+            - access_restoration
+            - guest_address
+            - guest_configuration
+        full_running:
+          lifecycle_vmid: 4425
+          proxmox_lifecycle_intent: full
+          lifecycle_desired_state: present
+          lifecycle_runtime_state: running
+          lifecycle_actual_release: "12"
+          lifecycle_release_probe_state: probed
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: provision
+          lifecycle_expected_destructive: false
+          lifecycle_expected_reconcile_host_config: true
+          lifecycle_expected_restore_guest_access: true
+          lifecycle_expected_configure_guest: true
+          lifecycle_expected_outcome: configured
+          lifecycle_expected_before_runtime: running
+          lifecycle_expected_after_runtime: running
+          lifecycle_expected_after_release: "12"
+          lifecycle_expected_after_probe_state: probed
+          lifecycle_expected_events:
+            - api_reconciliation
             - host_reconciliation
             - runtime_refresh
             - release_refresh

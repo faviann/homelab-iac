@@ -12,4 +12,8 @@ proxmox_lifecycle_desired_release: ""
 
 proxmox_skip_self: true
 
+# How long a guest created in this run may take to obtain its IPv4 address.
+proxmox_lifecycle_guest_address_retries: 12
+proxmox_lifecycle_guest_address_delay: 5
+
 proxmox_fleet_preflight_enabled: true

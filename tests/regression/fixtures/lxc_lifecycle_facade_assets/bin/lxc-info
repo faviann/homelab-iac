@@ -1,0 +1,14 @@
+#!/bin/sh
+# Models `lxc-info --name <vmid> --ips --no-humanize` on the Proxmox host. A
+# guest holds no lease the instant it starts, so the first query answers
+# nothing; later queries print the seeded address, if the scenario seeded one.
+set -eu
+
+vmid=$2
+events="$LIFECYCLE_TEST_STATE_DIR/$vmid.events"
+
+if grep -qx guest_address "$events"; then
+  cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.address" 2>/dev/null || true
+else
+  echo guest_address >> "$events"
+fi

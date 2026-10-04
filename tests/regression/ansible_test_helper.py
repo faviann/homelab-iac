@@ -106,17 +106,18 @@ def local_sshd(root: Path) -> Iterator[int]:
     )
     port = free_port()
     (root / "sshd_config").write_text(SSHD_CONFIG.format(port=port, root=root))
-    sshd = subprocess.Popen(
-        [str(SSHD), "-D", "-e", "-f", str(root / "sshd_config")],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    try:
-        wait_for_port(port)
-        yield port
-    finally:
-        sshd.terminate()
-        sshd.wait()
+    with (root / "sshd.log").open("w", encoding="utf-8") as log:
+        sshd = subprocess.Popen(
+            [str(SSHD), "-D", "-e", "-f", str(root / "sshd_config")],
+            stdout=subprocess.DEVNULL,
+            stderr=log,
+        )
+        try:
+            wait_for_port(port)
+            yield port
+        finally:
+            sshd.terminate()
+            sshd.wait()
 
 
 class _SshPortHandler(socketserver.BaseRequestHandler):

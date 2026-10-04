@@ -64,6 +64,14 @@
         mode: "0600"
       delegate_to: localhost
 
+    - name: Seed the IPv4 address the created guest obtains
+      ansible.builtin.copy:
+        dest: "{{ lifecycle_test_state_dir }}/{{ lifecycle_vmid }}.address"
+        content: "{{ lifecycle_guest_address }}"
+        mode: "0600"
+      delegate_to: localhost
+      when: lifecycle_guest_address is defined
+
     - name: Seed observable known-host state for rebuild cleanup scenarios
       ansible.builtin.lineinfile:
         path: "{{ lookup('env', 'HOME') }}/.ssh/known_hosts"
