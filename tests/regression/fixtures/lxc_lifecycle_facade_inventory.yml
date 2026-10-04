@@ -354,6 +354,28 @@ all:
             - api_reconciliation
             - container_transition
             - runtime_refresh
+        full_remove_stopped:
+          lifecycle_vmid: 4427
+          proxmox_lifecycle_intent: full
+          lifecycle_desired_state: absent
+          lifecycle_runtime_state: stopped
+          lifecycle_actual_release: ""
+          lifecycle_release_probe_state: skipped_stopped
+          lifecycle_seed_release: "12"
+          lifecycle_expected_transition: remove
+          lifecycle_expected_destructive: true
+          lifecycle_expected_reconcile_host_config: false
+          lifecycle_expected_restore_guest_access: false
+          lifecycle_expected_configure_guest: false
+          lifecycle_expected_outcome: removed
+          lifecycle_expected_before_runtime: stopped
+          lifecycle_expected_after_runtime: absent
+          lifecycle_expected_after_release: ""
+          lifecycle_expected_after_probe_state: absent
+          lifecycle_expected_events:
+            - api_reconciliation
+            - container_transition
+            - runtime_refresh
         full_already_absent:
           lifecycle_vmid: 4409
           proxmox_lifecycle_intent: full
