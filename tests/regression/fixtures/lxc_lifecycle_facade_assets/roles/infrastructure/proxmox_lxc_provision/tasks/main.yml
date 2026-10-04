@@ -20,29 +20,29 @@
       {{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.events
   when: proxmox_lxc_contract.api_spec.state == 'absent'
 
+# community.proxmox.proxmox 2.0.0 answers `state: absent` for a running guest
+# with an unchanged "stop it before deletion" result, so the double keeps a
+# running guest in place unless a stop was issued first.
 - name: Model the observable state established by provisioning
   ansible.builtin.copy:
     dest: "{{ lifecycle_test_state_dir }}/{{ proxmox_lxc_contract.api_spec.vmid }}.state"
     content: >-
+      {%- set observed = lookup('ansible.builtin.file', lifecycle_observed_state_path) | trim -%}
+      {%- if proxmox_lxc_contract.api_spec.state == 'absent' -%}
+      {{ observed if observed == 'running' else 'absent' }}
+      {%- elif proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
+              or proxmox_lifecycle_runtime_state == 'absent' -%}
       {{
-        'absent'
-        if proxmox_lxc_contract.api_spec.state == 'absent'
-        else (
-          (
-            'running'
-            if (
-              proxmox_lxc_provision_start_allowed | default(true) | bool
-              and proxmox_lxc_contract.api_spec.start_on_create | bool
-            )
-            else 'stopped'
-          )
-          if (
-            proxmox_lxc_lifecycle_plan.container_transition == 'rebuild'
-            or proxmox_lifecycle_runtime_state == 'absent'
-          )
-          else lookup('ansible.builtin.file', lifecycle_observed_state_path) | trim
+        'running'
+        if (
+          proxmox_lxc_provision_start_allowed | default(true) | bool
+          and proxmox_lxc_contract.api_spec.start_on_create | bool
         )
+        else 'stopped'
       }}
+      {%- else -%}
+      {{ observed }}
+      {%- endif -%}
     mode: "0600"
   delegate_to: localhost
   vars:

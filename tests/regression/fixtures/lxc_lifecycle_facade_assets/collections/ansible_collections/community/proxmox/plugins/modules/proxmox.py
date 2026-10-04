@@ -48,19 +48,24 @@ module = AnsibleModule(
     supports_check_mode=True,
 )
 
-if (
-    module.params["state"] == "started"
-    or os.environ.get("LIFECYCLE_WIRING_REAL_ROLES") == "1"
-) and not module.check_mode:
+REAL_ROLES = os.environ.get("LIFECYCLE_WIRING_REAL_ROLES") == "1"
+RUNTIME_TRANSITIONS = {"started": "running", "stopped": "stopped"}
+
+if (module.params["state"] in RUNTIME_TRANSITIONS or REAL_ROLES) and not module.check_mode:
     state_dir = Path(os.environ["LIFECYCLE_TEST_STATE_DIR"])
     vmid = module.params["vmid"]
-    events_path = state_dir / f"{vmid}.events"
-    with events_path.open("a", encoding="utf-8") as events:
-        if module.params["state"] == "started":
-            events.write("container_transition\n")
-        else:
-            events.write("api_reconciliation\n")
     if module.params["state"] == "started":
-        (state_dir / f"{vmid}.state").write_text("running", encoding="utf-8")
+        event = "container_transition"
+    elif REAL_ROLES:
+        event = "api_reconciliation"
+    else:
+        event = None
+    if event:
+        with (state_dir / f"{vmid}.events").open("a", encoding="utf-8") as events:
+            events.write(f"{event}\n")
+    if module.params["state"] in RUNTIME_TRANSITIONS:
+        (state_dir / f"{vmid}.state").write_text(
+            RUNTIME_TRANSITIONS[module.params["state"]], encoding="utf-8"
+        )
 
 module.exit_json(changed=True)

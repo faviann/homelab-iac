@@ -215,6 +215,17 @@
       when: lifecycle_test_case == 'execution_failure'
       run_once: true
 
+    - name: Assert check mode neither stops nor removes a guest planned for removal
+      ansible.builtin.assert:
+        that:
+          - hostvars.check_remove.lxc_lifecycle_result.plan.container_transition == 'remove'
+          - hostvars.check_remove.lxc_lifecycle_result.outcome.status == 'checked'
+          - >-
+            hostvars.check_remove.lxc_lifecycle_result.observations.after.runtime_state
+            == 'running'
+      when: lifecycle_test_case == 'check_remove'
+      run_once: true
+
     - name: Assert a running target's guest release is observed before planning
       ansible.builtin.assert:
         that:

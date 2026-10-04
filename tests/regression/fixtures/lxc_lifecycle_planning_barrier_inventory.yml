@@ -33,6 +33,9 @@ all:
             - vmid: 7106
               name: check-running
               status: running
+            - vmid: 7107
+              name: check-remove
+              status: running
         proxmox_lxc_global_defaults:
           state: present
           node: pve-a
@@ -79,3 +82,13 @@ all:
           proxmox_lxc:
             vmid: 7106
             hostname: check-running
+        check_remove:
+          proxmox_lifecycle_intent: full
+          proxmox_lifecycle_policy:
+            strict_validation: false
+            rebuild_on_release_mismatch: false
+            allow_destructive_transitions: true
+          proxmox_lxc:
+            vmid: 7107
+            hostname: check-remove
+            state: absent
