@@ -4,6 +4,10 @@
 # Managed account creation and Docker group membership are owned by
 # config/lxc_docker_environment so UID/GID are enforced in one place.
 
+# A Docker start/restart failure inside this role on a fresh GPU LXC after a
+# version change may involve the NVIDIA runtime being declared before install.
+# See the ordering/configuration notes beside lxc_docker_runtime_daemon_options
+# in defaults/main.yml and https://github.com/faviann/homelab-iac/issues/143.
 - name: Install Docker using geerlingguy.docker role
   ansible.builtin.include_role:
     name: geerlingguy.docker

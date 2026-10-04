@@ -17,17 +17,22 @@ lxc_docker_runtime_compose_package_state: present
 #
 # Ordering note: configure.yml runs this role before lxc_nvidia_runtime, so on a
 # freshly built GPU host daemon.json declares path: nvidia-container-runtime and
-# Docker restarts before that binary exists. That is safe because dockerd only
-# resolves a runtime path when a container asks for it — `dockerd --validate`
-# accepts exactly this file with no nvidia-container-runtime present (auth,
-# Docker 29.7.2). It would break if a future daemon validated runtime paths at
-# startup; the safer rule is to keep nvidia workloads off a host until
-# lxc_nvidia_runtime has run, rather than to split the file across two writers.
+# Docker restarts before that binary exists. Docker 29.7.2 accepted this file
+# in `dockerd --validate` without nvidia-container-runtime present. A future
+# daemon could require the binary at startup, so a Docker start/restart failure
+# on a fresh GPU LXC after a version change is a reason to check this ordering.
+# Keep NVIDIA workloads off the host until lxc_nvidia_runtime has run.
 #
 # The runtimes block is a byte-for-byte restatement of what
 # `nvidia-ctk runtime configure --runtime=docker` emitted with NVIDIA Container
-# Toolkit 1.19.1. A newer toolkit may expect a different shape; re-verify the
-# block against the toolkit's own output when it is upgraded.
+# Toolkit 1.19.1. A newer toolkit may expect a different shape. When Docker or
+# the toolkit changes version, verify a fresh GPU-LXC provision and a GPU
+# workload, and compare this block with the toolkit's generated configuration.
+# Runtime registration alone does not prove a GPU workload can run. If Docker
+# starts but GPU containers fail, this declaration is another assumption to
+# check. Preserve the single writer and log rotation if ordering or shape must
+# change. Historical findings and constraints:
+# https://github.com/faviann/homelab-iac/issues/143
 lxc_docker_runtime_daemon_options: >-
   {{
     {
