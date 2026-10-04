@@ -117,7 +117,6 @@ def run_isolated_playbook() -> subprocess.CompletedProcess[str]:
             capture_output=True,
             text=True,
             env=env,
-            timeout=30,
         )
 
     return result
