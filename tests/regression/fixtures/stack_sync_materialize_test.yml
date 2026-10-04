@@ -540,8 +540,6 @@
       overmind:
         agent_key: "fixture-agent-key"
     lxc_docker_env_desired_top_level_stack_dirs: []
-    _per_host_stack_metadata_files:
-      files: []
   tasks:
     - name: Publish exact Overmind discovery results
       ansible.builtin.set_fact:
@@ -602,8 +600,6 @@
       docker_gid: "{{ ansible_user_gid }}"
       path_ownership_overrides: []
     lxc_docker_env_desired_top_level_stack_dirs: []
-    _per_host_stack_metadata_files:
-      files: []
   tasks:
     - name: Publish exact Servarr discovery results
       ansible.builtin.set_fact:

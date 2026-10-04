@@ -9,7 +9,6 @@ Stack-owned:
 - `compose.yaml`
 - `.env.j2`
 - this `README.md`
-- `stack.yaml`
 - `./appdata/notifiarr`
 
 Host-owned:
@@ -25,4 +24,4 @@ Host-owned:
 ./run.sh --limit servarr --stack notifiarr
 ```
 
-Expected result: Ansible renders `.env.j2`, copies deployable stack files only, leaves this README and `stack.yaml` out of `/conf/docker/stacks/notifiarr`, and runs `docker compose up -d` for `notifiarr`.
+Expected result: Ansible renders `.env.j2`, copies deployable stack files only, leaves this README out of `/conf/docker/stacks/notifiarr`, and runs `docker compose up -d` for `notifiarr`.

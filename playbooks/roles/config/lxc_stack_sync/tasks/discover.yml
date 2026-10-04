@@ -34,7 +34,6 @@
       stack_dirs_to_create: []
       files_to_render: []
       files_to_copy: []
-      stack_metadata: []
       prereq_dirs: []
       ownership_overrides: []
       managed_files: []
@@ -247,22 +246,6 @@
         ~ '/(' ~ (deferred | map('regex_escape') | join('|')) ~ ')(/|$)'
       }}
   when: deferred | length > 0
-
-- name: Capture stack metadata files before deploy filtering
-  ansible.builtin.set_fact:
-    _per_host_stack_metadata_files:
-      files: "{{ metadata_files }}"
-  vars:
-    metadata_files: >-
-      {%- set kept = [] -%}
-      {%- for file in _per_host_static_files.files | default([]) -%}
-      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
-      {%- if relative_path is match('^[^/]+/stack\.yaml$') -%}
-      {%- set _ = kept.append(file | combine({'relative_path': relative_path, 'stack_name': relative_path.split('/')[0]})) -%}
-      {%- endif -%}
-      {%- endfor -%}
-      {{ kept }}
-  when: _per_host_stacks_dir.stat.exists | default(false)
 
 - name: Filter stack-local docs and metadata from deployment discovery
   ansible.builtin.set_fact:

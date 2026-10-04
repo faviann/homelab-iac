@@ -58,7 +58,7 @@ generic rename cannot safely reconcile.
 
 - `git mv stacks/<host>/<old> stacks/<host>/<new>`.
 - **Reference hunt.** `rg -n '<old>'` across the repo; fix every hit that means *this* stack:
-  - `stack.yaml` `name:` field; stack-local `README.md` / `docs/**`.
+  - stack-local `README.md` / `docs/**`.
   - explicit `traefik.http.routers.<name>...Host(...)` rules and `traefik.domain` in the stack's compose.
   - Traefik router/service names embedded in label keys, e.g. `traefik.http.services.<old>.loadbalancer...`
     (cosmetic — the router/service name is stack-local — but normalize for consistency).

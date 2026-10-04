@@ -10,10 +10,6 @@
     repo_only_stack_files:
       - README.md
       - docs/operator.md
-      - stack.yml
-      - metadata.yaml
-      - metadata.yml
-      - metadata.json
     deployed_myapp: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/myapp"
     myapp_source: "{{ lxc_docker_environment_internal.stacks_source }}/myapp"
     lxc_docker_environment_internal:
@@ -48,13 +44,7 @@
             app:
               image: myapp:latest
 
-    - name: Seed parseable stack metadata that must stay repo-only
-      ansible.builtin.copy:
-        dest: "{{ myapp_source }}/stack.yaml"
-        mode: "0644"
-        content: "kind: stack\n"
-
-    - name: Seed stack-local docs and other metadata, plus an ordinary deployable config file
+    - name: Seed stack-local docs plus an ordinary deployable config file
       ansible.builtin.command:
         argv: "{{ ['touch'] + (repo_only_stack_files + ['config.ini']) | map('regex_replace', '^', myapp_source ~ '/') | list }}"
       changed_when: true
@@ -153,7 +143,7 @@
           - not _stale_stack.stat.exists
           - (_quarantined_compose.content | b64decode | from_yaml).services.old.image == 'old:latest'
 
-    # Deployed tree: deployable files arrive while stack-local docs and metadata stay repo-only.
+    # Deployed tree: deployable files arrive while stack-local docs stay repo-only.
     - name: Find the deployed desired stack tree
       ansible.builtin.find:
         paths: "{{ deployed_myapp }}"
@@ -166,7 +156,7 @@
       ansible.builtin.assert:
         that:
           - "['compose.yaml', 'config.ini'] | difference(deployed_files) == []"
-          - "(['docs', 'stack.yaml'] + repo_only_stack_files) | intersect(deployed_files) == []"
+          - "(['docs'] + repo_only_stack_files) | intersect(deployed_files) == []"
       vars:
         deployed_files: "{{ _deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp) | list }}"
 
