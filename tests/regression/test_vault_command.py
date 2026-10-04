@@ -1649,7 +1649,14 @@ def test_diff_names_changed_keys_since_a_commit_without_disclosing_values(
     ]
     assert unchanged.returncode == 0, unchanged.stderr
     assert unchanged.stdout.splitlines() == ["no key changes"]
-    output = changed.stdout + changed.stderr + unchanged.stdout + unchanged.stderr
+    encrypt("vault_kept: [malformed-value-marker\n")
+    malformed = run_vault(repo, env, "diff")
+
+    assert malformed.returncode == 1
+    assert malformed.stderr == "diff HEAD: FAIL\n"
+    output = "".join(
+        result.stdout + result.stderr for result in (changed, unchanged, malformed)
+    )
     assert "-value-marker" not in output
 
 

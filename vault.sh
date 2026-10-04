@@ -157,7 +157,8 @@ diff_vault() {
     workspace="$(mktemp -d /dev/shm/homelab-vault.XXXXXX)" || return 1
     arm_transaction_cleanup "$workspace"
     chmod 700 "$workspace"
-    if git show "$ref:inventory/vault.yml" >"$workspace/base.enc" 2>/dev/null \
+    # git's own errors carry no plaintext, so a mistyped ref stays visible.
+    if git show "$ref:inventory/vault.yml" >"$workspace/base.enc" \
         && uv run --locked ansible-vault view "$workspace/base.enc" \
             >"$workspace/base.yml" 2>/dev/null \
         && uv run --locked ansible-vault view "$VAULT_FILE" \
