@@ -15,6 +15,51 @@
     - proxmox_lxc_lifecycle_plan.configure_guest | bool
     - not (ansible_check_mode | bool and proxmox_lifecycle_runtime_state != 'running')
   block:
+    # The LAN resolver publishes a new lease's name minutes after the lease, so
+    # a guest created in this run is reached by the IPv4 the Proxmox host sees
+    # it holding. Only the connection target changes: ansible_host, which
+    # templates and other hosts read, keeps the inventory name.
+    - name: Reach a guest created in this run by its observed IPv4 address
+      when:
+        - proxmox_lxc_lifecycle_plan.container_transition == 'provision'
+        - proxmox_lxc_lifecycle_observation_before.runtime_state == 'absent'
+      vars:
+        proxmox_lifecycle_ipv4_line: '^\d+\.\d+\.\d+\.\d+$'
+      block:
+        - name: Wait for the created guest to obtain an IPv4 address
+          ansible.builtin.command:
+            argv:
+              - lxc-info
+              - --name
+              - "{{ proxmox_lxc_contract.api_spec.vmid }}"
+              - --ips
+              - --no-humanize
+          register: proxmox_lifecycle_guest_addresses
+          until: >-
+            proxmox_lifecycle_guest_addresses.stdout_lines
+            | select('match', proxmox_lifecycle_ipv4_line) | length > 0
+          retries: "{{ proxmox_lifecycle_guest_address_retries }}"
+          delay: "{{ proxmox_lifecycle_guest_address_delay }}"
+          changed_when: false
+          delegate_to: "{{ proxmox_pct_delegate_host }}"
+          vars:
+            ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+
+        - name: Connect to the created guest by its observed IPv4 address
+          ansible.builtin.set_fact:
+            ansible_ssh_host: >-
+              {{
+                proxmox_lifecycle_guest_addresses.stdout_lines
+                | select('match', proxmox_lifecycle_ipv4_line) | first
+              }}
+      rescue:
+        - name: Report the created guest's missing IPv4 address
+          ansible.builtin.fail:
+            msg: >-
+              LXC {{ proxmox_lxc_contract.api_spec.vmid }} reported no IPv4 address within
+              {{ proxmox_lifecycle_guest_address_retries | int * proxmox_lifecycle_guest_address_delay | int }}s
+              after start.
+
     - name: Ensure container is accessible via SSH
       ansible.builtin.wait_for_connection:
         timeout: "{{ 60 if (proxmox_lifecycle_rebuilt | bool) else 15 }}"

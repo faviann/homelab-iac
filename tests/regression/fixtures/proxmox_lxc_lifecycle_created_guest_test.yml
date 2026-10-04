@@ -1,0 +1,71 @@
+---
+# Drives the lifecycle role's task files the way the decision fixture does, so
+# the facade's stub roles resolve ahead of the production config roles. The
+# execute play keeps the production serial order: the addressed guest first.
+- name: Initialize planning for guests created in this run
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Initialize the target-local planning contract
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: initialize_planning
+
+- name: Compile each created guest's contract
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Compile the target-local LXC contract
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: compile_target
+
+- name: Plan each created guest's lifecycle
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Build the target-local semantic lifecycle plan
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: plan_target
+
+- name: Publish each created guest's plan
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Publish the semantic plan through the stable result interface
+      ansible.builtin.import_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: publish_planning_result
+      vars:
+        proxmox_lifecycle_barrier_blocked: false
+
+- name: Execute the created guests' plans linearly
+  hosts: lxcs
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Execute through the split lifecycle facade
+      ansible.builtin.include_role:
+        name: provisioning/proxmox_lxc_lifecycle
+        tasks_from: execute
+
+- name: Assert the created guests' lifecycle results
+  hosts: lxcs
+  gather_facts: false
+  tasks:
+    - name: Assert the addressed guest was configured and the other failed by vmid
+      ansible.builtin.assert:
+        that:
+          - hostvars.created_guest.lxc_lifecycle_result.outcome.status == 'configured'
+          - >-
+            hostvars.created_guest_without_address.lxc_lifecycle_result.outcome.status
+            == 'execution_failed'
+          - >-
+            hostvars.created_guest_without_address.lxc_lifecycle_result.outcome.reason
+            is search('LXC 7302 reported no IPv4 address')
+        fail_msg: >-
+          created_guest: {{ hostvars.created_guest.lxc_lifecycle_result.outcome }};
+          created_guest_without_address:
+          {{ hostvars.created_guest_without_address.lxc_lifecycle_result.outcome }}
+      run_once: true

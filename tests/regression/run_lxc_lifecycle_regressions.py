@@ -83,6 +83,7 @@ FULL_ONLY_SCRIPTS = (
     "lxc_spec_contract_launcher.py",
     "proxmox_lxc_provision_contract_launcher.py",
     "proxmox_lxc_lifecycle_configure_check_mode_absent_launcher.py",
+    "proxmox_lxc_lifecycle_created_guest_launcher.py",
     "proxmox_lxc_lifecycle_observation_status_launcher.py",
     "lxc_manual_ssh_recovery_launcher.py",
     "proxmox_host_ssh_enrollment_launcher.py",
