@@ -32,6 +32,7 @@ def run_case(temp_root: Path, name: str, *arguments: str) -> bool:
         (7104, "absent"),
         (7105, "stopped"),
         (7106, "running"),
+        (7107, "running"),
     ):
         (state_dir / f"{vmid}.state").write_text(state, encoding="utf-8")
         (state_dir / f"{vmid}.release").write_text("12", encoding="utf-8")
@@ -119,6 +120,7 @@ CASES: tuple[tuple[str, ...], ...] = (
         "lifecycle_test_execution_failure_host=barrier_valid",
     ),
     ("compile_failure", "--limit", "barrier_valid,barrier_compile_invalid"),
+    ("check_remove", "--limit", "check_remove", "--check"),
     ("self_skip", "--limit", "workstation"),
     ("self_include", "--limit", "workstation", "-e", "proxmox_skip_self=false"),
     ("unsafe_default", "--limit", "barrier_valid,barrier_after_failure"),

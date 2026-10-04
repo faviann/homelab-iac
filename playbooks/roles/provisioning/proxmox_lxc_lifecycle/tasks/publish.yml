@@ -1,4 +1,16 @@
 ---
+# community.proxmox.proxmox can report ok while the guest survives, so the
+# post-action observation, not the plan, decides whether removal happened.
+- name: Fail a removal that left the container in place
+  ansible.builtin.fail:
+    msg: >-
+      Lifecycle removal of {{ inventory_hostname }} left the container
+      {{ proxmox_lxc_lifecycle_observation_after.runtime_state }}; expected absent.
+  when:
+    - not ansible_check_mode
+    - proxmox_lxc_lifecycle_plan.container_transition == 'remove'
+    - proxmox_lxc_lifecycle_observation_after.runtime_state != 'absent'
+
 - name: Build lifecycle result payload from the semantic plan
   ansible.builtin.set_fact:
     lxc_lifecycle_result: >-
