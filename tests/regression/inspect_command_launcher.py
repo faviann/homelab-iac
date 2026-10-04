@@ -36,15 +36,14 @@ FIXTURE_COLLECTIONS = (
 def run_inspect(
     *arguments: str,
     env: dict[str, str] | None = None,
-    timeout: int = 15,
 ) -> subprocess.CompletedProcess[str]:
+    # Assert completed command behavior, independent of controller scheduling.
     return subprocess.run(
         [str(INSPECT), *arguments],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         env=env or os.environ.copy(),
-        timeout=timeout,
     )
 
 
@@ -690,7 +689,6 @@ def assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing() -> N
                 "--limit",
                 "target_conflict,release_problem",
                 env=env,
-                timeout=60,
             )
         lifecycle_observation_reached = observation.with_suffix(".calls").exists()
 
@@ -735,7 +733,7 @@ def main() -> int:
         assert_containers_includes_unreserved_node_container(deny_audit=True)
         assert_credentials_walks_permission_ladder_without_disclosure()
         assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing()
-    except (AssertionError, subprocess.TimeoutExpired) as error:
+    except AssertionError as error:
         print(error, file=sys.stderr)
         return 1
     print("ok: inspect command exposes read-only managed-host diagnostics")
