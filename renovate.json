@@ -3,6 +3,7 @@
   "extends": ["config:recommended"],
   "enabledManagers": ["docker-compose", "custom.regex"],
   "pinDigests": true,
+  "gitAuthor": "Renovate Bot <4932538+faviann@users.noreply.github.com>",
   "timezone": "America/Montreal",
   "schedule": ["* * * * 6"],
   "prHourlyLimit": 0,
