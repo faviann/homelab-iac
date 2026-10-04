@@ -41,7 +41,7 @@
       {%-   set transition = 'none' -%}
       {%- elif rebuild_required -%}
       {%-   set transition = 'rebuild' -%}
-      {%- elif proxmox_lifecycle_intent == 'full' and proxmox_lifecycle_runtime_state == 'stopped' -%}
+      {%- elif desired_present and proxmox_lifecycle_intent == 'full' and proxmox_lifecycle_runtime_state == 'stopped' -%}
       {%-   set transition = 'start' -%}
       {%- elif desired_present -%}
       {%-   set transition = 'provision' -%}
