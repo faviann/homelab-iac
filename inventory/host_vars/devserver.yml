@@ -1,0 +1,21 @@
+---
+# Host-specific configuration for developer tooling (Renovate)
+# Inherits from: tier_small, cap_docker
+
+lxc_hwaddr: "BC:24:11:C0:B5:16"
+default_domain: admin.faviann.com
+
+lxc_docker_env_stack_vars:
+  renovate:
+    # Fine-grained GitHub token scoped to faviann/homelab-iac. See
+    # stacks/devserver/renovate/README.md.
+    token: "{{ vault_renovate_token }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 310
+  hostname: devserver
+  description: "Developer tooling (Renovate) managed via Ansible"
+  tags:
+    - ansible
+    - devserver

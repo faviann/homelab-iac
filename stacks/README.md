@@ -137,6 +137,52 @@ To iterate on a single stack without reconciling the others:
 
 No registration step is required; the role discovers everything under `stacks/<host>/` automatically.
 
+## Image Updates
+
+Renovate opens image update PRs against this repository on Saturdays. It runs as a service on `devserver` (`stacks/devserver/renovate/`), looping every six hours, and its repository config, including the weekly `schedule` window, is [`renovate.json`](../renovate.json). Runs outside the window still refresh the Dependency Dashboard and existing PRs, and a dashboard tick takes effect at the next run. [ADR-0016](../docs/adr/0016-use-self-hosted-renovate-for-stack-image-updates.md) records why.
+
+- Every image reference in a stack's Compose files is tracked. A reference that contains a variable is skipped, except the vendor version pins below.
+- Updates are grouped into one PR per stack folder. Majors get a separate PR per folder.
+- Floating tags such as `latest` or `16-alpine` keep the tag and gain a digest (`image:tag@sha256:...`). A new digest arrives as a PR.
+- Application majors open as PRs labelled `major` once the release is 14 days old. Nothing merges automatically.
+- Database majors (`postgres`, `pgvector`, `mariadb`, `valkey`, `redis` in the image name) wait on the Dependency Dashboard issue, because they need a dump and restore rather than a tag change.
+- Every update under `stacks/auth/` and `stacks/portal/` waits on the Dependency Dashboard. A tick there opens the PR.
+
+**Assisted stacks.** When a stack's upgrade needs a runbook, hold its updates on the dashboard and link the runbook from the PR body. Add one rule to `renovate.json` in the same change as the runbook:
+
+```json
+{
+  "description": "<stack>: upgrades follow <runbook>",
+  "matchFileNames": ["stacks/<host>/<stack>/**"],
+  "dependencyDashboardApproval": true,
+  "prBodyNotes": ["Follow <link to runbook> before merging."]
+}
+```
+
+To preview what Renovate would report from a checkout, without a token or any write:
+
+```bash
+npx --package renovate@<version in stacks/devserver/renovate/compose.yaml> renovate --platform=local --dry-run=lookup
+```
+
+It reads committed files only, so commit `renovate.json` changes first.
+
+## Vendor Stacks
+
+A vendor stack keeps upstream's Compose file unchanged so that an upgrade is a re-download. Immich (`stacks/public/immich`) and Authentik (`stacks/auth/auth`) are vendor stacks.
+
+- **Marker.** The first line of `compose.yaml` is `# vendor: <upstream compose URL>`, and everything below it is upstream's file byte-for-byte. Use a versioned URL when upstream publishes one (Immich: `https://github.com/immich-app/immich/releases/download/<version>/docker-compose.yml`). Otherwise use the unversioned URL (Authentik: `https://docs.goauthentik.io/compose.yml`).
+- **Pin.** The version lives in the stack's `.env.j2` (`IMMICH_VERSION`, `AUTHENTIK_TAG`), which overrides the default tag inside upstream's file. Renovate bumps it there through a regex manager in `renovate.json`.
+- **Overrides.** Every local change goes in `compose.override.yaml` or `compose.override.yaml.j2`, including `x-prereq-dirs` and `x-busy-check`. Never edit the vendored file.
+- **Lint.** The vendored `compose.yaml` path is listed in the exclude lists of `.ansible-lint` and `.yamllint`, because upstream formatting fails the lint gate. Renovate's `docker-compose` manager is disabled for it, so images inside it change only with upstream's file.
+- **Sync.** When Renovate bumps the pin, it runs `scripts/vendor-sync.sh`. The script re-downloads the marker URL, with the new version substituted into it when the URL is versioned, and rewrites the file with the marker restored. The PR then shows upstream's Compose diff next to the pin change. To resync by hand, edit the version in the marker URL if it has one, then run:
+
+  ```bash
+  sh scripts/vendor-sync.sh stacks/<host>/<stack>/compose.yaml
+  ```
+
+A new vendor stack adds its marker, its `.env.j2` pin, a regex manager and the path in the vendored-file rule in `renovate.json`, and the two lint excludes, in one change.
+
 ## Busy Checks
 
 A lifecycle run can interrupt a stack: `docker compose up -d` recreates changed services, Docker runtime changes or a package upgrade can restart the Docker daemon, and a reboot or host-side reconciliation restarts the LXC. A stack that runs long jobs can declare a busy check so the run leaves it alone while it reports busy.
@@ -355,6 +401,7 @@ Ordinary app stacks follow these defaults. Vendor-preserving, foundational, and 
 15. Stack-local docs and `stack.yaml` contain no plaintext secrets or secret-shaped values.
 16. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans, and ADR-006 exceptions keep their behavior unless the user asks to change it.
 17. A stack whose jobs must not be interrupted declares one `x-busy-check` in a non-templated Compose file, and its command exits `0` only when idle and `1` only when busy.
+18. A vendored `compose.yaml` is upstream byte-for-byte below its `# vendor:` marker, and every local change lives in the override file.
 
 ## Notes
 

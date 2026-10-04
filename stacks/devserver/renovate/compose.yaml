@@ -1,0 +1,22 @@
+---
+# Long-running Renovate against this repository; the repository config,
+# including the weekly Saturday window, is renovate.json at the repo root.
+# The command loops under the image's own entrypoint (which runs dumb-init as
+# PID 1): run Renovate, sleep six hours, repeat. A failed run does not end the
+# loop. A start or restart runs immediately.
+services:
+  renovate:
+    image: ghcr.io/renovatebot/renovate:44.132.4
+    container_name: renovate
+    restart: unless-stopped
+    command: ["bash", "-c", "while :; do renovate; sleep 6h; done"]
+    env_file:
+      - .env
+    environment:
+      RENOVATE_PLATFORM: github
+      RENOVATE_REPOSITORIES: faviann/homelab-iac
+      # Renovate runs no post-upgrade task unless it matches this list. The
+      # vendor sync is the only task renovate.json declares.
+      RENOVATE_ALLOWED_COMMANDS: >-
+        ["^sh scripts/vendor-sync\\.sh stacks/[a-z0-9/_-]+/compose\\.yaml [A-Za-z0-9._-]+ [A-Za-z0-9._-]+$$"]
+      LOG_LEVEL: info

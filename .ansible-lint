@@ -25,3 +25,7 @@ exclude_paths:
   # header, so yaml rules (e.g. document-start) cannot apply and fix
   # mode must never rewrite it.
   - inventory/vault.yml
+  # Vendored upstream Compose files stay byte-for-byte upstream so the vendor
+  # sync can replace them whole (stacks/README.md, Vendor Stacks).
+  - stacks/auth/auth/compose.yaml
+  - stacks/public/immich/compose.yaml

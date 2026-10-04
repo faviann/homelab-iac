@@ -106,6 +106,10 @@ vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 vault_overmind_cliproxy_api_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
 vault_overmind_cliproxy_management_key_hash: "REPLACE_WITH_BCRYPT_HASH"
 
+# Renovate on devserver: fine-grained GitHub token scoped to faviann/homelab-iac.
+# See stacks/devserver/renovate/README.md for the permissions.
+vault_renovate_token: "REPLACE_WITH_GITHUB_FINE_GRAINED_TOKEN"
+
 # Lobu control plane
 # ENCRYPTION_KEY is long-lived state, not a rotatable secret: replacing it
 # makes every credential already encrypted in Lobu's database unreadable.
