@@ -61,7 +61,7 @@ python -c "import beetsplug.VGMplug"
 
 `startup.sh` also patches `VGMplug.py` at container start to add `timeout=5` to both `requests.get` calls. Without this, vgmdb.info hangs silently when down, blocking each search query for ~25–30s and pushing previews past the 30s frontend timeout.
 
-There is intentionally no local `Dockerfile` or `stack.yaml`.
+There is intentionally no local `Dockerfile`.
 
 ### MusicBrainz is a plugin, not built-in
 

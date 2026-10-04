@@ -9,7 +9,6 @@
     docker_agents_enabled: false
     lxc_stack_sync_managed_assets:
       changed_results: []
-    lxc_stack_sync_deploy_exclude_regex: "^[^/]+/(README(\\..*)?|docs($|/.*)|stack\\.ya?ml|metadata\\.(ya?ml|json))$"
     empty_deployment_report:
       changed: false
       discovered_stacks: []

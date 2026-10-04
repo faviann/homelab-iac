@@ -28,6 +28,5 @@ Rules:
 - set container user IDs from inventory with `PUID={{ docker_uid }}` and `PGID={{ docker_gid }}` instead of hardcoding `1000`
 - stack templates may read `stack_vars`
 - `stack_vars` is provided only while rendering the current stack
-- do not put runtime vars or secrets in `stack.yaml` or stack-local variable files
 - required `stack_vars.<key>` references should not use `default()` or `.get()` fallbacks
 - optional runtime inputs can use explicit fallbacks only when the application has a known safe default

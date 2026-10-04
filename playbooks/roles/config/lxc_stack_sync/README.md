@@ -47,7 +47,6 @@ non-directory paths and preserve metadata on existing directories.
 - `stack_dirs_to_create`: absolute stack directory paths under the shared mount
 - `files_to_render`: templated source files with `source_path`, `dest_path`, `relative_path`, `stack_name`, and effective `owner`, `group`, and `mode`
 - `files_to_copy`: static source files with `source_path`, `dest_path`, `relative_path`, `stack_name`, and effective `owner`, `group`, and `mode`
-- `stack_metadata`: parsed non-secret `stack.yaml` files, keyed by `stack_name`, kept as role-scoped plan data and never injected into Ansible host/global variable scope
 - `prereq_dirs`: resolved `x-prereq-dirs` creation candidates with `path`, `owner`, `group`, and `mode`; materialization narrows this to paths observed as missing
 - `ownership_overrides`: passthrough ownership override entries from `lxc_docker_environment_internal`
 - `managed_files`: resolved `x-managed-files` entries with `path`, `owner`, `group`, and `mode`
@@ -66,16 +65,7 @@ non-directory paths and preserve metadata on existing directories.
 
 ### Deploy Exclusions
 
-Stack-local documentation and metadata are repo-only control-plane files. The discovery task filters these paths before materialization:
+Stack-local documentation is repo-only. The discovery task drops every path matching `lxc_stack_sync_deploy_exclude_regex` before materialization:
 
-- `<stack>/README.md`
+- `<stack>/README` and `<stack>/README.*`
 - `<stack>/docs/**`
-- `<stack>/stack.yaml`
-- `<stack>/stack.yml`
-- `<stack>/metadata.yaml`
-- `<stack>/metadata.yml`
-- `<stack>/metadata.json`
-
-Only `<stack>/stack.yaml` is parsed into `lxc_stack_sync_manifest_plan.stack_metadata`. It is role-scoped data for stack sync/reporting decisions, not Ansible variable scope. Do not add `include_vars`, `vars_files`, or broad `set_fact` loading for stack metadata.
-
-Stack metadata remains non-secret control data and must not contain vars, secrets, or vault references.

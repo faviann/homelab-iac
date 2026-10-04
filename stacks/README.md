@@ -8,8 +8,8 @@ Stack portability is explicit. A stack being under `stacks/<host>/<stack>/` does
 
 | Tier | Meaning | Examples | Change Style |
 | --- | --- | --- | --- |
-| Portable app stack | Normal application stack that can carry its Compose files, non-secret `.env.j2`, repo-only `README.md`, and non-secret `stack.yaml` beside the stack. | `stacks/servarr/notifiarr`, `stacks/servarr/kapowarr` | Small stack-local changes are allowed. |
-| Host-bound app stack | App stack whose runtime depends on host-local storage, GPU, VPN, external networks, or ownership mechanics. It can still have stack-local docs/metadata, but host mechanics stay in inventory. | `stacks/jellyfin/jellyfin`, `stacks/seedbox/bittorrent` | Keep host dependencies documented in stack metadata; keep deployment mechanics in host vars. |
+| Portable app stack | Normal application stack that can carry its Compose files, non-secret `.env.j2`, and repo-only `README.md` beside the stack. | `stacks/servarr/notifiarr`, `stacks/servarr/kapowarr` | Small stack-local changes are allowed. |
+| Host-bound app stack | App stack whose runtime depends on host-local storage, GPU, VPN, external networks, or ownership mechanics. It can still have stack-local docs, but host mechanics stay in inventory. | `stacks/jellyfin/jellyfin`, `stacks/seedbox/bittorrent` | Keep deployment mechanics in host vars. |
 | Foundational controlled migration | Cross-host or platform stack that other stacks depend on, or that has scripts with hardcoded repo paths. | `stacks/auth/auth`, `stacks/portal/traefik3`, `stacks/portal/dockhand`, `stacks/public/romm` OIDC coupling | Treat as a controlled migration with a dedicated plan. |
 
 Foundational stacks are intentionally less portable. Authentik/OIDC has cross-host coupling, `scripts/authentik_blueprint_sync.py` depends on the current auth stack paths, and `portal_instance` controls portal discovery, Traefik KOP behavior, Hawser inclusion, and Dockhand seeding.
@@ -38,7 +38,6 @@ Stack-owned files:
 - `.env.j2` when values are rendered from inventory/vault variables
 - committed app config under `appdata/`
 - stack-local `README.md` and files under `docs/`
-- non-secret `stack.yaml` metadata
 - Compose extension blocks such as `x-prereq-dirs`, `x-managed-files`, and `x-busy-check`
 
 Host/inventory-owned settings:
@@ -55,14 +54,13 @@ Host/inventory-owned settings:
 - vault-backed secret bindings in `inventory/host_vars/*.yml`
 - `portal_instance`, `traefik_kop_enabled`, Hawser, and Dockhand host orchestration
 
-Do not dynamically include stack-local variable files into Ansible host scope. Stack metadata is non-secret role data; templates still render from normal Ansible inventory, group, host, and vault variables plus the injected `stack_name`.
+Do not dynamically include stack-local variable files into Ansible host scope. Templates render from normal Ansible inventory, group, host, and vault variables plus the injected `stack_name`.
 
 - Host folder must match `inventory_hostname`.
 - Stack folder name is the Compose project name. The role pins it with `docker compose -p`, so do not set a top-level `name:` in repo-owned Compose files. Vendor files may keep upstream's. During `.j2` rendering, the role also injects `stack_name`.
 - `.j2` files are rendered with inventory, host, group, vault variables, `stack_name`, and the current stack `stack_vars` task-scoped render data, then deployed without the `.j2` suffix.
 - Other files are copied verbatim.
-- Stack-local `README.md`, `docs/**`, `stack.yaml`, `stack.yml`, and `metadata.yaml`/`.yml`/`.json` files are repo-only and are excluded from deployment.
-- Do not use stack-local metadata for secrets or runtime variable injection.
+- Stack-local `README.md` and `docs/**` are repo-only and are excluded from deployment.
 - Compose-relative persistent data should live under `./appdata/...`.
 - All bind-mount target directories must exist before first deploy. If they do not, Docker creates them as root on first start, causing permission errors for non-root container processes. Declare dirs that need pre-creation in an `x-prereq-dirs` block in the repo-managed compose definition for the stack; the Ansible role creates each missing directory on the LXC with Docker user ownership and mode `0755`. This is create-if-absent behavior: once a declared directory exists, `x-prereq-dirs` does not change its mode, owner, or group. Use `compose.yaml` by default. If the stack intentionally preserves an upstream vendor `compose.yaml`, place `x-prereq-dirs` in `compose.override.yaml` instead. This applies to empty `./appdata/` dirs, `/ephemeral/<stack>/` paths, and new `/data/` subpaths.
 - Files that must exist before container start with a specific mode can be declared in `x-managed-files`. Relative `./` paths are resolved from the deployed stack directory. Repository-synced files are rendered or copied directly with the declaration's mode; other declared files are created empty when absent without truncating existing content. This is intended for generated state files such as Traefik ACME storage that must exist with restricted permissions.
@@ -77,52 +75,13 @@ Do not dynamically include stack-local variable files into Ansible host scope. S
 | `/ephemeral/...` | Regenerable data on fast local storage | `/ephemeral/romm/resources` | Declare in `x-prereq-dirs` if the stack needs it created |
 | `/data/...` | Shared external pool | `/data/media` | Only declare new subpaths in `x-prereq-dirs`; leave pre-existing paths alone |
 
-## Stack Metadata
-
-Portable and host-bound app stacks may include `stack.yaml` for non-secret metadata:
-
-```yaml
-schema_version: 1
-kind: stack
-name: notifiarr
-description: Notification and automation companion
-portability:
-  tier: portable-app
-  owner: stack
-runtime:
-  template_inputs:
-    - docker_uid
-    - docker_gid
-    - default_domain
-    - stack_name
-  host_requirements:
-    external_networks:
-      - shared
-    host_directories: []
-    ownership_overrides: []
-exposure:
-  traefik: protected
-  homepage_instances:
-    - admin
-```
-
-Rules:
-
-- `stack.yaml` is not copied to `/conf/docker/stacks`.
-- During deployment, stack sync parses `stack.yaml` only as
-  `lxc_stack_sync_manifest_plan.stack_metadata`.
-- `stack.yaml` must not contain secrets, vault references, API tokens, passwords, private keys, or credentials.
-- Stack sync does not load `stack.yaml` into Ansible variable scope: it does not define
-  Ansible variables or override host vars.
-- Host requirements listed in metadata are documentation until a future explicit aggregation design exists.
-
 ## Build a Stack
 
 1. Create `stacks/<host>/<stack>/compose.yaml`.
 2. Add `.env` or `.env.j2` if the stack needs environment variables.
 3. For bind-mount target dirs that need pre-creation, add an `x-prereq-dirs` block to the repo-managed compose definition for the stack. Use `compose.yaml` by default. If you are intentionally preserving a vendor upstream base compose, put it in `compose.override.yaml` instead. Dirs that already contain committed config files need no entry.
 4. Add Traefik and Homepage labels only to the user-facing service.
-5. Add `stack.yaml` if the stack has non-secret metadata to record, then walk the Review Checklist.
+5. Walk the Review Checklist.
 6. Deploy with:
 
 ```bash
@@ -397,11 +356,10 @@ Ordinary app stacks follow these defaults. Vendor-preserving, foundational, and 
 11. Secrets live in vault-backed `.env.j2`, not static `.env`.
 12. Stateful databases should not use floating `latest` tags; pin them and give them a realistic `stop_grace_period`.
 13. Portability tier is clear: portable app, host-bound app, or foundational controlled migration.
-14. Host-level deployment mechanics remain in inventory/host vars, not stack metadata.
-15. Stack-local docs and `stack.yaml` contain no plaintext secrets or secret-shaped values.
-16. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans, and ADR-006 exceptions keep their behavior unless the user asks to change it.
-17. A stack whose jobs must not be interrupted declares one `x-busy-check` in a non-templated Compose file, and its command exits `0` only when idle and `1` only when busy.
-18. A vendored `compose.yaml` is upstream byte-for-byte below its `# vendor:` marker, and every local change lives in the override file.
+14. Stack-local docs contain no plaintext secrets or secret-shaped values.
+15. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans, and ADR-006 exceptions keep their behavior unless the user asks to change it.
+16. A stack whose jobs must not be interrupted declares one `x-busy-check` in a non-templated Compose file, and its command exits `0` only when idle and `1` only when busy.
+17. A vendored `compose.yaml` is upstream byte-for-byte below its `# vendor:` marker, and every local change lives in the override file.
 
 ## Notes
 
