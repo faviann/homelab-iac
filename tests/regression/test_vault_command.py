@@ -276,7 +276,7 @@ def test_vault_requires_an_operation_and_advertises_its_complete_interface() -> 
 
     assert missing.returncode == 2
     assert help_result.returncode == 0
-    assert {"configure", "edit", "check", "set", "rotate"} <= set(
+    assert {"configure", "edit", "check", "diff", "set", "rotate"} <= set(
         help_result.stdout.split()
     )
 
@@ -1604,6 +1604,60 @@ def test_set_round_trips_through_real_ansible_vault(
     mapping = yaml.safe_load(vault.read_text(encoding="utf-8"))
     assert mapping["vault_transferred"] == AWKWARD_SECRET.decode()
     assert mapping["unrelated_scalar"] == "keep-me"
+
+
+def test_diff_names_changed_keys_since_a_commit_without_disclosing_values(
+    real_vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/vault.yml"
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=repo, env=env, check=True, capture_output=True, timeout=10,
+        )
+
+    def encrypt(content: str) -> None:
+        vault.write_text(content, encoding="utf-8")
+        assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+
+    encrypt(
+        "vault_kept: kept-value-marker\n"
+        "vault_rotated: old-value-marker\n"
+        "vault_dropped: dropped-value-marker\n"
+    )
+    git("init", "-q")
+    git("add", "inventory/vault.yml")
+    git("commit", "-q", "-m", "base")
+    encrypt(
+        "vault_kept: kept-value-marker\n"
+        "vault_rotated: new-value-marker\n"
+        "vault_added: added-value-marker\n"
+    )
+
+    changed = run_vault(repo, env, "diff")
+    git("add", "inventory/vault.yml")
+    git("commit", "-q", "-m", "current")
+    unchanged = run_vault(repo, env, "diff")
+
+    assert changed.returncode == 0, changed.stderr
+    assert changed.stdout.splitlines() == [
+        "added: vault_added",
+        "removed: vault_dropped",
+        "changed: vault_rotated",
+    ]
+    assert unchanged.returncode == 0, unchanged.stderr
+    assert unchanged.stdout.splitlines() == ["no key changes"]
+    encrypt("vault_kept: [malformed-value-marker\n")
+    malformed = run_vault(repo, env, "diff")
+
+    assert malformed.returncode == 1
+    assert malformed.stderr == "diff HEAD: FAIL\n"
+    output = "".join(
+        result.stdout + result.stderr for result in (changed, unchanged, malformed)
+    )
+    assert "-value-marker" not in output
 
 
 def test_set_declines_an_unencrypted_vault_without_prompting(

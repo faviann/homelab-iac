@@ -24,6 +24,9 @@ Operations:
   configure  Create or update Proxmox API credentials
   edit       Edit the complete encrypted vault
   check      Verify the vault without disclosing its contents
+  diff       Name the keys added, removed, or changed since a commit,
+             without disclosing values:
+               diff [<git-ref>]   (default HEAD)
   set        Transfer a UTF-8 text file into a top-level vault variable:
                set <key> --from-file <path> --create|--replace
                    [--strip-final-newline]
@@ -143,6 +146,49 @@ PY
     fi
     local status=0
     (( CHECK_FAILED == 0 )) || status=1
+    cleanup_transaction || status=1
+    disarm_transaction_cleanup
+    return "$status"
+}
+
+diff_vault() {
+    local ref="$1" workspace status=0
+    require_uv || return 1
+    workspace="$(mktemp -d /dev/shm/homelab-vault.XXXXXX)" || return 1
+    arm_transaction_cleanup "$workspace"
+    chmod 700 "$workspace"
+    # git's own errors carry no plaintext, so a mistyped ref stays visible.
+    if git show "$ref:inventory/vault.yml" >"$workspace/base.enc" \
+        && uv run --locked ansible-vault view "$workspace/base.enc" \
+            >"$workspace/base.yml" 2>/dev/null \
+        && uv run --locked ansible-vault view "$VAULT_FILE" \
+            >"$workspace/current.yml" 2>/dev/null; then
+        # Only key names leave this process; stderr is dropped because a YAML
+        # error message can quote the offending plaintext.
+        uv run --locked python - "$workspace/base.yml" "$workspace/current.yml" \
+            2>/dev/null <<'PY' || status=1
+import sys
+from pathlib import Path
+
+import yaml
+
+base, current = (yaml.safe_load(Path(path).read_text(encoding="utf-8")) for path in sys.argv[1:])
+if not (isinstance(base, dict) and isinstance(current, dict)):
+    sys.exit(1)
+lines = []
+for key in sorted(base.keys() | current.keys()):
+    if key not in base:
+        lines.append(f"added: {key}")
+    elif key not in current:
+        lines.append(f"removed: {key}")
+    elif base[key] != current[key]:
+        lines.append(f"changed: {key}")
+print("\n".join(lines) or "no key changes")
+PY
+    else
+        status=1
+    fi
+    (( status == 0 )) || printf 'diff %s: FAIL\n' "$ref" >&2
     cleanup_transaction || status=1
     disarm_transaction_cleanup
     return "$status"
@@ -731,6 +777,11 @@ case "$1" in
     check)
         (( $# == 1 )) || exit 2
         check_vault
+        exit $?
+        ;;
+    diff)
+        (( $# <= 2 )) && [[ "${2:-HEAD}" != -* ]] || { usage >&2; exit 2; }
+        diff_vault "${2:-HEAD}"
         exit $?
         ;;
     set)

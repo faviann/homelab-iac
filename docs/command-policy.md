@@ -11,6 +11,7 @@ of what the guards enforce.
 | --- | --- | --- | --- |
 | `./setup.sh` | `sync` | none | yes |
 | `./vault.sh` | `check` | none | yes |
+| | `diff [<git-ref>]` | none | yes |
 | | `set <key> --from-file <path> --create\|--replace [--strip-final-newline]` | none | on explicit request |
 | | `rotate --dry-run` | none | yes |
 | | `configure`, `edit`, `rotate` | none | human-only |
@@ -311,7 +312,7 @@ Agent use of a documented raw command is a separate decision:
 | `ansible-inventory --graph` | `./inspect.sh vars --graph` |
 | `ansible-vault encrypt` | `./vault.sh configure`, which creates the vault |
 | `ansible-vault edit` | `./vault.sh edit` |
-| `ansible-vault view` | `./vault.sh check`, which verifies the vault without printing values. No operation prints decrypted contents |
+| `ansible-vault view` | `./vault.sh check`, which verifies the vault, or `./vault.sh diff`, which names changed keys. No operation prints decrypted contents |
 | `ansible-lint` | `./validate.sh lint` |
 | the lifecycle regression runner | `./validate.sh lifecycle [--full] [--only <launcher.py>]... [--fail-fast]` |
 | `pytest`, `python -m unittest`, or a test file run with `python` | `./validate.sh tests [<target>...]` |

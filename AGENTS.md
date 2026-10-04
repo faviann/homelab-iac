@@ -93,6 +93,7 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./recover.sh ssh-keys [--limit <targets>]` | Human-only. Enroll the controller key in existing LXCs |
 | `./recover.sh proxmox-host-ssh` | Human-only. Enroll the controller key on the Proxmox host (prompts for its root password) |
 | `./vault.sh check` | Verify the vault without disclosing its contents |
+| `./vault.sh diff [<git-ref>]` | Name the vault keys added, removed, or changed since a commit (default `HEAD`), never their values |
 | `./vault.sh set <key> --from-file <path> --create\|--replace` | Only on explicit request. Move a secret file into the vault without reading it |
 | `./vault.sh rotate --dry-run` | Rehearse passphrase rotation on throwaway copies |
 | `./vault.sh configure` / `edit` / `rotate` | Human-only. Interactive credential, vault, and passphrase changes |

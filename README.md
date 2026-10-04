@@ -304,6 +304,8 @@ API credentials; configuration checks only the selected service inputs.
 `./vault.sh configure` creates the encrypted vault, or updates its Proxmox
 credentials, through a TTY prompt. `./vault.sh edit` opens the whole vault in
 your editor, and `./vault.sh check` verifies it without printing any value.
+`./vault.sh diff [<git-ref>]` names the keys added, removed, or changed since
+a commit (default `HEAD`), also without printing values.
 Every top-level key starts with `vault_`, as in `inventory/vault.yml.example`.
 
 ### Inventory
