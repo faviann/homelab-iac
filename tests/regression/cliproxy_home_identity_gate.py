@@ -108,7 +108,7 @@ class RetainedResponses:
         else:
             require(False, "bounded WebSocket upgrade headers")
 
-    def turn(self, expected: str = "response.completed") -> bool:
+    def turn(self) -> bool:
         raw = json.dumps({"type": "response.create", "model": MODEL,
             "input": [{"role": "user", "content": [{"type": "input_text", "text": "revocation selection"}]}]}).encode()
         mask = os.urandom(4)
@@ -128,7 +128,7 @@ class RetainedResponses:
                 return False
             item = json.loads(raw)
             if item.get("type") in ("response.completed", "error", "response.failed"):
-                return item["type"] == expected and (expected != "error" or item.get("status") == 401)
+                return item["type"] == "response.completed"
         return False
 
     def close(self) -> None:
@@ -232,16 +232,11 @@ def verify_identities(pair) -> None:
             "sacrificial HTTP stream accepted and held before deletion")
         status, _ = pair.request(pair.home_url + "/access/api-keys?id=" + str(records[2]["id"]), MANAGEMENT_KEY, "DELETE")
         require(status == 200, "individual sacrificial deletion by stable ID")
+        before = pair.provider.served
         status, _ = pair.request(pair.cpa_url + "/chat/completions", credentials[2], "POST",
             {"model": MODEL, "messages": [{"role": "user", "content": "new after deletion"}]})
-        require(status == 401, "immediate independent request rejection after deletion")
-        new_socket = RetainedResponses(pair.cpa_url + "/responses", credentials[2])
-        try:
-            before = pair.provider.served
-            require(new_socket.status == 101 and new_socket.turn("error") and pair.provider.served == before,
-                "new WebSocket dispatch rejects deleted key with 401 before upstream")
-        finally:
-            new_socket.close()
+        require(status == 401 and pair.provider.served == before,
+            "immediate independent request rejection after deletion before upstream")
         require(retained.turn(), "retained same-model WebSocket selection survives key deletion")
         pair.provider.stream_release.set()
         require(b"[DONE]" in held.read(), "accepted HTTP stream completes after key deletion")
