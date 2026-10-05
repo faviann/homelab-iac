@@ -23,14 +23,15 @@ import pytest
 import yaml
 
 from cliproxy_home_recovery_gate import (
-    CPA_IMAGE, HOME_IMAGE, LEGACY_KEY, MANAGEMENT_KEY, MODEL, HomeCPAPair, SyntheticProvider,
+    CPA_IMAGE, HOME_IMAGE, LEGACY_KEY, MANAGEMENT_KEY, MODEL, REPO, HomeCPAPair, SyntheticProvider,
 )
 
 pytestmark = pytest.mark.serial
 # Fixed synthetic bcrypt reference; management probes use a fixture-only env
 # password so the test never rewrites this imported reference to gain access.
 BCRYPT_REFERENCE = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
-CPA_PIN = "eceasy/cli-proxy-api:v7.3.8@sha256:6c2c8a7904799bd29a3f7f92a598555d8321b6a5682000b87af4495c5704fa72"
+SCRIPT_HOME_IMAGE = re.search(r"^initial_home_image=(\S+)$",
+                              (REPO / "scripts/cliproxy-maintenance.sh").read_text(), re.M)[1]
 
 
 def require(condition: bool, stage: str) -> None:
@@ -122,9 +123,8 @@ class MigrationPair(HomeCPAPair):
 
 @pytest.fixture
 def migration_pair():
-    require(CPA_IMAGE == CPA_PIN, "migration requires the approved CPA 7.3.8 pin")
-    require(HOME_IMAGE == "eceasy/cli-proxy-api-home:v1.1.0@sha256:14e666f537b26a3fe1cb1a17b458000ff80898edbd7d6cafd83a4d5f7450a49c",
-            "migration requires approved Home pin")
+    # Rehearse exactly the Home image the maintenance script imports and exports with.
+    require(HOME_IMAGE == SCRIPT_HOME_IMAGE, "gate and maintenance script Home images differ")
     with tempfile.TemporaryDirectory(prefix="cliproxy-home-migration-") as temporary:
         pair = MigrationPair(Path(temporary))
         pair.root.chmod(0o700)

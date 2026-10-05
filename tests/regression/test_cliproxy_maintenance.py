@@ -303,7 +303,6 @@ def test_import_uses_only_writable_copy_and_preserves_frozen_source(offline_rehe
     assert (candidate / "original/auth/static/panel.html").exists()
     assert not (candidate / "bootstrap/auth/static").exists()
     assert original.stat().st_mode & 0o777 == 0o600
-    assert (candidate / "source-files.txt").exists()
     assert "oauth_files=1" in (candidate / "import.txt").read_text()
     native = [event for event in rehearsal.events() if event[:2] == ["docker", "run"]]
     assert len(native) == 1
@@ -329,7 +328,6 @@ def test_standalone_rollback_replaces_auth_preserves_state_and_removes_orphans(o
         shutil.rmtree(data / "home")
         result = rehearsal.run("import-legacy", "candidate", script=script, offline=True)
         assert result.returncode == 0, result.stderr
-        (legacy / "config/config.yaml").write_bytes(b"synthetic-displaced-config")
         expected_file = "original.json"
         expected_payload = "synthetic-original"
     else:
@@ -348,13 +346,9 @@ def test_standalone_rollback_replaces_auth_preserves_state_and_removes_orphans(o
     assert not (legacy / "auth/stale.json").exists()
     restored = legacy / "auth" / expected_file
     assert json.loads(restored.read_text())["refresh_token"] == expected_payload
-    if branch == "original":
-        assert (legacy / "config/config.yaml").read_bytes() == b"synthetic-original-config"
-    else:
+    if branch == "current":
         assert not (legacy / "auth/original.json").exists()
-        assert (legacy / "config/config.yaml").read_bytes() == b"synthetic-original-config"
     attempt, = backups.glob("rollback-" + branch + "-candidate-*")
-    assert (attempt / "home/home.db").exists()
     assert (attempt / "replaced-auth/stale.json").exists()
     removed = [target for verb, target in rehearsal.effects() if verb == "rm"]
     assert removed == ["cliproxy-home-bootstrap", "cliproxy-home"]

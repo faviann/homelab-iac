@@ -295,11 +295,10 @@ Agent use of a documented raw command is a separate decision:
   its whole run and exits `75` before SSH when the lock is held. It stops,
   detaches, removes or restarts only the named containers, stops Home before
   CPA, and aborts if any writer is still running. Import, export and rollback
-  preserve private source/state candidates; rollback
-  replaces only the declared standalone auth tree and restores frozen config only
-  in the original branch. Snapshot and restore write only under the declared
-  runtime and recovery paths. Run `./run.sh` only after the
-  script has exited. A person freezes other control nodes and Home
+  preserve private source/state candidates; rollback replaces only the declared
+  standalone auth tree. Snapshot and restore write only under the declared
+  runtime and recovery paths. Run `./run.sh` only after the script has exited.
+  A person freezes other control nodes and Home
   administration for the whole window, including the gaps between runs.
 - **Sensitive output:** no environment dumps, credential contents, or secrets
   in command arguments, logs or evidence.

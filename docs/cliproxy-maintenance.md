@@ -64,8 +64,8 @@ name this holder.
 | `restart-cpa` | Emergency. Stops and restarts CPA only. Home keeps running. |
 | `import-legacy <name>` | Freezes complete standalone config/auth in a new private candidate, imports only from a writable config/top-level OAuth copy into an empty Home directory, and leaves writers stopped for human acceptance. |
 | `export-current <name>` | Preserves the whole stopped Home directory and any CPA cache, then exports current legacy state into a new empty candidate. Leaves writers stopped for human coverage/status acceptance. |
-| `rollback-original <name>` | Restores a frozen import candidate before Home could refresh, preserves displaced state and removes both Home containers. |
-| `rollback-current <name>` | Replaces standalone auth with a reviewed current-export candidate, preserves displaced state and removes both Home containers. |
+| `rollback-original <name>` | Before Home could refresh. Replaces standalone auth with the frozen original after checking its hashes, keeps the displaced tree, and removes both Home containers. |
+| `rollback-current <name>` | After possible refresh. Replaces standalone auth with an accepted current export, keeps the displaced tree, and removes both Home containers. |
 | `snapshot <name>` | Stops all writers, exports the full Home database with the deployed pinned image, and copies its enrolled CPA cache into a new private recovery candidate. Leaves writers stopped. |
 | `restore <name>` | Stops all writers, checks the candidate's artifact hashes, restores with its recorded Home image into a new empty directory, preserves failed state and replaces the runtime database/cache together. Leaves writers stopped. |
 
@@ -162,178 +162,139 @@ The [pinned-pair gate](#pinned-pair-gate) covers native snapshot and restore.
 ## One-time standalone import and initial rollback
 
 This finite transition keeps the original client addresses, arbitrary legacy
-client key and management bcrypt hash. Use #481's loopback Home bootstrap to
-inspect the import for acceptance. Issuing the CPA machine enrollment
-[#481](https://github.com/faviann/homelab-iac/issues/481) and activating the permanent
-runtime [#482](https://github.com/faviann/homelab-iac/issues/482) follow only after
-that acceptance. Ordinary deployment never imports.
+client key and management bcrypt hash. Ordinary deployment never imports. The
+import is accepted through #481's loopback bootstrap; machine enrollment
+([#481](https://github.com/faviann/homelab-iac/issues/481)) and the permanent
+runtime ([#482](https://github.com/faviann/homelab-iac/issues/482)) follow only
+after that acceptance.
 
 ### Freeze and inventory
 
-Before stopping standalone CPA, record a private **safe inventory**: the
-original standalone repository revision and CPA pin; source OAuth filenames and
-count; provider/account identities, active/disabled status and previously healthy
-models; config-based provider record count; and the relevant metadata fields to
-retain (expiry/refresh status, account identity, routing prefix, excluded models,
-headers or custom metadata in use). Record names, counts and outcomes, never
-credential values, request bodies or callback URLs. Use the current authenticated
-panel and operator knowledge; the source manifest produced below records original
-filenames, modes and private checksums without displaying their contents.
+Before stopping standalone CPA, record a private **safe inventory** from the
+authenticated panel and operator knowledge: the original repository revision and
+CPA pin; OAuth filenames and count; each account's identity, active/disabled
+status and previously healthy models; the config-based provider record count; and
+the metadata in use (expiry/refresh status, account identity, routing prefix,
+excluded models, headers, custom fields). Record names, counts and outcomes only.
 
-Freeze **all** client keys, runtime policy and config-based provider roots until
-initial acceptance ends. OAuth token/expiry/account metadata may refresh under
-Home, which determines the rollback branch. A provider credential configured in
-YAML is exported back into YAML; restoring the original template after changing
-that root would discard its new state. If any frozen root changes, abort this
-standalone procedure and choose matched Home recovery or human reauthentication.
-
-Check free space for the complete source, writable copy, Home state and recovery
-candidates. Confirm no unexpected process/container owns these paths; the script
-fences only the three named containers. Freeze other controllers and Home
-administration throughout the gaps between script calls. Do not admit clients or
-start later enrollment while an import/export candidate remains unaccepted.
+Until initial acceptance ends, freeze all client keys, runtime policy and
+config-based provider roots. Rollback re-renders the original template, so a
+change to any of them abandons this procedure for matched Home recovery or human
+reauthentication. Also freeze other controllers and Home administration between
+script calls, and admit no clients while a candidate is unaccepted. Check free
+space for the source, its copy, Home state and recovery candidates. The script
+fences only the three named containers; confirm nothing else owns these paths.
 
 ### Import once
 
-Preserve a clean checkout of the reviewed **original standalone revision** that
-contains this maintenance script and still defines standalone CPA. Use it for
-both import and later rollback deployment. Do not run import from a later
-Home-runtime checkout: `import.txt` records the executing checkout's HEAD as the
-standalone revision, and a Home Compose revision is not a standalone baseline.
-Confirm the preserved template and legacy vault references reproduce the deployed
-frozen configuration. Then choose a unique name:
+Run from a clean checkout of the reviewed **original standalone revision**: one
+that contains this script and still defines standalone CPA. `import.txt` records
+that HEAD as the rollback revision, so never import from a Home-runtime checkout.
+Confirm its template and vault references reproduce the deployed config, then:
 
 ```bash
 scripts/cliproxy-maintenance.sh import-legacy initial-20261005
 ```
 
-The target `/data/overmind/cliproxy/home` must be absent or an empty root:root
-0700 directory. An initialized DB, WAL, leftover file or other nonempty directory
-is rejected; there is no populated-DB recognition or repeat-import option.
-Standalone rendered config must be root:root 0600, auth root:root 0700, and source
-OAuth files regular root:root 0600 files. All owners stop Home-first, then CPA.
+The script aborts unless `/data/overmind/cliproxy/home` is absent or an empty
+root:root 0700 directory. There is no repeat-import or populated-DB option. The
+standalone config must be root:root 0600, its auth directory root:root 0700, and
+top-level OAuth files regular root:root 0600 files. The new candidate holds:
 
-The new `/backups/overmind/cliproxy/<name>` contains:
+- `original/`: the untouched config and complete auth tree. It is never mounted
+  into a native import; `SOURCE_SHA256SUMS` lets rollback prove it is unchanged.
+- `bootstrap/`: the writable copy, holding config and top-level OAuth JSON only.
+- `import.txt` (Home pin, standalone revision, OAuth file count) and `import.log`.
 
-- `original/config.yaml` and the complete untouched `original/auth/`, including
-  original filenames and modes. This frozen original never goes into a native
-  import mount.
-- `source-files.txt`, `SOURCE_SHA256SUMS`, `import.txt` (Home pin, standalone
-  revision and top-level OAuth file count), and private native/verification logs.
-- `bootstrap/config.yaml` and writable `bootstrap/auth/` containing only copied
-  top-level JSON credentials, without panel/static/log directories.
+The pinned Home v1.1.0 digest runs native `-import` with `--network none`. Home
+adds UUIDs to the writable OAuth copies **before** its database transaction, so a
+failure can leave changed copies and a partial DB. Abandon both: never reimport,
+merge or repair them. After a lost SSH session, resolve the actual state first.
 
-Exactly the resolved Home v1.1.0 digest runs native `-import` with `--network none`
-and no published ports. Home adds OAuth UUIDs to the writable source **before**
-its database transaction. A failure can therefore leave changed copies and a
-partial DB candidate. Retain and abandon both; never reimport them, merge them
-into another target or modify the frozen original. A lost SSH session leaves an
-unknown result: preserve evidence and resolve the actual state before recovery.
+Native success only prepares a candidate. Before any machine enrollment, compare
+`import.log` with the safe inventory and inspect each account through the
+bootstrap's authenticated panel. Confirm the legacy key and bcrypt hash with the
+native probes in #481's runbook, without printing them. UUID addition and
+documented config normalization are expected.
 
-Native success only prepares a candidate. Privately compare its import summary
-with the safe inventory, then inspect imported account coverage/status and config
-through the later loopback bootstrap's authenticated panel **before issuing any
-machine enrollment**. The bootstrap itself belongs to #481; do not start permanent
-CPA or admit clients until this acceptance passes. Confirm the unchanged legacy
-key and bcrypt hash with the native authentication/functional probes in that
-runbook; do not print either value. Account/provider identities, enabled status
-and meaningful metadata must match; UUID addition and documented config
-normalization are expected. Check active accounts individually, not just totals.
+The native `created/updated/unchanged/skipped` totals mix config roots, client
+keys and credentials; they are **not OAuth account counts**. `auth-dir`,
+config-provider roots synthesized into credential records, and concurrency roots
+are intentional structural skips. Any other skip, a missing OAuth account, a
+changed active status, collapsed duplicates, lost metadata or an unexplained count
+aborts acceptance: keep clients fenced and take a rollback branch below. Never
+patch SQLite or YAML by hand to pass acceptance.
 
-Native `created/updated/unchanged/skipped` totals combine config roots, client keys
-and credentials, so they are **not OAuth account counts**. Intentional structural
-skips include `auth-dir`, config-provider roots synthesized into credential
-records, and concurrency roots. Allow only explained structural skips. An omitted
-or unsynthesizable OAuth file, changed active-account status, duplicate/collapsed
-records, meaningful metadata loss or unexplained counts aborts acceptance. Keep
-all clients fenced and take the appropriate rollback branch. The synthetic gate
-below performs silent value comparisons; production acceptance is the human's
-safe inventory comparison, not an ad hoc SQLite or YAML rewrite.
+### Rollback before Home could refresh
 
-### Before Home could refresh
-
-Use this branch only when Home/CPA could not have used or refreshed the imported
-credentials. If that is uncertain, use the current-export branch.
+Use this only when Home/CPA cannot have used or refreshed the imported
+credentials. If unsure, use the current-export branch.
 
 ```bash
 scripts/cliproxy-maintenance.sh rollback-original initial-20261005
 ```
 
-This checks the frozen source hashes, copies the whole selected auth tree into a
-fresh private attempt, preserves Home DB/WAL/cache even before enrollment, and
-moves the displaced standalone auth tree into the attempt. It restores the frozen
-rendered config and **replaces** the auth tree. Both permanent and bootstrap Home
-containers are explicitly removed; normal Compose `up -d` leaves omitted services
-as orphans. Bind-mounted Home state stays private for diagnosis. Nothing starts.
-
-Use the recorded original revision in a clean checkout, release any manual lock,
-then deploy the original standalone stack through the supported command:
+It verifies `SOURCE_SHA256SUMS`, replaces the standalone auth tree with the frozen
+one, moves the displaced tree into a new `rollback-original-*` attempt, and
+removes both Home containers, which Compose `up -d` would leave as orphans. Home
+state stays in place for diagnosis. Nothing starts. From a clean checkout of the
+recorded revision, with the frozen vault references, deploy:
 
 ```bash
 ./run.sh configure --limit overmind --stack cliproxy
 ```
 
-Keep the frozen legacy vault references unchanged so rendering reproduces the
-accepted config. Recheck legacy clients and each previously healthy real provider
-before lifting the freeze. A successful container start or recap is insufficient.
+The deploy re-renders the frozen config. Recheck legacy clients and each
+previously healthy provider before lifting the freeze; a started container is not
+acceptance.
 
-### After possible refresh, before any consumer-key switch
+### Rollback after possible refresh
 
-Never restore stale original tokens when Home may have refreshed them:
+Never restore stale original tokens once Home may have refreshed them. Export the
+current state first:
 
 ```bash
 scripts/cliproxy-maintenance.sh export-current current-20261005
 ```
 
-After fencing owners, this first copies the **whole** Home directory (including
-WAL/SHM) and any CPA cache privately, without requiring completed enrollment. It
-runs the same pinned Home offline with explicit `-export-dir /export`, into a new
-empty candidate. Native legacy export produces `export/config.yaml` and
-`export/auths/`; omitting `-export-dir` can place auth outside the target. Export
-opens/migrates the writable database, so preservation happens first. This legacy
-exchange export is not the full matched recovery format from #479.
+It copies the whole Home directory (with WAL/SHM) and any CPA cache into the new
+candidate first, because native export opens and migrates the database. It then
+runs the pinned Home offline with `-export-dir /export`, producing
+`export/config.yaml` and `export/auths/`. This legacy export is not #479's matched
+recovery format.
 
-Privately review the export against the current safe inventory and frozen policy.
-Native export writes config before auth and can leave partial output on failure;
-original duplicate filenames can collapse exported records. Exit 0 and a file
-count alone are insufficient. Require complete meaningful provider coverage,
-active/disabled status and current refresh/account metadata; verify YAML provider
-roots, legacy client key and management hash still match the original baseline.
-Keep partial/unusable candidates for evidence and abandon them. An unusable
-export requires human reauthentication or matched Home recovery, never stale-token
-fallback. Choose another unique export name for a separately reviewed attempt.
-
-Only after that acceptance:
+Exit 0 and a file count are not acceptance: export writes config before auth, can
+leave partial output, and can collapse records whose original filenames
+duplicated. Compare `export/` with the current safe inventory: every provider,
+active/disabled status and current refresh/account metadata, plus unchanged YAML
+provider roots, legacy key and management hash. An unusable export means human
+reauthentication or matched Home recovery, never stale-token fallback. Keep it as
+evidence and retry under a new name. Only after acceptance:
 
 ```bash
 scripts/cliproxy-maintenance.sh rollback-current current-20261005
 ```
 
-This restores **only** the accepted current `auths/` tree by replacement, with
-root ownership, 0700 directories and 0600 files. It preserves displaced auth and
-Home DB/WAL/cache and removes both Home containers before returning. It does not
-install exported config: deploy the original revision/template through `./run.sh`
-only while the frozen client-key/runtime/config-provider baseline remains valid.
-Recheck actual provider and legacy-client behavior before lifting the freeze.
+It replaces the standalone auth tree with `export/auths/`, keeps the displaced
+tree in a `rollback-current-*` attempt and removes both Home containers. It never
+installs the exported config. Deploy the original revision as above while the
+frozen baseline still holds, then recheck providers and legacy clients.
 
-### Close the window and retire copies
+### Close the window
 
 Keep the frozen original until initial client/provider acceptance passes. After
-successful Home cutover, establish and verify the enrolled matched recovery set
-from #479 before retiring any copy. Explicitly record **standalone rollback closed**
-before the first real consumer-key switch (#484); later recovery uses matched Home
-state and cache, because the original single-key template cannot serve new keys.
+cutover, verify #479's enrolled matched recovery set, then record **standalone
+rollback closed** before the first real consumer-key switch
+([#484](https://github.com/faviann/homelab-iac/issues/484)). The original
+single-key template cannot serve new keys, so later recovery uses matched Home
+state. The change that records the closure also deletes the four one-time
+actions, this section and the migration gate with its tests.
 
-Human archive cleanup happens only after confirming the protected original and
-verified current/previous matched Home recovery sets exist with private modes.
-Retire obsolete standalone auth/config copies from synced storage and writable
-bootstrap copies through the later runtime retirement procedure; never delete the
-only protected original or evidence needed for an unresolved attempt. Keep
-current-export recovery candidates until the selected rollback or Home recovery
-is accepted. Archive retirement is a deliberate human decision, with no automatic
-prune, retention timer or plaintext payload inspection. Preserve failed candidates
-until their incident is resolved, then retire them privately under the same
-maintenance scope.
+Archive cleanup is a deliberate human step, with no automatic prune or payload
+inspection. Retire standalone and bootstrap copies only after the protected
+original and verified current/previous matched recovery sets exist with private
+modes. Keep each export and failed candidate until its rollback, recovery or
+incident is resolved.
 
 ### Synthetic migration gate
 
@@ -341,14 +302,14 @@ maintenance scope.
 ./validate.sh tests tests/regression/cliproxy_home_migration_gate.py
 ```
 
-The explicit gate uses the exact pinned images, synthetic credentials and a fake
-provider on a local internal network. It proves original/copy separation, silent
-legacy-key/hash and OAuth metadata preservation, UUID normalization, current
-native export after simulated refreshed metadata, and restored standalone provider
-behavior. Script stand-ins separately verify auth-tree replacement and removal
-of both Home orphans. This is synthetic metadata preservation, not real OAuth
-refresh; real account health and refresh are human acceptance. Docker is required
-only for this named gate, not no-argument `./validate.sh`.
+Using the script's Home pin, the deployed CPA pin, synthetic credentials and a
+fake provider on an internal network, the gate proves original/copy separation,
+silent preservation of the legacy key, bcrypt hash and OAuth metadata, UUID
+normalization, current export after simulated refreshed metadata, and restored
+standalone provider behavior. Script stand-ins cover auth-tree replacement and
+removal of both Home containers. It does not exercise real OAuth refresh; real
+account health is human acceptance. Only this named gate needs Docker, so
+no-argument `./validate.sh` does not.
 
 ## Matched recovery and assisted updates
 
