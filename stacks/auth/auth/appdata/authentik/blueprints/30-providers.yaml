@@ -15,7 +15,7 @@ entries:
     external_host: https://faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: eUpABodfgaBAh1WIXLyt7cJxruUVuLwkD58GFiAk
     cookie_domain: ''
@@ -51,7 +51,7 @@ entries:
     external_host: https://admin.faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: V22HP9oO57okyFvqVNrXzR0S4neRFn5wIqhztyaS
     cookie_domain: admin.faviann.com
@@ -85,7 +85,7 @@ entries:
     external_host: https://auth.faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: yYD0jihvEGIaH6aSmJwODWVuruBkVdTBEEOXVBRL
     cookie_domain: ''
@@ -121,7 +121,7 @@ entries:
     external_host: https://home.faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: V1gk0HBf1DoKv8qSzg02CS4L9pt6LtYJDg9aPWV0
     cookie_domain: .faviann.com
@@ -155,7 +155,7 @@ entries:
     external_host: https://home.faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: WRzS8KTzRTIu52jJtEcJ4pkbhTSazytgdRPyS6NC
     cookie_domain: home.faviann.com
@@ -189,7 +189,7 @@ entries:
     external_host: https://media.faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: XGVb7sapaM1IPZ8vjjH1OCwDkRUaE2SEUEA0v7fY
     cookie_domain: ''
@@ -225,7 +225,7 @@ entries:
     external_host: https://media.faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: 4PVE8wm3nnsXLTYjZ46IfvhQBkvlN0XJ96r0GoFI
     cookie_domain: media.faviann.com
@@ -259,7 +259,7 @@ entries:
     external_host: https://ai.local.faviann.com
     internal_host: ''
     internal_host_ssl_validation: true
-    access_token_validity: hours=24
+    access_token_validity: days=30
     refresh_token_validity: days=30
     client_id: F8bRzw3cP4pQmK7nT2xYhV6sD9aLcE1uG5jN0wXi
     cookie_domain: ''
