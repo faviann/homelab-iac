@@ -42,9 +42,7 @@ elif verb == ["container", "inspect"]:
     if fail == "inspect:" + target:
         raise SystemExit(1)
     item = containers[target]
-    if "NetworkSettings" in args[3]:
-        print(" ".join(item["networks"]))
-    elif "Config.Image" in args[3]:
+    if "Config.Image" in args[3]:
         print("eceasy/fixture:v1@sha256:" + "a" * 64)
     else:
         print(item["status"])
@@ -53,8 +51,6 @@ elif verb == ["container", "stop"]:
         raise SystemExit(1)
     if fail != "survives:" + target:
         containers[target]["status"] = "exited"
-elif verb == ["network", "disconnect"]:
-    containers[target]["networks"].remove(args[-2])
 elif verb == ["container", "rm"]:
     if containers[target]["status"] == "running":
         raise SystemExit("attempted removal of a running container")
@@ -67,7 +63,9 @@ elif args[0] == "run":
         raise SystemExit(1)
     mounts = [args[i + 1] for i, arg in enumerate(args) if arg == "--mount"]
     paths = {{item.split("dst=")[1].split(",")[0]: Path(item.split("src=")[1].split(",")[0]) for item in mounts}}
-    if "-db-export" in args[-1]:
+    if "--detach" in args:
+        containers[args[args.index("--name") + 1]] = {{"status": "running"}}
+    elif "-db-export" in args[-1]:
         (paths["/recovery"] / "home.zip").write_bytes(b"synthetic-snapshot")
     elif "-export -export-dir" in args[-1]:
         (paths["/export"] / "config.yaml").write_text("synthetic-current-config")
@@ -108,8 +106,7 @@ class Rehearsal:
 
     @staticmethod
     def container(name: str, status: str = "running") -> dict:
-        bootstrap = name == "cliproxy-home-bootstrap"
-        return {"status": status, "networks": ["cliproxy_default"] if bootstrap else []}
+        return {"status": status}
 
     def run(self, action="stop", *arguments, fail="", script=SCRIPT, offline=False):
         self.state_file.write_text(json.dumps({"containers": self.containers, "fail": fail}))
@@ -137,7 +134,7 @@ class Rehearsal:
         """Mutating Docker calls as (verb, container)."""
         return [
             (event[2], event[-1]) for event in self.events()
-            if event[0] == "docker" and event[2] in ("stop", "start", "rm", "disconnect")
+            if event[0] == "docker" and event[2] in ("stop", "start", "rm")
         ]
 
 
@@ -156,16 +153,13 @@ def test_contended_lock_performs_no_ssh_or_docker(rehearsal):
 
 
 @pytest.mark.parametrize("home", ["cliproxy-home", "cliproxy-home-bootstrap"])
-def test_stop_stops_home_before_cpa_and_detaches_bootstrap(rehearsal, home):
+def test_stop_stops_home_before_cpa(rehearsal, home):
     if home == "cliproxy-home-bootstrap":
         del rehearsal.containers["cliproxy-home"]
         rehearsal.containers[home] = rehearsal.container(home)
     result = rehearsal.run()
     assert result.returncode == 0, result.stderr
-    expected = [("stop", home), ("stop", "cliproxy")]
-    if home == "cliproxy-home-bootstrap":
-        expected.append(("disconnect", home))
-    assert rehearsal.effects() == expected
+    assert rehearsal.effects() == [("stop", home), ("stop", "cliproxy")]
     assert all(item["status"] == "exited" for item in rehearsal.final().values())
 
 
@@ -214,14 +208,6 @@ def test_removal_is_limited_to_named_home_containers(rehearsal, action, removed,
         assert final["cliproxy-home"]["status"] == "running"
 
 
-def test_remove_bootstrap_refuses_a_running_bootstrap(rehearsal):
-    del rehearsal.containers["cliproxy-home"]
-    rehearsal.containers["cliproxy-home-bootstrap"] = rehearsal.container("cliproxy-home-bootstrap")
-    result = rehearsal.run("remove-bootstrap")
-    assert result.returncode != 0
-    assert rehearsal.effects() == []
-
-
 def test_restart_cpa_touches_only_cpa_and_requires_it_running(rehearsal):
     result = rehearsal.run("restart-cpa")
     assert result.returncode == 0, result.stderr
@@ -262,6 +248,39 @@ def offline_rehearsal(rehearsal):
     finally:
         shutil.rmtree(data)
         shutil.rmtree(backups)
+
+
+def test_bootstrap_serves_imported_home_on_loopback_only(offline_rehearsal):
+    rehearsal, script, data, _ = offline_rehearsal
+    for container in rehearsal.containers.values():
+        container["status"] = "exited"
+    result = rehearsal.run("start-bootstrap", script=script, offline=True)
+    assert result.returncode == 0, result.stderr
+    native, = [event for event in rehearsal.events() if event[:2] == ["docker", "run"]]
+    assert native[native.index("--publish") + 1] == "127.0.0.1:8327:8327"
+    assert f"type=bind,src={data / 'home'},dst=/CLIProxyAPIHome/data" in native
+
+
+@pytest.mark.parametrize("owner", ["cliproxy", "cliproxy-home"])
+def test_bootstrap_refuses_running_writers(offline_rehearsal, owner):
+    rehearsal, script, _, _ = offline_rehearsal
+    for container in rehearsal.containers.values():
+        container["status"] = "exited"
+    rehearsal.containers[owner]["status"] = "running"
+    result = rehearsal.run("start-bootstrap", script=script, offline=True)
+    assert result.returncode != 0
+    assert rehearsal.effects() == []
+    assert not any(event[:2] == ["docker", "run"] for event in rehearsal.events())
+
+
+def test_bootstrap_requires_imported_state(offline_rehearsal):
+    rehearsal, script, data, _ = offline_rehearsal
+    for container in rehearsal.containers.values():
+        container["status"] = "exited"
+    (data / "home/home.db").unlink()
+    result = rehearsal.run("start-bootstrap", script=script, offline=True)
+    assert result.returncode != 0
+    assert not any(event[:2] == ["docker", "run"] for event in rehearsal.events())
 
 
 def test_snapshot_and_repeated_restore_preserve_failed_state_and_remain_stopped(offline_rehearsal):
@@ -364,4 +383,4 @@ def test_current_export_failure_keeps_whole_private_state_and_partial_candidate(
     assert (candidate / "home/home.db-wal").exists()
     assert (candidate / "cpa/client-key.pem").exists()
     assert (candidate / "export").exists()
-    assert all(verb in ("stop", "disconnect") for verb, _ in rehearsal.effects())
+    assert all(verb == "stop" for verb, _ in rehearsal.effects())

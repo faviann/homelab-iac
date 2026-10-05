@@ -13,7 +13,7 @@ managed hosts.
 | --- | --- |
 | `cliproxy` | CPA, Compose service and container in project `cliproxy` |
 | `cliproxy-home` | Permanent Home, same project |
-| `cliproxy-home-bootstrap` | Temporary plain Home container used once for enrollment, attached only to `cliproxy_default` |
+| `cliproxy-home-bootstrap` | Temporary plain Home container used once for enrollment, outside the stack network |
 
 CPA always exists. Before migration, both Home containers may be absent. CPA
 and Home both write state, so each of them counts as a **writer**.
@@ -58,8 +58,9 @@ name this holder.
 
 | Action | Effect |
 | --- | --- |
-| `stop` | Stops both Home containers, then CPA, and confirms each one exited. Then detaches a stopped bootstrap from `cliproxy_default`. Use it before offline state work. |
-| `remove-bootstrap` | Detaches and removes the stopped bootstrap. The running pair is left alone. Use it only after initial acceptance and a verified matched recovery baseline. |
+| `start-bootstrap` | Starts one plain named Home from the imported database and reviewed cluster file, publishing 8327 on loopback only. Requires stopped writers; Docker refuses a second bootstrap by name. |
+| `stop` | Stops both Home containers, then CPA, and confirms each one exited. Use it before offline state work. |
+| `remove-bootstrap` | Removes the stopped bootstrap. The running pair is left alone. Use it only after initial acceptance and a verified matched recovery baseline. |
 | `remove-home` | Standalone rollback. Runs `stop`, then removes both Home containers, which ordinary Compose startup would leave as orphans. CPA stays stopped until you deploy the original revision. Preserve the failed state first; removing the containers does not delete bind mounts. |
 | `restart-cpa` | Emergency. Stops and restarts CPA only. Home keeps running. |
 | `import-legacy <name>` | Freezes complete standalone config/auth in a new private candidate, imports only from a writable config/top-level OAuth copy into an empty Home directory, and leaves writers stopped for human acceptance. |
@@ -76,20 +77,17 @@ Actions abort without further changes on failures in the checks they perform:
 - A container is paused, restarting, or dead.
 - Both Home containers are running when an action fences all writers.
 - A writer is still running after it was stopped.
-- The bootstrap is running when it should be detached or removed.
 
 Stops give Docker 30 seconds before SIGKILL, so active requests can be cut off
-mid-stream. Container inspection, stop, detach, removal and restart calls are
+mid-stream. Container inspection, stop, removal and restart calls are
 capped at 45 seconds. Offline native export and restore have no time cap.
 
 Why Home stops first: Home's subscriptions can keep CPA from finishing
 SIGTERM.
 
 Why the bootstrap is kept until acceptance: normal deployment prunes unused
-images. The stopped bootstrap keeps the pulled Home image in use. It is
-detached so its network alias cannot compete with the permanent Home. If the
-daemon refuses to detach a stopped container, the run aborts. Don't restart a
-writer and don't add `--force` to get past it.
+images. The stopped bootstrap keeps the pulled Home image in use. It never
+joins the stack network, so it cannot compete for the permanent Home's alias.
 
 Never use Compose `down`, `--remove-orphans`, project-wide or pattern-based
 removal, or volume or network deletion.
@@ -163,10 +161,9 @@ The [pinned-pair gate](#pinned-pair-gate) covers native snapshot and restore.
 
 This finite transition keeps the original client addresses, arbitrary legacy
 client key and management bcrypt hash. Ordinary deployment never imports. The
-import is accepted through #481's loopback bootstrap; machine enrollment
-([#481](https://github.com/faviann/homelab-iac/issues/481)) and the permanent
-runtime ([#482](https://github.com/faviann/homelab-iac/issues/482)) follow only
-after that acceptance.
+import is accepted through the [loopback bootstrap](#native-node-enrollment-and-durable-trust)
+before issuing its pending machine enrollment. The permanent runtime
+([#482](https://github.com/faviann/homelab-iac/issues/482)) follows that acceptance.
 
 ### Freeze and inventory
 
@@ -184,6 +181,18 @@ reauthentication. Also freeze other controllers and Home administration between
 script calls, and admit no clients while a candidate is unaccepted. Check free
 space for the source, its copy, Home state and recovery candidates. The script
 fences only the three named containers; confirm nothing else owns these paths.
+
+Before stop/import, synchronize the reviewed standalone checkout through the
+facade so the non-secret Home cluster file is deployed:
+
+```bash
+./run.sh configure --limit overmind --stack cliproxy
+```
+
+This revision still runs standalone CPA. The facade can reconcile Docker,
+upgrade host packages and reboot; include those effects in the maintenance
+window. The cluster file carries only the SQLite path and advertised Home
+identity. Its permanent service binding belongs to the later runtime change.
 
 ### Import once
 
@@ -214,7 +223,8 @@ merge or repair them. After a lost SSH session, resolve the actual state first.
 Native success only prepares a candidate. Before any machine enrollment, compare
 `import.log` with the safe inventory and inspect each account through the
 bootstrap's authenticated panel. Confirm the legacy key and bcrypt hash with the
-native probes in #481's runbook, without printing them. UUID addition and
+native checks in the [bootstrap procedure](#native-node-enrollment-and-durable-trust),
+without printing them. UUID addition and
 documented config normalization are expected.
 
 The native `created/updated/unchanged/skipped` totals mix config roots, client
@@ -311,6 +321,138 @@ removal of both Home containers. It does not exercise real OAuth refresh; real
 account health is human acceptance. Only this named gate needs Docker, so
 no-argument `./validate.sh` does not.
 
+## Native node enrollment and durable trust
+
+This continues the accepted one-time import above. The human performs these
+steps under the same maintenance freeze. Existing standalone CPA remains
+stopped; permanent Home/CPA activation is the later runtime change. The
+isolated [pinned-pair gate](#pinned-pair-gate) verifies that future activation
+contract using synthetic credentials.
+
+### Start and reach the temporary Home
+
+Use the reviewed standalone checkout synchronized before import, then:
+
+```bash
+scripts/cliproxy-maintenance.sh start-bootstrap
+```
+
+The action uses the imported `/data/overmind/cliproxy/home/home.db` and the
+single reviewed [`cluster.yaml`](../stacks/overmind/cliproxy/appdata/config/cluster.yaml)
+at `/conf/docker/stacks/cliproxy/appdata/config/cluster.yaml`. It starts the
+resolved Home v1.1.0 digest with `umask 077`, no Compose labels, no automatic
+restart, and `127.0.0.1:8327:8327` only. The cluster file advertises
+`cliproxy-home:8327`; that identity goes into the carrier, regardless of the
+bootstrap's network or the browser's tunnel address, so the bootstrap stays off
+`cliproxy_default`. Docker refuses an existing bootstrap, including a stopped
+one. Preserve that attempt and resolve it before starting another; do not
+remove it to retry.
+
+From the workstation, keep this human-only tunnel open in another terminal:
+
+```bash
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:8327:127.0.0.1:8327 \
+  -l root -i ~/.ansible/ssh/proxmox_lxc overmind
+```
+
+Open `http://127.0.0.1:8327/management.html`. If workstation port 8327 is
+occupied, change only the left-hand tunnel port and the browser URL. The
+embedded Home panel needs no download into the old CPA auth tree.
+
+Log in using the **existing management password**, the plaintext corresponding
+to the imported bcrypt hash. Keep `remote-management.allow-remote: true`; Docker
+forwarding is not an authentication bypass. Do not supply `MANAGEMENT_PASSWORD`,
+change the password, reimport or modify SQLite to get login working. A failed
+login or unavailable panel aborts acceptance.
+
+In the authenticated panel, compare the legacy client key with its protected
+original and review every imported provider account, status and metadata against
+the safe inventory. Keep values inside the private panel and original files;
+record only names, counts and outcomes. Do not start provider logins or change
+runtime policy. A running Home is not import acceptance. Home may refresh
+accounts, so use the current-export rollback branch if refresh cannot be ruled
+out.
+
+### Issue and protect one pending machine enrollment
+
+After import acceptance, use the panel's native CPA node-enrollment dialog to
+create one node named `cliproxy`. The native operation is
+`POST /v8/management/certificates/clients` with `node_name: cliproxy`; use the
+panel, without a custom request script or credential-bearing command arguments.
+Keep the returned `home_jwt` carrier private. Record its non-secret certificate
+ID and node name for later connected-identity acceptance.
+
+On the workstation, use the human vault editor:
+
+```bash
+./vault.sh edit
+```
+
+Add `vault_overmind_cliproxy_home_jwt` and transfer the carrier directly from the
+private panel into the editor. Use a protected 0600 file in a private 0700
+directory if a temporary file is needed. Keep it outside Git and issue evidence;
+never echo it, pass it in an argument, dump browser requests or inspect a
+container's environment. Close the editor to persist the encrypted vault, then
+clear the clipboard and retire any temporary carrier file. Keep the existing
+legacy client-key and management-hash vault entries for rollback.
+
+At this point the certificate is **pending**. Issuing the carrier does not
+connect CPA, consume the enrollment secret or create its cache. When the later
+runtime change first starts CPA with `HOME_JWT`, native CPA sends a CSR, Home
+issues the certificate and consumes the enrollment secret. Startup then keeps
+using that carrier's target/identity with its matching persisted trust. There
+is no automatic reenrollment.
+
+### Stop and retain before permanent activation
+
+After saving the pending carrier, run:
+
+```bash
+scripts/cliproxy-maintenance.sh stop
+```
+
+This uses the existing bounded Home-first stop and fails unless the bootstrap
+exited. On failure, keep the freeze and preserve the attempt. Close the tunnel. Retain the stopped container through initial acceptance so
+normal image prune keeps the pulled Home image available.
+
+### Accept issued trust and take its matching snapshot
+
+After the later permanent activation, require the recorded named CPA identity
+to be healthy in Home and an authenticated legacy client/provider request to
+succeed. The imported management password must still work through the native
+panel. Check root:root 0700 on `/data/overmind/cliproxy/cpa` and root:root 0600 on
+its `client-crt.pem`, `client-key.pem` and `home-ca-crt.pem`, using file metadata
+only. Exercise the existing bounded restart:
+
+```bash
+scripts/cliproxy-maintenance.sh restart-cpa
+```
+
+It interrupts all CPA sessions. Require that same identity to reconnect with
+unchanged cached trust and the original, now-consumed carrier. CPA can exit 0 on enrollment failure, so
+process exit status or Compose startup alone is insufficient.
+
+Only **after certificate issuance and cache acceptance**, take a full Home
+snapshot and its matching CPA cache using the existing
+[snapshot procedure](#snapshot). A pre-enrollment database or legacy export is
+not this baseline. Verify isolated matched restore before recording initial
+acceptance. Then retire only the stopped bootstrap:
+
+```bash
+scripts/cliproxy-maintenance.sh remove-bootstrap
+```
+
+Snapshot leaves the permanent writers stopped. From the reviewed runtime
+checkout, deploy the pair again through the facade and recheck functional
+acceptance before lifting the freeze.
+
+Retain the current and previous accepted recovery sets under the existing
+retention policy. If the cache is missing, incomplete or mismatched, stop and
+escalate to matched Home/cache restoration or a fresh **human-issued** enrollment
+with its own acceptance and new snapshot. Reusing the consumed carrier cannot
+recreate the lost client identity. Do not delete trust, recreate CA state or
+retry automatic enrollment to get past a failure.
+
 ## Matched recovery and assisted updates
 
 Home owns runtime configuration, provider credentials and refresh state,
@@ -402,8 +544,14 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 ./validate.sh tests tests/regression/cliproxy_home_recovery_gate.py
 ```
 
-Using synthetic credentials on an internal Docker network, this enrolls a CPA
-with Home, takes a native full snapshot, restores it into an empty target,
-compares persistent state and reconnects the same CPA identity from the copied
-cache. It uses the deployed CPA pin and the gate's Home pin. It needs a local
-Docker daemon and fails without it. No-argument `./validate.sh` does not run it.
+Using synthetic credentials on an internal Docker network, this verifies the
+imported bcrypt password through native remote management and that the embedded
+panel is served. It enrolls CPA through `cliproxy-home:8327`, checks private
+issued cache modes, restarts with the consumed carrier and unchanged trust, and
+proves cache loss cannot reuse that carrier. The same fixture takes
+a native full snapshot, restores it into an empty target, compares persistent
+state and reconnects the same CPA identity from the matching copied cache.
+It uses the deployed CPA pin and the resolved Home pin. It needs a local Docker
+daemon and fails without it. No-argument `./validate.sh` does not run it.
+This is isolated native-image evidence, not production enrollment, a browser
+interaction test or real OAuth/provider acceptance; those remain human gates.

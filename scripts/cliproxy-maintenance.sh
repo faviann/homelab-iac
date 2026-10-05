@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Human-only CPA/Home maintenance on overmind. See docs/cliproxy-maintenance.md.
 #
-# Usage: scripts/cliproxy-maintenance.sh stop|remove-bootstrap|remove-home|restart-cpa|snapshot <name>|restore <name>|import-legacy <name>|export-current <name>|rollback-original <name>|rollback-current <name>
+# Usage: scripts/cliproxy-maintenance.sh start-bootstrap|stop|remove-bootstrap|remove-home|restart-cpa|snapshot <name>|restore <name>|import-legacy <name>|export-current <name>|rollback-original <name>|rollback-current <name>
 #
 # Holds the lifecycle lock for the whole run; contention exits 75 before SSH.
 set -euo pipefail
 
 case ${1:-} in
-  stop|remove-bootstrap|remove-home|restart-cpa)
+  start-bootstrap|stop|remove-bootstrap|remove-home|restart-cpa)
     (($# == 1)) || { sed -n 4p "$0" >&2; exit 2; }
     action=$1
     name=
@@ -72,19 +72,6 @@ stop_writers() {
   stop cliproxy
 }
 
-# Detaches the stopped bootstrap from the stack network without removing it.
-detach_bootstrap() {
-  local s networks
-  s=$(state cliproxy-home-bootstrap)
-  [[ $s != absent ]] || return 0
-  [[ $s == stopped ]] || abort 'cliproxy-home-bootstrap is running'
-  networks=$(docker_ container inspect \
-    --format '{{range $n, $_ := .NetworkSettings.Networks}}{{$n}} {{end}}' \
-    cliproxy-home-bootstrap)
-  [[ " $networks " != *' cliproxy_default '* ]] ||
-    docker_ network disconnect cliproxy_default cliproxy-home-bootstrap
-}
-
 remove() {
   local s
   s=$(state "$1")
@@ -111,6 +98,28 @@ pinned_image() {
   image=$(docker_ container inspect --format '{{.Config.Image}}' "$1")
   [[ $image =~ @sha256:[a-f0-9]{64}$ ]] || abort "$1 image is not digest-pinned"
   echo "$image"
+}
+
+start-bootstrap() {
+  local s container
+  for container in cliproxy-home cliproxy; do
+    s=$(state "$container")
+    [[ $s != running ]] || abort "$container must be stopped before bootstrap"
+  done
+  private_parent "$data"
+  private_parent "$home_dir"
+  # Without it Home would create an empty database that blocks a later import.
+  [[ -s $home_dir/home.db ]] || abort 'imported Home database is missing'
+  # No Compose labels, automatic restart, credential input or enrollment helper.
+  # cluster.yaml, not Docker networking, supplies the identity in the carrier,
+  # so the bootstrap stays off the stack network. An existing bootstrap fails
+  # the name check; preserve it rather than removing it to retry.
+  docker_ run --detach --pull never --name cliproxy-home-bootstrap --restart no \
+    --publish 127.0.0.1:8327:8327 --entrypoint sh \
+    --mount "type=bind,src=$home_dir,dst=/CLIProxyAPIHome/data" \
+    --mount "type=bind,src=$legacy/config/cluster.yaml,dst=/CLIProxyAPIHome/cluster.yaml,readonly" \
+    "$initial_home_image" -c 'umask 077; exec ./CLIProxyAPIHome' >/dev/null
+  echo 'bootstrap started; authenticate through the loopback tunnel and accept the imported state before issuing a pending enrollment'
 }
 
 import-legacy() {
@@ -253,22 +262,21 @@ restore() {
 }
 
 case $1 in
+  start-bootstrap)
+    start-bootstrap
+    ;;
   snapshot|restore|import-legacy|export-current|rollback-original|rollback-current)
     stop_writers
-    detach_bootstrap
     "$1" "$2" "$3"
     ;;
   stop)
     stop_writers
-    detach_bootstrap
     ;;
   remove-bootstrap)
-    detach_bootstrap
     remove cliproxy-home-bootstrap
     ;;
   remove-home)
     stop_writers
-    detach_bootstrap
     remove cliproxy-home-bootstrap
     remove cliproxy-home
     ;;
