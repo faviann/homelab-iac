@@ -78,6 +78,7 @@ class RevocationProvider(SyntheticProvider):
                 raw = self.rfile.read(size)
                 payload = json.loads(bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
                 if payload.get("type") != "response.create" or (turn and payload.get("previous_response_id") != "synthetic-retained-1"):
+                    self.server.native_continuation_valid = False
                     raise ValueError
                 self.server.native_turns += 1
                 self.server.served += 1
@@ -147,6 +148,9 @@ class RetainedResponses:
             f"Authorization: Bearer {key}\r\n\r\n").encode())
         self.status = int(self.reader.readline(4096).split()[1])
         self.previous_response_id = ""
+        self.terminal_type = ""
+        self.terminal_status = 0
+        self.close_code = 0
         for _ in range(30):
             if self.reader.readline(4096) == b"\r\n":
                 break
@@ -173,9 +177,13 @@ class RetainedResponses:
             require(size <= 65536 and not header[1] & 0x80, "bounded local WebSocket frame")
             raw = self.reader.read(size)
             if header[0] & 15 == 8:
+                self.terminal_type = "close"
+                self.close_code = struct.unpack("!H", raw[:2])[0] if len(raw) >= 2 else 0
                 return False
             item = json.loads(raw)
             if item.get("type") in ("response.completed", "error", "response.failed"):
+                self.terminal_type = item["type"]
+                self.terminal_status = int(item.get("status", 0))
                 if item["type"] == "response.completed":
                     self.previous_response_id = item["response"]["id"]
                 return item["type"] == "response.completed"
@@ -198,6 +206,7 @@ def identity_pair():
                 pair.provider.failed = False
                 pair.provider.native_connections = 0
                 pair.provider.native_turns = 0
+                pair.provider.native_continuation_valid = True
                 pair.provider.stream_started = threading.Event()
                 pair.provider.stream_release = threading.Event()
                 pair.provider.RequestHandlerClass = RevocationProvider
@@ -297,8 +306,11 @@ def verify_identities(pair) -> None:
             {"model": MODEL, "messages": [{"role": "user", "content": "new after deletion"}]})
         require(status == 401 and pair.provider.served == before,
             "immediate independent request rejection after deletion before upstream")
-        require(retained.turn() and pair.provider.native_connections == 1 and pair.provider.native_turns == 2,
-            "retained same-model native WebSocket selection survives key deletion on the same upstream connection")
+        completed = retained.turn()
+        require(pair.provider.native_continuation_valid, "native upstream continuation received the previous completed response ID")
+        require(completed, f"retained native continuation completion (terminal {retained.terminal_type}, status {retained.terminal_status}, close {retained.close_code})")
+        require(pair.provider.native_connections == 1, "retained native continuation keeps one upstream connection")
+        require(pair.provider.native_turns == 2, "retained native continuation serves the second upstream turn")
         pair.provider.stream_release.set()
         require(b"[DONE]" in held.read(), "accepted HTTP stream completes after key deletion")
     finally:
