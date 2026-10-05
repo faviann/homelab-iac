@@ -70,7 +70,7 @@ Actions abort without further changes on failures in the checks they perform:
 - Docker can't list or inspect a container. A failed inspection never counts
   as "absent".
 - A container is paused, restarting, or dead.
-- Both Home containers are running (`stop` and `remove-home`).
+- Both Home containers are running (`stop`, `remove-home`, `snapshot` and `restore`).
 - A writer is still running after it was stopped.
 - The bootstrap is running when it should be detached or removed.
 
