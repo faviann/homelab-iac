@@ -162,10 +162,11 @@ The [pinned-pair gate](#pinned-pair-gate) covers native snapshot and restore.
 ## One-time standalone import and initial rollback
 
 This finite transition keeps the original client addresses, arbitrary legacy
-client key and management bcrypt hash. It does not enroll CPA or deploy Home.
-[Native enrollment (#481)](https://github.com/faviann/homelab-iac/issues/481)
-and [runtime activation (#482)](https://github.com/faviann/homelab-iac/issues/482)
-follow only after the import acceptance below. Ordinary deployment never imports.
+client key and management bcrypt hash. Use #481's loopback Home bootstrap to
+inspect the import for acceptance. Issuing the CPA machine enrollment
+[#481](https://github.com/faviann/homelab-iac/issues/481) and activating the permanent
+runtime [#482](https://github.com/faviann/homelab-iac/issues/482) follow only after
+that acceptance. Ordinary deployment never imports.
 
 ### Freeze and inventory
 

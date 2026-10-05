@@ -110,15 +110,10 @@ class MigrationPair(HomeCPAPair):
         self.stop()
 
     def restore(self, source: Path, target: Path, auth_name: str) -> None:
-        # Runtime, client-key and config-provider policy remain frozen. Restore
-        # old config, then replace the entire auth tree rather than overlay it.
+        # Runtime, client-key and config-provider policy remain frozen. Prepare
+        # standalone from old config and the selected native/source auth tree.
         shutil.copy2(self.root / "original/config.yaml", target / "config.yaml")
-        stale = target / "auth/stale-deleted-account.json"
-        stale.parent.mkdir(exist_ok=True)
-        stale.write_text('{"type":"codex","email":"stale@example.invalid"}')
-        shutil.rmtree(target / "auth")
         shutil.copytree(source / auth_name, target / "auth")
-        require(not stale.exists(), "rollback overlaid a stale account")
         config = yaml.safe_load((target / "config.yaml").read_text())
         config["auth-dir"] = "/legacy/auth"
         (target / "config.yaml").write_text(yaml.safe_dump(config))
