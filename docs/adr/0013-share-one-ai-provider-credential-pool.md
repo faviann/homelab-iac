@@ -25,14 +25,25 @@ The router narrows the convenient path. The LXCs share an unfirewalled bridge,
 so an attacker positioned to abuse the direct port can already reach other
 services on it.
 
-Home administration uses its native embedded panel and management API with the
-imported management bcrypt hash/password. Its separate port 8327 removes the
-old shared-client/management-port rationale for avoiding edge authentication.
-The approved migration still chooses native Home authentication and the existing
-LAN restriction for its later browser route, with no Authentik forwarding,
-password override, public administration or custom authentication layer. Native
-CPA/Home RESP travels directly over the Compose default network with mTLS;
-the ordinary HTTP browser route cannot transport it.
+Home administration uses its native embedded panel and management API at
+`https://cliproxy-home.local.faviann.com/management.html`, with the imported
+management bcrypt hash/password and the same `local-ip-restriction` policy.
+The whole Home HTTP surface, including unused user-registration endpoints,
+stays inside this LAN boundary. Its published plain HTTP listener at
+`overmind.faviann.vms:8327` is accepted on the same flat bridge as CPA's client
+port. The portal allowlist does not restrict either direct listener.
+
+The separate Home port removes the old shared-client/management-port rationale
+for avoiding edge authentication. The approved migration chooses native Home
+administration over Authentik forwarding or a custom authentication layer, with
+no password override, public administration or path authentication exceptions.
+CPA Home mode no longer serves its old panel. Home embeds the panel and handles
+provider callback paste itself; see
+[the administration acceptance procedure](../cliproxy-maintenance.md#lan-administration-and-acceptance).
+Native CPA/Home RESP travels directly over the Compose default network with
+mTLS; the ordinary HTTP browser route cannot transport it. Runtime authority
+and durable identity follow
+[the native enrollment contract](../cliproxy-maintenance.md#native-node-enrollment-and-durable-trust).
 
 The flat-bridge acceptance remains provisional and is expected to be retired
 by Proxmox host-level segmentation restricting client and management origins.
