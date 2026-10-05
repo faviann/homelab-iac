@@ -52,6 +52,7 @@ class RevocationProvider(SyntheticProvider):
         # Only the local native Codex exchange needed to retain a selection.
         # No OAuth, external provider or general WebSocket implementation.
         with guarded_provider(self.server):
+            self.server.native_phase = "upgrade"
             self.connection.settimeout(8)
             if not self.path.endswith("/responses"):
                 raise ValueError
@@ -63,8 +64,12 @@ class RevocationProvider(SyntheticProvider):
             self.send_header("Sec-WebSocket-Accept", accept)
             self.end_headers()
             for turn in range(2):
+                self.server.native_phase = "request-header"
                 header = self.rfile.read(2)
+                self.server.native_header_length = len(header)
+                self.server.native_opcode = header[0] & 15 if header else 0
                 if not header or header[0] & 15 == 8:
+                    self.server.native_phase = "eof" if not header else "close"
                     return
                 if len(header) != 2 or header[0] != 0x81 or not header[1] & 0x80:
                     raise ValueError
@@ -75,17 +80,20 @@ class RevocationProvider(SyntheticProvider):
                     raise ValueError
                 mask = self.rfile.read(4)
                 raw = self.rfile.read(size)
+                self.server.native_phase = "request-type"
                 payload = json.loads(bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
                 if payload.get("type") != "response.create":
                     raise ValueError
                 self.server.native_turns += 1
                 self.server.served += 1
+                self.server.native_phase = "completion-write"
                 raw = json.dumps({"type": "response.completed", "response": {
                     "id": "synthetic-retained-" + str(turn + 1), "object": "response", "status": "completed", "output": [],
                     "usage": {"input_tokens": 2, "output_tokens": 1, "total_tokens": 3}}}).encode()
                 self.wfile.write(bytes([0x81, 126]) + struct.pack("!H", len(raw)) + raw)
                 self.wfile.flush()
             # Retain the upstream socket until the fixture tears down CPA.
+            self.server.native_phase = "waiting-cleanup"
             self.rfile.read(2)
 
     def do_POST(self) -> None:
@@ -130,6 +138,7 @@ def guarded_provider(server):
         yield
     except Exception:
         server.failed = True
+        server.native_failure_phase = server.native_phase
 
 
 class RetainedResponses:
@@ -154,7 +163,7 @@ class RetainedResponses:
         else:
             require(False, "bounded WebSocket upgrade headers")
 
-    def turn(self) -> bool:
+    def turn(self, pair, phase: str) -> bool:
         # Same-model full turns exercise the retained Home selection without
         # requiring incremental transcript passthrough or previous_response_id.
         payload = {"type": "response.create", "model": RETAINED_MODEL,
@@ -165,13 +174,23 @@ class RetainedResponses:
         self.socket.sendall(head + mask + bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
         for _ in range(100):
             header = self.reader.read(2)
-            require(len(header) == 2, "retained WebSocket frame header")
+            if len(header) != 2:
+                # Container logs remain private in memory; expose only known
+                # source lifecycle markers and controlled fake-server metadata.
+                captured = pair.docker("logs", pair.cpa_name, stage="native lifecycle diagnostic")
+                logs = captured.stdout + captured.stderr
+                require(False, f"{phase} WebSocket header: native turns {pair.provider.native_turns}, "
+                    f"provider failed {pair.provider.failed}, fake phase {pair.provider.native_phase}, "
+                    f"failure phase {pair.provider.native_failure_phase}, opcode {pair.provider.native_opcode}, "
+                    f"header length {pair.provider.native_header_length}, "
+                    f"executor shutdown {'reason=executor_shutdown' in logs}, "
+                    f"persistent {'session_object=persistent' in logs}, ephemeral {'session_object=ephemeral' in logs}")
             size = header[1] & 127
             if size == 126:
                 size = struct.unpack("!H", self.reader.read(2))[0]
             elif size == 127:
                 size = struct.unpack("!Q", self.reader.read(8))[0]
-            require(size <= 65536 and not header[1] & 0x80, "bounded local WebSocket frame")
+            require(size <= 65536 and not header[1] & 0x80, phase + " bounded local WebSocket frame")
             raw = self.reader.read(size)
             if header[0] & 15 == 8:
                 self.terminal_type = "close"
@@ -200,6 +219,10 @@ def identity_pair():
                 pair.provider.served = 0
                 pair.provider.failed = False
                 pair.provider.native_turns = 0
+                pair.provider.native_phase = "idle"
+                pair.provider.native_failure_phase = "none"
+                pair.provider.native_opcode = 0
+                pair.provider.native_header_length = 0
                 pair.provider.stream_started = threading.Event()
                 pair.provider.stream_release = threading.Event()
                 pair.provider.RequestHandlerClass = RevocationProvider
@@ -283,7 +306,7 @@ def verify_identities(pair) -> None:
     held = None
     try:
         retained = RetainedResponses(pair.cpa_url + "/responses", credentials[2])
-        require(retained.status == 101 and retained.turn() and pair.provider.native_turns == 1,
+        require(retained.status == 101 and retained.turn(pair, "before deletion") and pair.provider.native_turns == 1,
             "native sacrificial WebSocket selection established before deletion")
         held = pair.client.open(urllib.request.Request(pair.cpa_url + "/chat/completions",
             data=json.dumps({"model": MODEL, "stream": True,
@@ -299,7 +322,7 @@ def verify_identities(pair) -> None:
             {"model": MODEL, "messages": [{"role": "user", "content": "new after deletion"}]})
         require(status == 401 and pair.provider.served == before,
             "immediate independent request rejection after deletion before upstream")
-        completed = retained.turn()
+        completed = retained.turn(pair, "after deletion")
         require(completed, f"retained native continuation completion (terminal {retained.terminal_type}, status {retained.terminal_status}, close {retained.close_code})")
         require(pair.provider.native_turns == 2, "retained native continuation serves the second upstream turn")
         pair.provider.stream_release.set()
