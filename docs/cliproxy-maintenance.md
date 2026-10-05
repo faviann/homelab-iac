@@ -492,7 +492,7 @@ synthetic behavior only; the human records production acceptance on
      (streaming, Anthropic Messages, Responses HTTP/SSE/WebSockets).
    - Every previously healthy Claude/Codex account still serves, and accounts
      and management login match the safe inventory.
-   - A Home runtime edit survives a supported redeploy without reimport.
+   - A Home runtime edit reaches CPA and survives a supported redeploy without reimport.
    - With Home stopped, requests fail instead of being served standalone.
    - #483's native panel, login and callback workflow works through the LAN
      route. Don't print callback URLs.
