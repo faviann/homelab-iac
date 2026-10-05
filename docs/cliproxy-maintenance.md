@@ -63,12 +63,12 @@ name this holder.
 | `remove-home` | Standalone rollback. Runs `stop`, then removes both Home containers, which ordinary Compose startup would leave as orphans. CPA stays stopped until you deploy the original revision. Preserve the failed state first; removing the containers does not delete bind mounts. |
 | `restart-cpa` | Emergency. Stops and restarts CPA only. Home keeps running. |
 
-Each action aborts without further changes when:
+Actions abort without further changes on failures in the checks they perform:
 
 - Docker can't list or inspect a container. A failed inspection never counts
   as "absent".
 - A container is paused, restarting, or dead.
-- Both Home containers are running.
+- Both Home containers are running (`stop` and `remove-home`).
 - A writer is still running after it was stopped.
 - The bootstrap is running when it should be detached or removed.
 
@@ -151,4 +151,4 @@ This runs the script with a real `flock` and local SSH/Docker stand-ins. It
 checks the script's ordering, scope and abort decisions. It does not check
 Docker's shutdown or network behavior, pinned-image termination, DNS/mTLS,
 enrollment, snapshot and restore, or real provider and client acceptance.
-Those remain human cutover gates.
+Those remain later implementation and human cutover gates.

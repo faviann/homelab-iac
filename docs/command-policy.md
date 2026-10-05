@@ -288,7 +288,7 @@ Agent use of a documented raw command is a separate decision:
   maintenance paths named in [the procedure](cliproxy-maintenance.md).
 
   ```bash
-  scripts/cliproxy-maintenance.sh stop|remove-bootstrap|remove-home|restart-cpa
+  scripts/cliproxy-maintenance.sh <action>
   ```
 
 - **Boundary:** mutating. The script holds the exclusive lifecycle lock for
