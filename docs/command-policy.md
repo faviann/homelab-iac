@@ -255,9 +255,9 @@ Agent use of a documented raw command is a separate decision:
 
 #### CLIProxy management-key hash
 
-- **Trigger:** creating or changing the CLIProxy management password before
-  a deploy, as written in
-  [the CLIProxy stack README](../stacks/overmind/cliproxy/README.md#vault-entries).
+- **Trigger:** preparing the original standalone CLIProxy management password
+  before one-time Home import. The runtime retains that imported hash; see
+  [the CLIProxy stack README](../stacks/overmind/cliproxy/README.md#required-carrier-and-private-state).
 - **Audience:** a person only. The plaintext password is theirs to choose and
   keep.
 - **Scope:** the local workstation. It contacts no managed host and does not

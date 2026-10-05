@@ -18,10 +18,9 @@ managed hosts.
 CPA always exists. Before migration, both Home containers may be absent. CPA
 and Home both write state, so each of them counts as a **writer**.
 
-Native one-shot tools use the images pinned for the deployed pair. The CPA pin
-is in [`compose.yaml`](../stacks/overmind/cliproxy/compose.yaml). The Home pin
-is in the [migration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171)
-until Home joins that file. After an assisted update, use the pins recorded
+Native one-shot tools use the images pinned for the deployed pair in
+[`compose.yaml`](../stacks/overmind/cliproxy/compose.yaml).
+After an assisted update, use the pins recorded
 with the recovery set you restore from, and use the old Home image for the
 pre-update export.
 
@@ -162,8 +161,8 @@ The [pinned-pair gate](#pinned-pair-gate) covers native snapshot and restore.
 This finite transition keeps the original client addresses, arbitrary legacy
 client key and management bcrypt hash. Ordinary deployment never imports. The
 import is accepted through the [loopback bootstrap](#native-node-enrollment-and-durable-trust)
-before issuing its pending machine enrollment. The permanent runtime
-([#482](https://github.com/faviann/homelab-iac/issues/482)) follows that acceptance.
+before issuing its pending machine enrollment. Permanent activation follows
+that acceptance; see [the integrated cutover](#permanent-activation-and-initial-acceptance).
 
 ### Freeze and inventory
 
@@ -325,7 +324,7 @@ no-argument `./validate.sh` does not.
 
 This continues the accepted one-time import above. The human performs these
 steps under the same maintenance freeze. Existing standalone CPA remains
-stopped; permanent Home/CPA activation is the later runtime change. The
+stopped; permanent Home/CPA activation follows these steps. The
 isolated [pinned-pair gate](#pinned-pair-gate) verifies that future activation
 contract using synthetic credentials.
 
@@ -397,8 +396,8 @@ clear the clipboard and retire any temporary carrier file. Keep the existing
 legacy client-key and management-hash vault entries for rollback.
 
 At this point the certificate is **pending**. Issuing the carrier does not
-connect CPA, consume the enrollment secret or create its cache. When the later
-runtime change first starts CPA with `HOME_JWT`, native CPA sends a CSR, Home
+connect CPA, consume the enrollment secret or create its cache. When permanent
+activation first starts CPA with `HOME_JWT`, native CPA sends a CSR, Home
 issues the certificate and consumes the enrollment secret. Startup then keeps
 using that carrier's target/identity with its matching persisted trust. There
 is no automatic reenrollment.
@@ -417,7 +416,7 @@ normal image prune keeps the pulled Home image available.
 
 ### Accept issued trust and take its matching snapshot
 
-After the later permanent activation, require the recorded named CPA identity
+After permanent activation, require the recorded named CPA identity
 to be healthy in Home and an authenticated legacy client/provider request to
 succeed. The imported management password must still work through the native
 panel. Check root:root 0700 on `/data/overmind/cliproxy/cpa` and root:root 0600 on
@@ -452,6 +451,60 @@ escalate to matched Home/cache restoration or a fresh **human-issued** enrollmen
 with its own acceptance and new snapshot. Reusing the consumed carrier cannot
 recreate the lost client identity. Do not delete trust, recreate CA state or
 retry automatic enrollment to get past a failure.
+
+## Permanent activation and initial acceptance
+
+This puts the procedures above in cutover order. PR completion verifies
+synthetic behavior only; the human records production acceptance on
+[#477](https://github.com/faviann/homelab-iac/issues/477).
+
+1. **Rehearse.** Run full `./validate.sh` and the
+   [pinned-pair gate](#pinned-pair-gate) at the exact pins, and record
+   revisions, pins and outcomes. Confirm free disk space and that port 8327 is
+   free on `overmind`. Prepare the
+   [LAN routing slice](https://github.com/faviann/homelab-iac/issues/483);
+   runtime startup alone cannot pass its gate.
+2. **Freeze, inventory and import** from the original standalone revision:
+   [Freeze and inventory](#freeze-and-inventory), then [Import once](#import-once).
+3. **Enroll and stop the bootstrap:**
+   [Native node enrollment and durable trust](#native-node-enrollment-and-durable-trust)
+   through [Stop and retain](#stop-and-retain-before-permanent-activation).
+   Never run two Home writers on the same SQLite state.
+4. **Activate.** From the clean reviewed Home-runtime checkout, run:
+
+   ```bash
+   ./run.sh configure --limit overmind --stack cliproxy
+   ```
+
+   This can still configure and reboot the host; see
+   [Deploy, accept or recover](#deploy-accept-or-recover). Check the exact
+   pins, one running Home writer, `.env` at 0600 and both PID 1 umasks at 0077.
+   Readiness means native Home login with the imported management password,
+   the recorded CPA identity healthy in Home, and a legacy-key request served
+   by a known provider and model. A clean recap, a running container or CPA
+   exit 0 is not readiness.
+5. **Accept clients and providers, or roll back.** Keep keys and policy frozen.
+   Use the original key and representative real consumers at both
+   `https://cliproxy.local.faviann.com` and `http://overmind.faviann.vms:8317`.
+   Require all of these:
+   - Broodling's gateway `/v1` URL with `gpt-5.6-sol` Chat Completions, tools
+     and JSON output, plus each protocol another known consumer uses
+     (streaming, Anthropic Messages, Responses HTTP/SSE/WebSockets).
+   - Every previously healthy Claude/Codex account still serves, and accounts
+     and management login match the safe inventory.
+   - A Home runtime edit reaches CPA and survives a supported redeploy without reimport.
+   - With Home stopped, requests fail instead of being served standalone.
+   - #483's native panel, login and callback workflow works through the LAN
+     route. Don't print callback URLs.
+
+   On any failure, preserve evidence and take the matching rollback branch:
+   [before](#rollback-before-home-could-refresh) or
+   [after possible refresh](#rollback-after-possible-refresh).
+6. **Take the enrolled recovery baseline:**
+   [Accept issued trust and take its matching snapshot](#accept-issued-trust-and-take-its-matching-snapshot).
+7. **Close the window:** record **standalone rollback closed** as in
+   [Close the window](#close-the-window), before the first real consumer-key
+   change.
 
 ## Matched recovery and assisted updates
 
@@ -541,8 +594,19 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 ### Pinned-pair gate
 
 ```bash
-./validate.sh tests tests/regression/cliproxy_home_recovery_gate.py
+./validate.sh tests tests/regression/cliproxy_home_runtime_gate.py tests/regression/cliproxy_home_recovery_gate.py tests/regression/cliproxy_home_migration_gate.py
 ```
+
+The runtime gate materializes the actual repository stack and starts its
+rendered Compose wiring with only isolated names, paths and network/port
+overrides. It checks that a missing carrier fails rendering, the private `.env`,
+native DNS/mTLS identity, the legacy key with Broodling's `gpt-5.6-sol`
+tools/JSON request, an unchanged redeploy that recreates nothing, a cluster
+change that recreates only Home with the new document mounted read-only, and
+private startup umasks. Protocol behavior belongs to the pinned images and is a
+human acceptance check. The migration gate rehearses the initial standalone
+rollback with synthetic refreshed credentials. The recovery gate, described
+next, owns restart from cached trust and the native matched restore.
 
 Using synthetic credentials on an internal Docker network, this verifies the
 imported bcrypt password through native remote management and that the embedded
