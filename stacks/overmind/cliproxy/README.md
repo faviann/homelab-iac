@@ -180,6 +180,12 @@ Credentials land in `./appdata/auth/` on the shared volume and survive container
 and LXC recreation. Losing them costs a re-login, not data — there is no backup
 timer and none is warranted.
 
+## Home migration maintenance
+
+Migration, protected recovery, assisted pair updates and emergency CPA restarts
+are human-only. They follow [the maintenance procedure](../../../docs/cliproxy-maintenance.md)
+under its [command-policy exception](../../../docs/command-policy.md#cpahome-maintenance-on-overmind).
+
 ## Upgrades
 
 The image is pinned by tag and digest in `compose.yaml`. Upstream releases

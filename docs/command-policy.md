@@ -276,6 +276,33 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** agents do not run it or handle the hash. They direct the
   person to this entry.
 
+#### CPA/Home maintenance on overmind
+
+- **Trigger:** the reviewed CPA/Home migration, protected backup or restore,
+  an assisted pair update, or emergency termination of revoked CPA sessions.
+- **Audience:** people only. Agents may change and rehearse the script, but
+  never run it against a managed host.
+- **Scope:** the `cliproxy` Compose project on `overmind`: containers
+  `cliproxy` and `cliproxy-home`, the temporary `cliproxy-home-bootstrap` and
+  its `cliproxy_default` attachment, pinned native tools, and the private
+  maintenance paths named in [the procedure](cliproxy-maintenance.md).
+
+  ```bash
+  scripts/cliproxy-maintenance.sh <action>
+  ```
+
+- **Boundary:** mutating. The script holds the exclusive lifecycle lock for
+  its whole run and exits `75` before SSH when the lock is held. It stops,
+  detaches, removes or restarts only the named containers, stops Home before
+  CPA, and aborts if any writer is still running. Run `./run.sh` only after the
+  script has exited. A person freezes other control nodes and Home
+  administration for the whole window, including the gaps between runs.
+- **Sensitive output:** no environment dumps, credential contents, or secrets
+  in command arguments, logs or evidence.
+- **Escalation:** on any abort, unknown remote result or failed acceptance,
+  preserve evidence and follow the procedure's recovery branch. Never widen
+  the removal scope or restart a writer to get past a failure.
+
 #### Vendor compose sync
 
 - **Trigger:** resyncing a vendored `compose.yaml` with upstream, as written in
