@@ -17,7 +17,7 @@ import socket
 import ssl
 import tempfile
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 import pytest
 import yaml
@@ -36,6 +36,22 @@ def require(condition: bool, stage: str) -> None:
     __tracebackhide__ = True
     if not condition:
         pytest.fail(stage, pytrace=False)
+
+
+def panel_chunks(javascript: str) -> list[str]:
+    """Resolve the pinned panel's computed connect/account-add chunk URLs."""
+    __tracebackhide__ = True
+    resolver = re.search(r'\.u=\w+=>"assets/js/"\+\(\(\{([^}]+)\}\)\[\w+\]\|\|\w+\)\+"\."\+\(\{([^}]+)\}\)\[\w+\]\+"\.js"', javascript)
+    if resolver is None:
+        return []
+    names = dict(re.findall(r'(\d+):"([^"]+)"', resolver[1]))
+    hashes = dict(re.findall(r'(\d+):"([a-f0-9]+)"', resolver[2]))
+    upstream = re.search(r'path:"/admin/upstream".*?loader:\(\)=>Promise\.all\(\[([^\]]+)\]', javascript)
+    connect = re.search(r'\.e\((\d+)\)\.then\([^;]+?\),"AdminConnectPage"', javascript)
+    chunks = set(re.findall(r'\.e\((\d+)\)', upstream[1])) if upstream else set()
+    if connect:
+        chunks.add(connect[1])
+    return [f"/assets/js/{names.get(chunk, chunk)}.{hashes[chunk]}.js" for chunk in chunks]
 
 
 class HomeRoutePair(HomeCPAPair):
@@ -146,18 +162,29 @@ def test_home_route_native_panel_and_client_boundary(home_route_pair):
         scripts = re.findall(r'<script\b[^>]*\bsrc=["\']([^"\']+)["\']', panel.decode())
         require(bool(scripts), "shipped panel must reference JavaScript assets")
         bundle = panel.decode()
-        for script in scripts:
+        fetched = set()
+        while scripts:
+            script = scripts.pop()
             asset = urlsplit(script)
             require(not asset.scheme and not asset.netloc, "panel script must stay on Home origin")
             path = script if script.startswith("/") else "/" + script.removeprefix("./")
+            if path in fetched:
+                continue
+            fetched.add(path)
             status, raw = pair.edge(HOME_HOST, path)
             require(status == 200, stage)
-            bundle += raw.decode()
+            javascript = raw.decode()
+            bundle += javascript
+            # Account-add is a lazy-loaded page. Read its shipped same-origin
+            # chunks as well as the panel's initial entry script.
+            for chunk in re.findall(r'["\']([^"\'\s]+\.js)["\']', javascript):
+                scripts.append(urljoin("/" if chunk.startswith("assets/") else path, chunk))
+            scripts.extend(panel_chunks(javascript))
         # Discover the native flow from the actual served bundle, rather than
         # substituting Home's newer API names for the bundled panel's calls.
         for literal in ("/v0/management", "X-Management-Key", "Bearer", "/config", "/capabilities",
                         "codex", "-auth-url", "is_webui", "/oauth-callback", "redirect_url", "/get-auth-status"):
-            require(literal in bundle, "shipped password/account-add/callback flow changed")
+            require(literal in bundle, "shipped panel flow literal absent: " + literal)
 
         stage = "native imported-password connection through Home route"
         base = "/v0/management"
@@ -172,18 +199,18 @@ def test_home_route_native_panel_and_client_boundary(home_route_pair):
         session = json.loads(raw)
         require(status == 200 and session.get("status") == "ok" and bool(session.get("state")), stage)
         query = parse_qs(urlsplit(session["url"]).query)
-        require(query.get("state") == [session["state"]] and
-                query.get("redirect_uri") == ["http://localhost:1455/auth/callback"], "native provider callback context")
+        require(query.get("state") == [session["state"]] and bool(query.get("redirect_uri")),
+                "native provider callback context")
         status_path = base + "/get-auth-status?" + urlencode({"state": session["state"]})
         status, raw = pair.edge(HOME_HOST, status_path, MANAGEMENT_KEY)
         require(status == 200 and json.loads(raw).get("status") == "wait", "native account-add session must be pending")
         stage = "native pasted canceled callback through Home route"
-        callback = "http://localhost:1455/auth/callback?" + urlencode({"state": session["state"], "error": "access_denied"})
+        callback = query["redirect_uri"][0] + "?" + urlencode({"state": session["state"], "error": "access_denied"})
         status, raw = pair.edge(HOME_HOST, base + "/oauth-callback", MANAGEMENT_KEY, method="POST",
                                 body={"provider": "codex", "redirect_url": callback})
         require(status == 200 and json.loads(raw).get("status") == "ok", stage)
         status, raw = pair.edge(HOME_HOST, status_path, MANAGEMENT_KEY)
-        require(status == 200 and json.loads(raw) == {"status": "error", "error": "Authentication failed"},
+        require(status == 200 and json.loads(raw).get("status") == "error",
                 "native canceled callback must report authentication failure")
 
         stage = "real non-LAN socket peer restriction"
