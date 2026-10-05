@@ -47,7 +47,7 @@ def fingerprint(root: Path) -> dict:
 
 def oauth_files(root: Path) -> dict:
     return {value["email"]: value for p in root.glob("*.json")
-            if (value := json.loads(p.read_text())).get("type") == "codex"}
+            if (value := json.loads(p.read_text())).get("type") in ("codex", "claude")}
 
 
 def compare_accounts(actual: dict, expected: dict) -> None:
@@ -59,7 +59,7 @@ def compare_accounts(actual: dict, expected: dict) -> None:
 
 def database_accounts(state: Path) -> tuple[dict, dict]:
     with sqlite3.connect(f"file:{state / 'home.db'}?mode=ro", uri=True) as db:
-        rows = db.execute("select uuid, disabled, auth_json from auth where provider='codex'").fetchall()
+        rows = db.execute("select uuid, disabled, auth_json from auth where provider in ('codex', 'claude')").fetchall()
         config = dict(db.execute("select key, value from config").fetchall())
         keys = [row[0] for row in db.execute("select api_key from api_key").fetchall()]
     require(keys == [LEGACY_KEY], "arbitrary legacy client key changed")
@@ -153,6 +153,13 @@ def test_offline_import_and_both_pre_consumer_standalone_rollbacks(migration_pai
                    "account_id": f"synthetic-account-{disabled}", "prefix": "migration",
                    "priority": 7, "note": "frozen original", "migration_marker": {"generation": "original"}, "last_refresh": "2026-01-01T00:00:00Z"}
         (original / "auth" / f"legacy-{disabled}.json").write_text(json.dumps(account))
+    (original / "auth/legacy-claude.json").write_text(json.dumps({
+        "type": "claude", "email": "migration-claude@example.invalid", "disabled": True,
+        "access_token": "synthetic-claude-access", "refresh_token": "synthetic-claude-refresh",
+        "expired": "2100-01-01T00:00:00Z", "account_id": "synthetic-claude-account",
+        "prefix": "migration", "priority": 7, "note": "frozen original",
+        "migration_marker": {"generation": "original"}, "last_refresh": "2026-01-01T00:00:00Z",
+    }))
     for path in [original, *original.rglob("*")]:
         path.chmod(0o700 if path.is_dir() else 0o600)
     frozen = fingerprint(original)
@@ -172,7 +179,7 @@ def test_offline_import_and_both_pre_consumer_standalone_rollbacks(migration_pai
     with sqlite3.connect(f"file:{state / 'home.db'}?mode=ro", uri=True) as db:
         imported_count = sum(db.execute(f"select count(*) from {table}").fetchone()[0]
                              for table in ("config", "api_key", "auth"))
-        config_provider_count = db.execute("select count(*) from auth where provider!='codex'").fetchone()[0]
+        config_provider_count = db.execute("select count(*) from auth where provider not in ('codex', 'claude')").fetchone()[0]
     require(int(summary[1]) == imported_count and config_provider_count == 1,
             f"native created count/config-provider inventory differs ({summary[1]}/{imported_count}/{config_provider_count})")
     compare_accounts(accounts, expected)
