@@ -98,14 +98,18 @@ vault_overmind_homelab_dev_agent_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
 vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 
 # CLIProxyAPI stack on overmind.
-#   vault_overmind_cliproxy_api_key            client key every consuming agent presents
+# Keep these frozen original references for the initial standalone rollback.
+# Home imports the legacy client key and management hash once, then owns them.
+#   vault_overmind_cliproxy_api_key            legacy client key retained for unmigrated agents
 #   vault_overmind_cliproxy_management_key_hash bcrypt hash of the management password.
 #                                              Store the HASH here; log into the panel
 #                                              with the plaintext you hashed.
 #                                              See stacks/overmind/cliproxy/README.md
 vault_overmind_cliproxy_api_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
 vault_overmind_cliproxy_management_key_hash: "REPLACE_WITH_BCRYPT_HASH"
-# One-time native Home enrollment carrier; see docs/cliproxy-maintenance.md#native-node-enrollment-and-durable-trust
+# Required runtime carrier from native enrollment. Retain it with the matching
+# persistent CPA trust; a consumed carrier cannot recreate a lost cache.
+# See docs/cliproxy-maintenance.md#native-node-enrollment-and-durable-trust
 vault_overmind_cliproxy_home_jwt: "REPLACE_WITH_NATIVE_HOME_ENROLLMENT"
 
 # Renovate on devserver: fine-grained GitHub token scoped to faviann/homelab-iac.

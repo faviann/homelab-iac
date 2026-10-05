@@ -18,10 +18,9 @@ managed hosts.
 CPA always exists. Before migration, both Home containers may be absent. CPA
 and Home both write state, so each of them counts as a **writer**.
 
-Native one-shot tools use the images pinned for the deployed pair. The CPA pin
-is in [`compose.yaml`](../stacks/overmind/cliproxy/compose.yaml). The Home pin
-is in the [migration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171)
-until Home joins that file. After an assisted update, use the pins recorded
+Native one-shot tools use the images pinned for the deployed pair in
+[`compose.yaml`](../stacks/overmind/cliproxy/compose.yaml).
+After an assisted update, use the pins recorded
 with the recovery set you restore from, and use the old Home image for the
 pre-update export.
 
@@ -162,8 +161,8 @@ The [pinned-pair gate](#pinned-pair-gate) covers native snapshot and restore.
 This finite transition keeps the original client addresses, arbitrary legacy
 client key and management bcrypt hash. Ordinary deployment never imports. The
 import is accepted through the [loopback bootstrap](#native-node-enrollment-and-durable-trust)
-before issuing its pending machine enrollment. The permanent runtime
-([#482](https://github.com/faviann/homelab-iac/issues/482)) follows that acceptance.
+before issuing its pending machine enrollment. Permanent activation follows
+that acceptance; see [the integrated cutover](#permanent-activation-and-initial-acceptance).
 
 ### Freeze and inventory
 
@@ -325,7 +324,7 @@ no-argument `./validate.sh` does not.
 
 This continues the accepted one-time import above. The human performs these
 steps under the same maintenance freeze. Existing standalone CPA remains
-stopped; permanent Home/CPA activation is the later runtime change. The
+stopped; permanent Home/CPA activation follows these steps. The
 isolated [pinned-pair gate](#pinned-pair-gate) verifies that future activation
 contract using synthetic credentials.
 
@@ -397,8 +396,8 @@ clear the clipboard and retire any temporary carrier file. Keep the existing
 legacy client-key and management-hash vault entries for rollback.
 
 At this point the certificate is **pending**. Issuing the carrier does not
-connect CPA, consume the enrollment secret or create its cache. When the later
-runtime change first starts CPA with `HOME_JWT`, native CPA sends a CSR, Home
+connect CPA, consume the enrollment secret or create its cache. When permanent
+activation first starts CPA with `HOME_JWT`, native CPA sends a CSR, Home
 issues the certificate and consumes the enrollment secret. Startup then keeps
 using that carrier's target/identity with its matching persisted trust. There
 is no automatic reenrollment.
@@ -417,7 +416,7 @@ normal image prune keeps the pulled Home image available.
 
 ### Accept issued trust and take its matching snapshot
 
-After the later permanent activation, require the recorded named CPA identity
+After permanent activation, require the recorded named CPA identity
 to be healthy in Home and an authenticated legacy client/provider request to
 succeed. The imported management password must still work through the native
 panel. Check root:root 0700 on `/data/overmind/cliproxy/cpa` and root:root 0600 on
@@ -452,6 +451,86 @@ escalate to matched Home/cache restoration or a fresh **human-issued** enrollmen
 with its own acceptance and new snapshot. Reusing the consumed carrier cannot
 recreate the lost client identity. Do not delete trust, recreate CA state or
 retry automatic enrollment to get past a failure.
+
+## Permanent activation and initial acceptance
+
+This connects the one-time import, pending enrollment, permanent runtime and
+matched recovery procedures. PR completion verifies synthetic behavior only;
+the human records production acceptance on
+[#477](https://github.com/faviann/homelab-iac/issues/477).
+
+1. **Rehearse and establish the original baseline.** Run full `./validate.sh`
+   and the [native gates](#pinned-pair-gate) at the exact CPA/Home pins. Record
+   their revisions, pins and outcomes. Before production import, identify every
+   known consumer and previously healthy provider/model through the private safe
+   inventory above. Confirm available disk space and free port 8327. Preserve
+   Broodling's existing gateway `/v1` URL and `gpt-5.6-sol` tools/JSON contract;
+   untracked consumers continue using the legacy key. The client DNS/Traefik
+   route is unchanged. Prepare the later
+   [LAN routing slice](https://github.com/faviann/homelab-iac/issues/483) and its
+   DNS/TLS requirements; runtime startup alone cannot complete that gate.
+2. **Freeze and import from the original revision.** Approve the maintenance
+   window and freeze all controllers, administration, policy/provider changes
+   and consumer keys. From the recorded clean standalone checkout, synchronize
+   the reviewed cluster file, run `import-legacy`, and accept the imported state
+   through the loopback bootstrap as described above. Include possible package
+   upgrades, Docker reconciliation and host reboot in the window, even with
+   `--stack cliproxy`. An unexpected writer, nonempty target or partial/skipped
+   import aborts. Do not import from this Home-runtime checkout.
+3. **Protect the pending carrier and stop bootstrap.** Issue one native named
+   CPA enrollment, save its carrier in `vault_overmind_cliproxy_home_jwt` using
+   the human vault editor, then run `scripts/cliproxy-maintenance.sh stop`.
+   Require that bootstrap exited and close the tunnel. Retain the stopped
+   bootstrap to protect its pulled image from normal image prune. It stays off
+   the stack network and has no competing Home alias. Never run two Home
+   writers on the same SQLite state.
+4. **Activate the reviewed permanent runtime.** Switch to the clean reviewed
+   Home-runtime checkout and deploy with the supported operation:
+
+   ```bash
+   ./run.sh configure --limit overmind --stack cliproxy
+   ```
+
+   Check the exact pins, only one running Home writer, `.env` 0600, state/cache
+   directories root:root 0700, secret files 0600 and both PID 1 umasks 0077.
+   Require native Home authentication with the imported management password,
+   healthy membership for the recorded CPA identity and an authenticated legacy
+   key request to a known provider/model. A clean recap, running container or
+   CPA exit 0 is insufficient. Startup ordering is not functional readiness.
+5. **Accept existing clients and providers, or roll back.** Keep key/policy
+   changes frozen. Compare the original key and representative real consumers
+   at both `https://cliproxy.local.faviann.com` and
+   `http://overmind.faviann.vms:8317`. Require known models, Chat Completions with
+   tools and JSON output/streaming, Anthropic Messages and Responses
+   HTTP/SSE/WebSockets for consumers that use them. Confirm each previously
+   healthy Claude/Codex account still serves after import and restart. Compare
+   account count/status/metadata and management authentication to the safe
+   inventory. Confirm Home runtime edits persist through supported redeploy
+   without reimport, and CPA reconnects with unchanged cached trust after the
+   bounded restart. Under this human maintenance window, verify Home
+   unavailability fails rather than serving a local standalone fallback.
+   Complete #483's native panel, login and callback workflow through the chosen
+   LAN route without printing callback URLs. Any failure preserves evidence
+   and takes the original/current-export rollback branch above while the
+   accepted legacy key/policy baseline still holds. An unusable current export
+   requires matched Home recovery or human reauthentication, never stale tokens.
+6. **Verify the matched enrolled recovery baseline.** After certificate/cache
+   acceptance, run the existing `snapshot <new-name>` procedure. It stops Home
+   then CPA and records the full DB snapshot, matching cache and exact pair/
+   revision manifest. Rehearse restoration on an isolated target with provider
+   and production egress blocked; cloned trust must not reach production Home
+   or refresh real accounts. Preserve the frozen source until this baseline is
+   verified. Redeploy the permanent pair through the supported configure
+   operation, recheck old-key functional acceptance, then remove only the
+   stopped bootstrap with `remove-bootstrap`. Privately archive the original
+   before retiring obsolete shared-volume secret copies.
+7. **Close initial acceptance before identities change.** Record successful
+   live gates and **standalone rollback closed** explicitly before the first
+   real consumer-key switch. That later human-confirmed closure change retires
+   the one-time migration actions/tests as specified above. Subsequent key,
+   account and policy changes require new snapshots; later recovery restores
+   matched Home state and reapplies post-snapshot revocations before clients
+   return. Legacy-key retirement remains a separate explicit decision.
 
 ## Matched recovery and assisted updates
 
@@ -541,8 +620,17 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 ### Pinned-pair gate
 
 ```bash
-./validate.sh tests tests/regression/cliproxy_home_recovery_gate.py
+./validate.sh tests tests/regression/cliproxy_home_runtime_gate.py tests/regression/cliproxy_home_recovery_gate.py tests/regression/cliproxy_home_migration_gate.py
 ```
+
+The runtime gate materializes the actual repository stack and starts its
+rendered Compose wiring with only isolated names, paths and network/port
+overrides. It verifies native DNS/mTLS and functional identity, the legacy
+`gpt-5.6-sol` tools/JSON contract and streaming, Anthropic Messages, Responses
+HTTP/SSE/WebSockets, Home configuration propagation, second deploy and cluster
+recreation with private persistent state/cache, restart and Home-outage failure.
+The migration gate rehearses the initial standalone rollback with synthetic
+refreshed credentials. The recovery gate below owns the native matched restore.
 
 Using synthetic credentials on an internal Docker network, this verifies the
 imported bcrypt password through native remote management and that the embedded
