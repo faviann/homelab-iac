@@ -108,7 +108,7 @@ class RetainedResponses:
         else:
             require(False, "bounded WebSocket upgrade headers")
 
-    def turn(self) -> bool:
+    def turn(self, expected: str = "response.completed") -> bool:
         raw = json.dumps({"type": "response.create", "model": MODEL,
             "input": [{"role": "user", "content": [{"type": "input_text", "text": "revocation selection"}]}]}).encode()
         mask = os.urandom(4)
@@ -128,7 +128,7 @@ class RetainedResponses:
                 return False
             item = json.loads(raw)
             if item.get("type") in ("response.completed", "error", "response.failed"):
-                return item["type"] == "response.completed"
+                return item["type"] == expected and (expected != "error" or item.get("status") == 401)
         return False
 
     def close(self) -> None:
@@ -237,7 +237,9 @@ def verify_identities(pair) -> None:
         require(status == 401, "immediate independent request rejection after deletion")
         new_socket = RetainedResponses(pair.cpa_url + "/responses", credentials[2])
         try:
-            require(new_socket.status == 401, "new WebSocket rejected after deletion")
+            before = pair.provider.served
+            require(new_socket.status == 101 and new_socket.turn("error") and pair.provider.served == before,
+                "new WebSocket dispatch rejects deleted key with 401 before upstream")
         finally:
             new_socket.close()
         require(retained.turn(), "retained same-model WebSocket selection survives key deletion")
