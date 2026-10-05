@@ -9,6 +9,7 @@ revocation boundary; this is not a general protocol compatibility suite.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import socket
@@ -22,12 +23,14 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+import yaml
 
 from cliproxy_home_recovery_gate import (
     HomeCPAPair, LEGACY_KEY, MANAGEMENT_KEY, MODEL, SyntheticProvider,
 )
 
 pytestmark = pytest.mark.serial
+RETAINED_MODEL = "synthetic-retained-model"
 
 
 def require(condition: bool, stage: str) -> None:
@@ -45,6 +48,47 @@ def guarded(stage: str):
 
 
 class RevocationProvider(SyntheticProvider):
+    def do_GET(self) -> None:
+        # Only the local native Codex exchange needed to retain a selection.
+        # No OAuth, external provider or general WebSocket implementation.
+        with guarded_provider(self.server):
+            self.connection.settimeout(8)
+            if not self.path.endswith("/responses"):
+                raise ValueError
+            accept = base64.b64encode(hashlib.sha1((self.headers["Sec-WebSocket-Key"]
+                + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
+            self.send_response(101)
+            self.send_header("Upgrade", "websocket")
+            self.send_header("Connection", "Upgrade")
+            self.send_header("Sec-WebSocket-Accept", accept)
+            self.end_headers()
+            self.server.native_connections += 1
+            for turn in range(2):
+                header = self.rfile.read(2)
+                if not header or header[0] & 15 == 8:
+                    return
+                if len(header) != 2 or header[0] != 0x81 or not header[1] & 0x80:
+                    raise ValueError
+                size = header[1] & 127
+                if size == 126:
+                    size = struct.unpack("!H", self.rfile.read(2))[0]
+                if size > 65536 or size == 127:
+                    raise ValueError
+                mask = self.rfile.read(4)
+                raw = self.rfile.read(size)
+                payload = json.loads(bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
+                if payload.get("type") != "response.create" or (turn and payload.get("previous_response_id") != "synthetic-retained-1"):
+                    raise ValueError
+                self.server.native_turns += 1
+                self.server.served += 1
+                raw = json.dumps({"type": "response.completed", "response": {
+                    "id": "synthetic-retained-" + str(turn + 1), "object": "response", "status": "completed", "output": [],
+                    "usage": {"input_tokens": 2, "output_tokens": 1, "total_tokens": 3}}}).encode()
+                self.wfile.write(bytes([0x81, 126]) + struct.pack("!H", len(raw)) + raw)
+                self.wfile.flush()
+            # Retain the upstream socket until the fixture tears down CPA.
+            self.rfile.read(2)
+
     def do_POST(self) -> None:
         with guarded_provider(self.server):
             payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -102,6 +146,7 @@ class RetainedResponses:
             f"Sec-WebSocket-Key: {nonce}\r\nSec-WebSocket-Version: 13\r\n"
             f"Authorization: Bearer {key}\r\n\r\n").encode())
         self.status = int(self.reader.readline(4096).split()[1])
+        self.previous_response_id = ""
         for _ in range(30):
             if self.reader.readline(4096) == b"\r\n":
                 break
@@ -109,8 +154,11 @@ class RetainedResponses:
             require(False, "bounded WebSocket upgrade headers")
 
     def turn(self) -> bool:
-        raw = json.dumps({"type": "response.create", "model": MODEL,
-            "input": [{"role": "user", "content": [{"type": "input_text", "text": "revocation selection"}]}]}).encode()
+        payload = {"type": "response.create", "model": RETAINED_MODEL,
+            "input": [{"role": "user", "content": [{"type": "input_text", "text": "revocation selection"}]}]}
+        if self.previous_response_id:
+            payload["previous_response_id"] = self.previous_response_id
+        raw = json.dumps(payload).encode()
         mask = os.urandom(4)
         head = bytes([0x81, 0x80 | len(raw)]) if len(raw) < 126 else bytes([0x81, 0xfe]) + struct.pack("!H", len(raw))
         self.socket.sendall(head + mask + bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
@@ -128,6 +176,8 @@ class RetainedResponses:
                 return False
             item = json.loads(raw)
             if item.get("type") in ("response.completed", "error", "response.failed"):
+                if item["type"] == "response.completed":
+                    self.previous_response_id = item["response"]["id"]
                 return item["type"] == "response.completed"
         return False
 
@@ -146,9 +196,18 @@ def identity_pair():
                 pair.prepare()
                 pair.provider.served = 0
                 pair.provider.failed = False
+                pair.provider.native_connections = 0
+                pair.provider.native_turns = 0
                 pair.provider.stream_started = threading.Event()
                 pair.provider.stream_release = threading.Event()
                 pair.provider.RequestHandlerClass = RevocationProvider
+                source = pair.root / "source/config.yaml"
+                config = yaml.safe_load(source.read_text())
+                config["codex-api-key"] = [{"api-key": base64.urlsafe_b64encode(os.urandom(32)).decode(),
+                    "base-url": config["openai-compatibility"][0]["base-url"], "websockets": True,
+                    "models": [{"name": RETAINED_MODEL, "alias": RETAINED_MODEL}]}]
+                source.write_text(yaml.safe_dump(config))
+                source.chmod(0o600)
             yield pair
         finally:
             with guarded("synthetic identity fixture cleanup"):
@@ -222,7 +281,8 @@ def verify_identities(pair) -> None:
     held = None
     try:
         retained = RetainedResponses(pair.cpa_url + "/responses", credentials[2])
-        require(retained.status == 101 and retained.turn(), "sacrificial WebSocket selection established before deletion")
+        require(retained.status == 101 and retained.turn() and pair.provider.native_connections == 1
+            and pair.provider.native_turns == 1, "native sacrificial WebSocket selection established before deletion")
         held = pair.client.open(urllib.request.Request(pair.cpa_url + "/chat/completions",
             data=json.dumps({"model": MODEL, "stream": True,
                 "messages": [{"role": "user", "content": "held-revocation"}]}).encode(),
@@ -237,7 +297,8 @@ def verify_identities(pair) -> None:
             {"model": MODEL, "messages": [{"role": "user", "content": "new after deletion"}]})
         require(status == 401 and pair.provider.served == before,
             "immediate independent request rejection after deletion before upstream")
-        require(retained.turn(), "retained same-model WebSocket selection survives key deletion")
+        require(retained.turn() and pair.provider.native_connections == 1 and pair.provider.native_turns == 2,
+            "retained same-model native WebSocket selection survives key deletion on the same upstream connection")
         pair.provider.stream_release.set()
         require(b"[DONE]" in held.read(), "accepted HTTP stream completes after key deletion")
     finally:
