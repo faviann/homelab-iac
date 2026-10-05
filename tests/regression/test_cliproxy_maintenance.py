@@ -67,7 +67,10 @@ elif args[0] == "run":
         raise SystemExit(1)
     mounts = [args[i + 1] for i, arg in enumerate(args) if arg == "--mount"]
     paths = {{item.split("dst=")[1].split(",")[0]: Path(item.split("src=")[1].split(",")[0]) for item in mounts}}
-    if "-db-export" in args[-1]:
+    if "--detach" in args:
+        bootstrap = args[args.index("--name") + 1]
+        containers[bootstrap] = {{"status": "running", "networks": [args[args.index("--network") + 1]]}}
+    elif "-db-export" in args[-1]:
         (paths["/recovery"] / "home.zip").write_bytes(b"synthetic-snapshot")
     elif "-export -export-dir" in args[-1]:
         (paths["/export"] / "config.yaml").write_text("synthetic-current-config")
@@ -249,6 +252,8 @@ def offline_rehearsal(rehearsal):
                           (legacy / "auth/static/panel.html", b"synthetic-panel")):
         path.write_bytes(payload)
         path.chmod(0o600)
+    shutil.copyfile(SCRIPT.parents[1] / "stacks/overmind/cliproxy/appdata/config/cluster.yaml",
+                    legacy / "config/cluster.yaml")
     script = rehearsal.root / "scripts/maintenance.sh"
     script.parent.mkdir()
     # Local git revision stays tied to the actual checkout, while remote paths
@@ -262,6 +267,48 @@ def offline_rehearsal(rehearsal):
     finally:
         shutil.rmtree(data)
         shutil.rmtree(backups)
+
+
+def test_bootstrap_starts_one_named_loopback_home_and_stop_retains_it_detached(offline_rehearsal):
+    rehearsal, script, data, _ = offline_rehearsal
+    for container in rehearsal.containers.values():
+        container["status"] = "exited"
+    result = rehearsal.run("start-bootstrap", script=script, offline=True)
+    assert result.returncode == 0, result.stderr
+    native, = [event for event in rehearsal.events() if event[:2] == ["docker", "run"]]
+    assert native[native.index("--name") + 1] == "cliproxy-home-bootstrap"
+    assert native[native.index("--network") + 1] == "cliproxy_default"
+    assert native[native.index("--network-alias") + 1] == "cliproxy-home"
+    assert native[native.index("--publish") + 1] == "127.0.0.1:8327:8327"
+    assert f"type=bind,src={data / 'home'},dst=/CLIProxyAPIHome/data" in native
+    assert any("/config/cluster.yaml,dst=/CLIProxyAPIHome/cluster.yaml,readonly" in arg for arg in native)
+    rehearsal.containers = rehearsal.final()
+    result = rehearsal.run("stop", script=script, offline=True)
+    assert result.returncode == 0, result.stderr
+    assert rehearsal.final()["cliproxy-home-bootstrap"] == {"status": "exited", "networks": []}
+    assert not any(verb == "rm" for verb, _ in rehearsal.effects())
+
+
+@pytest.mark.parametrize("owner", ["cliproxy", "cliproxy-home", "cliproxy-home-bootstrap"])
+def test_bootstrap_refuses_running_writers_or_a_retained_attempt(offline_rehearsal, owner):
+    rehearsal, script, _, _ = offline_rehearsal
+    for container in rehearsal.containers.values():
+        container["status"] = "exited"
+    rehearsal.containers[owner] = rehearsal.container(owner, "exited" if owner.endswith("bootstrap") else "running")
+    result = rehearsal.run("start-bootstrap", script=script, offline=True)
+    assert result.returncode != 0
+    assert rehearsal.effects() == []
+    assert not any(event[:2] == ["docker", "run"] for event in rehearsal.events())
+
+
+def test_bootstrap_requires_imported_state(offline_rehearsal):
+    rehearsal, script, data, _ = offline_rehearsal
+    for container in rehearsal.containers.values():
+        container["status"] = "exited"
+    (data / "home/home.db").unlink()
+    result = rehearsal.run("start-bootstrap", script=script, offline=True)
+    assert result.returncode != 0
+    assert not any(event[:2] == ["docker", "run"] for event in rehearsal.events())
 
 
 def test_snapshot_and_repeated_restore_preserve_failed_state_and_remain_stopped(offline_rehearsal):

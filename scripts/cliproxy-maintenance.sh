@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Human-only CPA/Home maintenance on overmind. See docs/cliproxy-maintenance.md.
 #
-# Usage: scripts/cliproxy-maintenance.sh stop|remove-bootstrap|remove-home|restart-cpa|snapshot <name>|restore <name>|import-legacy <name>|export-current <name>|rollback-original <name>|rollback-current <name>
+# Usage: scripts/cliproxy-maintenance.sh start-bootstrap|stop|remove-bootstrap|remove-home|restart-cpa|snapshot <name>|restore <name>|import-legacy <name>|export-current <name>|rollback-original <name>|rollback-current <name>
 #
 # Holds the lifecycle lock for the whole run; contention exits 75 before SSH.
 set -euo pipefail
 
 case ${1:-} in
-  stop|remove-bootstrap|remove-home|restart-cpa)
+  start-bootstrap|stop|remove-bootstrap|remove-home|restart-cpa)
     (($# == 1)) || { sed -n 4p "$0" >&2; exit 2; }
     action=$1
     name=
@@ -111,6 +111,28 @@ pinned_image() {
   image=$(docker_ container inspect --format '{{.Config.Image}}' "$1")
   [[ $image =~ @sha256:[a-f0-9]{64}$ ]] || abort "$1 image is not digest-pinned"
   echo "$image"
+}
+
+start-bootstrap() {
+  local s
+  for container in cliproxy-home cliproxy; do
+    s=$(state "$container")
+    [[ $s != running ]] || abort "$container must be stopped before bootstrap"
+  done
+  s=$(state cliproxy-home-bootstrap)
+  [[ $s == absent ]] || abort 'bootstrap already exists; preserve it and resolve the previous attempt'
+  private_parent "$data"
+  private_parent "$home_dir"
+  [[ -s $home_dir/home.db && -s $legacy/config/cluster.yaml ]] || abort 'imported Home database or reviewed cluster settings are missing'
+  # No Compose labels, automatic restart, credential input or enrollment helper.
+  # The existing project network supplies the identity recorded in the carrier.
+  docker_ run --detach --pull never --name cliproxy-home-bootstrap --restart no \
+    --network cliproxy_default --network-alias cliproxy-home \
+    --publish 127.0.0.1:8327:8327 --entrypoint sh \
+    --mount "type=bind,src=$home_dir,dst=/CLIProxyAPIHome/data" \
+    --mount "type=bind,src=$legacy/config/cluster.yaml,dst=/CLIProxyAPIHome/cluster.yaml,readonly" \
+    "$initial_home_image" -c 'umask 077; exec ./CLIProxyAPIHome' >/dev/null
+  echo 'bootstrap started; authenticate through the loopback tunnel and accept the imported state before issuing a pending enrollment'
 }
 
 import-legacy() {
@@ -253,6 +275,9 @@ restore() {
 }
 
 case $1 in
+  start-bootstrap)
+    start-bootstrap
+    ;;
   snapshot|restore|import-legacy|export-current|rollback-original|rollback-current)
     stop_writers
     detach_bootstrap

@@ -1,0 +1,6 @@
+---
+sqlite:
+  path: /CLIProxyAPIHome/data/home.db
+node:
+  external-ip: cliproxy-home
+  port: 8327

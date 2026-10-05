@@ -294,7 +294,15 @@ Agent use of a documented raw command is a separate decision:
 - **Boundary:** mutating. The script holds the exclusive lifecycle lock for
   its whole run and exits `75` before SSH when the lock is held. It stops,
   detaches, removes or restarts only the named containers, stops Home before
-  CPA, and aborts if any writer is still running. Import, export and rollback
+  CPA, and aborts if any writer is still running. `start-bootstrap` requires
+  stopped writers and no existing bootstrap, then starts exactly one plain
+  named Home from the imported database and the reviewed non-secret
+  `/conf/docker/stacks/cliproxy/appdata/config/cluster.yaml`. It uses the pinned
+  image, `cliproxy_default` alias `cliproxy-home`, and loopback port 8327 only.
+  The human-only SSH tunnel and native panel procedure in the runbook permit
+  imported-password login and one pending named machine enrollment. Store its
+  carrier through the human `./vault.sh edit`; the script handles no carrier.
+  Import, export and rollback
   preserve private source/state candidates; rollback replaces only the declared
   standalone auth tree. Snapshot and restore write only under the declared
   runtime and recovery paths. Run `./run.sh` only after the script has exited.
