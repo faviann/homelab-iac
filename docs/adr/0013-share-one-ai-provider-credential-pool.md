@@ -8,12 +8,30 @@ configuration, provider refresh state, client keys, accounting and cluster
 trust. Ansible owns topology, image pins, private directories and startup
 inputs. There is no user tenancy, per-consumer provider pool, quota or billing.
 
-The original standalone deployment used one shared client key. Home enables
-independently named, attributable and revocable consumer keys; the legacy key
-continues serving unmigrated clients. Initial migration does not change any
-consumer address or key. Real key rollout follows human acceptance and a
+The original standalone deployment used one shared client key. That rationale
+is superseded by one named native Home key per actual consumer: independent
+attribution and revocation no longer require separate provider accounts. Keys
+are unowned, with no channel or model-group restrictions, so all consumers use
+the same provider account pool. The imported record is named `legacy-shared`
+without changing its value or stable ID. Unknown and unmigrated clients retain
+that key until a separate explicit retirement decision.
+
+The [non-secret consumer inventory](../../stacks/overmind/cliproxy/README.md#consumer-identities-and-inventory)
+maps actual consumer names to stable Home IDs, credential-source owners and
+observed migration states. Native usage can display `api-key-ID` instead of
+the friendly name; verify attribution by ID. Individual native key operations
+avoid replacing unrelated consumers' keys. Revocation rejects new requests;
+accepted streams and retained Responses WebSocket selections can survive it.
+Emergency CPA restart interrupts every session under the
+[bounded maintenance procedure](../cliproxy-maintenance.md#emergency-cpa-restart).
+
+Initial migration does not change any consumer address or key. Real key rollout
+changes one actual consumer at a time, following human acceptance and a
 verified matched recovery baseline, after explicitly closing the initial
-standalone rollback window. Recovery is manual from matched Home snapshot and
+standalone rollback window. Broodling retains its fixed gateway/model/tool/JSON
+contract and later changes only its separately owned gateway key; its deployment
+remains [#353](https://github.com/faviann/homelab-iac/issues/353).
+Recovery is manual from matched Home snapshot and
 CPA cache sets; see
 [the recovery contract](../cliproxy-maintenance.md#matched-recovery-and-assisted-updates).
 
