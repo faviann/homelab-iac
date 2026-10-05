@@ -180,6 +180,17 @@ Credentials land in `./appdata/auth/` on the shared volume and survive container
 and LXC recreation. Losing them costs a re-login, not data — there is no backup
 timer and none is warranted.
 
+## Controlled Home migration maintenance
+
+The reviewed Home integration is implemented in separate subissues. The current
+standalone runtime remains unchanged by the maintenance-policy slice. Human
+migration, protected recovery, assisted pair updates and interrupting emergency
+CPA restart use [the bounded maintenance procedure](../../../docs/cliproxy-maintenance.md)
+and its [standing permission](../../../docs/command-policy.md#cpahome-maintenance-on-overmind).
+That procedure owns the lock, operator freeze, Home-first stop order and named
+bootstrap/orphan cleanup. Its synthetic rehearsal is separate from later
+pinned-image and production acceptance.
+
 ## Upgrades
 
 The image is pinned by tag and digest in `compose.yaml`. Upstream releases

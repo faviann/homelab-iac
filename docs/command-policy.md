@@ -276,6 +276,46 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** agents do not run it or handle the hash. They direct the
   person to this entry.
 
+#### CPA/Home maintenance on overmind
+
+- **Trigger:** reviewed initial CPA/Home migration, protected backup/restore,
+  assisted pair updates, or emergency termination of revoked CPA sessions.
+- **Audience:** human operator only. Agents implement and rehearse the
+  non-live procedure; they do not execute it against managed hosts.
+- **Scope:** `overmind`, deployed project `/conf/docker/stacks/cliproxy`,
+  Compose project `cliproxy`; services/containers `cliproxy` and
+  `cliproxy-home`; plain temporary container `cliproxy-home-bootstrap` and
+  only its `cliproxy_default` attachment. Native tools use the recorded CPA
+  v7.3.8/Home v1.1.0 pins, or the compatible pins recorded with a later
+  reviewed recovery set. Private maintenance storage is restricted to
+  `/data/overmind/cliproxy/home`, `/data/overmind/cliproxy/cpa`, and unique
+  subdirectories of `/backups/overmind/cliproxy`, plus the frozen legacy
+  config/auth source from this deployed stack. Later implementation must
+  declare/protect these private paths before use.
+- **Boundary:** follow [the finite maintenance procedure](cliproxy-maintenance.md).
+  Hold the existing exclusive nonblocking workstation lifecycle lock before
+  raw operations; contention performs no operation. Permit only bounded named
+  stops/restarts/removals, private copy/restoration, pinned native one-shot
+  import/export/snapshot tools, temporary loopback-only Home bootstrap and its
+  named network detach, and secret-safe acceptance probes. Stop every Home
+  owner before CPA for offline state work; verify every writer actually exited
+  and abort otherwise. Bounded stops can force termination and interrupt active
+  requests. Emergency CPA-only restart explicitly interrupts all CPA sessions.
+  Retain the stopped bootstrap through initial acceptance to protect its image
+  from deployment pruning. Release the raw lock before **each** `./run.sh`
+  invocation; ordinary deployment always uses that facade. The operator freeze
+  covers other control nodes, Home administration, and each unlock gap.
+- **Sensitive output:** no environment dumps, key/JWT/password argv values,
+  credential-file contents, callbacks, or secret request/log payloads. Secrets
+  remain in protected operator-controlled files/prompts and native private
+  state; evidence contains only non-secret status/counts. No published snapshots.
+- **Escalation:** abort on unexpected state, unavailable Docker/inspection,
+  any remaining writer, partial/skipped import, failed acceptance, or unusable
+  recovery data. Preserve evidence and select the recorded recovery branch.
+  Do not merge/overwrite restoration targets, blindly retry enrollment, start
+  competing owners, or broaden removal scope. A failed detach is an abort;
+  restarting a writer to make cleanup succeed is not permitted.
+
 #### Vendor compose sync
 
 - **Trigger:** resyncing a vendored `compose.yaml` with upstream, as written in
