@@ -105,8 +105,9 @@ no routing labels.
 First [revoke the individual consumer key](#revocation-and-session-limits)
 through Home administration. Revoking rejects new requests but an accepted
 HTTP stream can finish afterwards. The pinned native key deletion also reloads
-CPA and closes persistent Codex WebSockets; that side effect is not guaranteed
-termination of every accepted session. `restart-cpa` interrupts **every** CPA session and may reach the
+CPA and closes persistent Codex upstream connections and selections; that side
+effect is not guaranteed termination of every accepted session. `restart-cpa`
+interrupts **every** CPA session and may reach the
 forced-termination deadline. A running container is not proof that CPA works;
 run the secret-safe acceptance probes afterwards.
 
@@ -655,7 +656,9 @@ dispatch, so key authentication alone does not terminate that selection.
 **Pinned-runtime refinement:** native Home deletion publishes a configuration
 update, and CPA's
 [runtime reload](https://github.com/router-for-me/CLIProxyAPI/blob/c93978c4ea2e908255a2a06c37599fda3651554a/sdk/cliproxy/service_config.go)
-replaces the Codex executor and closes its persistent WebSockets. Delivery is
+replaces the Codex executor, closing its persistent upstream WebSockets and
+retained selections. An idle downstream client socket can remain open until
+its next turn, which then needs a fresh selection. Delivery is
 asynchronous; a retained selection can bypass fresh authentication until that
 replacement arrives. The synthetic
 gate observes that reload-induced closure with a healthy fake provider. This
@@ -690,9 +693,10 @@ named records with individual operations before CPA starts, then checks stable
 IDs and native usage attribution. Deletion is the only key mutation while CPA
 is running, excluding delayed earlier key-edit notifications. The sacrificial
 key's next independent request is rejected while the other named and legacy
-keys serve. Its established persistent native Codex WebSocket closes through
-the pinned runtime reload, with a healthy local fake provider, while its already
-accepted HTTP stream completes. These separate authentication from the reload
+keys serve. The pinned runtime reload closes its established persistent native
+Codex upstream connection and selection, with a healthy local fake provider;
+the old client socket's next turn cannot serve. Its already accepted HTTP
+stream completes. These separate authentication from the reload
 side effect and accepted work; no per-consumer termination is promised.
 This is identity evidence, not real
 consumer/provider acceptance or a generic protocol matrix. No-argument

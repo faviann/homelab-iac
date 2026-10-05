@@ -41,9 +41,12 @@ def require(condition: bool, stage: str) -> None:
 @contextmanager
 def guarded(stage: str):
     # Never expose exception text, request objects, response bodies or locals.
+    failed = False
     try:
         yield
     except Exception:
+        failed = True
+    if failed:
         pytest.fail(stage, pytrace=False)
 
 
@@ -161,6 +164,8 @@ class RetainedResponses:
         self.socket.sendall(head + mask + bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
         for _ in range(100):
             header = self.reader.read(2)
+            if header == b"":
+                return False
             require(len(header) == 2, "native WebSocket first-turn frame header")
             size = header[1] & 127
             if size == 126:
@@ -175,10 +180,6 @@ class RetainedResponses:
             if item.get("type") in ("response.completed", "error", "response.failed"):
                 return item["type"] == "response.completed"
         return False
-
-    def closed(self) -> bool:
-        header = self.reader.read(2)
-        return header == b"" or (len(header) == 2 and header[0] & 15 == 8)
 
     def close(self) -> None:
         self.reader.close()
@@ -306,7 +307,9 @@ def verify_identities(pair) -> None:
         require(any("codex websockets: upstream disconnected" in line and "reason=executor_shutdown" in line
             and "session_object=persistent" in line for line in (captured.stdout + captured.stderr).splitlines()),
             "native key-deletion config reload closes the persistent executor session")
-        require(retained.closed(), "accepted downstream native WebSocket closes on this pinned reload")
+        before = pair.provider.served
+        require(not retained.turn() and pair.provider.native_turns == 1 and not pair.provider.failed
+            and pair.provider.served == before, "next turn on the old native WebSocket is rejected after the known reload before upstream")
         pair.provider.stream_release.set()
         require(b"[DONE]" in held.read(), "accepted HTTP stream completes after key deletion")
     finally:

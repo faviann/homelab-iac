@@ -22,8 +22,9 @@ observed migration states. Native usage can display `api-key-ID` instead of
 the friendly name; verify attribution by ID. Individual native key operations
 avoid replacing unrelated consumers' keys. Revocation rejects new requests;
 accepted HTTP streams can finish afterwards. The pinned native deletion also
-reloads CPA and closes persistent Codex WebSockets, potentially interrupting
-unrelated native sessions. This observed reload refines the resolved plan's
+reloads CPA and closes persistent Codex upstream connections and selections,
+potentially interrupting unrelated native sessions. An idle client socket can
+remain open until its next turn. This observed reload refines the resolved plan's
 claim that deletion does not terminate retained selections. Key authentication
 alone does not end a retained selection, and deletion does not guarantee that
 all accepted work ended. Emergency CPA restart interrupts every session under the
