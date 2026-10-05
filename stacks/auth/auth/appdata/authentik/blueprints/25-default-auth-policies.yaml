@@ -26,6 +26,12 @@ entries:
     - email
     - username
     enrollment_flow: !Find [authentik_flows.flow, [slug, self-service-registration-approval]]
+- model: authentik_stages_user_login.userloginstage
+  state: present
+  identifiers:
+    name: default-authentication-login
+  attrs:
+    session_duration: days=30
 - model: authentik_flows.flowstagebinding
   state: present
   identifiers:
