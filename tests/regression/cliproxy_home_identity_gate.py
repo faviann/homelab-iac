@@ -228,7 +228,7 @@ def verify_identities(pair) -> None:
                 "messages": [{"role": "user", "content": "held-revocation"}]}).encode(),
             headers={"Authorization": "Bearer " + credentials[2], "Content-Type": "application/json"}), timeout=8)
         require(held.status == 200 and held.readline().startswith(b"data:")
-            and pair.provider.stream_started.is_set() and not pair.provider.stream_release.is_set(),
+            and pair.provider.stream_started.wait(3) and not pair.provider.stream_release.is_set(),
             "sacrificial HTTP stream accepted and held before deletion")
         status, _ = pair.request(pair.home_url + "/access/api-keys?id=" + str(records[2]["id"]), MANAGEMENT_KEY, "DELETE")
         require(status == 200, "individual sacrificial deletion by stable ID")
