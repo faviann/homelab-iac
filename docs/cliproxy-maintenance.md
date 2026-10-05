@@ -21,8 +21,8 @@ Do not change `$HOME` to evade a held lock. On `overmind`, the deployed project
 is `/conf/docker/stacks/cliproxy`, project `cliproxy`. Its exact container/service
 names are `cliproxy` and `cliproxy-home`; the plain temporary Home is
 `cliproxy-home-bootstrap`, attached only to `cliproxy_default`. Before migration,
-Home and bootstrap may be absent; CPA must exist. Unexpected names, project or
-service labels, two running Home owners, paused/restarting/dead state, unavailable
+Home and bootstrap may be absent; CPA must exist. Unexpected project or service
+labels on these names, two running Home owners, paused/restarting/dead state, unavailable
 Docker, or failed inspection are aborts, not evidence that a writer is absent.
 Do not use Compose `down`, `--remove-orphans`, project-wide removal, name patterns,
 volume deletion, or network deletion.
@@ -270,7 +270,7 @@ Rehearsal results are recorded with this PR: contention exits 75 before SSH;
 Home-first stops use a finite deadline and require exited observations; absent
 optional containers are distinguished from Docker/inspection failure; surviving
 writers prevent later actions; bootstrap detach/removal stays named; emergency
-restart stops only CPA before restart. Synthetic markers replace all credentials.
+restart stops only CPA before restart. The rehearsal needs no credentials.
 
 Real pinned-image termination, Docker DNS/mTLS, bootstrap/enrollment, matched
 snapshot/restore, functional protocols/panel, and real provider/client acceptance
