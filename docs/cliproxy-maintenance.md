@@ -454,83 +454,57 @@ retry automatic enrollment to get past a failure.
 
 ## Permanent activation and initial acceptance
 
-This connects the one-time import, pending enrollment, permanent runtime and
-matched recovery procedures. PR completion verifies synthetic behavior only;
-the human records production acceptance on
+This puts the procedures above in cutover order. PR completion verifies
+synthetic behavior only; the human records production acceptance on
 [#477](https://github.com/faviann/homelab-iac/issues/477).
 
-1. **Rehearse and establish the original baseline.** Run full `./validate.sh`
-   and the [native gates](#pinned-pair-gate) at the exact CPA/Home pins. Record
-   their revisions, pins and outcomes. Before production import, identify every
-   known consumer and previously healthy provider/model through the private safe
-   inventory above. Confirm available disk space and free port 8327. Preserve
-   Broodling's existing gateway `/v1` URL and `gpt-5.6-sol` tools/JSON contract;
-   untracked consumers continue using the legacy key. The client DNS/Traefik
-   route is unchanged. Prepare the later
-   [LAN routing slice](https://github.com/faviann/homelab-iac/issues/483) and its
-   DNS/TLS requirements; runtime startup alone cannot complete that gate.
-2. **Freeze and import from the original revision.** Approve the maintenance
-   window and freeze all controllers, administration, policy/provider changes
-   and consumer keys. From the recorded clean standalone checkout, synchronize
-   the reviewed cluster file, run `import-legacy`, and accept the imported state
-   through the loopback bootstrap as described above. Include possible package
-   upgrades, Docker reconciliation and host reboot in the window, even with
-   `--stack cliproxy`. An unexpected writer, nonempty target or partial/skipped
-   import aborts. Do not import from this Home-runtime checkout.
-3. **Protect the pending carrier and stop bootstrap.** Issue one native named
-   CPA enrollment, save its carrier in `vault_overmind_cliproxy_home_jwt` using
-   the human vault editor, then run `scripts/cliproxy-maintenance.sh stop`.
-   Require that bootstrap exited and close the tunnel. Retain the stopped
-   bootstrap to protect its pulled image from normal image prune. It stays off
-   the stack network and has no competing Home alias. Never run two Home
-   writers on the same SQLite state.
-4. **Activate the reviewed permanent runtime.** Switch to the clean reviewed
-   Home-runtime checkout and deploy with the supported operation:
+1. **Rehearse.** Run full `./validate.sh` and the
+   [pinned-pair gate](#pinned-pair-gate) at the exact pins, and record
+   revisions, pins and outcomes. Confirm free disk space and that port 8327 is
+   free on `overmind`. Prepare the
+   [LAN routing slice](https://github.com/faviann/homelab-iac/issues/483);
+   runtime startup alone cannot pass its gate.
+2. **Freeze, inventory and import** from the original standalone revision:
+   [Freeze and inventory](#freeze-and-inventory), then [Import once](#import-once).
+3. **Enroll and stop the bootstrap:**
+   [Native node enrollment and durable trust](#native-node-enrollment-and-durable-trust)
+   through [Stop and retain](#stop-and-retain-before-permanent-activation).
+   Never run two Home writers on the same SQLite state.
+4. **Activate.** From the clean reviewed Home-runtime checkout, run:
 
    ```bash
    ./run.sh configure --limit overmind --stack cliproxy
    ```
 
-   Check the exact pins, only one running Home writer, `.env` 0600, state/cache
-   directories root:root 0700, secret files 0600 and both PID 1 umasks 0077.
-   Require native Home authentication with the imported management password,
-   healthy membership for the recorded CPA identity and an authenticated legacy
-   key request to a known provider/model. A clean recap, running container or
-   CPA exit 0 is insufficient. Startup ordering is not functional readiness.
-5. **Accept existing clients and providers, or roll back.** Keep key/policy
-   changes frozen. Compare the original key and representative real consumers
-   at both `https://cliproxy.local.faviann.com` and
-   `http://overmind.faviann.vms:8317`. Require known models, Chat Completions with
-   tools and JSON output/streaming, Anthropic Messages and Responses
-   HTTP/SSE/WebSockets for consumers that use them. Confirm each previously
-   healthy Claude/Codex account still serves after import and restart. Compare
-   account count/status/metadata and management authentication to the safe
-   inventory. Confirm Home runtime edits persist through supported redeploy
-   without reimport, and CPA reconnects with unchanged cached trust after the
-   bounded restart. Under this human maintenance window, verify Home
-   unavailability fails rather than serving a local standalone fallback.
-   Complete #483's native panel, login and callback workflow through the chosen
-   LAN route without printing callback URLs. Any failure preserves evidence
-   and takes the original/current-export rollback branch above while the
-   accepted legacy key/policy baseline still holds. An unusable current export
-   requires matched Home recovery or human reauthentication, never stale tokens.
-6. **Verify the matched enrolled recovery baseline.** After certificate/cache
-   acceptance, run the existing `snapshot <new-name>` procedure. It stops Home
-   then CPA and records the full DB snapshot, matching cache and exact pair/
-   revision manifest. Rehearse restoration on an isolated target with provider
-   and production egress blocked; cloned trust must not reach production Home
-   or refresh real accounts. Preserve the frozen source until this baseline is
-   verified. Redeploy the permanent pair through the supported configure
-   operation, recheck old-key functional acceptance, then remove only the
-   stopped bootstrap with `remove-bootstrap`. Privately archive the original
-   before retiring obsolete shared-volume secret copies.
-7. **Close initial acceptance before identities change.** Record successful
-   live gates and **standalone rollback closed** explicitly before the first
-   real consumer-key switch. That later human-confirmed closure change retires
-   the one-time migration actions/tests as specified above. Subsequent key,
-   account and policy changes require new snapshots; later recovery restores
-   matched Home state and reapplies post-snapshot revocations before clients
-   return. Legacy-key retirement remains a separate explicit decision.
+   This can still configure and reboot the host; see
+   [Deploy, accept or recover](#deploy-accept-or-recover). Check the exact
+   pins, one running Home writer, `.env` at 0600 and both PID 1 umasks at 0077.
+   Readiness means native Home login with the imported management password,
+   the recorded CPA identity healthy in Home, and a legacy-key request served
+   by a known provider and model. A clean recap, a running container or CPA
+   exit 0 is not readiness.
+5. **Accept clients and providers, or roll back.** Keep keys and policy frozen.
+   Use the original key and representative real consumers at both
+   `https://cliproxy.local.faviann.com` and `http://overmind.faviann.vms:8317`.
+   Require all of these:
+   - Broodling's gateway `/v1` URL with `gpt-5.6-sol` Chat Completions, tools
+     and JSON output, plus each protocol another known consumer uses
+     (streaming, Anthropic Messages, Responses HTTP/SSE/WebSockets).
+   - Every previously healthy Claude/Codex account still serves, and accounts
+     and management login match the safe inventory.
+   - A Home runtime edit survives a supported redeploy without reimport.
+   - With Home stopped, requests fail instead of being served standalone.
+   - #483's native panel, login and callback workflow works through the LAN
+     route. Don't print callback URLs.
+
+   On any failure, preserve evidence and take the matching rollback branch:
+   [before](#rollback-before-home-could-refresh) or
+   [after possible refresh](#rollback-after-possible-refresh).
+6. **Take the enrolled recovery baseline:**
+   [Accept issued trust and take its matching snapshot](#accept-issued-trust-and-take-its-matching-snapshot).
+7. **Close the window:** record **standalone rollback closed** as in
+   [Close the window](#close-the-window), before the first real consumer-key
+   change.
 
 ## Matched recovery and assisted updates
 
@@ -625,12 +599,14 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 
 The runtime gate materializes the actual repository stack and starts its
 rendered Compose wiring with only isolated names, paths and network/port
-overrides. It verifies native DNS/mTLS and functional identity, the legacy
-`gpt-5.6-sol` tools/JSON contract and streaming, Anthropic Messages, Responses
-HTTP/SSE/WebSockets, Home configuration propagation, second deploy and cluster
-recreation with private persistent state/cache, restart and Home-outage failure.
-The migration gate rehearses the initial standalone rollback with synthetic
-refreshed credentials. The recovery gate below owns the native matched restore.
+overrides. It checks that a missing carrier fails rendering, the private `.env`,
+native DNS/mTLS identity, the legacy key with Broodling's `gpt-5.6-sol`
+tools/JSON request, an unchanged redeploy that recreates nothing, a cluster
+change that recreates only Home with the new document mounted read-only, and
+private startup umasks. Protocol behavior belongs to the pinned images and is a
+human acceptance check. The migration gate rehearses the initial standalone
+rollback with synthetic refreshed credentials. The recovery gate, described
+next, owns restart from cached trust and the native matched restore.
 
 Using synthetic credentials on an internal Docker network, this verifies the
 imported bcrypt password through native remote management and that the embedded

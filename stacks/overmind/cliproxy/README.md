@@ -12,8 +12,10 @@ Broodling keeps its fixed gateway `/v1` URL, `gpt-5.6-sol`, Chat Completions,
 tools and JSON-object contract. Initial cutover retains the legacy client key;
 consumer-secret changes happen separately after acceptance.
 
-This is a foundational controlled migration: follow the dedicated cutover and
-recovery procedure below before any live deployment.
+Cutover, rollback, recovery, assisted updates and the native Docker gates are
+in [the maintenance procedure](../../../docs/cliproxy-maintenance.md). Follow
+its [permanent activation and acceptance](../../../docs/cliproxy-maintenance.md#permanent-activation-and-initial-acceptance)
+before any live deployment.
 
 ## Runtime ownership
 
@@ -29,8 +31,7 @@ recovery procedure below before any live deployment.
 Home advertises `cliproxy-home:8327` on the project's default network. Native
 CPA/Home RESP uses mTLS directly over that network; an HTTP proxy cannot carry
 it. The permanent Home service publishes 8327 on the LAN. Browser routing is
-[#483](https://github.com/faviann/homelab-iac/issues/483); it must pass its LAN
-panel/callback acceptance gate before live cutover is accepted.
+[#483](https://github.com/faviann/homelab-iac/issues/483).
 
 Home's database is the runtime authority. CPA has no standalone config mount or
 `-config` argument, downloaded-panel setting or old loopback callback port
@@ -65,63 +66,22 @@ Do not rotate them during initial acceptance.
 The stack `.env` is managed at 0600. Host vars enforce root:root 0700 on Home,
 CPA and recovery directories; state stays outside stack synchronization and
 managed-file parent normalization. Both binaries start with `umask 077` and
-`exec`, preserving signal handling and private new files. Existing secret files
-must also be 0600: umask does not repair old modes. Verify metadata without
-reading contents. The legacy auth directory remains protected through the
-initial standalone rollback window.
+`exec`, preserving signal handling and private new files. Umask does not
+repair existing files; they must already be 0600.
 
-The CPA carrier retains its target/identity after enrollment. Its one-time
-secret is consumed, so losing the cache cannot be repaired by replaying the
-carrier. Use a matched restore or a fresh human-issued enrollment and a new
-accepted recovery set.
+The carrier's one-time secret is consumed at first connection, so replaying it
+cannot recreate a lost CPA cache. Recover with a matched restore or a fresh
+human-issued enrollment.
 
-## Initial cutover and acceptance
-
-Follow the integrated
-[permanent activation and acceptance procedure](../../../docs/cliproxy-maintenance.md#permanent-activation-and-initial-acceptance).
-Use the recorded standalone revision for import and rollback; this checkout
-cannot create the frozen legacy source. Live import, enrollment, vault edits,
-provider handling, activation and consumer-secret changes are human work.
-Repository PR completion does not assert production acceptance.
-
-From the reviewed runtime checkout, ordinary activation uses:
+## Deploy
 
 ```bash
 ./run.sh configure --limit overmind --stack cliproxy
 ```
 
-Stack targeting narrows stack synchronization; host configuration can still
-upgrade packages, reconcile Docker and reboot. `depends_on` orders startup and
-`unless-stopped` allows native retries. Neither it nor `up -d` proves readiness:
-require Home management authentication, the recorded healthy CPA identity and
-an authenticated provider request before admitting clients. CPA may exit zero
-on enrollment or Home-fetch failure. Only the permanent Home writer may run;
-retain the stopped, unaliased bootstrap until the matched baseline is verified.
-
-Acceptance covers both client entry paths, the original key, known models and
-protocol behavior, every previously healthy provider, Home login and callback
-workflow, restart, Home-outage failure, private modes and matched restoration.
-On initial failure use the
-[standalone rollback branch](../../../docs/cliproxy-maintenance.md#one-time-standalone-import-and-initial-rollback).
-After baseline verification record **standalone rollback closed** before any
-real consumer-key change. Later recovery restores matched Home state.
-
-## Verification and assisted updates
-
-```bash
-./validate.sh
-./validate.sh tests tests/regression/cliproxy_home_runtime_gate.py tests/regression/cliproxy_home_recovery_gate.py tests/regression/cliproxy_home_migration_gate.py
-```
-
-The explicit native gates need a local Docker daemon and the exact image pins.
-They use synthetic credentials and an internal network with a fake provider;
-they prove repository wiring, native protocols, enrollment/restart and matched
-restore without contacting production or providers. Default handoff validation
-has no Docker dependency. Browser interactions and real provider health remain
-human acceptance gates.
-
-Both images are pinned by literal tag and digest. Renovate holds this stack's
-updates for assisted review. Before every pair/schema update take a matched
-snapshot using the old Home pin, run these gates and follow
-[snapshot, restore and assisted updates](../../../docs/cliproxy-maintenance.md#matched-recovery-and-assisted-updates).
-There is no Home backup timer; the existing Postgres backup does not cover it.
+Startup is not readiness: CPA can exit 0 on an enrollment or Home-fetch
+failure. Judge a deploy by the connected CPA identity in Home and an
+authenticated provider request. Both images are pinned by tag and digest, and
+Renovate holds their updates for
+[assisted review](../../../docs/cliproxy-maintenance.md#assisted-updates).
+There is no Home backup timer; the Postgres backup does not cover it.
