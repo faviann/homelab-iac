@@ -532,17 +532,13 @@ tunnel above serves enrollment only and is closed before permanent activation.
 
 The entire Home hostname uses the existing `local-ip-restriction` allowlist;
 verify a client outside it receives 403. No path bypass or public administration
-is configured. The direct Home HTTP listener at `overmind.faviann.vms:8327`
-and CPA client listener at `overmind.faviann.vms:8317` remain reachable inside
-the accepted flat LAN boundary. The portal allowlist does not protect direct
-ports; future host segmentation is recorded in
+is configured. The direct listeners stay reachable on the flat LAN; see
 [the shared-pool ADR](adr/0013-share-one-ai-provider-credential-pool.md).
 
 Record production acceptance as hostname, revision, pins and outcomes without
 secret payloads: valid DNS/TLS, native browser/password login, successful real
 account addition and callback paste, previously healthy providers, allowlist
-denial and both unchanged client paths. Synthetic gates below do not perform
-these human checks.
+denial and both unchanged client paths.
 
 ## Matched recovery and assisted updates
 
@@ -633,7 +629,6 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 
 ```bash
 ./validate.sh tests tests/regression/cliproxy_home_runtime_gate.py tests/regression/cliproxy_home_recovery_gate.py tests/regression/cliproxy_home_migration_gate.py
-./validate.sh tests tests/regression/cliproxy_home_route_gate.py
 ```
 
 The runtime gate materializes the actual repository stack and starts its
@@ -658,17 +653,3 @@ It uses the deployed CPA pin and the resolved Home pin. It needs a local Docker
 daemon and fails without it. No-argument `./validate.sh` does not run it.
 This is isolated native-image evidence, not production enrollment, a browser
 interaction test or real OAuth/provider acceptance; those remain human gates.
-
-The route gate loads the actual Home and client router definitions and unchanged
-LAN allowlist into an isolated loopback-only Traefik. It checks the shipped
-Home panel and referenced assets, the panel's native password connection with
-the imported bcrypt credential, and its account-addition session and pasted
-synthetic canceled callback through that route. Cancellation deliberately ends
-in an authentication failure without a provider token exchange. A real socket
-source outside the allowlist receives 403 even with a forged forwarded header;
-the admitted client route still serves the legacy key and its old panel returns
-404. Only synthetic credentials and internal local Docker resources are used.
-The fixture's disposable TLS proves transport only; DNS, certificate validity,
-browser interactions and successful real-provider account addition remain the
-[human LAN acceptance](#lan-administration-and-acceptance). This explicit gate
-also needs local Docker and is excluded from no-argument `./validate.sh`.

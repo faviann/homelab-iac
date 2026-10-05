@@ -32,8 +32,7 @@ Home advertises `cliproxy-home:8327` on the project's default network. Native
 CPA/Home RESP uses mTLS directly over that network; an HTTP proxy cannot carry
 it. The permanent Home service publishes 8327 on the LAN. Administration uses
 `https://cliproxy-home.local.faviann.com/management.html` through portal's
-existing TLS and `local-ip-restriction` policy. Direct
-`http://overmind.faviann.vms:8327` shares the accepted LAN trust boundary.
+existing TLS and `local-ip-restriction` policy.
 
 Home's database is the runtime authority. CPA has no standalone config mount or
 `-config` argument, downloaded-panel setting or old loopback callback port
