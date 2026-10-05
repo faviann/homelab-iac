@@ -67,6 +67,11 @@ lxc_docker_env_stack_vars:
     agent_key: "{{ vault_overmind_homelab_dev_agent_key }}"
   cliproxy:
     home_jwt: "{{ vault_overmind_cliproxy_home_jwt }}"
+  sub2api:
+    postgres_password: "{{ vault_overmind_sub2api_postgres_password }}"
+    jwt_secret: "{{ vault_overmind_sub2api_jwt_secret }}"
+    totp_encryption_key: "{{ vault_overmind_sub2api_totp_encryption_key }}"
+    oidc_client_secret: "{{ vault_overmind_sub2api_oidc_client_secret }}"
 
 overmind_postgres_backup_enabled: true
 overmind_postgres_backup:

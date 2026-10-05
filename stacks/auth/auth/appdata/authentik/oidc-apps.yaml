@@ -178,3 +178,28 @@ apps:
     group: admins
     sub_mode: user_email
     issuer_mode: per_provider
+
+  - name: sub2api
+    slug: sub2api-local
+    provider_name: sub2api-local-oidc
+    launch_url: https://sub2api.local.faviann.com
+    client_id: sub2api-local
+    client_secret_var: stack_vars.sub2api_oidc_client_secret
+    signing_certificate_var: stack_vars.public_oidc_signing_certificate_name
+    redirect_uris:
+      - https://sub2api.local.faviann.com/api/v1/auth/oauth/oidc/callback
+    custom_scope_mappings:
+      - name: Admin Apps Email Verification
+        scope_name: email
+        description: Ensures admin apps receive a verified email claim
+        expression: |-
+          return {
+              "email": user.email,
+              "email_verified": True,
+          }
+    # sub2api only performs the authorization-code exchange.
+    grant_types:
+      - authorization_code
+    group: admins
+    sub_mode: user_email
+    issuer_mode: per_provider
