@@ -154,117 +154,101 @@ This runs the script with a real `flock` and local SSH/Docker stand-ins. It
 checks the script's ordering, scope and abort decisions. It does not check
 Docker's shutdown or network behavior, pinned-image termination, DNS/mTLS,
 enrollment, snapshot and restore, or real provider and client acceptance.
-The exact-image recovery gate below adds native enrollment, snapshot and
-restore verification; remaining client/panel behavior and live acceptance
-belong to the later integration and human cutover gates.
+The [pinned-pair gate](#pinned-pair-gate) covers native snapshot and restore.
 
 ## Matched recovery and assisted updates
 
-This prepares recovery for the accepted [Home integration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171).
-It does not enroll or activate production Home. The initial compatible pins are:
-
-| Component | Image | Source revision |
-| --- | --- | --- |
-| CPA | `eceasy/cli-proxy-api:v7.3.8@sha256:6c2c8a7904799bd29a3f7f92a598555d8321b6a5682000b87af4495c5704fa72` | `c93978c4ea2e908255a2a06c37599fda3651554a` |
-| Home | `eceasy/cli-proxy-api-home:v1.1.0@sha256:14e666f537b26a3fe1cb1a17b458000ff80898edbd7d6cafd83a4d5f7450a49c` | `c098d84d36f57b765e1545dcb53cb6717a673654` |
-
-Home owns runtime configuration, provider credentials/refresh state, consumer
-keys and revocations, persistent accounting and cluster trust. Ansible owns
+Home owns runtime configuration, provider credentials and refresh state,
+consumer keys and revocations, accounting and cluster trust. Ansible owns
 topology, pinned images, private directory declarations and startup inputs.
-Keep `home` and `cpa` outside synced `appdata`, `x-prereq-dirs` and
-`x-managed-files`; those mechanisms can normalize parent modes to 0755.
-The existing auth directory remains protected until initial standalone
-rollback acceptance closes. Existing overmind data/backup mounts suffice.
-The Postgres backup timer does not protect Home; there is no Home timer.
+Home state and the enrolled CPA certificate cache live in root-only 0700
+directories under `/data/overmind/cliproxy/{home,cpa}`. Recovery sets live under
+`/backups/overmind/cliproxy`. Keep these out of synced `appdata`,
+`x-prereq-dirs` and `x-managed-files`, which can reset parent modes to 0755.
+The legacy auth directory stays protected until standalone rollback acceptance.
+No timer backs up Home. The Postgres backup does not cover it.
 
-Take a snapshot **after successful CPA enrollment**, after administrative
-key/account/policy changes, and before every image or schema update:
+The initial compatible pair is CPA v7.3.8 (source `c93978c4ea2e908255a2a06c37599fda3651554a`)
+and Home v1.1.0 (source `c098d84d36f57b765e1545dcb53cb6717a673654`).
+
+### Snapshot
+
+Take a snapshot after CPA enrollment, after administrative key, account or
+policy changes, and before every image or schema update:
 
 ```bash
 scripts/cliproxy-maintenance.sh snapshot baseline-20261005
 ```
 
-The new candidate under `/backups/overmind/cliproxy/<name>` contains
-`home.zip`, the matching `cpa/` certificate cache, `images.txt` (deployed
-digest-pinned images and repository revision), artifact checksums and a private
-native export log. Record the upstream source revisions above for the initial
-pair; an assisted update records its reviewed revisions and compatibility
-evidence alongside the new candidate. Never edit pins in an existing set.
-Names contain only letters, digits, underscores and hyphens; an existing
-successful or incomplete candidate is never reused.
+This creates a new candidate at `/backups/overmind/cliproxy/<name>`: `home.zip`,
+the matching `cpa/` cache, `images.txt` (deployed digest pins and repository
+revision), `SHA256SUMS` and the native export log. The script refuses an existing
+name, and it refuses to run unless both parents are root:root 0700. It writes
+under umask 077.
 
-The script requires root:root 0700 parent directories, creates artifacts under
-umask 077 and repairs existing runtime/cache and copied file modes to 0600
-(directories 0700). Home export opens SQLite and runs its schema migration, so
-use the **old deployed pin** before upgrading and mount the whole writable
-database directory, including WAL/SHM. Never substitute a live `home.db` copy.
-Native [`-db-export`](https://github.com/router-for-me/CLIProxyAPIHome/blob/c098d84d36f57b765e1545dcb53cb6717a673654/cmd/home/main.go)
-creates a format-6 full snapshot in this pin, despite the README's stale
-format-4 claim. It includes config, provider state, key metadata, accounting
-and CA/private keys. Legacy `-export` creates exchange config/auth only and
-loses Home-only metadata; it is not a matched recovery snapshot. Snapshot ZIPs
-are **plaintext secrets** even at 0600. Never commit, publish, print or inspect
-their payloads in evidence.
+Home export opens SQLite and runs its schema migration. Export with the **old
+deployed Home pin** before an upgrade, from the whole database directory
+including WAL/SHM. Never copy a live `home.db`. In this pin, native
+[`-db-export`](https://github.com/router-for-me/CLIProxyAPIHome/blob/c098d84d36f57b765e1545dcb53cb6717a673654/cmd/home/main.go)
+writes a full snapshot: config, provider state, key metadata, accounting and
+CA/private keys. Legacy `-export` writes only exchange config and auth and is
+not a recovery snapshot. Snapshot ZIPs are **plaintext secrets**. Never
+commit, publish, print or inspect their payloads.
 
-A candidate becomes successful only after a restore rehearsal with its
-recorded pinned pair and matching cache on an isolated target. Block all
-provider/production egress; a copied identity must never reach production
-Home or refresh real accounts. Verify persistent state and native CPA
-reconnection. The required synthetic gate is:
+### Retention
 
-```bash
-./validate.sh tests tests/regression/test_cliproxy_home_recovery.py
-```
+A candidate counts as successful only after a restore rehearsal with its
+recorded pair and cache on an isolated target with no provider or production
+egress. A copied identity must never reach production Home or refresh real
+accounts. Keep the current and previous successful sets. Failed or incomplete
+candidates never advance retention. Record acceptance privately as names,
+revisions, counts and outcomes. A human retires older sets. Nothing prunes
+them automatically.
 
-It requires a local Docker daemon and resolves these exact pinned images;
-unavailable prerequisites fail the gate. It does not use production state.
-Keep the current and previous **successful** matched recovery sets. Incomplete
-or failed candidates never advance retention. Record acceptance privately
-using names, revisions, counts and outcomes, with no secret payloads. Older
-sets may remain until a human approves their retirement; no automated pruning
-or backup service is introduced.
+### Restore
 
-For recovery, keep the maintenance freeze and select a verified matched set:
+Keep the maintenance freeze and pick a verified set:
 
 ```bash
 scripts/cliproxy-maintenance.sh restore baseline-20261005
 ```
 
-The native tool imports into a genuinely new empty
-`/data/overmind/cliproxy/restore-<name>-<unique-attempt>/home` directory; a populated persistent
-target is rejected by Home. The script keeps failed Home state (including
-sidecars) and CPA cache under that attempt's `failed-home` and `failed-cpa`,
-then installs the restored pair at the declared runtime paths. Native full
-restore preserves persistent business state; expired/runtime-only records
-and internal migration rows may intentionally be skipped. This is not a
-byte-for-byte SQLite copy. Native output stays in private logs, and failed
-attempt directories remain for diagnosis rather than being merged or retried.
+The script verifies the set's checksums. It imports with the recorded Home
+image into a new empty `/data/overmind/cliproxy/restore-<name>-<attempt>/home`,
+moves the current Home state (with WAL/SHM) and CPA cache into that attempt's
+`failed-home` and `failed-cpa`, then installs the restored pair. Writers stay
+stopped. Native restore keeps business state but may skip expired or
+runtime-only records. It is not a byte-for-byte copy.
 
-Before clients return, restore the recorded compatible **pair** image pins and
-revision, and reapply every revocation made after the snapshot through native
-Home administration with CPA/client admission still blocked. The later
-enrollment/cutover procedure supplies that isolated administrative phase;
-`restore` deliberately leaves all writers stopped. Only then deploy through
-`./run.sh` and perform secret-safe functional acceptance. Missing or mismatched
-CPA cache/trust requires a matched restoration or new human enrollment. A
+Before clients return, deploy the recorded pair pins and reapply every
+revocation made after the snapshot, through Home administration while CPA and
+clients are still blocked. Then deploy through `./run.sh` and run functional
+acceptance. Judge CPA by its connected identity and an authenticated request.
+The pinned CPA can exit 0 after a carrier or cache failure. A missing or
+mismatched cache needs a matched restore or new human enrollment, because a
 consumed enrollment carrier cannot recreate lost identity keys.
-The pinned CPA may exit with status 0 after a carrier/cache failure; require
-native connected identity and authenticated functional readiness, not an exit
-code or container creation result.
 
-Recovery rolls back changes after the last snapshot. Later consumer keys,
-policy/account changes and accounting may be lost; later revocations must be
-reapplied, and stale OAuth refresh state may require operator login. After named
-consumer rollout, use Home recovery: the original single-key standalone
-template cannot preserve those consumers. Before rollout, follow the separately
-prepared initial standalone rollback procedure and preserve current refreshed
-provider state rather than silently restoring stale tokens.
+Recovery loses everything after the snapshot: later consumer keys, policy and
+account changes, and accounting. Stale OAuth refresh state may need an operator
+login. After named consumers exist, only Home recovery preserves them. Before
+then, use the standalone rollback and keep the current refreshed provider state.
 
-Renovate holds every update in this stack for dependency-dashboard approval,
-including tag and digest changes and the future Home sibling. This holds new
-update branches, not previously approved branches or rebases. An operator
-reviews the pair's compatibility, takes a pre-update set with the old Home
-binary, runs full `./validate.sh` plus the pinned pair's recovery/compatibility
-checks, and records post-update acceptance before advancing the baseline.
-Literal image pins remain in Compose for discovery; no automatic schema or
-image upgrade is permitted.
+### Assisted updates
+
+Renovate holds every update to this stack, tags and digests alike, for
+dependency-dashboard approval. The hold applies to new update branches, not
+ones already approved. Before approving: review the pair's compatibility, take a
+snapshot with the old Home pin, and run the pinned-pair gate and full
+`./validate.sh`. Record post-update acceptance before advancing the baseline.
+
+### Pinned-pair gate
+
+```bash
+./validate.sh tests tests/regression/cliproxy_home_recovery_gate.py
+```
+
+Using synthetic credentials on an internal Docker network, this enrolls a CPA
+with Home, takes a native full snapshot, restores it into an empty target,
+compares persistent state and reconnects the same CPA identity from the copied
+cache. It uses the deployed CPA pin and the gate's Home pin. It needs a local
+Docker daemon and fails without it. No-argument `./validate.sh` does not run it.

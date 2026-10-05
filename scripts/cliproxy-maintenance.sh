@@ -97,12 +97,7 @@ backups=/backups/overmind/cliproxy
 home_dir=$data/home
 cpa_dir=$data/cpa
 
-private_tree() {
-  chown -R root:root -- "$1"
-  find "$1" -type d -exec chmod 0700 {} +
-  find "$1" -type f -exec chmod 0600 {} +
-}
-
+# A root-only 0700 parent keeps everything beneath it private.
 private_parent() {
   [[ -d $1 && $(stat -c '%u:%g:%a' "$1") == '0:0:700' ]] ||
     abort "private parent must be root:root 0700: $1"
@@ -127,8 +122,6 @@ snapshot() {
   home_image=$(pinned_image cliproxy-home)
   cpa_image=$(pinned_image cliproxy)
   mkdir -- "$recovery" # Never reuse a successful or incomplete candidate.
-  private_tree "$home_dir"
-  private_tree "$cpa_dir"
   # Native export opens/migrates SQLite: it needs the whole writable directory,
   # including WAL/SHM. Offline tools have no time cap and no network access.
   docker run --rm --network none --entrypoint sh \
@@ -140,7 +133,6 @@ snapshot() {
   printf 'home_image=%s\ncpa_image=%s\nrepository_revision=%s\n' \
     "$home_image" "$cpa_image" "$2" >"$recovery/images.txt"
   (cd "$recovery"; sha256sum home.zip cpa/client-crt.pem cpa/client-key.pem cpa/home-ca-crt.pem >SHA256SUMS)
-  private_tree "$recovery"
   echo "snapshot candidate prepared: $recovery; verify isolated restore before counting it as successful"
 }
 
@@ -165,7 +157,6 @@ restore() {
   # Preserve the entire failed DB/WAL/cache before replacing either runtime path.
   [[ ! -e $home_dir ]] || mv -- "$home_dir" "$stage/failed-home"
   [[ ! -e $cpa_dir ]] || mv -- "$cpa_dir" "$stage/failed-cpa"
-  private_tree "$stage"
   mv -- "$stage/home" "$home_dir"
   mv -- "$stage/cpa" "$cpa_dir"
   echo 'matched state restored; keep writers stopped, use recorded pair pins and reapply later revocations before admitting clients'

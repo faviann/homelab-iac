@@ -294,9 +294,8 @@ Agent use of a documented raw command is a separate decision:
 - **Boundary:** mutating. The script holds the exclusive lifecycle lock for
   its whole run and exits `75` before SSH when the lock is held. It stops,
   detaches, removes or restarts only the named containers, stops Home before
-  CPA, and aborts if any writer is still running. Prepared native offline
-  snapshots, empty-target restores and private state copies stay within the
-  declared runtime/recovery paths. Run `./run.sh` only after the
+  CPA, and aborts if any writer is still running. Snapshot and restore write
+  only under the declared runtime and recovery paths. Run `./run.sh` only after the
   script has exited. A person freezes other control nodes and Home
   administration for the whole window, including the gaps between runs.
 - **Sensitive output:** no environment dumps, credential contents, or secrets
@@ -387,9 +386,5 @@ These are known limits, not defects waiting for a fix.
   that the real `ssh` client decides trust. Validation fails on a machine
   without it, and it installs nothing.
 - `./validate.sh` needs no machine-local secret, so a build server can now run
-  it after a checkout and its documented tooling prerequisites. The mandatory
-  CPA/Home recovery fixture also needs a local Docker Unix socket and the exact
-  pinned images (pulled by controlled test setup if absent). It uses only
-  temporary synthetic state, an internal network and offline native tools;
-  missing Docker or images fails rather than skipping the gate. None exists yet
+  it after a checkout, a `uv` install, and `openssh-server`. None exists yet
   (#200).

@@ -33,17 +33,10 @@ disarmed by whatever compromises the guest, and because host-level segmentation
 supersedes that role rather than extending it.
 
 The [accepted Home integration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171)
-supersedes the single-key attribution/revocation tradeoff after human cutover.
-The shared provider pool and LAN trust boundary remain. Home becomes the sole
-runtime authority for provider credentials, configuration, consumer-key state,
-accounting and cluster trust; Ansible retains topology and bootstrap inputs.
-Independent named keys share that pool without user tenancy or quotas.
-Native Home management authentication and a separate LAN-only administrative
-endpoint replace the shared CPA management-panel rationale when routing lands.
-Production stays standalone until the prepared migration is executed.
-
-Recovery is manual: a post-enrollment full Home snapshot, matching CPA cache and
-recorded compatible pair pins form one private recovery set. Retain current and
-previous successful sets and reapply later revocations before client admission.
-Runtime DB/WAL/cache stay outside stack synchronization. See
-[the recovery and assisted-update contract](../cliproxy-maintenance.md#matched-recovery-and-assisted-updates).
+supersedes the single-key attribution/revocation tradeoff once cut over. The
+shared provider pool and LAN trust boundary remain. Home becomes the runtime
+authority for provider credentials, configuration, consumer keys, accounting
+and cluster trust, with independent named keys and no user tenancy or quotas.
+Ansible keeps topology and bootstrap inputs. Recovery is manual, from matched
+Home snapshot and CPA cache sets; see
+[the recovery contract](../cliproxy-maintenance.md#matched-recovery-and-assisted-updates).
