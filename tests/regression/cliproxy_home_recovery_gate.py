@@ -93,7 +93,7 @@ class HomeCPAPair:
         except (OSError, subprocess.TimeoutExpired):
             pytest.fail(stage + ": Docker unavailable or timed out", pytrace=False)
         if check and result.returncode:
-            pytest.fail(f"{stage}: Docker operation failed\n{result.stderr[-2000:]}", pytrace=False)
+            pytest.fail(f"{stage}: Docker operation failed (exit {result.returncode})", pytrace=False)
         return result
 
     def prepare(self) -> None:
@@ -291,8 +291,11 @@ def test_full_snapshot_restores_business_state_and_matching_cpa(home_cpa_pair):
     pair.wait(lambda: any(row[1] == NAMED_KEY and row[5] == 3 and not row[6] for row in persistent_observation(source)["usage"]), "persisted synthetic accounting")
     pair.stop()
     before = persistent_observation(source)
-    assert len(before["provider"]) == 1 and len(before["keys"]) == 2
-    assert any(row[0] == node_id and not row[3] and row[6] for row in before["trust"]), "enrollment was not completed and consumed"
+    provider_count, key_count = len(before["provider"]), len(before["keys"])
+    assert provider_count == 1 and key_count == 2
+    enrolled = any(row[0] == node_id and not row[3] and row[6] for row in before["trust"])
+    if not enrolled:
+        pytest.fail("enrollment was not completed and consumed", pytrace=False)
 
     recovery = pair.directory("recovery-set")
     pair.native(source, "-db-export", "/recovery/recovery-set/home.zip", stage="native full database export")
@@ -303,7 +306,9 @@ def test_full_snapshot_restores_business_state_and_matching_cpa(home_cpa_pair):
 
     target = pair.directory("restored-state")
     pair.native(target, "-db-import", "/recovery/recovery-set/home.zip", stage="native empty-target full restore")
-    assert persistent_observation(target) == before, "restored persistent business state differs"
+    restored = persistent_observation(target) == before
+    if not restored:
+        pytest.fail("restored persistent business state differs", pytrace=False)
 
     restored_home = pair.directory("restored-cpa")
     shutil.copytree(recovery / "cpa", restored_home / ".cli-proxy-api")
