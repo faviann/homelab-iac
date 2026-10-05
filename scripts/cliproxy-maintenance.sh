@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Human-only CPA/Home maintenance on overmind. See docs/cliproxy-maintenance.md.
 #
-# Usage: scripts/cliproxy-maintenance.sh stop|remove-bootstrap|remove-home|restart-cpa|snapshot <name>|restore <name>
+# Usage: scripts/cliproxy-maintenance.sh stop|remove-bootstrap|remove-home|restart-cpa|snapshot <name>|restore <name>|import-legacy <name>|export-current <name>|rollback-original <name>|rollback-current <name>
 #
 # Holds the lifecycle lock for the whole run; contention exits 75 before SSH.
 set -euo pipefail
@@ -13,7 +13,7 @@ case ${1:-} in
     name=
     revision=
     ;;
-  snapshot|restore)
+  snapshot|restore|import-legacy|export-current|rollback-original|rollback-current)
     (($# == 2)) && [[ $2 =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$ ]] ||
       { sed -n 4p "$0" >&2; exit 2; }
     action=$1
@@ -96,6 +96,9 @@ data=/data/overmind/cliproxy
 backups=/backups/overmind/cliproxy
 home_dir=$data/home
 cpa_dir=$data/cpa
+legacy=/conf/docker/stacks/cliproxy/appdata
+# The finite initial migration uses exactly the resolved Home version.
+initial_home_image=eceasy/cli-proxy-api-home:v1.1.0@sha256:14e666f537b26a3fe1cb1a17b458000ff80898edbd7d6cafd83a4d5f7450a49c
 
 # A root-only 0700 parent keeps everything beneath it private.
 private_parent() {
@@ -109,6 +112,93 @@ pinned_image() {
   [[ $image =~ @sha256:[a-f0-9]{64}$ ]] || abort "$1 image is not digest-pinned"
   echo "$image"
 }
+
+import-legacy() {
+  local candidate file
+  candidate=$backups/$1
+  private_parent "$data"
+  private_parent "$backups"
+  [[ ! -e $home_dir ]] || {
+    private_parent "$home_dir"
+    [[ -z $(find "$home_dir" -mindepth 1 -maxdepth 1 -print -quit) ]] || abort 'Home import directory is not empty; preserve and abandon the candidate'
+  }
+  [[ -s $legacy/config/config.yaml && -d $legacy/auth ]] || abort 'standalone source is missing'
+  private_parent "$legacy/auth"
+  [[ $(stat -c '%u:%g:%a' "$legacy/config/config.yaml") == '0:0:600' ]] || abort 'standalone config must be root:root 0600'
+  mkdir -- "$candidate"
+  mkdir -- "$candidate/original" "$candidate/bootstrap" "$candidate/bootstrap/auth"
+  cp -a -- "$legacy/config/config.yaml" "$candidate/original/config.yaml"
+  cp -a -- "$legacy/auth" "$candidate/original/auth"
+  # Hashes stay private; rollback-original checks them after the human gap.
+  (cd "$candidate/original"; find . -type f -exec sha256sum -- {} + >../SOURCE_SHA256SUMS)
+  cp -a -- "$candidate/original/config.yaml" "$candidate/bootstrap/config.yaml"
+  shopt -s nullglob
+  for file in "$candidate/original/auth/"*.[jJ][sS][oO][nN]; do
+    [[ -f $file && ! -L $file && $(stat -c '%u:%g:%a' "$file") == '0:0:600' ]] || abort 'OAuth source must be regular root:root 0600 files'
+    cp -a -- "$file" "$candidate/bootstrap/auth/"
+  done
+  printf 'home_image=%s\nstandalone_revision=%s\noauth_files=%s\n' \
+    "$initial_home_image" "$2" "$(find "$candidate/bootstrap/auth" -maxdepth 1 -type f | wc -l)" >"$candidate/import.txt"
+  [[ -d $home_dir ]] || mkdir -- "$home_dir"
+  docker run --rm --network none --entrypoint sh \
+    --mount "type=bind,src=$candidate/bootstrap,dst=/bootstrap" \
+    --mount "type=bind,src=$home_dir,dst=/CLIProxyAPIHome/data" "$initial_home_image" \
+    -c 'umask 077; exec ./CLIProxyAPIHome -import -config /bootstrap/config.yaml -auth-dir /bootstrap/auth -sqlite-path /CLIProxyAPIHome/data/home.db' \
+    >"$candidate/import.log" 2>&1 || abort 'native import failed; retain and abandon the private copy and DB candidate'
+  echo "import candidate prepared: $candidate; compare source coverage/status and native counts privately before enrollment; writers remain stopped"
+}
+
+export-current() {
+  local candidate
+  candidate=$backups/$1
+  private_parent "$data"
+  private_parent "$backups"
+  [[ -s $home_dir/home.db ]] || abort 'Home state is missing'
+  mkdir -- "$candidate"
+  # Export opens/migrates the DB, so keep the whole directories (WAL/SHM and a
+  # not-yet-enrolled cache) first. This is evidence, not a matched recovery set.
+  cp -a -- "$home_dir" "$candidate/home"
+  [[ ! -d $cpa_dir ]] || cp -a -- "$cpa_dir" "$candidate/cpa"
+  mkdir -- "$candidate/export"
+  docker run --rm --network none --entrypoint sh \
+    --mount "type=bind,src=$home_dir,dst=/CLIProxyAPIHome/data" \
+    --mount "type=bind,src=$candidate/export,dst=/export" "$initial_home_image" \
+    -c 'umask 077; exec ./CLIProxyAPIHome -export -export-dir /export -sqlite-path /CLIProxyAPIHome/data/home.db' \
+    >"$candidate/export.log" 2>&1 || abort 'native legacy export failed; retain and abandon the private candidate'
+  [[ -s $candidate/export/config.yaml && -d $candidate/export/auths ]] || abort 'legacy export is incomplete'
+  echo "current export candidate prepared: $candidate; compare coverage/status and frozen config-provider policy before rollback-current; writers remain stopped"
+}
+
+# Home state and its bind mounts stay in place; only the standalone auth tree
+# is replaced. Deploying the original revision re-renders the frozen config.
+rollback() {
+  local candidate source attempt
+  candidate=$backups/$2
+  private_parent "$data"
+  private_parent "$backups"
+  private_parent "$candidate"
+  if [[ $1 == original ]]; then
+    source=$candidate/original/auth
+    (cd "$candidate/original"; sha256sum --check ../SOURCE_SHA256SUMS >../source-verify.log 2>&1) || abort 'frozen source checksums failed'
+  else
+    source=$candidate/export/auths
+  fi
+  [[ -d $source ]] || abort 'selected auth tree is missing'
+  attempt=$(mktemp -d "$backups/rollback-$1-$2-XXXXXX")
+  cp -a -- "$source" "$attempt/auth"
+  # Restore a complete tree, never overlay stale credentials or stale filenames.
+  # cp -a preserves root-owned source/native-export files; protect the tree's
+  # root when it moves back into shared standalone storage.
+  chmod 0700 -- "$attempt/auth"
+  [[ ! -e $legacy/auth ]] || mv -- "$legacy/auth" "$attempt/replaced-auth"
+  mv -- "$attempt/auth" "$legacy/auth"
+  remove cliproxy-home-bootstrap
+  remove cliproxy-home
+  echo "standalone auth restored; evidence: $attempt; deploy the recorded original revision with ./run.sh, then verify legacy clients/providers"
+}
+
+rollback-original() { rollback original "$1"; }
+rollback-current() { rollback current "$1"; }
 
 snapshot() {
   local recovery home_image cpa_image
@@ -163,7 +253,7 @@ restore() {
 }
 
 case $1 in
-  snapshot|restore)
+  snapshot|restore|import-legacy|export-current|rollback-original|rollback-current)
     stop_writers
     detach_bootstrap
     "$1" "$2" "$3"

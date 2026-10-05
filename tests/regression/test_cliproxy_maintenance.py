@@ -69,6 +69,16 @@ elif args[0] == "run":
     paths = {{item.split("dst=")[1].split(",")[0]: Path(item.split("src=")[1].split(",")[0]) for item in mounts}}
     if "-db-export" in args[-1]:
         (paths["/recovery"] / "home.zip").write_bytes(b"synthetic-snapshot")
+    elif "-export -export-dir" in args[-1]:
+        (paths["/export"] / "config.yaml").write_text("synthetic-current-config")
+        (paths["/export"] / "auths").mkdir()
+        (paths["/export"] / "auths/current.json").write_text('{{"refresh_token":"synthetic-current"}}')
+    elif "-import -config" in args[-1]:
+        for path in (paths["/bootstrap"] / "auth").glob("*.json"):
+            payload = json.loads(path.read_text())
+            payload["uuid"] = "synthetic-added-uuid"
+            path.write_text(json.dumps(payload))
+        (paths["/CLIProxyAPIHome/data"] / "home.db").write_bytes(b"synthetic-imported-db")
     else:
         (paths["/CLIProxyAPIHome/data"] / "home.db").write_bytes(b"synthetic-restored-db")
 else:
@@ -85,7 +95,7 @@ class Rehearsal:
         self.home = root / "home"
         (self.home / ".ansible").mkdir(parents=True)
         for command in ("bash", "flock", "timeout", "grep", "sed", "git", "stat", "mkdir",
-                        "cp", "sha256sum", "mktemp", "mv", "unshare"):
+                        "cp", "sha256sum", "mktemp", "mv", "unshare", "find", "wc", "chmod"):
             self.bin.joinpath(command).symlink_to(shutil.which(command))
         for command in ("ssh", "docker"):
             shim = self.bin / command
@@ -231,12 +241,21 @@ def offline_rehearsal(rehearsal):
     (data / "home/home.db-wal").write_bytes(b"synthetic-wal")
     for name in ("client-crt.pem", "client-key.pem", "home-ca-crt.pem"):
         (data / "cpa" / name).write_bytes(b"synthetic-cache")
+    legacy = rehearsal.root / "legacy"
+    for path in (legacy / "config", legacy / "auth", legacy / "auth/static"):
+        path.mkdir(parents=True, mode=0o700)
+    for path, payload in ((legacy / "config/config.yaml", b"synthetic-original-config"),
+                          (legacy / "auth/original.json", b'{"type":"codex","refresh_token":"synthetic-original"}'),
+                          (legacy / "auth/static/panel.html", b"synthetic-panel")):
+        path.write_bytes(payload)
+        path.chmod(0o600)
     script = rehearsal.root / "scripts/maintenance.sh"
     script.parent.mkdir()
     # Local git revision stays tied to the actual checkout, while remote paths
     # are the only production inputs replaced for this controlled rehearsal.
     script.write_text(SCRIPT.read_text().replace("/data/overmind/cliproxy", str(data))
                       .replace("/backups/overmind/cliproxy", str(backups))
+                      .replace("/conf/docker/stacks/cliproxy/appdata", str(legacy))
                       .replace('git -C "$(dirname "$0")/.."', f'git -C "{SCRIPT.parents[1]}"'))
     try:
         yield rehearsal, script, data, backups
@@ -269,3 +288,80 @@ def test_offline_snapshot_failure_retains_candidate_and_never_restarts(offline_r
     assert result.returncode != 0
     assert (backups / "failed").exists()
     assert all(verb == "stop" for verb, _ in rehearsal.effects())
+
+
+def test_import_uses_only_writable_copy_and_preserves_frozen_source(offline_rehearsal):
+    rehearsal, script, data, backups = offline_rehearsal
+    shutil.rmtree(data / "home")
+    result = rehearsal.run("import-legacy", "initial", script=script, offline=True)
+    assert result.returncode == 0, result.stderr
+    candidate = backups / "initial"
+    original = candidate / "original/auth/original.json"
+    copied = candidate / "bootstrap/auth/original.json"
+    assert "uuid" not in json.loads(original.read_text())
+    assert json.loads(copied.read_text())["uuid"] == "synthetic-added-uuid"
+    assert (candidate / "original/auth/static/panel.html").exists()
+    assert not (candidate / "bootstrap/auth/static").exists()
+    assert original.stat().st_mode & 0o777 == 0o600
+    assert "oauth_files=1" in (candidate / "import.txt").read_text()
+    native = [event for event in rehearsal.events() if event[:2] == ["docker", "run"]]
+    assert len(native) == 1
+    assert native[0][native[0].index("--network") + 1] == "none"
+    assert "-import -config /bootstrap/config.yaml" in native[0][-1]
+    assert all(item["status"] == "exited" for item in rehearsal.final().values())
+
+
+def test_import_rejects_nonempty_home_without_native_or_source_changes(offline_rehearsal):
+    rehearsal, script, _, backups = offline_rehearsal
+    result = rehearsal.run("import-legacy", "initial", script=script, offline=True)
+    assert result.returncode != 0
+    assert not (backups / "initial").exists()
+    assert not any(event[:2] == ["docker", "run"] for event in rehearsal.events())
+
+
+@pytest.mark.parametrize("branch", ["original", "current"])
+def test_standalone_rollback_replaces_auth_preserves_state_and_removes_orphans(offline_rehearsal, branch):
+    rehearsal, script, data, backups = offline_rehearsal
+    rehearsal.containers["cliproxy-home-bootstrap"] = rehearsal.container("cliproxy-home-bootstrap", "exited")
+    legacy = rehearsal.root / "legacy"
+    if branch == "original":
+        shutil.rmtree(data / "home")
+        result = rehearsal.run("import-legacy", "candidate", script=script, offline=True)
+        assert result.returncode == 0, result.stderr
+        expected_file = "original.json"
+        expected_payload = "synthetic-original"
+    else:
+        # No enrollment/cache requirement: preserve incomplete CPA state as evidence.
+        shutil.rmtree(data / "cpa")
+        result = rehearsal.run("export-current", "candidate", script=script, offline=True)
+        assert result.returncode == 0, result.stderr
+        assert (backups / "candidate/home/home.db-wal").exists()
+        assert not (backups / "candidate/cpa").exists()
+        assert (legacy / "auth/original.json").exists()  # Export is not replacement.
+        expected_file = "current.json"
+        expected_payload = "synthetic-current"
+    (legacy / "auth/stale.json").write_bytes(b"synthetic-stale")
+    result = rehearsal.run("rollback-" + branch, "candidate", script=script, offline=True)
+    assert result.returncode == 0, result.stderr
+    assert not (legacy / "auth/stale.json").exists()
+    restored = legacy / "auth" / expected_file
+    assert json.loads(restored.read_text())["refresh_token"] == expected_payload
+    if branch == "current":
+        assert not (legacy / "auth/original.json").exists()
+    attempt, = backups.glob("rollback-" + branch + "-candidate-*")
+    assert (attempt / "replaced-auth/stale.json").exists()
+    removed = [target for verb, target in rehearsal.effects() if verb == "rm"]
+    assert removed == ["cliproxy-home-bootstrap", "cliproxy-home"]
+    assert list(rehearsal.final()) == ["cliproxy"]
+    assert rehearsal.final()["cliproxy"]["status"] == "exited"
+
+
+def test_current_export_failure_keeps_whole_private_state_and_partial_candidate(offline_rehearsal):
+    rehearsal, script, _, backups = offline_rehearsal
+    result = rehearsal.run("export-current", "failed", fail="native", script=script, offline=True)
+    assert result.returncode != 0
+    candidate = backups / "failed"
+    assert (candidate / "home/home.db-wal").exists()
+    assert (candidate / "cpa/client-key.pem").exists()
+    assert (candidate / "export").exists()
+    assert all(verb in ("stop", "disconnect") for verb, _ in rehearsal.effects())
