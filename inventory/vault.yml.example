@@ -105,12 +105,7 @@ vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 #                                              See stacks/overmind/cliproxy/README.md
 vault_overmind_cliproxy_api_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
 vault_overmind_cliproxy_management_key_hash: "REPLACE_WITH_BCRYPT_HASH"
-# Human-issued native Home machine enrollment, added through ./vault.sh edit.
-# Pending until CPA first starts in Home mode; issuance consumes its secret.
-# Retain this carrier for startup with the matching durable CPA certificate cache.
-# Cache loss needs matched Home/cache restoration or fresh human enrollment;
-# the consumed carrier cannot recreate trust. Standalone CPA does not require it.
-# See docs/cliproxy-maintenance.md#native-node-enrollment-and-durable-trust
+# One-time native Home enrollment carrier; see docs/cliproxy-maintenance.md#native-node-enrollment-and-durable-trust
 vault_overmind_cliproxy_home_jwt: "REPLACE_WITH_NATIVE_HOME_ENROLLMENT"
 
 # Renovate on devserver: fine-grained GitHub token scoped to faviann/homelab-iac.

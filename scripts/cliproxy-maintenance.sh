@@ -72,19 +72,6 @@ stop_writers() {
   stop cliproxy
 }
 
-# Detaches the stopped bootstrap from the stack network without removing it.
-detach_bootstrap() {
-  local s networks
-  s=$(state cliproxy-home-bootstrap)
-  [[ $s != absent ]] || return 0
-  [[ $s == stopped ]] || abort 'cliproxy-home-bootstrap is running'
-  networks=$(docker_ container inspect \
-    --format '{{range $n, $_ := .NetworkSettings.Networks}}{{$n}} {{end}}' \
-    cliproxy-home-bootstrap)
-  [[ " $networks " != *' cliproxy_default '* ]] ||
-    docker_ network disconnect cliproxy_default cliproxy-home-bootstrap
-}
-
 remove() {
   local s
   s=$(state "$1")
@@ -114,20 +101,20 @@ pinned_image() {
 }
 
 start-bootstrap() {
-  local s
+  local s container
   for container in cliproxy-home cliproxy; do
     s=$(state "$container")
     [[ $s != running ]] || abort "$container must be stopped before bootstrap"
   done
-  s=$(state cliproxy-home-bootstrap)
-  [[ $s == absent ]] || abort 'bootstrap already exists; preserve it and resolve the previous attempt'
   private_parent "$data"
   private_parent "$home_dir"
-  [[ -s $home_dir/home.db && -s $legacy/config/cluster.yaml ]] || abort 'imported Home database or reviewed cluster settings are missing'
+  # Without it Home would create an empty database that blocks a later import.
+  [[ -s $home_dir/home.db ]] || abort 'imported Home database is missing'
   # No Compose labels, automatic restart, credential input or enrollment helper.
-  # The existing project network supplies the identity recorded in the carrier.
+  # cluster.yaml, not Docker networking, supplies the identity in the carrier,
+  # so the bootstrap stays off the stack network. An existing bootstrap fails
+  # the name check; preserve it rather than removing it to retry.
   docker_ run --detach --pull never --name cliproxy-home-bootstrap --restart no \
-    --network cliproxy_default --network-alias cliproxy-home \
     --publish 127.0.0.1:8327:8327 --entrypoint sh \
     --mount "type=bind,src=$home_dir,dst=/CLIProxyAPIHome/data" \
     --mount "type=bind,src=$legacy/config/cluster.yaml,dst=/CLIProxyAPIHome/cluster.yaml,readonly" \
@@ -280,20 +267,16 @@ case $1 in
     ;;
   snapshot|restore|import-legacy|export-current|rollback-original|rollback-current)
     stop_writers
-    detach_bootstrap
     "$1" "$2" "$3"
     ;;
   stop)
     stop_writers
-    detach_bootstrap
     ;;
   remove-bootstrap)
-    detach_bootstrap
     remove cliproxy-home-bootstrap
     ;;
   remove-home)
     stop_writers
-    detach_bootstrap
     remove cliproxy-home-bootstrap
     remove cliproxy-home
     ;;

@@ -13,7 +13,7 @@ managed hosts.
 | --- | --- |
 | `cliproxy` | CPA, Compose service and container in project `cliproxy` |
 | `cliproxy-home` | Permanent Home, same project |
-| `cliproxy-home-bootstrap` | Temporary plain Home container used once for enrollment, attached only to `cliproxy_default` |
+| `cliproxy-home-bootstrap` | Temporary plain Home container used once for enrollment, outside the stack network |
 
 CPA always exists. Before migration, both Home containers may be absent. CPA
 and Home both write state, so each of them counts as a **writer**.
@@ -58,9 +58,9 @@ name this holder.
 
 | Action | Effect |
 | --- | --- |
-| `start-bootstrap` | Starts one plain named Home from the imported database and reviewed cluster file on loopback 8327, with the `cliproxy-home` alias on `cliproxy_default`. Requires stopped writers and no existing bootstrap. |
-| `stop` | Stops both Home containers, then CPA, and confirms each one exited. Then detaches a stopped bootstrap from `cliproxy_default`. Use it before offline state work. |
-| `remove-bootstrap` | Detaches and removes the stopped bootstrap. The running pair is left alone. Use it only after initial acceptance and a verified matched recovery baseline. |
+| `start-bootstrap` | Starts one plain named Home from the imported database and reviewed cluster file, publishing 8327 on loopback only. Requires stopped writers; Docker refuses a second bootstrap by name. |
+| `stop` | Stops both Home containers, then CPA, and confirms each one exited. Use it before offline state work. |
+| `remove-bootstrap` | Removes the stopped bootstrap. The running pair is left alone. Use it only after initial acceptance and a verified matched recovery baseline. |
 | `remove-home` | Standalone rollback. Runs `stop`, then removes both Home containers, which ordinary Compose startup would leave as orphans. CPA stays stopped until you deploy the original revision. Preserve the failed state first; removing the containers does not delete bind mounts. |
 | `restart-cpa` | Emergency. Stops and restarts CPA only. Home keeps running. |
 | `import-legacy <name>` | Freezes complete standalone config/auth in a new private candidate, imports only from a writable config/top-level OAuth copy into an empty Home directory, and leaves writers stopped for human acceptance. |
@@ -77,20 +77,17 @@ Actions abort without further changes on failures in the checks they perform:
 - A container is paused, restarting, or dead.
 - Both Home containers are running when an action fences all writers.
 - A writer is still running after it was stopped.
-- The bootstrap is running when it should be detached or removed.
 
 Stops give Docker 30 seconds before SIGKILL, so active requests can be cut off
-mid-stream. Container inspection, stop, detach, removal and restart calls are
+mid-stream. Container inspection, stop, removal and restart calls are
 capped at 45 seconds. Offline native export and restore have no time cap.
 
 Why Home stops first: Home's subscriptions can keep CPA from finishing
 SIGTERM.
 
 Why the bootstrap is kept until acceptance: normal deployment prunes unused
-images. The stopped bootstrap keeps the pulled Home image in use. It is
-detached so its network alias cannot compete with the permanent Home. If the
-daemon refuses to detach a stopped container, the run aborts. Don't restart a
-writer and don't add `--force` to get past it.
+images. The stopped bootstrap keeps the pulled Home image in use. It never
+joins the stack network, so it cannot compete for the permanent Home's alias.
 
 Never use Compose `down`, `--remove-orphans`, project-wide or pattern-based
 removal, or volume or network deletion.
@@ -344,11 +341,12 @@ The action uses the imported `/data/overmind/cliproxy/home/home.db` and the
 single reviewed [`cluster.yaml`](../stacks/overmind/cliproxy/appdata/config/cluster.yaml)
 at `/conf/docker/stacks/cliproxy/appdata/config/cluster.yaml`. It starts the
 resolved Home v1.1.0 digest with `umask 077`, no Compose labels, no automatic
-restart, and `127.0.0.1:8327:8327` only. On the existing `cliproxy_default`
-network it advertises `cliproxy-home:8327`; that identity goes into the carrier,
-regardless of the browser's tunnel address. No additional network is created.
-The action refuses an existing bootstrap, including a stopped one. Preserve
-that attempt and resolve it before starting another; do not remove it to retry.
+restart, and `127.0.0.1:8327:8327` only. The cluster file advertises
+`cliproxy-home:8327`; that identity goes into the carrier, regardless of the
+bootstrap's network or the browser's tunnel address, so the bootstrap stays off
+`cliproxy_default`. Docker refuses an existing bootstrap, including a stopped
+one. Preserve that attempt and resolve it before starting another; do not
+remove it to retry.
 
 From the workstation, keep this human-only tunnel open in another terminal:
 
@@ -405,7 +403,7 @@ issues the certificate and consumes the enrollment secret. Startup then keeps
 using that carrier's target/identity with its matching persisted trust. There
 is no automatic reenrollment.
 
-### Stop, detach and retain before permanent activation
+### Stop and retain before permanent activation
 
 After saving the pending carrier, run:
 
@@ -413,19 +411,8 @@ After saving the pending carrier, run:
 scripts/cliproxy-maintenance.sh stop
 ```
 
-This uses the existing bounded Home-first stop and detaches the stopped
-bootstrap from `cliproxy_default`. Before the later permanent deployment, check
-only safe state and network fields from the workstation:
-
-```bash
-ssh -l root -i ~/.ansible/ssh/proxmox_lxc overmind \
-  "docker container inspect --format '{{.State.Status}} {{range \$n, \$_ := .NetworkSettings.Networks}}{{\$n}} {{end}}' cliproxy-home-bootstrap"
-```
-
-Require `exited` or `created` and no `cliproxy_default` attachment. The stopped,
-detached bootstrap cannot compete for the `cliproxy-home` alias. On failure,
-keep the freeze and preserve the attempt; never restart it or force detach.
-Close the tunnel. Retain the stopped container through initial acceptance so
+This uses the existing bounded Home-first stop and fails unless the bootstrap
+exited. On failure, keep the freeze and preserve the attempt. Close the tunnel. Retain the stopped container through initial acceptance so
 normal image prune keeps the pulled Home image available.
 
 ### Accept issued trust and take its matching snapshot
@@ -558,10 +545,10 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 ```
 
 Using synthetic credentials on an internal Docker network, this verifies the
-imported bcrypt password through native remote management and checks the embedded
-panel HTML/assets. It issues a named enrollment for `cliproxy-home:8327`, checks
-private issued cache modes, restarts with the consumed carrier and unchanged
-trust, and proves cache loss cannot reuse that carrier. The same fixture takes
+imported bcrypt password through native remote management and that the embedded
+panel is served. It enrolls CPA through `cliproxy-home:8327`, checks private
+issued cache modes, restarts with the consumed carrier and unchanged trust, and
+proves cache loss cannot reuse that carrier. The same fixture takes
 a native full snapshot, restores it into an empty target, compares persistent
 state and reconnects the same CPA identity from the matching copied cache.
 It uses the deployed CPA pin and the resolved Home pin. It needs a local Docker

@@ -42,9 +42,7 @@ elif verb == ["container", "inspect"]:
     if fail == "inspect:" + target:
         raise SystemExit(1)
     item = containers[target]
-    if "NetworkSettings" in args[3]:
-        print(" ".join(item["networks"]))
-    elif "Config.Image" in args[3]:
+    if "Config.Image" in args[3]:
         print("eceasy/fixture:v1@sha256:" + "a" * 64)
     else:
         print(item["status"])
@@ -53,8 +51,6 @@ elif verb == ["container", "stop"]:
         raise SystemExit(1)
     if fail != "survives:" + target:
         containers[target]["status"] = "exited"
-elif verb == ["network", "disconnect"]:
-    containers[target]["networks"].remove(args[-2])
 elif verb == ["container", "rm"]:
     if containers[target]["status"] == "running":
         raise SystemExit("attempted removal of a running container")
@@ -68,8 +64,7 @@ elif args[0] == "run":
     mounts = [args[i + 1] for i, arg in enumerate(args) if arg == "--mount"]
     paths = {{item.split("dst=")[1].split(",")[0]: Path(item.split("src=")[1].split(",")[0]) for item in mounts}}
     if "--detach" in args:
-        bootstrap = args[args.index("--name") + 1]
-        containers[bootstrap] = {{"status": "running", "networks": [args[args.index("--network") + 1]]}}
+        containers[args[args.index("--name") + 1]] = {{"status": "running"}}
     elif "-db-export" in args[-1]:
         (paths["/recovery"] / "home.zip").write_bytes(b"synthetic-snapshot")
     elif "-export -export-dir" in args[-1]:
@@ -111,8 +106,7 @@ class Rehearsal:
 
     @staticmethod
     def container(name: str, status: str = "running") -> dict:
-        bootstrap = name == "cliproxy-home-bootstrap"
-        return {"status": status, "networks": ["cliproxy_default"] if bootstrap else []}
+        return {"status": status}
 
     def run(self, action="stop", *arguments, fail="", script=SCRIPT, offline=False):
         self.state_file.write_text(json.dumps({"containers": self.containers, "fail": fail}))
@@ -140,7 +134,7 @@ class Rehearsal:
         """Mutating Docker calls as (verb, container)."""
         return [
             (event[2], event[-1]) for event in self.events()
-            if event[0] == "docker" and event[2] in ("stop", "start", "rm", "disconnect")
+            if event[0] == "docker" and event[2] in ("stop", "start", "rm")
         ]
 
 
@@ -159,16 +153,13 @@ def test_contended_lock_performs_no_ssh_or_docker(rehearsal):
 
 
 @pytest.mark.parametrize("home", ["cliproxy-home", "cliproxy-home-bootstrap"])
-def test_stop_stops_home_before_cpa_and_detaches_bootstrap(rehearsal, home):
+def test_stop_stops_home_before_cpa(rehearsal, home):
     if home == "cliproxy-home-bootstrap":
         del rehearsal.containers["cliproxy-home"]
         rehearsal.containers[home] = rehearsal.container(home)
     result = rehearsal.run()
     assert result.returncode == 0, result.stderr
-    expected = [("stop", home), ("stop", "cliproxy")]
-    if home == "cliproxy-home-bootstrap":
-        expected.append(("disconnect", home))
-    assert rehearsal.effects() == expected
+    assert rehearsal.effects() == [("stop", home), ("stop", "cliproxy")]
     assert all(item["status"] == "exited" for item in rehearsal.final().values())
 
 
@@ -217,14 +208,6 @@ def test_removal_is_limited_to_named_home_containers(rehearsal, action, removed,
         assert final["cliproxy-home"]["status"] == "running"
 
 
-def test_remove_bootstrap_refuses_a_running_bootstrap(rehearsal):
-    del rehearsal.containers["cliproxy-home"]
-    rehearsal.containers["cliproxy-home-bootstrap"] = rehearsal.container("cliproxy-home-bootstrap")
-    result = rehearsal.run("remove-bootstrap")
-    assert result.returncode != 0
-    assert rehearsal.effects() == []
-
-
 def test_restart_cpa_touches_only_cpa_and_requires_it_running(rehearsal):
     result = rehearsal.run("restart-cpa")
     assert result.returncode == 0, result.stderr
@@ -252,8 +235,6 @@ def offline_rehearsal(rehearsal):
                           (legacy / "auth/static/panel.html", b"synthetic-panel")):
         path.write_bytes(payload)
         path.chmod(0o600)
-    shutil.copyfile(SCRIPT.parents[1] / "stacks/overmind/cliproxy/appdata/config/cluster.yaml",
-                    legacy / "config/cluster.yaml")
     script = rehearsal.root / "scripts/maintenance.sh"
     script.parent.mkdir()
     # Local git revision stays tied to the actual checkout, while remote paths
@@ -269,32 +250,23 @@ def offline_rehearsal(rehearsal):
         shutil.rmtree(backups)
 
 
-def test_bootstrap_starts_one_named_loopback_home_and_stop_retains_it_detached(offline_rehearsal):
+def test_bootstrap_serves_imported_home_on_loopback_only(offline_rehearsal):
     rehearsal, script, data, _ = offline_rehearsal
     for container in rehearsal.containers.values():
         container["status"] = "exited"
     result = rehearsal.run("start-bootstrap", script=script, offline=True)
     assert result.returncode == 0, result.stderr
     native, = [event for event in rehearsal.events() if event[:2] == ["docker", "run"]]
-    assert native[native.index("--name") + 1] == "cliproxy-home-bootstrap"
-    assert native[native.index("--network") + 1] == "cliproxy_default"
-    assert native[native.index("--network-alias") + 1] == "cliproxy-home"
     assert native[native.index("--publish") + 1] == "127.0.0.1:8327:8327"
     assert f"type=bind,src={data / 'home'},dst=/CLIProxyAPIHome/data" in native
-    assert any("/config/cluster.yaml,dst=/CLIProxyAPIHome/cluster.yaml,readonly" in arg for arg in native)
-    rehearsal.containers = rehearsal.final()
-    result = rehearsal.run("stop", script=script, offline=True)
-    assert result.returncode == 0, result.stderr
-    assert rehearsal.final()["cliproxy-home-bootstrap"] == {"status": "exited", "networks": []}
-    assert not any(verb == "rm" for verb, _ in rehearsal.effects())
 
 
-@pytest.mark.parametrize("owner", ["cliproxy", "cliproxy-home", "cliproxy-home-bootstrap"])
-def test_bootstrap_refuses_running_writers_or_a_retained_attempt(offline_rehearsal, owner):
+@pytest.mark.parametrize("owner", ["cliproxy", "cliproxy-home"])
+def test_bootstrap_refuses_running_writers(offline_rehearsal, owner):
     rehearsal, script, _, _ = offline_rehearsal
     for container in rehearsal.containers.values():
         container["status"] = "exited"
-    rehearsal.containers[owner] = rehearsal.container(owner, "exited" if owner.endswith("bootstrap") else "running")
+    rehearsal.containers[owner]["status"] = "running"
     result = rehearsal.run("start-bootstrap", script=script, offline=True)
     assert result.returncode != 0
     assert rehearsal.effects() == []
@@ -411,4 +383,4 @@ def test_current_export_failure_keeps_whole_private_state_and_partial_candidate(
     assert (candidate / "home/home.db-wal").exists()
     assert (candidate / "cpa/client-key.pem").exists()
     assert (candidate / "export").exists()
-    assert all(verb in ("stop", "disconnect") for verb, _ in rehearsal.effects())
+    assert all(verb == "stop" for verb, _ in rehearsal.effects())
