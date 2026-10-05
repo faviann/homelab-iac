@@ -76,6 +76,39 @@ The carrier's one-time secret is consumed at first connection, so replaying it
 cannot recreate a lost CPA cache. Recover with a matched restore or a fresh
 human-issued enrollment.
 
+## Consumer identities and inventory
+
+Home's native key records give each actual consumer an independently named,
+attributable and revocable credential over the same provider account pool.
+Keep keys unowned (`user_id: null`) with empty `channels` and `model_groups`.
+Label the imported key `legacy-shared` without changing its value or stable
+Home ID; unknown and unmigrated consumers keep using it until a separate
+explicit retirement decision.
+
+Follow the [human identity rollout](../../../docs/cliproxy-maintenance.md#consumer-identity-rollout)
+after initial live acceptance, the verified matched recovery baseline and
+explicit closure of the standalone rollback window.
+
+| Consumer name | Stable Home key ID | Credential-source owner | Migration status |
+| --- | --- | --- | --- |
+
+Use the actual Home numeric ID, rather than a display name or list index. For
+each known consumer, record the responsible owner and its approved secret-store
+or binding reference, never the key value. Record the observed status: `legacy`,
+`prepared` (key created, consumer unchanged), `migrated` (behavior and ID
+attribution accepted), or `revoked`, with a date and non-secret evidence
+reference. Multiple legacy consumers may reference the same legacy ID. Retain
+revoked/deleted rows and the shared record so recovery can reapply later
+revocations. Update this table after each accepted administrative change; it
+does not reconcile Home state or provision secrets.
+
+### Broodling gateway contract
+
+Broodling requires `GATEWAY_BASE_URL=https://cliproxy.local.faviann.com/v1`,
+`gpt-5.6-sol`, Chat Completions, tools and JSON-object output. When its
+operator migrates it, only its separately owned gateway key changes. Its
+deployment is owned by [#353](https://github.com/faviann/homelab-iac/issues/353).
+
 ## Deploy
 
 ```bash

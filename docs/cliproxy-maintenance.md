@@ -102,9 +102,9 @@ no routing labels.
 
 ### Emergency CPA restart
 
-First revoke the consumer key through Home administration. Revoking rejects
-new requests but does not end an open stream or a retained Responses WebSocket
-session. `restart-cpa` interrupts **every** CPA session and may reach the
+First [revoke the individual consumer key](#revocation-and-session-limits)
+through Home administration. Revocation rejects new requests only; `restart-cpa`
+interrupts **every** CPA session and may reach the
 forced-termination deadline. A running container is not proof that CPA works;
 run the secret-safe acceptance probes afterwards.
 
@@ -540,6 +540,139 @@ secret payloads: valid DNS/TLS, native browser/password login, successful real
 account addition and callback paste, previously healthy providers, allowlist
 denial and both unchanged client paths.
 
+## Consumer identity rollout
+
+This prepares [#484](https://github.com/faviann/homelab-iac/issues/484). Only a
+human enrolls real consumer secrets and changes consumer configuration.
+Use Home's native API-key controls through the accepted LAN panel. The
+individual API operations below also describe the supported native management
+path; they are request shapes, not terminal commands. Supply passwords and
+key values through private native input or protected files. Never print the
+key-list response: it includes every raw key, even when only IDs/names are
+needed. No provider credential or CPA enrollment carrier is a consumer key.
+
+### Readiness and enumeration
+
+Before the first real consumer-key change, require all of these:
+
+- Initial client/provider acceptance at both unchanged addresses and
+  [LAN panel/callback acceptance](#lan-administration-and-acceptance) are
+  recorded on [#477](https://github.com/faviann/homelab-iac/issues/477).
+- The enrolled [matched recovery baseline](#accept-issued-trust-and-take-its-matching-snapshot)
+  has passed its isolated restore rehearsal.
+- The human has explicitly recorded
+  [standalone rollback closed](#close-the-window). This preparation does not
+  close it; the one-time import/rollback machinery stays until that human
+  confirmation.
+- The [synthetic identity gate](#synthetic-identity-gate) passes at the accepted
+  pair pins. A maintenance window covers key changes, snapshot stops and any
+  emergency restart, since each can interrupt other consumers' sessions.
+
+Enumerate known consumers from operator knowledge and accepted deployment
+contracts. Fill the
+[non-secret inventory](../stacks/overmind/cliproxy/README.md#consumer-identities-and-inventory)
+with actual names, stable numeric Home IDs, actual credential-source owners
+and observed migration status. Keep unidentified consumers on the legacy key.
+Broodling follows its
+[fixed gateway contract](../stacks/overmind/cliproxy/README.md#broodling-gateway-contract).
+
+### Individual native key operations
+
+Use `/v8/management/access/api-keys` with Home's native management
+authentication. The
+[pinned native implementation](https://github.com/router-for-me/CLIProxyAPIHome/blob/c098d84d36f57b765e1545dcb53cb6717a673654/internal/cluster/management/api_keys.go)
+supports these operations:
+
+| Operation | Method and input | Record to keep |
+| --- | --- | --- |
+| Identify the imported record privately | `GET`; match its key privately against the frozen legacy credential | Its `items[].id` / `api_key_id`, without copying the secret-bearing response |
+| Create one actual consumer key | `POST` body `{"api_key": "<REPLACE_ME>", "display_name": "<ACTUAL_CONSUMER>", "user_id": null, "channels": [], "model_groups": []}` | Returned `api_key.id`, approved secret reference and actual owner |
+| Rename one record, including the legacy one to `legacy-shared` | `PATCH` body `{"id": <HOME_KEY_ID>, "display_name": "<NAME>"}` | Same stable ID and key value; updated inventory name |
+| Revoke one record | `DELETE` with query `id=<HOME_KEY_ID>` | Retained inventory row, revocation date and outcome |
+
+Do not use a bulk `PUT`, positional list indices or secret-valued query
+selectors. Verify the imported legacy record is unowned and has empty channel
+and model-group bindings. Create named keys with those same unrestricted
+bindings; this shares one existing provider pool without Home User tenancy,
+per-consumer channels, quotas or model policy. Naming the legacy record
+does not identify its individual callers.
+
+### Migrate one actual consumer
+
+1. Privately create a distinct consumer key using the individual native
+   operation. Confirm its actual name, returned ID, null owner and empty
+   bindings. Record the secret-source owner/reference and status `prepared`;
+   keep its value only in the approved credential store and native state.
+2. Change only that consumer's gateway credential using its owner's supported
+   procedure. Keep its base URL, model and request behavior. Test the actual
+   consumer contract and an unrelated named/legacy consumer. On failure,
+   stop this rollout: keep the legacy key serving, return this consumer to its
+   accepted legacy credential if necessary, and revoke its unused candidate
+   by ID. Do not revert the fleet to the old standalone template.
+3. Send a fresh accepted request and verify attribution through Home's native
+   `/v8/management/usage/records?client_key_id=<HOME_KEY_ID>` or
+   `/v8/management/usage/aggregates?group_by=client_key`. Match the record's
+   `client.api_key_id` or aggregate `id` to the inventory ID; the label may be
+   `api-key-ID` rather than the friendly name. Accounting is asynchronous:
+   wait for that request to appear, and record only non-secret ID/outcome
+   evidence. The provider API-key usage view measures provider credentials,
+   not consumer identity. Do not inspect/export payloads or raw key responses.
+4. Record status `migrated` only after behavior and ID attribution pass. Take
+   the [manual protected snapshot](#snapshot) after this administrative key
+   change, and resume through the existing supported deployment procedure.
+   Accept the recovery candidate through its isolated matched restore before
+   advancing retention. Snapshot creation stops Home and CPA, so schedule it
+   with every affected consumer. Then move to the next actual consumer.
+
+Keep deleted/revoked inventory rows and the ID evidence. Reapply later
+revocations after a stale snapshot restore before consumers return. Home
+remains the key authority; the inventory records the accepted migration and
+revocation outcomes.
+
+### Revocation and session limits
+
+First create a sacrificial key without changing any real consumer. Prove a
+request works, delete that one record by ID, and require its next independent
+request to be rejected while the other named and legacy keys still work.
+Record the revocation outcome and snapshot the resulting administrative state.
+Real revocation uses the same individual operation and preserves its inventory
+row; legacy retirement needs a separate explicit decision confirming no
+remaining callers depend on it.
+
+Revocation rejects new requests only. It does not prove existing work ended:
+an accepted HTTP stream can finish, and the pinned
+[CPA retained selection path](https://github.com/router-for-me/CLIProxyAPI/blob/c93978c4ea2e908255a2a06c37599fda3651554a/sdk/cliproxy/auth/conductor_home.go)
+reuses an existing same-model WebSocket selection without a fresh key check.
+Any key change publishes a configuration update that CPA reloads, which can
+also interrupt unrelated consumers' native sessions; do not rely on it as a
+per-consumer session kill. Treat existing work as potentially authorized until
+it closes. For guaranteed termination, revoke first and run the human-only
+bounded action:
+
+```bash
+scripts/cliproxy-maintenance.sh restart-cpa
+```
+
+This interrupts **all** CPA sessions, including unrelated consumers, and can
+force termination after the stop deadline. Follow
+[emergency CPA restart](#emergency-cpa-restart), then require fresh rejection
+for the revoked key and readiness for the surviving keys.
+
+### Synthetic identity gate
+
+```bash
+./validate.sh tests tests/regression/cliproxy_home_identity_gate.py
+```
+
+This explicit local-Docker gate reuses the pinned-pair fixture with synthetic
+credentials and one fake provider. It labels the imported legacy record without
+changing its ID or value, creates multiple unowned unrestricted named records
+individually, and checks attribution by stable ID. Deleting one record by ID
+rejects its next request while the other named and legacy keys keep serving.
+It does not check existing sessions; see
+[revocation and session limits](#revocation-and-session-limits). No-argument
+`./validate.sh` excludes this Docker-dependent filename.
+
 ## Matched recovery and assisted updates
 
 Home owns runtime configuration, provider credentials and refresh state,
@@ -628,7 +761,7 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 ### Pinned-pair gate
 
 ```bash
-./validate.sh tests tests/regression/cliproxy_home_runtime_gate.py tests/regression/cliproxy_home_recovery_gate.py tests/regression/cliproxy_home_migration_gate.py
+./validate.sh tests tests/regression/cliproxy_home_runtime_gate.py tests/regression/cliproxy_home_recovery_gate.py tests/regression/cliproxy_home_migration_gate.py tests/regression/cliproxy_home_identity_gate.py
 ```
 
 The runtime gate materializes the actual repository stack and starts its
