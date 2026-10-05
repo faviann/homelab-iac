@@ -1,278 +1,154 @@
 # Human maintenance of CPA and Home
 
-This procedure is the finite human-only exception in
-[command policy](command-policy.md#cpahome-maintenance-on-overmind). It implements
-[#478](https://github.com/faviann/homelab-iac/issues/478), using the
-[resolved migration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171).
-It authorizes no agent execution against managed hosts. Ordinary deployment
-continues through `./run.sh`.
+This is the procedure behind the human-only
+[command-policy exception](command-policy.md#cpahome-maintenance-on-overmind).
+It covers the CPA/Home migration on `overmind`, protected backup and restore,
+assisted pair updates, and emergency termination of revoked CPA sessions.
+Ordinary deployment stays on `./run.sh`. Agents do not run this against
+managed hosts.
 
-## Preconditions and authority
+## Names
 
-A human approves the maintenance window and freezes competing deployments on
-**all control nodes**, Home administration, provider/policy changes, and consumer
-key changes. Keep that freeze through raw maintenance, deployment, acceptance,
-and recovery. The workstation lock does not coordinate other control nodes or
-Home's administrative API. Cancel active requests as necessary; there is no
-promise of a graceful drain.
-
-Use the normal workstation home directory and existing controller identity.
-Do not change `$HOME` to evade a held lock. On `overmind`, the deployed project
-is `/conf/docker/stacks/cliproxy`, project `cliproxy`. Its exact container/service
-names are `cliproxy` and `cliproxy-home`; the plain temporary Home is
-`cliproxy-home-bootstrap`, attached only to `cliproxy_default`. Before migration,
-Home and bootstrap may be absent; CPA must exist. Unexpected project or service
-labels on these names, two running Home owners, paused/restarting/dead state, unavailable
-Docker, or failed inspection are aborts, not evidence that a writer is absent.
-Do not use Compose `down`, `--remove-orphans`, project-wide removal, name patterns,
-volume deletion, or network deletion.
-
-Native maintenance tools use the recorded pair, initially:
-
-| Component | Pin |
+| Name | What it is |
 | --- | --- |
-| CPA | `eceasy/cli-proxy-api:v7.3.8@sha256:6c2c8a7904799bd29a3f7f92a598555d8321b6a5682000b87af4495c5704fa72` |
-| Home | `eceasy/cli-proxy-api-home:v1.1.0@sha256:14e666f537b26a3fe1cb1a17b458000ff80898edbd7d6cafd83a4d5f7450a49c` |
+| `cliproxy` | CPA, Compose service and container in project `cliproxy` |
+| `cliproxy-home` | Permanent Home, same project |
+| `cliproxy-home-bootstrap` | Temporary plain Home container used once for enrollment, attached only to `cliproxy_default` |
 
-After an assisted pair update, use the pins recorded with the selected recovery
-set. Use the old pinned Home binary for the pre-update export/snapshot. The
-private paths reserved by the plan are `/data/overmind/cliproxy/home`,
-`/data/overmind/cliproxy/cpa`, and unique subdirectories under
-`/backups/overmind/cliproxy`. Their declarations and snapshot/import/restore
-commands arrive in later subissues; they are **not provisioned by this change**.
-Require root ownership, directories 0700 and files 0600 before using them.
-Never copy a live `home.db` alone, overwrite a populated restoration target,
-or allow concurrent state writers. Preserve the original standalone source
-through initial acceptance.
+CPA always exists. Before migration, both Home containers may be absent. CPA
+and Home both write state, so each of them counts as a **writer**.
 
-## Stop writers and detach bootstrap
+Native one-shot tools use the images pinned for the deployed pair. The CPA pin
+is in [`compose.yaml`](../stacks/overmind/cliproxy/compose.yaml). The Home pin
+is in the [migration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171)
+until Home joins that file. After an assisted update, use the pins recorded
+with the recovery set you restore from, and use the old Home image for the
+pre-update export.
 
-Run this block from the repository root on the workstation. It takes the existing
-exclusive nonblocking lock before SSH; contention exits 75 without contacting
-`overmind`. A directly acquired lock has no holder record, so competing supported
-commands may not identify this holder. The outer SSH limit is three minutes;
-each Docker observation has a ten-second limit plus five seconds before forced
-client termination. Each stop grants Docker thirty seconds before container
-SIGKILL and bounds its client to forty seconds plus five. A timeout or nonzero
-result aborts. Client timeout alone never proves a container exited.
+Private maintenance state lives under `/data/overmind/cliproxy/home`,
+`/data/overmind/cliproxy/cpa`, and a unique subdirectory of
+`/backups/overmind/cliproxy`. Require root ownership, 0700 directories and
+0600 files before you use them. Never copy a live `home.db` on its own, never
+overwrite a populated restore target, and keep the original standalone state
+until initial acceptance passes.
 
-Home subscriptions can keep CPA from finishing SIGTERM: stop permanent or
-temporary Home **before CPA**, inspect actual stopped state after each stop,
-and recheck every writer before offline work. Stop failure or any remaining
-writer forbids copying, importing, exporting, restoring, starting another owner,
-and deployment. Inspecting only state, labels and network names avoids container
-environment disclosure.
+## Before you start
 
-<!-- rehearsal: maintenance -->
+Approve a maintenance window. Freeze deployments from **every** control node,
+Home administration, provider and policy changes, and consumer key changes.
+Keep the freeze until acceptance or recovery is complete. The script's lock
+only covers this workstation, and it does nothing about Home's administrative
+API.
+
+In-flight requests may be cut off. Shutdown is not a graceful drain.
+
+## Run an action
+
+Run from the repository root on the workstation:
+
 ```bash
-(
-  flock --exclusive --nonblock 9 ||
-    { echo 'lifecycle lock held: nothing ran' >&2; exit 75; }
-  timeout --signal=TERM --kill-after=5s 180s \
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -l root \
-      -i ~/.ansible/ssh/proxmox_lxc overmind 'bash -se' <<'REMOTE'
-set -euo pipefail
-umask 077
-cd /conf/docker/stacks/cliproxy
-
-docker_bounded() {
-  timeout --signal=TERM --kill-after=5s 10s docker "$@"
-}
-abort() { echo "maintenance aborted: $*" >&2; exit 1; }
-# No environment/config dump. Failed inventory is not an absent container.
-docker_bounded info --format '{{.ServerVersion}}' >/dev/null
-containers="$(docker_bounded container ls --all --format '{{.Names}}')"
-container_state() {
-  local name="$1" record project service status running
-  case "$name" in
-    cliproxy|cliproxy-home|cliproxy-home-bootstrap) ;;
-    *) abort 'unapproved container' ;;
-  esac
-  if [[ $'\n'"$containers"$'\n' != *$'\n'"$name"$'\n'* ]]; then
-    [[ "$name" != cliproxy ]] || abort 'CPA is absent'
-    echo absent
-    return
-  fi
-  record="$(docker_bounded container inspect --format \
-    '{{with index .Config.Labels "com.docker.compose.project"}}{{.}}{{end}}|{{with index .Config.Labels "com.docker.compose.service"}}{{.}}{{end}}|{{.State.Status}}|{{.State.Running}}' "$name")"
-  IFS='|' read -r project service status running <<<"$record"
-  if [[ "$name" == cliproxy-home-bootstrap ]]; then
-    [[ -z "$project" && -z "$service" ]] || abort 'bootstrap has unexpected Compose labels'
-  else
-    [[ "$project" == cliproxy && "$service" == "$name" ]] || abort "unexpected owner of $name"
-  fi
-  case "$status|$running" in
-    'running|true') echo running ;;
-    'exited|false'|'created|false') echo stopped ;;
-    *) abort "unexpected state of $name" ;;
-  esac
-}
-require_stopped() {
-  local state
-  state="$(container_state "$1")"
-  [[ "$state" == stopped || "$state" == absent ]] || abort "$1 remains a writer"
-}
-stop_writer() {
-  local state
-  state="$(container_state "$1")"
-  if [[ "$state" == running ]]; then
-    timeout --signal=TERM --kill-after=5s 40s docker container stop --time 30 "$1" >/dev/null
-  fi
-  require_stopped "$1"
-}
-stop_all_writers() {
-  local home_state bootstrap_state
-  home_state="$(container_state cliproxy-home)"
-  bootstrap_state="$(container_state cliproxy-home-bootstrap)"
-  [[ "$home_state|$bootstrap_state" != 'running|running' ]] || abort 'two running Home owners'
-  # Validate CPA ownership/state before the first mutation.
-  container_state cliproxy >/dev/null
-  stop_writer cliproxy-home
-  stop_writer cliproxy-home-bootstrap
-  stop_writer cliproxy
-  require_stopped cliproxy-home
-  require_stopped cliproxy-home-bootstrap
-  require_stopped cliproxy
-}
-detach_bootstrap() {
-  local state networks
-  state="$(container_state cliproxy-home-bootstrap)"
-  [[ "$state" != absent ]] || return 0
-  require_stopped cliproxy-home-bootstrap
-  networks="$(docker_bounded container inspect --format \
-    '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' cliproxy-home-bootstrap)"
-  case "$networks" in
-    '') return 0 ;;
-    cliproxy_default) ;;
-    *) abort 'unexpected bootstrap network attachment' ;;
-  esac
-  docker_bounded network disconnect cliproxy_default cliproxy-home-bootstrap
-  networks="$(docker_bounded container inspect --format \
-    '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' cliproxy-home-bootstrap)"
-  [[ -z "$networks" ]] || abort 'bootstrap remains attached'
-}
-# Replace only these two action lines for the named alternatives below.
-stop_all_writers
-detach_bootstrap
-REMOTE
-) 9>>~/.ansible/homelab-iac-lifecycle.lock
+scripts/cliproxy-maintenance.sh <action>
 ```
 
-The block detaches only the stopped bootstrap from `cliproxy_default`. The
-[Moby v28 stopped-container path](https://github.com/moby/moby/blob/v28.0.0/daemon/container_operations.go#L958-L991)
-removes this stored attachment without starting the container. This source
-evidence does not verify the target daemon: if it rejects detach, abort and
-escalate without restarting a writer or adding `--force`. Retain
-that stopped container until initial acceptance: normal deployment prunes unused
-images, and the stopped container keeps the pulled Home image in use. Never start
-the permanent Home while a temporary Home writer or its competing alias remains.
-For offline state operations, insert only the reviewed pinned native/private
-operation after the successful writer checks, before `REMOTE`. Later runbooks
-supply those commands. Native one-shot import/export runs unpublished with
-`--network none`; temporary bootstrap publishes management port 8327 on loopback
-only, with no routing labels. No alternate owners or public bootstrap binding.
+The script takes the exclusive lifecycle lock before SSH and holds it until it
+exits. If a live operation holds the lock, it prints
+`lifecycle lock held: nothing ran`, exits 75, and does not contact `overmind`.
+Because the lock is taken directly, a `./run.sh` that collides with it cannot
+name this holder.
 
-## Named alternatives within the same locked block
+| Action | Effect |
+| --- | --- |
+| `stop` | Stops both Home containers, then CPA, and confirms each one exited. Then detaches a stopped bootstrap from `cliproxy_default`. Use it before offline state work. |
+| `remove-bootstrap` | Detaches and removes the stopped bootstrap. The running pair is left alone. Use it only after initial acceptance and a verified matched recovery baseline. |
+| `remove-home` | Standalone rollback. Runs `stop`, then removes both Home containers, which ordinary Compose startup would leave as orphans. CPA stays stopped until you deploy the original revision. Preserve the failed state first; removing the containers does not delete bind mounts. |
+| `restart-cpa` | Emergency. Stops and restarts CPA only. Home keeps running. |
 
-Replace the two action lines above, leaving all preflight/lock/bounds intact.
-These are finite alternatives, not a new lifecycle command.
+Each action aborts without further changes when:
 
-After initial acceptance and the verified matched recovery baseline, remove
-only the stopped bootstrap, leaving the permanent pair running. Do not force-remove
-a writer:
+- Docker can't list or inspect a container. A failed inspection never counts
+  as "absent".
+- A container is paused, restarting, or dead.
+- Both Home containers are running.
+- A writer is still running after it was stopped.
+- The bootstrap is running when it should be detached or removed.
 
-<!-- rehearsal: bootstrap-remove -->
-```bash
-require_stopped cliproxy-home-bootstrap
-detach_bootstrap
-if [[ "$(container_state cliproxy-home-bootstrap)" != absent ]]; then
-  docker_bounded container rm cliproxy-home-bootstrap >/dev/null
-fi
-```
+Stops give Docker 30 seconds before SIGKILL, so active requests can be cut off
+mid-stream. Every Docker call is capped at 45 seconds.
 
-For the recorded standalone rollback branch, stop all writers and remove only
-Home containers that ordinary Compose startup would leave as orphans. Preserve
-the failed state/recovery data before removal; removal does not delete bind mounts.
-CPA stays stopped until supported deployment of the reviewed original revision.
+Why Home stops first: Home's subscriptions can keep CPA from finishing
+SIGTERM.
 
-<!-- rehearsal: home-remove -->
-```bash
-stop_all_writers
-detach_bootstrap
-for name in cliproxy-home-bootstrap cliproxy-home; do
-  require_stopped "$name"
-  if [[ "$(container_state "$name")" != absent ]]; then
-    docker_bounded container rm "$name" >/dev/null
-  fi
-done
-```
+Why the bootstrap is kept until acceptance: normal deployment prunes unused
+images. The stopped bootstrap keeps the pulled Home image in use. It is
+detached so its network alias cannot compete with the permanent Home. If the
+daemon refuses to detach a stopped container, the run aborts. Don't restart a
+writer and don't add `--force` to get past it.
 
-For an active compromise, first revoke the consumer key through native Home
-administration. Revocation rejects new requests but does not end an existing
-stream or retained Responses WebSocket session. Explicitly accept interruption
-of **all CPA sessions**. This CPA-only operation may reach Docker's forced
-termination deadline; Home remains running. Verify CPA exited before starting it
-again, then perform the secret-safe functional acceptance probes. A running
-container is not functional readiness.
+Never use Compose `down`, `--remove-orphans`, project-wide or pattern-based
+removal, or volume or network deletion.
 
-<!-- rehearsal: emergency -->
-```bash
-# Validate every known owner, including the optional temporary Home.
-home_state="$(container_state cliproxy-home)"
-bootstrap_state="$(container_state cliproxy-home-bootstrap)"
-[[ "$home_state|$bootstrap_state" != 'running|running' ]] || abort 'two running Home owners'
-stop_writer cliproxy
-docker_bounded container start cliproxy >/dev/null
-[[ "$(container_state cliproxy)" == running ]] || abort 'CPA did not restart'
-```
+### Offline state work
 
-## Unlock, deploy, accept or recover
+Later issues add each snapshot, import, export or restore step as a new
+action of this script. Each one starts with the `stop` sequence, so it runs
+under the same lock and only after every writer has exited. The SSH session
+has no overall time limit, so a long import is not killed partway through.
+Run one-shot import and export with `--network none` and no published ports.
+A temporary bootstrap publishes management port 8327 on loopback only, with
+no routing labels.
 
-The subshell releases the raw lock on exit, including aborts. An SSH/client
-timeout leaves remote completion uncertain: keep the operator freeze, establish
-the actual remote state, and choose recovery before any retry or deployment.
-**Release it before
-every supported deployment invocation**; never nest `./run.sh` under that lock.
-For the reviewed permanent pair and, once prepared, its administration route:
+### Emergency CPA restart
+
+First revoke the consumer key through Home administration. Revoking rejects
+new requests but does not end an open stream or a retained Responses WebSocket
+session. `restart-cpa` interrupts **every** CPA session and may reach the
+forced-termination deadline. A running container is not proof that CPA works;
+run the secret-safe acceptance probes afterwards.
+
+## Deploy, accept or recover
+
+Deploy through the facade. Each call takes the lock again:
 
 ```bash
 ./run.sh configure --limit overmind --stack cliproxy
 ./run.sh configure --limit portal --stack traefik3
 ```
 
-Each call reacquires the existing lock. The unlock gap admits another deployment
-from this workstation; the operator freeze must cover that gap and both calls.
-`--stack` narrows stack sync/start, but host configuration can still upgrade
-packages, reconcile Docker, and reboot. Do not interpret `up -d` or a successful
-recap as acceptance. Check the recorded pins, private modes, every writer/alias,
-and the applicable readiness, client/provider, panel and recovery gates.
+`--stack` narrows stack sync. Host configuration can still upgrade packages,
+reconcile Docker, and reboot. A clean recap or `up -d` is not acceptance.
+Check the recorded pins, private modes, every writer, and the readiness,
+client/provider, panel and recovery gates.
 
-No environment dumps, credential-file contents, key/JWT/password argv values,
-callback URLs or secret request/log payloads may enter terminal transcripts or
-published evidence. Use operator-controlled protected files/prompts and native
-state; logs/artifacts stay private. `./vault.sh edit` is human-only and takes no
-lifecycle lock. An unusable recovery set, partial/skipped import, unexpected
-state, remaining writer or failed acceptance is an abort. Preserve evidence and
-choose the recorded recovery branch; do not merge/overwrite targets, reuse a
-consumed enrollment blindly, or fall back to stale provider tokens.
+If SSH drops mid-run, the remote result is unknown. Keep the freeze, find out
+the actual remote state, and choose the recovery branch before you retry or
+deploy.
 
-## Synthetic rehearsal and later acceptance
+Abort and preserve evidence on any of these:
 
-Run `./validate.sh tests tests/regression/test_cliproxy_maintenance.py` to execute
-the exact documented maintenance block and named alternatives with a real local
-`flock`, a temporary home, and local SSH/Docker stand-ins. No managed host,
-production credential, real Docker daemon, or provider is contacted. The stand-in
-records finite operations and simulated container states, including failures;
-this verifies procedure decisions, not Docker's implementation or CPA's shutdown
-behavior. Full handoff is `./validate.sh` with no arguments.
+- an unusable recovery set
+- a partial or skipped import
+- unexpected state
+- a writer that is still running
+- failed acceptance
 
-Rehearsal results are recorded with this PR: contention exits 75 before SSH;
-Home-first stops use a finite deadline and require exited observations; absent
-optional containers are distinguished from Docker/inspection failure; surviving
-writers prevent later actions; bootstrap detach/removal stays named; emergency
-restart stops only CPA before restart. The rehearsal needs no credentials.
+Then follow the recorded recovery branch. Don't merge into or overwrite
+targets, don't reuse a consumed enrollment blindly, and don't fall back to
+stale provider tokens.
 
-Real pinned-image termination, Docker DNS/mTLS, bootstrap/enrollment, matched
-snapshot/restore, functional protocols/panel, and real provider/client acceptance
-remain later implementation and human cutover gates. This rehearsal does not
-satisfy them or authorize production execution.
+Keep secrets out of terminals and evidence. That means no environment dumps,
+no credential-file contents, no key, JWT or password in command arguments, no
+callback URLs, and no secret request or log payloads. Use protected files or
+prompts and native state. Logs stay private. `./vault.sh edit` is human-only
+and takes no lifecycle lock.
+
+## Rehearsal
+
+```bash
+./validate.sh tests tests/regression/test_cliproxy_maintenance.py
+```
+
+This runs the script with a real `flock` and local SSH/Docker stand-ins. It
+checks the script's ordering, scope and abort decisions. It does not check
+Docker's shutdown or network behavior, pinned-image termination, DNS/mTLS,
+enrollment, snapshot and restore, or real provider and client acceptance.
+Those remain human cutover gates.

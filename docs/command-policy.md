@@ -278,43 +278,30 @@ Agent use of a documented raw command is a separate decision:
 
 #### CPA/Home maintenance on overmind
 
-- **Trigger:** reviewed initial CPA/Home migration, protected backup/restore,
-  assisted pair updates, or emergency termination of revoked CPA sessions.
-- **Audience:** human operator only. Agents implement and rehearse the
-  non-live procedure; they do not execute it against managed hosts.
-- **Scope:** `overmind`, deployed project `/conf/docker/stacks/cliproxy`,
-  Compose project `cliproxy`; services/containers `cliproxy` and
-  `cliproxy-home`; plain temporary container `cliproxy-home-bootstrap` and
-  only its `cliproxy_default` attachment. Native tools use the recorded CPA
-  v7.3.8/Home v1.1.0 pins, or the compatible pins recorded with a later
-  reviewed recovery set. Private maintenance storage is restricted to
-  `/data/overmind/cliproxy/home`, `/data/overmind/cliproxy/cpa`, and unique
-  subdirectories of `/backups/overmind/cliproxy`, plus the frozen legacy
-  config/auth source from this deployed stack. Later implementation must
-  declare/protect these private paths before use.
-- **Boundary:** follow [the finite maintenance procedure](cliproxy-maintenance.md).
-  Hold the existing exclusive nonblocking workstation lifecycle lock before
-  raw operations; contention performs no operation. Permit only bounded named
-  stops/restarts/removals, private copy/restoration, pinned native one-shot
-  import/export/snapshot tools, temporary loopback-only Home bootstrap and its
-  named network detach, and secret-safe acceptance probes. Stop every Home
-  owner before CPA for offline state work; verify every writer actually exited
-  and abort otherwise. Bounded stops can force termination and interrupt active
-  requests. Emergency CPA-only restart explicitly interrupts all CPA sessions.
-  Retain the stopped bootstrap through initial acceptance to protect its image
-  from deployment pruning. Release the raw lock before **each** `./run.sh`
-  invocation; ordinary deployment always uses that facade. The operator freeze
-  covers other control nodes, Home administration, and each unlock gap.
-- **Sensitive output:** no environment dumps, key/JWT/password argv values,
-  credential-file contents, callbacks, or secret request/log payloads. Secrets
-  remain in protected operator-controlled files/prompts and native private
-  state; evidence contains only non-secret status/counts. No published snapshots.
-- **Escalation:** abort on unexpected state, unavailable Docker/inspection,
-  any remaining writer, partial/skipped import, failed acceptance, or unusable
-  recovery data. Preserve evidence and select the recorded recovery branch.
-  Do not merge/overwrite restoration targets, blindly retry enrollment, start
-  competing owners, or broaden removal scope. A failed detach is an abort;
-  restarting a writer to make cleanup succeed is not permitted.
+- **Trigger:** the reviewed CPA/Home migration, protected backup or restore,
+  an assisted pair update, or emergency termination of revoked CPA sessions.
+- **Audience:** people only. Agents may change and rehearse the script, but
+  never run it against a managed host.
+- **Scope:** the `cliproxy` Compose project on `overmind`: containers
+  `cliproxy` and `cliproxy-home`, the temporary `cliproxy-home-bootstrap` and
+  its `cliproxy_default` attachment, pinned native tools, and the private
+  maintenance paths named in [the procedure](cliproxy-maintenance.md).
+
+  ```bash
+  scripts/cliproxy-maintenance.sh stop|remove-bootstrap|remove-home|restart-cpa
+  ```
+
+- **Boundary:** mutating. The script holds the exclusive lifecycle lock for
+  its whole run and exits `75` before SSH when the lock is held. It stops,
+  detaches, removes or restarts only the named containers, stops Home before
+  CPA, and aborts if any writer is still running. Run `./run.sh` only after the
+  script has exited. A person freezes other control nodes and Home
+  administration for the whole window, including the gaps between runs.
+- **Sensitive output:** no environment dumps, credential contents, or secrets
+  in command arguments, logs or evidence.
+- **Escalation:** on any abort, unknown remote result or failed acceptance,
+  preserve evidence and follow the procedure's recovery branch. Never widen
+  the removal scope or restart a writer to get past a failure.
 
 #### Vendor compose sync
 
