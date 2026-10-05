@@ -9,13 +9,11 @@ client addresses stay the same:
 - `http://overmind.faviann.vms:8317`, directly on the LAN
 
 Broodling keeps its fixed gateway `/v1` URL, `gpt-5.6-sol`, Chat Completions,
-tools and JSON-object contract. Initial cutover retains the legacy client key;
-consumer-secret changes happen separately after acceptance.
+tools and JSON-object contract. The imported legacy client key keeps serving
+until consumers move to named keys.
 
-Cutover, rollback, recovery, assisted updates and the native Docker gates are
-in [the maintenance procedure](../../../docs/cliproxy-maintenance.md). Follow
-its [permanent activation and acceptance](../../../docs/cliproxy-maintenance.md#permanent-activation-and-initial-acceptance)
-before any live deployment.
+Enrollment, recovery, assisted updates and the native Docker gates are in
+[the maintenance procedure](../../../docs/cliproxy-maintenance.md).
 
 ## Runtime ownership
 
@@ -52,19 +50,13 @@ requires human review of existing carrier/certificate compatibility.
 
 ## Required carrier and private state
 
-A human performs the existing
+A human performs the
 [native enrollment procedure](../../../docs/cliproxy-maintenance.md#native-node-enrollment-and-durable-trust)
-and saves its returned carrier with `./vault.sh edit`. Never paste it into chat,
+and saves its returned carrier in the vault. Never paste it into chat,
 Git, command arguments or diagnostic output. `stack_vars.home_jwt | compose_env`
 rejects missing or placeholder input and escapes Compose interpolation;
 `${HOME_JWT:?…}` also rejects an empty environment before startup. An empty
 carrier must never select standalone mode.
-
-Keep `vault_overmind_cliproxy_api_key` and
-`vault_overmind_cliproxy_management_key_hash` frozen for the recorded original
-standalone revision's initial rollback. They are no longer rendered by this
-runtime checkout. Home imports their values once and owns subsequent changes.
-Do not rotate them during initial acceptance.
 
 The stack `.env` is managed at 0600. Host vars enforce root:root 0700 on Home,
 CPA and recovery directories; state stays outside stack synchronization and
@@ -86,8 +78,7 @@ Home ID; unknown and unmigrated consumers keep using it until a separate
 explicit retirement decision.
 
 Follow the [human identity rollout](../../../docs/cliproxy-maintenance.md#consumer-identity-rollout)
-after initial live acceptance, the verified matched recovery baseline and
-explicit closure of the standalone rollback window.
+after the verified matched recovery baseline.
 
 | Consumer name | Stable Home key ID | Credential-source owner | Migration status |
 | --- | --- | --- | --- |
