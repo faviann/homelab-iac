@@ -47,7 +47,7 @@ In-flight requests may be cut off. Shutdown is not a graceful drain.
 Run from the repository root on the workstation:
 
 ```bash
-scripts/cliproxy-maintenance.sh <action>
+scripts/cliproxy-maintenance.sh <action> [recovery-name]
 ```
 
 The script takes the exclusive lifecycle lock before SSH and holds it until it
@@ -62,18 +62,21 @@ name this holder.
 | `remove-bootstrap` | Detaches and removes the stopped bootstrap. The running pair is left alone. Use it only after initial acceptance and a verified matched recovery baseline. |
 | `remove-home` | Standalone rollback. Runs `stop`, then removes both Home containers, which ordinary Compose startup would leave as orphans. CPA stays stopped until you deploy the original revision. Preserve the failed state first; removing the containers does not delete bind mounts. |
 | `restart-cpa` | Emergency. Stops and restarts CPA only. Home keeps running. |
+| `snapshot <name>` | Stops all writers, exports the full Home database with the deployed pinned image, and copies its enrolled CPA cache into a new private recovery candidate. Leaves writers stopped. |
+| `restore <name>` | Stops all writers, checks the candidate's artifact hashes, restores with its recorded Home image into a new empty directory, preserves failed state and replaces the runtime database/cache together. Leaves writers stopped. |
 
 Actions abort without further changes on failures in the checks they perform:
 
 - Docker can't list or inspect a container. A failed inspection never counts
   as "absent".
 - A container is paused, restarting, or dead.
-- Both Home containers are running (`stop` and `remove-home`).
+- Both Home containers are running (`stop`, `remove-home`, `snapshot` and `restore`).
 - A writer is still running after it was stopped.
 - The bootstrap is running when it should be detached or removed.
 
 Stops give Docker 30 seconds before SIGKILL, so active requests can be cut off
-mid-stream. Every Docker call is capped at 45 seconds.
+mid-stream. Container inspection, stop, detach, removal and restart calls are
+capped at 45 seconds. Offline native export and restore have no time cap.
 
 Why Home stops first: Home's subscriptions can keep CPA from finishing
 SIGTERM.
@@ -89,8 +92,8 @@ removal, or volume or network deletion.
 
 ### Offline state work
 
-Later issues add each snapshot, import, export or restore step as a new
-action of this script. Each one starts with the `stop` sequence, so it runs
+Later issues add credential import/export and bootstrap as named actions.
+Snapshot and restore start with the `stop` sequence, so they run
 under the same lock and only after every writer has exited. The SSH session
 has no overall time limit, so a long import is not killed partway through.
 Run one-shot import and export with `--network none` and no published ports.
@@ -151,4 +154,101 @@ This runs the script with a real `flock` and local SSH/Docker stand-ins. It
 checks the script's ordering, scope and abort decisions. It does not check
 Docker's shutdown or network behavior, pinned-image termination, DNS/mTLS,
 enrollment, snapshot and restore, or real provider and client acceptance.
-Those remain later implementation and human cutover gates.
+The [pinned-pair gate](#pinned-pair-gate) covers native snapshot and restore.
+
+## Matched recovery and assisted updates
+
+Home owns runtime configuration, provider credentials and refresh state,
+consumer keys and revocations, accounting and cluster trust. Ansible owns
+topology, pinned images, private directory declarations and startup inputs.
+Home state and the enrolled CPA certificate cache live in root-only 0700
+directories under `/data/overmind/cliproxy/{home,cpa}`. Recovery sets live under
+`/backups/overmind/cliproxy`. Keep these out of synced `appdata`,
+`x-prereq-dirs` and `x-managed-files`, which can reset parent modes to 0755.
+The legacy auth directory stays protected until standalone rollback acceptance.
+No timer backs up Home. The Postgres backup does not cover it.
+
+The initial compatible pair is CPA v7.3.8 (source `c93978c4ea2e908255a2a06c37599fda3651554a`)
+and Home v1.1.0 (source `c098d84d36f57b765e1545dcb53cb6717a673654`).
+
+### Snapshot
+
+Take a snapshot after CPA enrollment, after administrative key, account or
+policy changes, and before every image or schema update:
+
+```bash
+scripts/cliproxy-maintenance.sh snapshot baseline-20261005
+```
+
+This creates a new candidate at `/backups/overmind/cliproxy/<name>`: `home.zip`,
+the matching `cpa/` cache, `images.txt` (deployed digest pins and repository
+revision), `SHA256SUMS` and the native export log. The script refuses an existing
+name, and it refuses to run unless both parents are root:root 0700. It writes
+under umask 077.
+
+Home export opens SQLite and runs its schema migration. Export with the **old
+deployed Home pin** before an upgrade, from the whole database directory
+including WAL/SHM. Never copy a live `home.db`. In this pin, native
+[`-db-export`](https://github.com/router-for-me/CLIProxyAPIHome/blob/c098d84d36f57b765e1545dcb53cb6717a673654/cmd/home/main.go)
+writes a full snapshot: config, provider state, key metadata, accounting and
+CA/private keys. Legacy `-export` writes only exchange config and auth and is
+not a recovery snapshot. Snapshot ZIPs are **plaintext secrets**. Never
+commit, publish, print or inspect their payloads.
+
+### Retention
+
+A candidate counts as successful only after a restore rehearsal with its
+recorded pair and cache on an isolated target with no provider or production
+egress. A copied identity must never reach production Home or refresh real
+accounts. Keep the current and previous successful sets. Failed or incomplete
+candidates never advance retention. Record acceptance privately as names,
+revisions, counts and outcomes. A human retires older sets. Nothing prunes
+them automatically.
+
+### Restore
+
+Keep the maintenance freeze and pick a verified set:
+
+```bash
+scripts/cliproxy-maintenance.sh restore baseline-20261005
+```
+
+The script verifies the set's checksums. It imports with the recorded Home
+image into a new empty `/data/overmind/cliproxy/restore-<name>-<attempt>/home`,
+moves the current Home state (with WAL/SHM) and CPA cache into that attempt's
+`failed-home` and `failed-cpa`, then installs the restored pair. Writers stay
+stopped. Native restore keeps business state but may skip expired or
+runtime-only records. It is not a byte-for-byte copy.
+
+Before clients return, deploy the recorded pair pins and reapply every
+revocation made after the snapshot, through Home administration while CPA and
+clients are still blocked. Then deploy through `./run.sh` and run functional
+acceptance. Judge CPA by its connected identity and an authenticated request.
+The pinned CPA can exit 0 after a carrier or cache failure. A missing or
+mismatched cache needs a matched restore or new human enrollment, because a
+consumed enrollment carrier cannot recreate lost identity keys.
+
+Recovery loses everything after the snapshot: later consumer keys, policy and
+account changes, and accounting. Stale OAuth refresh state may need an operator
+login. After named consumers exist, only Home recovery preserves them. Before
+then, use the standalone rollback and keep the current refreshed provider state.
+
+### Assisted updates
+
+Renovate holds every update to this stack, tags and digests alike, for
+dependency-dashboard approval. The hold applies to new update branches, not
+ones already approved. Before approving: review the pair's compatibility, take a
+snapshot with the old Home pin, and run the pinned-pair gate and full
+`./validate.sh`. Record post-update acceptance before advancing the baseline.
+
+### Pinned-pair gate
+
+```bash
+./validate.sh tests tests/regression/cliproxy_home_recovery_gate.py
+```
+
+Using synthetic credentials on an internal Docker network, this enrolls a CPA
+with Home, takes a native full snapshot, restores it into an empty target,
+compares persistent state and reconnects the same CPA identity from the copied
+cache. It uses the deployed CPA pin and the gate's Home pin. It needs a local
+Docker daemon and fails without it. No-argument `./validate.sh` does not run it.

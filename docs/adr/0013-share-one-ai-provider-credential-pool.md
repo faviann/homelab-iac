@@ -31,3 +31,12 @@ the Traefik origin. An in-guest nftables rule modelled on
 deliberately not built here, because rules enforced inside the guest are
 disarmed by whatever compromises the guest, and because host-level segmentation
 supersedes that role rather than extending it.
+
+The [accepted Home integration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171)
+supersedes the single-key attribution/revocation tradeoff once cut over. The
+shared provider pool and LAN trust boundary remain. Home becomes the runtime
+authority for provider credentials, configuration, consumer keys, accounting
+and cluster trust, with independent named keys and no user tenancy or quotas.
+Ansible keeps topology and bootstrap inputs. Recovery is manual, from matched
+Home snapshot and CPA cache sets; see
+[the recovery contract](../cliproxy-maintenance.md#matched-recovery-and-assisted-updates).

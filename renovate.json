@@ -69,6 +69,12 @@
       "dependencyDashboardApproval": true
     },
     {
+      "description": "CPA/Home: every pair update needs protected recovery and compatibility approval",
+      "matchFileNames": ["stacks/overmind/cliproxy/**"],
+      "dependencyDashboardApproval": true,
+      "prBodyNotes": ["**Assisted CPA/Home update:** take a matched snapshot with the old pinned Home image and follow [snapshot, restore and compatibility acceptance](https://github.com/faviann/homelab-iac/blob/main/docs/cliproxy-maintenance.md#matched-recovery-and-assisted-updates) before approving any tag or digest change."]
+    },
+    {
       "description": "Linuxserver fake majors: old tags that sort above current releases",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["lscr.io/linuxserver/qbittorrent"],

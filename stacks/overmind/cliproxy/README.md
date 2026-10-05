@@ -192,3 +192,9 @@ The image is pinned by tag and digest in `compose.yaml`. Upstream releases
 roughly daily and publishes no minor-series tag, so there is nothing safe to
 float to; bump the pin deliberately. Verify the management login still works
 after a bump — management key validation has regressed upstream before.
+
+## Home recovery
+
+Home state and the enrolled CPA cache live outside this synced stack, under
+`/data/overmind/cliproxy`. Snapshots, restores and the Renovate update hold
+follow [matched recovery and assisted updates](../../../docs/cliproxy-maintenance.md#matched-recovery-and-assisted-updates).
