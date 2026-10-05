@@ -68,15 +68,21 @@ http:
         - protected-edge-auth@file
         - lobu-crawler-01-session-view-auth
 
-    # Shared AI provider proxy. Both the management panel and the agent API
-    # live on the same port, so one LAN-restricted router covers both. The
-    # service is also reachable directly at overmind.faviann.vms:8317, which
-    # this router does not and cannot prevent; see
+    # Shared AI provider client API. Home administration has its own route.
+    # Both listeners remain directly reachable on the accepted LAN boundary; see
     # docs/adr/0013-share-one-ai-provider-credential-pool.md.
     cliproxy:
       rule: "Host(`cliproxy.local.faviann.com`)"
       entryPoints: websecure
       service: cliproxy
+      priority: 1000
+      middlewares:
+        - local-ip-restriction
+
+    cliproxy-home:
+      rule: "Host(`cliproxy-home.local.faviann.com`)"
+      entryPoints: websecure
+      service: cliproxy-home
       priority: 1000
       middlewares:
         - local-ip-restriction
@@ -222,6 +228,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://overmind.faviann.vms:8317"
+    cliproxy-home:
+      loadBalancer:
+        servers:
+          - url: "http://overmind.faviann.vms:8327"
     collie-workstation:
       loadBalancer:
         servers:

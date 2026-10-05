@@ -461,9 +461,10 @@ synthetic behavior only; the human records production acceptance on
 1. **Rehearse.** Run full `./validate.sh` and the
    [pinned-pair gate](#pinned-pair-gate) at the exact pins, and record
    revisions, pins and outcomes. Confirm free disk space and that port 8327 is
-   free on `overmind`. Prepare the
-   [LAN routing slice](https://github.com/faviann/homelab-iac/issues/483);
-   runtime startup alone cannot pass its gate.
+   free on `overmind`. Confirm `cliproxy-home.local.faviann.com` resolves to
+   portal from the operator's LAN client. DNS is human-managed; the existing
+   `*.local.faviann.com` TLS certificate covers the new hostname. Runtime
+   startup alone cannot pass the [LAN acceptance](#lan-administration-and-acceptance).
 2. **Freeze, inventory and import** from the original standalone revision:
    [Freeze and inventory](#freeze-and-inventory), then [Import once](#import-once).
 3. **Enroll and stop the bootstrap:**
@@ -474,6 +475,7 @@ synthetic behavior only; the human records production acceptance on
 
    ```bash
    ./run.sh configure --limit overmind --stack cliproxy
+   ./run.sh configure --limit portal --stack traefik3
    ```
 
    This can still configure and reboot the host; see
@@ -494,8 +496,8 @@ synthetic behavior only; the human records production acceptance on
      and management login match the safe inventory.
    - A Home runtime edit reaches CPA and survives a supported redeploy without reimport.
    - With Home stopped, requests fail instead of being served standalone.
-   - #483's native panel, login and callback workflow works through the LAN
-     route. Don't print callback URLs.
+   - [LAN administration and acceptance](#lan-administration-and-acceptance),
+     including the native panel, imported password and real provider callback.
 
    On any failure, preserve evidence and take the matching rollback branch:
    [before](#rollback-before-home-could-refresh) or
@@ -505,6 +507,42 @@ synthetic behavior only; the human records production acceptance on
 7. **Close the window:** record **standalone rollback closed** as in
    [Close the window](#close-the-window), before the first real consumer-key
    change.
+
+### LAN administration and acceptance
+
+From a LAN client, open
+`https://cliproxy-home.local.faviann.com/management.html`. Confirm DNS selects
+portal and the browser accepts its existing TLS certificate, then connect with
+the original imported management password. Home's native management
+authentication owns this login; there is no Authentik or `MANAGEMENT_PASSWORD`
+override. A missing or wrong password must fail. The old
+`https://cliproxy.local.faviann.com/management.html` must return 404 while the
+client API continues serving at its unchanged addresses.
+
+Use the shipped Home panel's account-addition flow for any provider that needs
+reauthentication or a newly accepted account. Complete the provider's login in
+the browser. If its localhost callback cannot open, copy the complete callback
+URL privately from the address bar and paste it into Home's callback submission
+field. Require a successful result and a working provider request before
+accepting that account. Imported healthy accounts need no new login. Never put
+authorization URLs, callback URLs, passwords or tokens in logs, chat or Git.
+The standalone CPA callback tunnels and port mappings 1455, 54545 and 51121
+are retired; Home handles callback submission natively. The temporary bootstrap
+tunnel above serves enrollment only and is closed before permanent activation.
+
+The entire Home hostname uses the existing `local-ip-restriction` allowlist;
+verify a client outside it receives 403. No path bypass or public administration
+is configured. The direct Home HTTP listener at `overmind.faviann.vms:8327`
+and CPA client listener at `overmind.faviann.vms:8317` remain reachable inside
+the accepted flat LAN boundary. The portal allowlist does not protect direct
+ports; future host segmentation is recorded in
+[the shared-pool ADR](adr/0013-share-one-ai-provider-credential-pool.md).
+
+Record production acceptance as hostname, revision, pins and outcomes without
+secret payloads: valid DNS/TLS, native browser/password login, successful real
+account addition and callback paste, previously healthy providers, allowlist
+denial and both unchanged client paths. Synthetic gates below do not perform
+these human checks.
 
 ## Matched recovery and assisted updates
 
@@ -595,6 +633,7 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 
 ```bash
 ./validate.sh tests tests/regression/cliproxy_home_runtime_gate.py tests/regression/cliproxy_home_recovery_gate.py tests/regression/cliproxy_home_migration_gate.py
+./validate.sh tests tests/regression/cliproxy_home_route_gate.py
 ```
 
 The runtime gate materializes the actual repository stack and starts its
@@ -619,3 +658,17 @@ It uses the deployed CPA pin and the resolved Home pin. It needs a local Docker
 daemon and fails without it. No-argument `./validate.sh` does not run it.
 This is isolated native-image evidence, not production enrollment, a browser
 interaction test or real OAuth/provider acceptance; those remain human gates.
+
+The route gate loads the actual Home and client router definitions and unchanged
+LAN allowlist into an isolated loopback-only Traefik. It checks the shipped
+Home panel and referenced assets, the panel's native password connection with
+the imported bcrypt credential, and its account-addition session and pasted
+synthetic canceled callback through that route. Cancellation deliberately ends
+in an authentication failure without a provider token exchange. A real socket
+source outside the allowlist receives 403 even with a forged forwarded header;
+the admitted client route still serves the legacy key and its old panel returns
+404. Only synthetic credentials and internal local Docker resources are used.
+The fixture's disposable TLS proves transport only; DNS, certificate validity,
+browser interactions and successful real-provider account addition remain the
+[human LAN acceptance](#lan-administration-and-acceptance). This explicit gate
+also needs local Docker and is excluded from no-argument `./validate.sh`.

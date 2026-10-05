@@ -62,6 +62,27 @@ def assert_route(
 
 
 class PortalExternalServiceConfigTests(unittest.TestCase):
+    def test_cliproxy_client_and_home_routes(self) -> None:
+        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
+        for name, port in (("cliproxy", 8317), ("cliproxy-home", 8327)):
+            assert_route(
+                self,
+                config,
+                name,
+                host_rule=f"Host(`{name}.local.faviann.com`)",
+                service=name,
+                middlewares=["local-ip-restriction"],
+                backend=f"http://overmind.faviann.vms:{port}",
+            )
+            self.assertEqual(config["http"]["routers"][name]["priority"], 1000)
+
+        static = yaml.safe_load(
+            (EXTERNALSERVICE_PATH.parent.parent / "traefik.yaml").read_text(encoding="utf-8")
+        )
+        tls = static["entryPoints"]["websecure"]["http"]["tls"]
+        self.assertEqual(tls["certResolver"], "cloudflare")
+        self.assertIn("*.local.faviann.com", tls["domains"][0]["sans"])
+
     def test_aoe_external_route_contract(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
 

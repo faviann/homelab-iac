@@ -30,16 +30,20 @@ before any live deployment.
 
 Home advertises `cliproxy-home:8327` on the project's default network. Native
 CPA/Home RESP uses mTLS directly over that network; an HTTP proxy cannot carry
-it. The permanent Home service publishes 8327 on the LAN. Browser routing is
-[#483](https://github.com/faviann/homelab-iac/issues/483).
+it. The permanent Home service publishes 8327 on the LAN. Administration uses
+`https://cliproxy-home.local.faviann.com/management.html` through portal's
+existing TLS and `local-ip-restriction` policy. Direct
+`http://overmind.faviann.vms:8327` shares the accepted LAN trust boundary.
 
 Home's database is the runtime authority. CPA has no standalone config mount or
 `-config` argument, downloaded-panel setting or old loopback callback port
 publications. Redeployment does not overwrite Home settings or reimport OAuth.
-Administration uses Home's embedded `/management.html` and native management
-API with the imported management password/hash. There is no Authentik or
-`MANAGEMENT_PASSWORD` override. Provider callbacks are completed through Home's
-native panel workflow; keep callback URLs private.
+Home's embedded panel and management API use the imported management
+password/hash. The old client hostname's `/management.html` now returns an
+expected 404 in Home mode. Follow
+[LAN administration and acceptance](../../../docs/cliproxy-maintenance.md#lan-administration-and-acceptance)
+for login and native callback paste; the old standalone CPA callback tunnels
+and mappings are retired.
 
 The non-secret cluster file is mounted read-only. Home reads it at startup;
 `.env.j2` hashes its exact content so Compose recreates Home and refreshes the
