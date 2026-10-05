@@ -23,6 +23,25 @@ lxc_docker_env_host_directories:
     owner: "0"
     group: "0"
     mode: "0700"
+  # Home runtime state and enrolled CPA trust stay outside stack sync and its
+  # managed-file parent normalization. Retain legacy auth above through initial
+  # standalone rollback acceptance.
+  - path: /data/overmind/cliproxy
+    owner: "0"
+    group: "0"
+    mode: "0700"
+  - path: /data/overmind/cliproxy/home
+    owner: "0"
+    group: "0"
+    mode: "0700"
+  - path: /data/overmind/cliproxy/cpa
+    owner: "0"
+    group: "0"
+    mode: "0700"
+  - path: /backups/overmind/cliproxy
+    owner: "0"
+    group: "0"
+    mode: "0700"
 
 proxmox_lxc_host_directories:
   - path: /tank/overmind

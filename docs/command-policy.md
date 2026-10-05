@@ -385,5 +385,9 @@ These are known limits, not defects waiting for a fix.
   that the real `ssh` client decides trust. Validation fails on a machine
   without it, and it installs nothing.
 - `./validate.sh` needs no machine-local secret, so a build server can now run
-  it after a checkout, a `uv` install, and `openssh-server`. None exists yet
+  it after a checkout and its documented tooling prerequisites. The mandatory
+  CPA/Home recovery fixture also needs a local Docker Unix socket and the exact
+  pinned images (pulled by controlled test setup if absent). It uses only
+  temporary synthetic state, an internal network and offline native tools;
+  missing Docker or images fails rather than skipping the gate. None exists yet
   (#200).

@@ -192,3 +192,21 @@ The image is pinned by tag and digest in `compose.yaml`. Upstream releases
 roughly daily and publishes no minor-series tag, so there is nothing safe to
 float to; bump the pin deliberately. Verify the management login still works
 after a bump — management key validation has regressed upstream before.
+
+## Prepared Home recovery
+
+The [accepted Home integration](https://github.com/faviann/homelab-iac/issues/477)
+will make Home the runtime authority for provider credentials, configuration,
+consumer keys, accounting and cluster trust. Production remains standalone
+until the human performs the later import/enrollment/cutover procedure.
+Private Home state and CPA cache are declared outside this synced stack at
+`/data/overmind/cliproxy/{home,cpa}`; manual matched recovery sets live under
+`/backups/overmind/cliproxy`. The legacy auth directory stays protected through
+initial standalone rollback acceptance.
+
+Use the [matched recovery and assisted-update procedure](../../../docs/cliproxy-maintenance.md#matched-recovery-and-assisted-updates).
+It distinguishes full Home snapshots from legacy exchange export, retains
+current/previous successful sets and requires recorded pins, matching CPA trust
+and later revocations before client admission. Every stack image update needs
+assisted Renovate approval. No live recovery, secrets or runtime activation is
+performed by these repository preparations.

@@ -29,6 +29,8 @@ with (root / "events.jsonl").open("a") as log:
     log.write(json.dumps([name, *args]) + "\\n")
 if name == "ssh":
     remote = args[args.index("overmind") + 1:]
+    if os.environ.get("OFFLINE_REHEARSAL"):
+        remote = ["unshare", "-Ur", *remote]
     raise SystemExit(subprocess.run(remote).returncode)
 
 state = json.loads((root / "state.json").read_text())
@@ -42,6 +44,8 @@ elif verb == ["container", "inspect"]:
     item = containers[target]
     if "NetworkSettings" in args[3]:
         print(" ".join(item["networks"]))
+    elif "Config.Image" in args[3]:
+        print("eceasy/fixture:v1@sha256:" + "a" * 64)
     else:
         print(item["status"])
 elif verb == ["container", "stop"]:
@@ -58,6 +62,15 @@ elif verb == ["container", "rm"]:
 elif verb == ["container", "start"]:
     if fail != "start":
         containers[target]["status"] = "running"
+elif args[0] == "run":
+    if fail == "native":
+        raise SystemExit(1)
+    mounts = [args[i + 1] for i, arg in enumerate(args) if arg == "--mount"]
+    paths = {{item.split("dst=")[1].split(",")[0]: Path(item.split("src=")[1].split(",")[0]) for item in mounts}}
+    if "-db-export" in args[-1]:
+        (paths["/recovery"] / "home.zip").write_bytes(b"synthetic-snapshot")
+    else:
+        (paths["/CLIProxyAPIHome/data"] / "home.db").write_bytes(b"synthetic-restored-db")
 else:
     raise SystemExit("unapproved Docker operation: " + repr(args))
 (root / "state.json").write_text(json.dumps(state))
@@ -71,7 +84,8 @@ class Rehearsal:
         self.bin.mkdir()
         self.home = root / "home"
         (self.home / ".ansible").mkdir(parents=True)
-        for command in ("bash", "flock", "timeout", "grep", "sed"):
+        for command in ("bash", "flock", "timeout", "grep", "sed", "git", "stat", "mkdir",
+                        "chown", "find", "chmod", "cp", "sha256sum", "mktemp", "mv", "unshare"):
             self.bin.joinpath(command).symlink_to(shutil.which(command))
         for command in ("ssh", "docker"):
             shim = self.bin / command
@@ -87,14 +101,15 @@ class Rehearsal:
         bootstrap = name == "cliproxy-home-bootstrap"
         return {"status": status, "networks": ["cliproxy_default"] if bootstrap else []}
 
-    def run(self, action="stop", *, fail=""):
+    def run(self, action="stop", *arguments, fail="", script=SCRIPT, offline=False):
         self.state_file.write_text(json.dumps({"containers": self.containers, "fail": fail}))
         return subprocess.run(
-            [str(self.bin / "bash"), str(SCRIPT), action],
+            [str(self.bin / "bash"), str(script), action, *arguments],
             text=True,
             capture_output=True,
             timeout=30,
-            env={"PATH": str(self.bin), "HOME": str(self.home), "REHEARSAL_ROOT": str(self.root)},
+            env={"PATH": str(self.bin), "HOME": str(self.home), "REHEARSAL_ROOT": str(self.root),
+                 "OFFLINE_REHEARSAL": "1" if offline else ""},
         )
 
     @property
@@ -203,3 +218,65 @@ def test_restart_cpa_touches_only_cpa_and_requires_it_running(rehearsal):
     assert rehearsal.effects() == [("stop", "cliproxy"), ("start", "cliproxy")]
     assert rehearsal.final()["cliproxy-home"]["status"] == "running"
     assert rehearsal.run("restart-cpa", fail="start").returncode != 0
+
+
+@pytest.fixture
+def offline_rehearsal(rehearsal):
+    """Map only fixed private paths; namespace root models guest root."""
+    data = rehearsal.root / "private-data"
+    backups = rehearsal.root / "private-backups"
+    for path in (data, backups, data / "home", data / "cpa"):
+        path.mkdir(mode=0o700, exist_ok=True)
+    (data / "home/home.db").write_bytes(b"synthetic-failed-db")
+    (data / "home/home.db-wal").write_bytes(b"synthetic-wal")
+    for name in ("client-crt.pem", "client-key.pem", "home-ca-crt.pem"):
+        (data / "cpa" / name).write_bytes(b"synthetic-cache")
+    script = rehearsal.root / "scripts/maintenance.sh"
+    script.parent.mkdir()
+    # Local git revision stays tied to the actual checkout, while remote paths
+    # are the only production inputs replaced for this controlled rehearsal.
+    script.write_text(SCRIPT.read_text().replace("/data/overmind/cliproxy", str(data))
+                      .replace("/backups/overmind/cliproxy", str(backups))
+                      .replace('git -C "$(dirname "$0")/.."', f'git -C "{SCRIPT.parents[1]}"'))
+    try:
+        yield rehearsal, script, data, backups
+    finally:
+        shutil.rmtree(data)
+        shutil.rmtree(backups)
+
+
+def test_snapshot_and_repeated_restore_preserve_failed_state_and_remain_stopped(offline_rehearsal):
+    rehearsal, script, data, backups = offline_rehearsal
+    result = rehearsal.run("snapshot", "baseline", script=script, offline=True)
+    assert result.returncode == 0, result.stderr
+    assert rehearsal.effects() == [("stop", "cliproxy-home"), ("stop", "cliproxy")]
+    (data / "home/home.db").chmod(0o644) # Failed runtime state still needs protection.
+    for _ in range(2):
+        result = rehearsal.run("restore", "baseline", script=script, offline=True)
+        assert result.returncode == 0, result.stderr
+    observation = subprocess.run(["unshare", "-Ur", sys.executable, "-c", '''
+import json, pathlib, stat, sys
+data, backups = map(pathlib.Path, sys.argv[1:])
+attempts = list(data.glob('restore-baseline-*'))
+print(json.dumps({"attempts": len(attempts),
+ "failed_db": all((p/'failed-home/home.db').is_file() for p in attempts),
+ "first_wal": any((p/'failed-home/home.db-wal').is_file() for p in attempts),
+ "private": all(stat.S_IMODE(p.stat().st_mode) == (0o700 if p.is_dir() else 0o600)
+                and p.stat().st_uid == p.stat().st_gid == 0
+                for parent in (data, backups) for p in parent.rglob('*'))}))
+''', str(data), str(backups)], capture_output=True, text=True, check=True)
+    assert json.loads(observation.stdout) == {
+        "attempts": 2, "failed_db": True, "first_wal": True, "private": True,
+    }
+    native = [event for event in rehearsal.events() if event[:2] == ["docker", "run"]]
+    assert len(native) == 3
+    assert all(event[event.index("--network") + 1] == "none" for event in native)
+    assert all(item["status"] == "exited" for item in rehearsal.final().values())
+
+
+def test_offline_snapshot_failure_retains_candidate_and_never_restarts(offline_rehearsal):
+    rehearsal, script, _, backups = offline_rehearsal
+    result = rehearsal.run("snapshot", "failed", fail="native", script=script, offline=True)
+    assert result.returncode != 0
+    assert (backups / "failed").exists()
+    assert all(verb == "stop" for verb, _ in rehearsal.effects())
