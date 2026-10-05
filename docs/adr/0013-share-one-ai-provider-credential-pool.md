@@ -21,8 +21,12 @@ maps actual consumer names to stable Home IDs, credential-source owners and
 observed migration states. Native usage can display `api-key-ID` instead of
 the friendly name; verify attribution by ID. Individual native key operations
 avoid replacing unrelated consumers' keys. Revocation rejects new requests;
-accepted streams and retained Responses WebSocket selections can survive it.
-Emergency CPA restart interrupts every session under the
+accepted HTTP streams can finish afterwards. The pinned native deletion also
+reloads CPA and closes persistent Codex WebSockets, potentially interrupting
+unrelated native sessions. This observed reload refines the resolved plan's
+claim that deletion does not terminate retained selections. Key authentication
+alone does not end a retained selection, and deletion does not guarantee that
+all accepted work ended. Emergency CPA restart interrupts every session under the
 [bounded maintenance procedure](../cliproxy-maintenance.md#emergency-cpa-restart).
 
 Initial migration does not change any consumer address or key. Real key rollout

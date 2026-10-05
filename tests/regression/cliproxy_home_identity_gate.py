@@ -3,7 +3,7 @@
 Explicitly run: ./validate.sh tests tests/regression/cliproxy_home_identity_gate.py
 Uses the existing recovery fixture, local internal Docker and synthetic keys.
 The default handoff suite does not collect this Docker-dependent filename.
-Existing stream/retained same-model selection behavior is checked only at the
+Existing stream/native WebSocket behavior is checked only at the
 revocation boundary; this is not a general protocol compatibility suite.
 """
 from __future__ import annotations
@@ -52,7 +52,6 @@ class RevocationProvider(SyntheticProvider):
         # Only the local native Codex exchange needed to retain a selection.
         # No OAuth, external provider or general WebSocket implementation.
         with guarded_provider(self.server):
-            self.server.native_phase = "upgrade"
             self.connection.settimeout(8)
             if not self.path.endswith("/responses"):
                 raise ValueError
@@ -63,38 +62,32 @@ class RevocationProvider(SyntheticProvider):
             self.send_header("Connection", "Upgrade")
             self.send_header("Sec-WebSocket-Accept", accept)
             self.end_headers()
-            for turn in range(2):
-                self.server.native_phase = "request-header"
-                header = self.rfile.read(2)
-                self.server.native_header_length = len(header)
-                self.server.native_opcode = header[0] & 15 if header else 0
-                if not header or header[0] & 15 == 8:
-                    self.server.native_phase = "eof" if not header else "close"
-                    return
-                if len(header) != 2 or header[0] != 0x81 or not header[1] & 0x80:
-                    raise ValueError
-                size = header[1] & 127
-                if size == 126:
-                    size = struct.unpack("!H", self.rfile.read(2))[0]
-                if size > 65536 or size == 127:
-                    raise ValueError
-                mask = self.rfile.read(4)
-                raw = self.rfile.read(size)
-                self.server.native_phase = "request-type"
-                payload = json.loads(bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
-                if payload.get("type") != "response.create":
-                    raise ValueError
-                self.server.native_turns += 1
-                self.server.served += 1
-                self.server.native_phase = "completion-write"
-                raw = json.dumps({"type": "response.completed", "response": {
-                    "id": "synthetic-retained-" + str(turn + 1), "object": "response", "status": "completed", "output": [],
-                    "usage": {"input_tokens": 2, "output_tokens": 1, "total_tokens": 3}}}).encode()
-                self.wfile.write(bytes([0x81, 126]) + struct.pack("!H", len(raw)) + raw)
-                self.wfile.flush()
-            # Retain the upstream socket until the fixture tears down CPA.
-            self.server.native_phase = "waiting-cleanup"
-            self.rfile.read(2)
+            header = self.rfile.read(2)
+            if len(header) != 2 or header[0] != 0x81 or not header[1] & 0x80:
+                raise ValueError
+            size = header[1] & 127
+            if size == 126:
+                size = struct.unpack("!H", self.rfile.read(2))[0]
+            if size > 65536 or size == 127:
+                raise ValueError
+            mask = self.rfile.read(4)
+            raw = self.rfile.read(size)
+            payload = json.loads(bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
+            if payload.get("type") != "response.create":
+                raise ValueError
+            self.server.native_turns += 1
+            self.server.served += 1
+            raw = json.dumps({"type": "response.completed", "response": {
+                "id": "synthetic-retained", "object": "response", "status": "completed", "output": [],
+                "usage": {"input_tokens": 2, "output_tokens": 1, "total_tokens": 3}}}).encode()
+            self.wfile.write(bytes([0x81, 126]) + struct.pack("!H", len(raw)) + raw)
+            self.wfile.flush()
+            # This healthy upstream stays open until CPA closes it on reload.
+            header = self.rfile.read(2)
+            if header == b"" or (len(header) == 2 and header[0] & 15 == 8):
+                self.server.native_closed.set()
+            else:
+                raise ValueError
 
     def do_POST(self) -> None:
         with guarded_provider(self.server):
@@ -138,11 +131,10 @@ def guarded_provider(server):
         yield
     except Exception:
         server.failed = True
-        server.native_failure_phase = server.native_phase
 
 
 class RetainedResponses:
-    """Small masked client for one local same-model retained-selection probe."""
+    """Small masked client for one local native selection and closure probe."""
 
     def __init__(self, url: str, key: str):
         target = urllib.parse.urlsplit(url)
@@ -154,18 +146,13 @@ class RetainedResponses:
             f"Sec-WebSocket-Key: {nonce}\r\nSec-WebSocket-Version: 13\r\n"
             f"Authorization: Bearer {key}\r\n\r\n").encode())
         self.status = int(self.reader.readline(4096).split()[1])
-        self.terminal_type = ""
-        self.terminal_status = 0
-        self.close_code = 0
         for _ in range(30):
             if self.reader.readline(4096) == b"\r\n":
                 break
         else:
             require(False, "bounded WebSocket upgrade headers")
 
-    def turn(self, pair, phase: str) -> bool:
-        # Same-model full turns exercise the retained Home selection without
-        # requiring incremental transcript passthrough or previous_response_id.
+    def turn(self) -> bool:
         payload = {"type": "response.create", "model": RETAINED_MODEL,
             "input": [{"role": "user", "content": [{"type": "input_text", "text": "revocation selection"}]}]}
         raw = json.dumps(payload).encode()
@@ -174,34 +161,24 @@ class RetainedResponses:
         self.socket.sendall(head + mask + bytes(value ^ mask[index % 4] for index, value in enumerate(raw)))
         for _ in range(100):
             header = self.reader.read(2)
-            if len(header) != 2:
-                # Container logs remain private in memory; expose only known
-                # source lifecycle markers and controlled fake-server metadata.
-                captured = pair.docker("logs", pair.cpa_name, stage="native lifecycle diagnostic")
-                logs = captured.stdout + captured.stderr
-                require(False, f"{phase} WebSocket header: native turns {pair.provider.native_turns}, "
-                    f"provider failed {pair.provider.failed}, fake phase {pair.provider.native_phase}, "
-                    f"failure phase {pair.provider.native_failure_phase}, opcode {pair.provider.native_opcode}, "
-                    f"header length {pair.provider.native_header_length}, "
-                    f"executor shutdown {'reason=executor_shutdown' in logs}, "
-                    f"persistent {'session_object=persistent' in logs}, ephemeral {'session_object=ephemeral' in logs}")
+            require(len(header) == 2, "native WebSocket first-turn frame header")
             size = header[1] & 127
             if size == 126:
                 size = struct.unpack("!H", self.reader.read(2))[0]
             elif size == 127:
                 size = struct.unpack("!Q", self.reader.read(8))[0]
-            require(size <= 65536 and not header[1] & 0x80, phase + " bounded local WebSocket frame")
+            require(size <= 65536 and not header[1] & 0x80, "bounded local native WebSocket frame")
             raw = self.reader.read(size)
             if header[0] & 15 == 8:
-                self.terminal_type = "close"
-                self.close_code = struct.unpack("!H", raw[:2])[0] if len(raw) >= 2 else 0
                 return False
             item = json.loads(raw)
             if item.get("type") in ("response.completed", "error", "response.failed"):
-                self.terminal_type = item["type"]
-                self.terminal_status = int(item.get("status", 0))
                 return item["type"] == "response.completed"
         return False
+
+    def closed(self) -> bool:
+        header = self.reader.read(2)
+        return header == b"" or (len(header) == 2 and header[0] & 15 == 8)
 
     def close(self) -> None:
         self.reader.close()
@@ -219,10 +196,7 @@ def identity_pair():
                 pair.provider.served = 0
                 pair.provider.failed = False
                 pair.provider.native_turns = 0
-                pair.provider.native_phase = "idle"
-                pair.provider.native_failure_phase = "none"
-                pair.provider.native_opcode = 0
-                pair.provider.native_header_length = 0
+                pair.provider.native_closed = threading.Event()
                 pair.provider.stream_started = threading.Event()
                 pair.provider.stream_release = threading.Event()
                 pair.provider.RequestHandlerClass = RevocationProvider
@@ -266,10 +240,6 @@ def verify_identities(pair) -> None:
     pair.native(state, "-import", "-config", "/recovery/source/config.yaml",
         "-auth-dir", "/recovery/source/auth", stage="synthetic identity import")
     pair.start_home(state)
-    node = pair.enroll()
-    pair.start_cpa(pair.directory("cpa-cache"))
-    pair.wait(lambda: pair.connected(node), "identity pair enrollment readiness")
-    pair.wait(lambda: pair.chat(LEGACY_KEY), "imported legacy request readiness")
 
     imported = keys(pair)
     require(len(imported) == 1 and imported[0]["api_key"] == LEGACY_KEY, "literal legacy import")
@@ -293,6 +263,12 @@ def verify_identities(pair) -> None:
         records.append(record)
     ids = {legacy["id"], *(record["id"] for record in records)}
     require(len(ids) == 4 and {record["id"] for record in keys(pair)} == ids, "distinct stable identities without list replacement")
+    # Finish key preparation before CPA subscribes, so deletion is the only
+    # administrative reload that can affect the accepted native session below.
+    node = pair.enroll()
+    pair.start_cpa(pair.directory("cpa-cache"))
+    pair.wait(lambda: pair.connected(node), "identity pair enrollment readiness")
+    pair.wait(lambda: pair.chat(LEGACY_KEY), "imported legacy request readiness")
     for credential in [LEGACY_KEY, *credentials]:
         before = pair.provider.served
         require(pair.chat(credential) and pair.provider.served == before + 1, "each identity serves through the shared fake provider")
@@ -306,14 +282,15 @@ def verify_identities(pair) -> None:
     held = None
     try:
         retained = RetainedResponses(pair.cpa_url + "/responses", credentials[2])
-        require(retained.status == 101 and retained.turn(pair, "before deletion") and pair.provider.native_turns == 1,
+        require(retained.status == 101 and retained.turn() and pair.provider.native_turns == 1,
             "native sacrificial WebSocket selection established before deletion")
         held = pair.client.open(urllib.request.Request(pair.cpa_url + "/chat/completions",
             data=json.dumps({"model": MODEL, "stream": True,
                 "messages": [{"role": "user", "content": "held-revocation"}]}).encode(),
             headers={"Authorization": "Bearer " + credentials[2], "Content-Type": "application/json"}), timeout=8)
         require(held.status == 200 and held.readline().startswith(b"data:")
-            and pair.provider.stream_started.wait(3) and not pair.provider.stream_release.is_set(),
+            and pair.provider.stream_started.wait(3) and not pair.provider.stream_release.is_set()
+            and not pair.provider.native_closed.is_set(),
             "sacrificial HTTP stream accepted and held before deletion")
         status, _ = pair.request(pair.home_url + "/access/api-keys?id=" + str(records[2]["id"]), MANAGEMENT_KEY, "DELETE")
         require(status == 200, "individual sacrificial deletion by stable ID")
@@ -322,9 +299,14 @@ def verify_identities(pair) -> None:
             {"model": MODEL, "messages": [{"role": "user", "content": "new after deletion"}]})
         require(status == 401 and pair.provider.served == before,
             "immediate independent request rejection after deletion before upstream")
-        completed = retained.turn(pair, "after deletion")
-        require(completed, f"retained native continuation completion (terminal {retained.terminal_type}, status {retained.terminal_status}, close {retained.close_code})")
-        require(pair.provider.native_turns == 2, "retained native continuation serves the second upstream turn")
+        require(pair.provider.native_closed.wait(8) and not pair.provider.failed
+            and pair.provider.native_turns == 1, "deletion closes the healthy accepted native upstream")
+        captured = pair.docker("logs", pair.cpa_name, stage="native deletion reload observation")
+        # Never print log lines: prove only this exact source lifecycle reason.
+        require(any("codex websockets: upstream disconnected" in line and "reason=executor_shutdown" in line
+            and "session_object=persistent" in line for line in (captured.stdout + captured.stderr).splitlines()),
+            "native key-deletion config reload closes the persistent executor session")
+        require(retained.closed(), "accepted downstream native WebSocket closes on this pinned reload")
         pair.provider.stream_release.set()
         require(b"[DONE]" in held.read(), "accepted HTTP stream completes after key deletion")
     finally:

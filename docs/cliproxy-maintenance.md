@@ -103,9 +103,10 @@ no routing labels.
 ### Emergency CPA restart
 
 First [revoke the individual consumer key](#revocation-and-session-limits)
-through Home administration. Revoking rejects new requests but does not end
-an accepted stream; a retained same-model Responses WebSocket selection can
-continue serving turns. `restart-cpa` interrupts **every** CPA session and may reach the
+through Home administration. Revoking rejects new requests but an accepted
+HTTP stream can finish afterwards. The pinned native key deletion also reloads
+CPA and closes persistent Codex WebSockets; that side effect is not guaranteed
+termination of every accepted session. `restart-cpa` interrupts **every** CPA session and may reach the
 forced-termination deadline. A running container is not proof that CPA works;
 run the secret-safe acceptance probes afterwards.
 
@@ -566,8 +567,9 @@ Before the first real consumer-key change, require all of these:
   close it; the one-time import/rollback machinery stays until that human
   confirmation.
 - The [synthetic identity gate](#synthetic-identity-gate) passes at the accepted
-  pair pins. A maintenance window covers snapshot stops and any emergency
-  restart; callers understand that these interrupt other consumers too.
+  pair pins. A maintenance window covers native key reloads, snapshot stops
+  and any emergency restart; callers understand their effects on other
+  consumers too.
 
 Enumerate known consumers from operator knowledge and accepted deployment
 contracts. Fill the
@@ -645,12 +647,24 @@ row; legacy retirement needs a separate explicit decision confirming no
 remaining callers depend on it.
 
 A new request's rejection does not prove existing work ended. An accepted
-HTTP stream can finish after deletion, and a retained same-model Responses
-WebSocket selection can keep serving turns without a fresh Home key check.
-The pinned
+HTTP stream can finish after deletion. The pinned
 [CPA retained selection path](https://github.com/router-for-me/CLIProxyAPI/blob/c93978c4ea2e908255a2a06c37599fda3651554a/sdk/cliproxy/auth/conductor_home.go)
-returns an existing eligible selection before a new Home dispatch. Treat
-retained sessions as potentially authorized until they close. For immediate
+returns an existing eligible same-model WebSocket selection before a new Home
+dispatch, so key authentication alone does not terminate that selection.
+
+**Pinned-runtime refinement:** native Home deletion publishes a configuration
+update, and CPA's
+[runtime reload](https://github.com/router-for-me/CLIProxyAPI/blob/c93978c4ea2e908255a2a06c37599fda3651554a/sdk/cliproxy/service_config.go)
+replaces the Codex executor and closes its persistent WebSockets. Delivery is
+asynchronous; a retained selection can bypass fresh authentication until that
+replacement arrives. The synthetic
+gate observes that reload-induced closure with a healthy fake provider. This
+corrects the resolved plan's overbroad claim that deletion does not terminate
+retained selections. Creation and other runtime-changing key edits can also
+publish an update; unrelated native WebSocket sessions can be interrupted.
+This is a runtime reload side effect, not a per-consumer session kill or a
+guarantee that every accepted request ended. Treat retained selections as
+potentially authorized until they actually close. For guaranteed all-session
 termination, revoke first and run the human-only bounded action:
 
 ```bash
@@ -672,11 +686,15 @@ graceful drain or per-consumer session kill.
 This explicit local-Docker gate reuses the native pinned-pair fixture and an
 internal network with synthetic credentials and one fake provider. It labels
 the unchanged imported legacy record, creates multiple unowned unrestricted
-named records with individual operations, checks stable IDs and native usage
-attribution, then deletes a sacrificial key. Its next independent request is
-rejected while the other named and legacy keys serve. An already accepted
-HTTP stream and a retained same-model Responses WebSocket selection expose
-the narrower revocation boundary. This is identity evidence, not real
+named records with individual operations before CPA starts, then checks stable
+IDs and native usage attribution. Deletion is the only key mutation while CPA
+is running, excluding delayed earlier key-edit notifications. The sacrificial
+key's next independent request is rejected while the other named and legacy
+keys serve. Its established persistent native Codex WebSocket closes through
+the pinned runtime reload, with a healthy local fake provider, while its already
+accepted HTTP stream completes. These separate authentication from the reload
+side effect and accepted work; no per-consumer termination is promised.
+This is identity evidence, not real
 consumer/provider acceptance or a generic protocol matrix. No-argument
 `./validate.sh` excludes this Docker-dependent filename.
 
