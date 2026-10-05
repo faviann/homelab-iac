@@ -17,25 +17,16 @@ without changing its value or stable ID. Unknown and unmigrated clients retain
 that key until a separate explicit retirement decision.
 
 The [non-secret consumer inventory](../../stacks/overmind/cliproxy/README.md#consumer-identities-and-inventory)
-maps actual consumer names to stable Home IDs, credential-source owners and
-observed migration states. Native usage can display `api-key-ID` instead of
-the friendly name; verify attribution by ID. Individual native key operations
-avoid replacing unrelated consumers' keys. Revocation rejects new requests;
-accepted HTTP streams can finish afterwards. The pinned native deletion also
-reloads CPA and closes persistent Codex upstream connections and selections,
-potentially interrupting unrelated native sessions. An idle client socket can
-remain open until its next turn. This observed reload refines the resolved plan's
-claim that deletion does not terminate retained selections. Key authentication
-alone does not end a retained selection, and deletion does not guarantee that
-all accepted work ended. Emergency CPA restart interrupts every session under the
-[bounded maintenance procedure](../cliproxy-maintenance.md#emergency-cpa-restart).
+maps actual consumers to stable Home key IDs. Revocation rejects new requests
+but is not guaranteed to end existing work; guaranteed termination is the bounded,
+all-session
+[emergency CPA restart](../cliproxy-maintenance.md#emergency-cpa-restart).
 
 Initial migration does not change any consumer address or key. Real key rollout
 changes one actual consumer at a time, following human acceptance and a
 verified matched recovery baseline, after explicitly closing the initial
-standalone rollback window. Broodling retains its fixed gateway/model/tool/JSON
-contract and later changes only its separately owned gateway key; its deployment
-remains [#353](https://github.com/faviann/homelab-iac/issues/353).
+standalone rollback window. Broodling's deployment remains
+[#353](https://github.com/faviann/homelab-iac/issues/353).
 Recovery is manual from matched Home snapshot and
 CPA cache sets; see
 [the recovery contract](../cliproxy-maintenance.md#matched-recovery-and-assisted-updates).

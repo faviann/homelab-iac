@@ -87,12 +87,7 @@ explicit retirement decision.
 
 Follow the [human identity rollout](../../../docs/cliproxy-maintenance.md#consumer-identity-rollout)
 after initial live acceptance, the verified matched recovery baseline and
-explicit closure of the standalone rollback window. Repository preparation
-does not close that window or change any real consumer credential.
-
-This non-secret inventory is awaiting human enumeration. Add only observed
-actual consumers; no live Home IDs, credential-source owners or migration
-states were inspected during implementation.
+explicit closure of the standalone rollback window.
 
 | Consumer name | Stable Home key ID | Credential-source owner | Migration status |
 | --- | --- | --- | --- |
@@ -107,12 +102,12 @@ revoked/deleted rows and the shared record so recovery can reapply later
 revocations. Update this table after each accepted administrative change; it
 does not reconcile Home state or provision secrets.
 
-[Broodling's separately owned installation](https://github.com/faviann/homelab-iac/issues/353)
-requires `GATEWAY_BASE_URL=https://cliproxy.local.faviann.com/v1`,
-`gpt-5.6-sol`, Chat Completions, tools and JSON-object output. Its eventual
-consumer migration changes only its separately owned gateway key. Its
-deployment, live key ID, credential-source owner and migration status remain
-outside this preparation; do not infer them from the known gateway contract.
+### Broodling gateway contract
+
+Broodling requires `GATEWAY_BASE_URL=https://cliproxy.local.faviann.com/v1`,
+`gpt-5.6-sol`, Chat Completions, tools and JSON-object output. When its
+operator migrates it, only its separately owned gateway key changes. Its
+deployment is owned by [#353](https://github.com/faviann/homelab-iac/issues/353).
 
 ## Deploy
 

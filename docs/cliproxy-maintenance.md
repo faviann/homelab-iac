@@ -103,10 +103,7 @@ no routing labels.
 ### Emergency CPA restart
 
 First [revoke the individual consumer key](#revocation-and-session-limits)
-through Home administration. Revoking rejects new requests but an accepted
-HTTP stream can finish afterwards. The pinned native key deletion also reloads
-CPA and closes persistent Codex upstream connections and selections; that side
-effect is not guaranteed termination of every accepted session. `restart-cpa`
+through Home administration. Revocation rejects new requests only; `restart-cpa`
 interrupts **every** CPA session and may reach the
 forced-termination deadline. A running container is not proof that CPA works;
 run the secret-safe acceptance probes afterwards.
@@ -568,20 +565,16 @@ Before the first real consumer-key change, require all of these:
   close it; the one-time import/rollback machinery stays until that human
   confirmation.
 - The [synthetic identity gate](#synthetic-identity-gate) passes at the accepted
-  pair pins. A maintenance window covers native key reloads, snapshot stops
-  and any emergency restart; callers understand their effects on other
-  consumers too.
+  pair pins. A maintenance window covers key changes, snapshot stops and any
+  emergency restart, since each can interrupt other consumers' sessions.
 
 Enumerate known consumers from operator knowledge and accepted deployment
 contracts. Fill the
 [non-secret inventory](../stacks/overmind/cliproxy/README.md#consumer-identities-and-inventory)
 with actual names, stable numeric Home IDs, actual credential-source owners
 and observed migration status. Keep unidentified consumers on the legacy key.
-Broodling's known contract is the fixed gateway `/v1` URL, `gpt-5.6-sol`, Chat
-Completions, tools and JSON output. When its operator migrates it, change only
-its separately owned gateway key; its installation stays owned by
-[#353](https://github.com/faviann/homelab-iac/issues/353). Do not invent a
-deployment, owner or live migration state for it.
+Broodling follows its
+[fixed gateway contract](../stacks/overmind/cliproxy/README.md#broodling-gateway-contract).
 
 ### Individual native key operations
 
@@ -593,9 +586,8 @@ supports these operations:
 | Operation | Method and input | Record to keep |
 | --- | --- | --- |
 | Identify the imported record privately | `GET`; match its key privately against the frozen legacy credential | Its `items[].id` / `api_key_id`, without copying the secret-bearing response |
-| Name the legacy record | `PATCH` body `{"id": <HOME_KEY_ID>, "display_name": "legacy-shared"}` | Same ID and key value; metadata-only rename |
 | Create one actual consumer key | `POST` body `{"api_key": "<REPLACE_ME>", "display_name": "<ACTUAL_CONSUMER>", "user_id": null, "channels": [], "model_groups": []}` | Returned `api_key.id`, approved secret reference and actual owner |
-| Rename one record | `PATCH` body `{"id": <HOME_KEY_ID>, "display_name": "<ACTUAL_CONSUMER>"}` | Same stable ID; updated inventory name |
+| Rename one record, including the legacy one to `legacy-shared` | `PATCH` body `{"id": <HOME_KEY_ID>, "display_name": "<NAME>"}` | Same stable ID and key value; updated inventory name |
 | Revoke one record | `DELETE` with query `id=<HOME_KEY_ID>` | Retained inventory row, revocation date and outcome |
 
 Do not use a bulk `PUT`, positional list indices or secret-valued query
@@ -647,28 +639,15 @@ Real revocation uses the same individual operation and preserves its inventory
 row; legacy retirement needs a separate explicit decision confirming no
 remaining callers depend on it.
 
-A new request's rejection does not prove existing work ended. An accepted
-HTTP stream can finish after deletion. The pinned
+Revocation rejects new requests only. It does not prove existing work ended:
+an accepted HTTP stream can finish, and the pinned
 [CPA retained selection path](https://github.com/router-for-me/CLIProxyAPI/blob/c93978c4ea2e908255a2a06c37599fda3651554a/sdk/cliproxy/auth/conductor_home.go)
-returns an existing eligible same-model WebSocket selection before a new Home
-dispatch, so key authentication alone does not terminate that selection.
-
-**Pinned-runtime refinement:** native Home deletion publishes a configuration
-update, and CPA's
-[runtime reload](https://github.com/router-for-me/CLIProxyAPI/blob/c93978c4ea2e908255a2a06c37599fda3651554a/sdk/cliproxy/service_config.go)
-replaces the Codex executor, closing its persistent upstream WebSockets and
-retained selections. An idle downstream client socket can remain open until
-its next turn, which then needs a fresh selection. Delivery is
-asynchronous; a retained selection can bypass fresh authentication until that
-replacement arrives. The synthetic
-gate observes that reload-induced closure with a healthy fake provider. This
-corrects the resolved plan's overbroad claim that deletion does not terminate
-retained selections. Creation and other runtime-changing key edits can also
-publish an update; unrelated native WebSocket sessions can be interrupted.
-This is a runtime reload side effect, not a per-consumer session kill or a
-guarantee that every accepted request ended. Treat retained selections as
-potentially authorized until they actually close. For guaranteed all-session
-termination, revoke first and run the human-only bounded action:
+reuses an existing same-model WebSocket selection without a fresh key check.
+Any key change publishes a configuration update that CPA reloads, which can
+also interrupt unrelated consumers' native sessions; do not rely on it as a
+per-consumer session kill. Treat existing work as potentially authorized until
+it closes. For guaranteed termination, revoke first and run the human-only
+bounded action:
 
 ```bash
 scripts/cliproxy-maintenance.sh restart-cpa
@@ -677,8 +656,7 @@ scripts/cliproxy-maintenance.sh restart-cpa
 This interrupts **all** CPA sessions, including unrelated consumers, and can
 force termination after the stop deadline. Follow
 [emergency CPA restart](#emergency-cpa-restart), then require fresh rejection
-for the revoked key and readiness for the surviving keys. Do not claim a
-graceful drain or per-consumer session kill.
+for the revoked key and readiness for the surviving keys.
 
 ### Synthetic identity gate
 
@@ -686,20 +664,13 @@ graceful drain or per-consumer session kill.
 ./validate.sh tests tests/regression/cliproxy_home_identity_gate.py
 ```
 
-This explicit local-Docker gate reuses the native pinned-pair fixture and an
-internal network with synthetic credentials and one fake provider. It labels
-the unchanged imported legacy record, creates multiple unowned unrestricted
-named records with individual operations before CPA starts, then checks stable
-IDs and native usage attribution. Deletion is the only key mutation while CPA
-is running, excluding delayed earlier key-edit notifications. The sacrificial
-key's next independent request is rejected while the other named and legacy
-keys serve. The pinned runtime reload closes its established persistent native
-Codex upstream connection and selection, with a healthy local fake provider;
-the old client socket's next turn cannot serve. Its already accepted HTTP
-stream completes. These separate authentication from the reload
-side effect and accepted work; no per-consumer termination is promised.
-This is identity evidence, not real
-consumer/provider acceptance or a generic protocol matrix. No-argument
+This explicit local-Docker gate reuses the pinned-pair fixture with synthetic
+credentials and one fake provider. It labels the imported legacy record without
+changing its ID or value, creates multiple unowned unrestricted named records
+individually, and checks attribution by stable ID. Deleting one record by ID
+rejects its next request while the other named and legacy keys keep serving.
+It does not check existing sessions; see
+[revocation and session limits](#revocation-and-session-limits). No-argument
 `./validate.sh` excludes this Docker-dependent filename.
 
 ## Matched recovery and assisted updates
