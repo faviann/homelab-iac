@@ -116,6 +116,7 @@ def test_wildcard_certificate_covers_every_access_tier() -> None:
         "*.media.faviann.com",
         "*.public.faviann.com",
         "*.local.faviann.com",
+        "*.ai.faviann.com",
     } <= set(certificate["sans"])
 
 

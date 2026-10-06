@@ -265,6 +265,8 @@ Set `default_domain` per host in `inventory/host_vars/<host>.yml`. The docker-ag
 | `seedbox` | `admin.faviann.com` | `bittorrent.admin.faviann.com` |
 | `jellyfin` | `public.faviann.com` | `jellyfin.public.faviann.com` |
 
+`*.ai.faviann.com` and `*.local.faviann.com` are LAN/VPN-only tiers with no Docker-label host: Firewalla overrides each wildcard to `10.1.0.2`, while public DNS sends them to the WAN through `*.faviann.com`. The name protects nothing; each router on these tiers must carry `local-ip-restriction`.
+
 When adding a new tier subdomain, also add its wildcard SAN in `stacks/portal/traefik3/appdata/traefik3/config/traefik.yaml` or TLS will fail.
 
 ## Secrets and `.env`

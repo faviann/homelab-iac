@@ -87,6 +87,14 @@ http:
       middlewares:
         - local-ip-restriction
 
+    sub2api:
+      rule: "Host(`gateway.ai.faviann.com`)"
+      entryPoints: websecure
+      service: sub2api
+      priority: 1000
+      middlewares:
+        - local-ip-restriction
+
     hermes:
       rule: "Host(`hermes.local.faviann.com`)"
       entryPoints: websecure
@@ -232,6 +240,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://overmind.faviann.vms:8327"
+    sub2api:
+      loadBalancer:
+        servers:
+          - url: "http://overmind.faviann.vms:8318"
     collie-workstation:
       loadBalancer:
         servers:
