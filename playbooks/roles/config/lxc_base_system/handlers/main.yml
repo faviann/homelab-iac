@@ -1,0 +1,8 @@
+---
+# Handlers for lxc_base_system role
+
+- name: Restart cron
+  ansible.builtin.systemd:
+    name: cron
+    state: restarted
+  listen: restart cron

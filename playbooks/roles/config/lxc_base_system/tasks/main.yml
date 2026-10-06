@@ -18,3 +18,11 @@
     update_cache: true
     cache_valid_time: "{{ lxc_base_system_apt_cache_valid_time }}"
   when: lxc_base_system_apt_update_cache | bool
+
+# Long-running daemons read the zone at startup; cron is the only one here.
+- name: Set the system timezone
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ lxc_timezone }}"
+    dest: /etc/localtime
+    state: link
+  notify: restart cron
