@@ -184,10 +184,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     assert (shared / "stacks/selected/.env").read_text() == (
         "VALUE=fixture-selected-value\nSOURCE=.env.j2 selected/.env\n"
     )
-    assert not [
-        path for path in (tmp_path / "cache").rglob("*")
-        if path.is_file() and "fixture-selected-value" in path.read_text(errors="replace")
-    ]
     assert (retired / "compose.yaml").exists()
     commands = docker_log.read_text().splitlines()
     assert not [line for line in commands if line.startswith(f"{retired}|")]

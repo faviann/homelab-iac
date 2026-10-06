@@ -42,7 +42,6 @@ non-directory paths and preserve metadata on existing directories.
 
 `lxc_stack_sync_manifest_plan` contains:
 
-- `templated_outputs`: relative target paths for `.j2` sources with the `.j2` suffix removed
 - `stack_dirs_to_create`: absolute stack directory paths under the shared mount
 - `files_to_render`: templated source files with `source_path`, `dest_path`, `relative_path`, `stack_name`, and effective `owner`, `group`, and `mode`
 - `files_to_copy`: static source files with `source_path`, `dest_path`, `relative_path`, `stack_name`, and effective `owner`, `group`, and `mode`
@@ -69,7 +68,7 @@ Every stack template is rendered exactly once, by the planner task "Render plann
 - `stack_name`: the stack's top-level directory name
 - `stack_vars`: `lxc_docker_env_stack_vars[stack_name]`, or `{}` when the stack declares none
 
-These are defined only on that render task, as task-scoped variables, never host facts. Rendered content stays in a registered result under `no_log`; it is never stored in a fact or in the plan. A template that fails to render fails the run before anything is written, and the message names only the failed templates by stack-relative path.
+These are defined only on that render task, as task-scoped variables. Rendered content stays in a registered result under `no_log`. A template that fails to render fails the run before anything is written, and the message names only the failed templates by stack-relative path.
 
 ### Deploy Exclusions
 

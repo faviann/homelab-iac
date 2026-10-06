@@ -4,7 +4,6 @@
 - name: Initialize compose manifest plan
   ansible.builtin.set_fact:
     lxc_stack_sync_manifest_plan:
-      templated_outputs: []
       stack_dirs_to_create: []
       files_to_render: []
       files_to_copy: []
@@ -20,7 +19,6 @@
         lxc_stack_sync_manifest_plan
         | combine(
             {
-              'templated_outputs': files_to_render | map(attribute='relative_path') | list,
               'files_to_render': files_to_render
             },
             recursive=True
@@ -40,8 +38,7 @@
       {%- endfor -%}
       {{ planned_files }}
 
-# The only render of stack templates. Content stays in this registered result
-# and is never copied into a fact, so no_log keeps it out of every output.
+# The only render of stack templates. Content stays in this registered result.
 - name: Render planned stack templates
   ansible.builtin.debug:
     msg: "{{ lookup('ansible.builtin.template', item.source_path) }}"
@@ -53,20 +50,21 @@
     label: "{{ item.relative_path }}"
   register: _lxc_stack_sync_rendered_templates
   ignore_errors: true
+  no_log: true
 
 - name: Fail when planned stack templates cannot render
   ansible.builtin.fail:
     msg: >-
-      Stack templates failed to render on {{ inventory_hostname }}: {{ failed | join(', ') }}.
+      Stack templates failed to render on {{ inventory_hostname }}: {{ _failed_templates | join(', ') }}.
       Render errors are hidden because they can contain stack values.
   vars:
-    failed: >-
+    _failed_templates: >-
       {{
         _lxc_stack_sync_rendered_templates.results | default([])
         | selectattr('failed', 'defined') | selectattr('failed')
         | map(attribute='item.relative_path') | sort
       }}
-  when: failed | length > 0
+  when: _failed_templates | length > 0
   no_log: false
 
 - name: Collect compose sources for planner discovery
@@ -82,7 +80,7 @@
       {%- for file in _per_host_static_files.files | default([]) -%}
       {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
       {%- if (relative_path | basename) in compose_names
-        and relative_path not in lxc_stack_sync_manifest_plan.templated_outputs -%}
+        and relative_path not in (lxc_stack_sync_manifest_plan.files_to_render | map(attribute='relative_path') | list) -%}
       {%- set _ = sources.append({
         'target_dir': (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path) | dirname,
         'content': lookup('ansible.builtin.file', file.path)
@@ -91,6 +89,7 @@
       {%- endfor -%}
       {{ sources }}
   register: _lxc_stack_sync_compose_sources
+  no_log: true
 
 - name: Build planner target stack directory list
   ansible.builtin.set_fact:
@@ -142,7 +141,7 @@
       {%- set planned_files = [] -%}
       {%- for file in _per_host_static_files.files | default([]) -%}
       {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
-      {%- if relative_path not in (lxc_stack_sync_manifest_plan.templated_outputs | default([])) -%}
+      {%- if relative_path not in (lxc_stack_sync_manifest_plan.files_to_render | map(attribute='relative_path') | list) -%}
       {%- set _ = planned_files.append({
         'source_path': file.path,
         'dest_path': lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path,
