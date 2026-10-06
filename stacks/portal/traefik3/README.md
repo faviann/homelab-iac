@@ -38,6 +38,15 @@ Host-owned:
 - portal vault-backed variable bindings in `inventory/host_vars/portal.yml`
 - domain-edge exposure and certificate DNS credentials
 
+## Config Changes
+
+Traefik reads `appdata/traefik3/config/traefik.yaml` only at startup, and the
+file is a single-file bind mount. When it changes, stack sync recreates the
+`traefik` service. That causes a brief outage of every route on portal, so
+batch static config changes. Routers in `conf.d/` are watched and hot-reloaded.
+Never declare them in `x-restart-on-change`, because a router edit would then
+cause the same outage.
+
 ## Proxmox SPICE Proxy
 
 Proxmox `.vv` files set `proxy=http://proxmox.local.faviann.com:3128`, so Remote

@@ -38,7 +38,7 @@ Stack-owned files:
 - `.env.j2` when values are rendered from inventory/vault variables
 - committed app config under `appdata/`
 - stack-local `README.md` and files under `docs/`
-- Compose extension blocks such as `x-prereq-dirs`, `x-managed-files`, and `x-busy-check`
+- Compose extension blocks such as `x-prereq-dirs`, `x-managed-files`, `x-busy-check`, and `x-restart-on-change`
 
 Host/inventory-owned settings:
 
@@ -64,6 +64,7 @@ Do not dynamically include stack-local variable files into Ansible host scope. T
 - Compose-relative persistent data should live under `./appdata/...`.
 - All bind-mount target directories must exist before first deploy. If they do not, Docker creates them as root on first start, causing permission errors for non-root container processes. Declare dirs that need pre-creation in an `x-prereq-dirs` block in the repo-managed compose definition for the stack; the Ansible role creates each missing directory on the LXC with Docker user ownership and mode `0755`. This is create-if-absent behavior: once a declared directory exists, `x-prereq-dirs` does not change its mode, owner, or group. Use `compose.yaml` by default. If the stack intentionally preserves an upstream vendor `compose.yaml`, place `x-prereq-dirs` in `compose.override.yaml` instead. This applies to empty `./appdata/` dirs, `/ephemeral/<stack>/` paths, and new `/data/` subpaths.
 - Files that must exist before container start with a specific mode can be declared in `x-managed-files`. Relative `./` paths are resolved from the deployed stack directory. Repository-synced files are rendered or copied directly with the declaration's mode; other declared files are created empty when absent without truncating existing content. This is intended for generated state files such as Traefik ACME storage that must exist with restricted permissions.
+- Changing a synced file does not by itself restart the container that reads it. See [Restart on Change](#restart-on-change).
 - Dirs that contain committed files do not need an `x-prereq-dirs` entry; Ansible creates them automatically when deploying the files.
 - Do not use `.gitkeep`.
 - If both `.env` and `.env.j2` exist for the same output path, the templated output wins.
@@ -95,6 +96,47 @@ To iterate on a single stack without reconciling the others:
 ```
 
 No registration step is required; the role discovers everything under `stacks/<host>/` automatically.
+
+## Restart on Change
+
+`docker compose up -d` recreates a container only when its image or service
+definition changes. It never sees the content of a bind-mounted file. An app
+that reads a synced file only at startup keeps running the old content.
+
+After a stack's `up -d`, stack sync recreates a single service with
+`docker compose up -d --force-recreate --no-deps <service>` when one of its
+tracked files was modified after the service's container last started. A
+service tracks these files:
+
+- **Every synced file it bind-mounts on its own.** No declaration is needed.
+  Ansible replaces a synced file by atomic rename, and a single-file mount stays
+  attached to the old inode until the container restarts. This applies
+  whether or not the app would re-read the file. Mounts are matched by inode.
+- **Every file declared for it in `x-restart-on-change`.** Declare a file in a
+  mounted directory when the app reads it only at startup:
+
+  ```yaml
+  x-restart-on-change:
+    portal-entry:
+      - ./appdata/nginx/conf.d/redirect.conf
+  ```
+
+  Paths are resolved from the stack directory. Each one must be a file the
+  stack syncs from the repo. An unknown service, a malformed value, a path
+  outside the stack, or a path the stack does not sync fails the run before
+  anything is synced, and the error names the stack and the path.
+
+Rules:
+
+- Never declare a file the app writes itself. Its own writes make the file newer
+  than the container, so every run would recreate the service.
+- Do not declare a file the app watches or hot-reloads, such as Traefik's
+  `conf.d/` routers. A recreate interrupts the service for nothing.
+- A service that shares another service's network namespace
+  (`network_mode: service:<name>`) loses its network when that service is
+  recreated alone. Do not declare files for such a provider service.
+
+The check keeps no state, so a failed run's recreate happens on the next run, and deferred stacks and `./run.sh --check` recreate nothing.
 
 ## Image Updates
 

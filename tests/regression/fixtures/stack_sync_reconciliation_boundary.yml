@@ -111,6 +111,7 @@
           discovered_stacks: [myapp]
           quarantined_stacks: [stale-app]
           skipped_stacks: []
+          recreated_services: []
 
     - name: Assert docker commands covered quarantine and startup
       ansible.builtin.assert:
@@ -178,6 +179,7 @@
           discovered_stacks: [myapp]
           quarantined_stacks: []
           skipped_stacks: []
+          recreated_services: []
 
     - name: Read Docker calls before check mode
       ansible.builtin.slurp:
@@ -209,6 +211,7 @@
           discovered_stacks: [myapp]
           quarantined_stacks: []
           skipped_stacks: [myapp]
+          recreated_services: []
 
     - name: Find quarantine destinations after apply, converged apply, and check mode
       ansible.builtin.find:

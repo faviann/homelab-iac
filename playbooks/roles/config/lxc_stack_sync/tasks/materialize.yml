@@ -7,6 +7,13 @@
     apply:
       no_log: true
 
+# Outside the planner's no_log so an invalid declaration names its stack and path.
+# Runs before any write, so a rejected declaration leaves the host untouched.
+- name: Read x-restart-on-change declarations
+  ansible.builtin.set_fact:
+    lxc_stack_sync_restart_on_change: >-
+      {{ _lxc_stack_sync_compose_sources.msg | restart_on_change_declarations(lxc_stack_sync_manifest_plan) }}
+
 - name: Check which stack prereq dirs already exist
   ansible.builtin.stat:
     path: "{{ item.path }}"

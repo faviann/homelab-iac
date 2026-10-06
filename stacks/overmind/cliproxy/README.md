@@ -43,9 +43,8 @@ for login and native callback paste; the old standalone CPA callback tunnels
 and mappings are retired.
 
 The non-secret cluster file is mounted read-only. Home reads it at startup;
-`.env.j2` hashes its exact content so Compose recreates Home and refreshes the
-single-file bind after Ansible's atomic replacement. This is a startup input,
-not an alternative runtime settings store. A changed cluster identity also
+stack sync recreates Home when the file changes, because it is a single-file
+bind mount. This is a startup input, not an alternative runtime settings store. A changed cluster identity also
 requires human review of existing carrier/certificate compatibility.
 
 ## Required carrier and private state

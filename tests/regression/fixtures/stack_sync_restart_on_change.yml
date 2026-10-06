@@ -1,0 +1,141 @@
+---
+# One sequential history of a host. Each step edits files, reconciles, and
+# checks which services were recreated and which recreate commands ran.
+- name: Test stack sync restart on change
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  environment:
+    PATH: "{{ temp_root }}:{{ lookup('env', 'PATH') }}"
+  vars:
+    docker_agents_enabled: false
+    lxc_stack_sync_managed_assets:
+      changed_results: []
+    source: "{{ lxc_docker_environment_internal.stacks_source }}"
+    deployed: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks"
+    lxc_docker_environment_internal:
+      shared_mount_source: "{{ temp_root }}/shared"
+      # Compose runs here; Docker reports bind sources under shared_mount_source.
+      root_docker_conf_path: "{{ temp_root }}/conf"
+      stacks_source: "{{ temp_root }}/stacks-source"
+      stale_stack_quarantine_root: "{{ temp_root }}/shared/stale-stacks"
+      external_networks: []
+      path_ownership_overrides: []
+      shared_owner: "{{ ansible_user_uid }}"
+      shared_group: "{{ ansible_user_gid }}"
+      docker_uid: "{{ ansible_user_uid }}"
+      docker_gid: "{{ ansible_user_gid }}"
+    busy_deferred:
+      deferred_stacks: [{stack: busy, state: busy, reason: ""}]
+      host_deferred: true
+    steps:
+      - name: first deploy recreates nothing, not even the stale orphan of a removed service
+        expected: []
+      - name: an undeclared file in a directory mount recreates nothing
+        write: myapp/conf.d/router.yml
+        expected: []
+      - name: a replaced single-file mount recreates only its service
+        write: myapp/config.yaml
+        expected: [{stack: myapp, service: app, files: [config.yaml]}]
+      - name: an unchanged rerun recreates nothing
+        expected: []
+      - name: a changed declared file recreates only its service
+        write: myapp/settings/worker.ini
+        expected: [{stack: myapp, service: worker, files: [settings/worker.ini]}]
+      - name: a stack deferred by a busy check is not recreated
+        write: busy/job.yaml
+        touch: busy/job.yaml
+        busy_check_result: "{{ busy_deferred }}"
+        expected: []
+  tasks:
+    - name: Create the stack source directories
+      ansible.builtin.file:
+        path: "{{ source }}/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: [myapp/conf.d, myapp/settings, busy]
+
+    - name: Create the Compose stack root and the mock container state
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: ["{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks", "{{ temp_root }}/containers"]
+
+    # The probe runs in the physical Compose directory while Docker reports
+    # bind sources under the other path, so only inode matching finds them.
+    - name: Reach the same stacks through the shared mount path
+      ansible.builtin.file:
+        src: "{{ lxc_docker_environment_internal.root_docker_conf_path }}"
+        dest: "{{ lxc_docker_environment_internal.shared_mount_source }}"
+        state: link
+
+    - name: Leave an old container of a service removed from myapp
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/containers/myapp-old"
+        content: "2000-01-01T00:00:00Z\n"
+        mode: "0644"
+
+    - name: Seed the stack sources
+      ansible.builtin.copy:
+        dest: "{{ source }}/{{ item.key }}"
+        mode: "0644"
+        content: "{{ item.value }}"
+      loop: "{{ files | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      vars:
+        files:
+          myapp/compose.yaml: |
+            x-restart-on-change:
+              worker:
+                - ./settings/worker.ini
+            services:
+              app: {image: app}
+              worker: {image: worker}
+          myapp/config.yaml: "v1\n"
+          myapp/conf.d/router.yml: "v1\n"
+          myapp/settings/worker.ini: "v1\n"
+          busy/compose.yaml: |
+            services:
+              job: {image: job}
+          busy/job.yaml: "v1\n"
+
+    # Containers are files holding their start time. Mounts are fixed per container.
+    - name: Place mock docker script on PATH
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/docker"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          state="{{ temp_root }}/containers"
+          mkdir -p "$state"
+          printf '%s\n' "$*" >> "{{ temp_root }}/docker-calls.log"
+          create() { date -u +%Y-%m-%dT%H:%M:%S.%NZ > "$state/$1"; echo Started >&2; }
+          case "$*" in
+            "compose -p "*" up -d --force-recreate --no-deps "*) create "$3-$8" ;;
+            "compose -p myapp up -d") for s in app worker; do [ -e "$state/myapp-$s" ] || create "myapp-$s"; done ;;
+            "compose -p busy up -d") [ -e "$state/busy-job" ] || create busy-job ;;
+            "compose -p myapp config --services") printf 'app\nworker\n' ;;
+            "compose -p busy config --services") echo job ;;
+            "ps "*) ls "$state" | grep "^${4#label=com.docker.compose.project=}-" || true ;;
+            "inspect "*)
+              shift 3
+              for id; do
+                case $id in
+                  myapp-app | myapp-old) mounts="{{ deployed }}/myapp/config.yaml {{ deployed }}/myapp/conf.d" ;;
+                  myapp-worker) mounts="{{ deployed }}/myapp/settings" ;;
+                  busy-job) mounts="{{ deployed }}/busy/job.yaml" ;;
+                esac
+                echo "${id#*-} $(cat "$state/$id") $mounts"
+              done
+              ;;
+            "image prune "*) echo "Total reclaimed space: 0B" ;;
+          esac
+
+    - name: Reconcile each step
+      ansible.builtin.include_tasks: stack_sync_restart_on_change_step.yml
+      loop: "{{ steps }}"
+      loop_control:
+        loop_var: step
+        label: "{{ step.name }}"

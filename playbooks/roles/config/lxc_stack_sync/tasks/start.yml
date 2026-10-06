@@ -42,6 +42,61 @@
   changed_when: "'Started' in _stack_sync_stack_up_results.stderr or 'Created' in _stack_sync_stack_up_results.stderr"
   when: (item.path | dirname | basename) in (lxc_docker_env_desired_top_level_stack_dirs | default([]))
 
+# Compose never sees a bind-mounted file's content, and a single-file mount keeps
+# the replaced inode. A container started before a tracked file's last write runs
+# stale config, so recreate that service alone. The start time is the only
+# record, so a run that failed before this step is healed by the next one.
+# Only stacks brought up above are probed; check mode skips them all.
+- name: Find services whose tracked files changed after their containers started
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['sh', '-c', lookup('ansible.builtin.file', 'restart_on_change_probe.sh'), 'restart-on-change', stack]
+        + (synced | map('regex_replace', '^', '=') | list)
+        + (declared | map(attribute='service') | zip(declared | map(attribute='path')) | map('join', '=') | list)
+      }}
+    chdir: "{{ item.item.path | dirname }}"
+  vars:
+    stack: "{{ item.item.path | dirname | basename }}"
+    synced: >-
+      {{
+        (lxc_stack_sync_manifest_plan.files_to_render + lxc_stack_sync_manifest_plan.files_to_copy)
+        | selectattr('stack_name', 'equalto', stack)
+        | map(attribute='relative_path')
+        | map('regex_replace', '^' ~ (stack | regex_escape) ~ '/', '')
+        | list
+      }}
+    declared: "{{ lxc_stack_sync_restart_on_change | default([]) | selectattr('stack', 'equalto', stack) | list }}"
+  loop: "{{ (_stack_sync_stack_up_results | default({})).results | default([]) | rejectattr('skipped', 'defined') | list }}"
+  loop_control:
+    label: "{{ stack }}"
+  register: _stack_sync_restart_probes
+  changed_when: false
+
+- name: Recreate services whose tracked files changed
+  ansible.builtin.command:
+    argv: [docker, compose, -p, "{{ item.stack }}", up, -d, --force-recreate, --no-deps, "{{ item.service }}"]
+    chdir: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/{{ item.stack }}"
+  loop: "{{ _stack_sync_recreates }}"
+  loop_control:
+    label: "{{ item.stack }}/{{ item.service }} ({{ item.files | join(', ') }})"
+  register: _stack_sync_recreate_results
+  changed_when: true
+  vars:
+    _stack_sync_recreates: >-
+      {%- set recreates = [] -%}
+      {%- for probe in (_stack_sync_restart_probes | default({})).results | default([]) -%}
+      {%- for line in probe.stdout_lines | default([]) -%}
+      {%- set words = line.split() -%}
+      {%- set _ = recreates.append({
+        'stack': probe.item.item.path | dirname | basename,
+        'service': words[0],
+        'files': words[1:]
+      }) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ recreates }}
+
 - name: Publish start slice into stack reconciliation
   ansible.builtin.set_fact:
     _lxc_docker_env_reconciliation: >-
@@ -53,6 +108,14 @@
                 'changed_results': (
                   (((_stack_sync_network_create | default({})).results | default([])))
                   + (((_stack_sync_stack_up_results | default({})).results | default([])))
+                  + (((_stack_sync_recreate_results | default({})).results | default([])))
+                ),
+                'recreated_services': (
+                  (((_stack_sync_recreate_results | default({})).results | default([]))
+                  | selectattr('changed', 'defined')
+                  | selectattr('changed')
+                  | map(attribute='item')
+                  | list)
                 ),
                 'skipped_stacks': (
                   (((_stack_sync_stack_up_results | default({})).results | default([]))

@@ -167,6 +167,7 @@
       loop: "{{ busy_check_fixture_stacks.keys() | list | difference(deferred_stacks) + ['plain'] }}"
       when: not busy_check_removed
 
+    # Stack sync's restart probe also lists containers, filtered to non-one-off ones.
     - name: Assert only declared stacks were probed, and only without the override
       ansible.builtin.assert:
         that: >-
@@ -175,7 +176,7 @@
         fail_msg: "{{ inventory_hostname }}/{{ item.key }} probe calls: {{ probe_calls }}"
       vars:
         probe_calls: >-
-          {{ docker_calls | select('search', '\| (ps .*project=|exec cid-)' ~ (item.key | regex_escape) ~ '( |$)') | list }}
+          {{ docker_calls | select('search', '\| (ps (?!.*oneoff).*project=|exec cid-)' ~ (item.key | regex_escape) ~ '( |$)') | list }}
       loop: "{{ busy_check_fixture_stacks | combine({'plain': {}}) | dict2items }}"
 
     - name: Read the deferral file

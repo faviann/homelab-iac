@@ -176,21 +176,9 @@ def test_actual_materialized_pair_wiring(runtime_pair):
     pair.deployment()
     require(identities == (pair.identity(pair.home_name), pair.identity(pair.cpa_name)),
         "unchanged deployment recreated services")
-    cluster = pair.stack_source / "cliproxy/appdata/config/cluster.yaml"
-    document = yaml.safe_load(cluster.read_text())
-    document["node"]["event-poll-interval"] = "750ms"
-    cluster.write_text(yaml.safe_dump(document))
-    require(pair.materialize(carrier).returncode == 0, "changed cluster materialization")
-    pair.deployment()
-    require(pair.identity(pair.home_name) != identities[0] and pair.identity(pair.cpa_name) == identities[1],
-        "cluster change must recreate Home only")
-    require(pair.docker("exec", pair.home_name, "cat", "/CLIProxyAPIHome/cluster.yaml",
-        stage="recreated Home startup document observation").stdout.encode() == cluster.read_bytes(),
-        "recreated Home reads the old cluster document")
     inspected = json.loads(pair.docker("inspect", pair.home_name, stage="cluster mount observation").stdout)[0]
     require(any(mount["Destination"] == "/CLIProxyAPIHome/cluster.yaml" and not mount["RW"]
         for mount in inspected["Mounts"]), "cluster mount is not read-only")
-    pair.wait(lambda: pair.connected(node), "cluster reread reconnects persistent identity")
     for name in (pair.home_name, pair.cpa_name):
         status = pair.docker("exec", name, "cat", "/proc/1/status", stage="native startup umask observation").stdout
         require("Umask:\t0077" in status, "native binary startup umask is not private")

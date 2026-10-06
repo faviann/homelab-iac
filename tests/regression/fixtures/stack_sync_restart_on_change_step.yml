@@ -1,0 +1,51 @@
+---
+- name: Start the step with an empty Docker call log
+  ansible.builtin.copy:
+    dest: "{{ temp_root }}/docker-calls.log"
+    content: ""
+    mode: "0644"
+
+- name: Change a source file for the step
+  ansible.builtin.copy:
+    dest: "{{ source }}/{{ step.write }}"
+    content: "{{ step.name }}\n"
+    mode: "0644"
+  when: step.write is defined
+
+- name: Touch a deployed file without changing its source
+  ansible.builtin.file:
+    path: "{{ deployed }}/{{ step.touch }}"
+    state: touch
+    mode: "0644"
+  when: step.touch is defined
+
+- name: Reconcile stacks
+  ansible.builtin.include_role:
+    name: config/lxc_stack_sync
+  vars:
+    lxc_busy_check_result: "{{ step.busy_check_result | default({}) }}"
+
+- name: Read Docker calls of the step
+  ansible.builtin.slurp:
+    src: "{{ temp_root }}/docker-calls.log"
+  register: _step_calls
+
+- name: Assert the step recreated exactly the expected services
+  ansible.builtin.assert:
+    that:
+      - lxc_docker_env_deployment_report.recreated_services == step.expected
+      - recreate_calls == expected_calls
+      - not (step.busy_check_result is defined and 'busy' in calls)
+    fail_msg: "{{ step.name }}: recreated {{ lxc_docker_env_deployment_report.recreated_services }}; Docker calls: {{ calls }}"
+  vars:
+    calls: "{{ _step_calls.content | b64decode }}"
+    recreate_calls: "{{ calls.splitlines() | select('search', '--force-recreate') | list }}"
+    expected_calls: >-
+      {{
+        step.expected
+        | map(attribute='stack')
+        | zip(step.expected | map(attribute='service'))
+        | map('join', ' up -d --force-recreate --no-deps ')
+        | map('regex_replace', '^', 'compose -p ')
+        | list
+      }}
