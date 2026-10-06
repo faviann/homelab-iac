@@ -341,9 +341,7 @@ import sys
 from pathlib import Path
 
 from ruamel.yaml import YAML
-from ruamel.yaml.error import CommentMark, YAMLError
-from ruamel.yaml.scalarstring import FoldedScalarString, LiteralScalarString
-from ruamel.yaml.tokens import CommentToken
+from ruamel.yaml.error import YAMLError
 
 vault_path = Path(sys.argv[1])
 value_path = Path(sys.argv[2])
@@ -360,43 +358,43 @@ if document is None:
     document = {}
 if not isinstance(document, dict):
     raise SystemExit(1)
-if (key in document) != (mode != "create"):
+must_exist = mode != "create"
+if (key in document) != must_exist:
     raise SystemExit(1)
 if mode == "unset":
-    # ruamel files the comment lines that follow a key under that key, so
-    # they would vanish with it; hand them to whatever precedes the key.
+    # Cut the key's own lines so every other line stays byte-identical.
+    # Column-0 comments and blank lines ending the span sit above the next
+    # key, so they stay. Fail closed if the cut changed any other value.
     keys = list(document)
+    lines = plaintext.splitlines(keepends=True)
+    start = document.lc.key(key)[0]
     position = keys.index(key)
-    token = (document.ca.items.pop(key, None) or [None] * 3)[2]
-    del document[key]
-    following = ""
-    if token is not None and token.column:
-        following = token.value.partition("\n")[2]
-    elif token is not None:
-        following = token.value.lstrip("\n")
-    if following and position == 0:
-        if document.ca.comment is None:
-            document.ca.comment = [None, []]
-        document.ca.comment[1] = (document.ca.comment[1] or []) + [
-            CommentToken(following, CommentMark(0))
-        ]
-    elif following:
-        previous_key = keys[position - 1]
-        previous = document.ca.items.setdefault(previous_key, [None] * 4)
-        if previous[2] is not None:
-            previous[2].value += following
-        else:
-            block = (FoldedScalarString, LiteralScalarString)
-            prefix = "" if isinstance(document[previous_key], block) else "\n"
-            previous[2] = CommentToken(prefix + following, CommentMark(0))
-else:
+    end = (
+        document.lc.key(keys[position + 1])[0]
+        if position + 1 < len(keys)
+        else len(lines)
+    )
+    while end > start + 1 and (
+        lines[end - 1].startswith("#") or not lines[end - 1].strip()
+    ):
+        end -= 1
+    result = "".join(lines[:start] + lines[end:])
+    expected = dict(document)
+    del expected[key]
     try:
-        value = value_path.read_bytes().decode("utf-8")
-    except (OSError, UnicodeDecodeError):
+        if dict(yaml.load(result) or {}) != expected:
+            raise SystemExit(1)
+    except YAMLError:
         raise SystemExit(1)
-    if strip == "1":
-        value = value.removesuffix("\n")
-    document[key] = value
+    vault_path.write_text(result, encoding="utf-8")
+    raise SystemExit(0)
+try:
+    value = value_path.read_bytes().decode("utf-8")
+except (OSError, UnicodeDecodeError):
+    raise SystemExit(1)
+if strip == "1":
+    value = value.removesuffix("\n")
+document[key] = value
 lines = plaintext.splitlines()
 yaml.explicit_start = bool(lines) and lines[0].strip() == "---"
 with vault_path.open("w", encoding="utf-8") as stream:

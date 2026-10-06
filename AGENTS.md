@@ -95,7 +95,7 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./vault.sh check` | Verify the vault without disclosing its contents |
 | `./vault.sh diff [<git-ref>]` | Name the vault keys added, removed, or changed since a commit (default `HEAD`), never their values |
 | `./vault.sh set <key> --from-file <path> --create\|--replace` | Only on explicit request. Move a secret file into the vault without reading it |
-| `./vault.sh unset <key>` | Only on explicit request. Remove one top-level vault key without reading its value |
+| `./vault.sh unset <key>` | Only on explicit request. Remove one top-level vault key without printing its value |
 | `./vault.sh rotate --dry-run` | Rehearse passphrase rotation on throwaway copies |
 | `./vault.sh configure` / `edit` / `rotate` | Human-only. Interactive credential, vault, and passphrase changes |
 | `./validate.sh` | Complete non-live verification (~5 min) — lint, full lifecycle regressions, and the pytest suite |

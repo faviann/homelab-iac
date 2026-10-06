@@ -1733,15 +1733,6 @@ def test_set_refuses_the_vault_file_as_its_own_source(
         assert_vault_untouched(repo, original)
 
 
-VALID_YAML_VALUES = ("operator@pve", "automation", "synthetic-token-marker", "keep-me")
-
-
-def assert_no_value_in(result: subprocess.CompletedProcess[str]) -> None:
-    output = result.stdout + result.stderr
-    for value in VALID_YAML_VALUES:
-        assert value not in output
-
-
 def test_unset_removes_only_the_named_top_level_key(
     vault_repo: tuple[Path, dict[str, str]],
 ) -> None:
@@ -1752,7 +1743,7 @@ def test_unset_removes_only_the_named_top_level_key(
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "unset unrelated_scalar: PASS\n"
-    assert_no_value_in(result)
+    assert result.stderr == ""
     expected = yaml.safe_load(VALID_YAML)
     del expected["unrelated_scalar"]
     assert published_mapping(repo) == expected
@@ -1765,6 +1756,10 @@ UNSET_KEPT_LINES = [
     "unrelated_scalar: keep-me  # inline comment",
     "# note about the quoted scalar",
     'quoted_scalar: "keep-me"',
+    "unrelated_mapping:",
+    "  nested: true",
+    "",
+    "# note about the block",
     "vault_block: |",
     "  block-line",
     "# note about the long value",
@@ -1782,8 +1777,13 @@ UNSET_KEPT_LINES = [
             3, ["vault_removed: removed-marker  # removed note"], id="inline-comment"
         ),
         pytest.param(
-            7, ["vault_removed: |", "  removed-marker"], id="block-scalars"
+            3, ["vault_removed:", "  nested: removed-marker"], id="removed-mapping"
         ),
+        pytest.param(7, ["vault_removed: removed-marker"], id="previous-mapping"),
+        pytest.param(
+            11, ["vault_removed: |", "  removed-marker"], id="block-scalars"
+        ),
+        pytest.param(13, ["vault_removed: removed-marker"], id="last-key"),
     ],
 )
 def test_unset_preserves_untouched_yaml_presentation(
@@ -1813,7 +1813,6 @@ def test_unset_of_a_missing_key_fails_without_changing_the_vault(
     assert result.returncode == 1
     assert result.stdout == ""
     assert result.stderr == "unset vault_absent: FAIL\n"
-    assert_no_value_in(result)
     assert_vault_untouched(repo, original)
     assert_no_transaction_artifacts(repo, env)
 
@@ -1859,11 +1858,16 @@ def test_diff_reports_an_unset_key_as_removed(
     vault = repo / "inventory/vault.yml"
     vault.write_text(VALID_YAML, encoding="utf-8")
     assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
-    for args in (("init", "-q"), ("add", "inventory/vault.yml"), ("commit", "-q", "-m", "base")):
+
+    def git(*args: str) -> None:
         subprocess.run(
             ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
             cwd=repo, env=env, check=True, capture_output=True, timeout=10,
         )
+
+    git("init", "-q")
+    git("add", "inventory/vault.yml")
+    git("commit", "-q", "-m", "base")
 
     removal = run_vault(repo, env, "unset", "unrelated_scalar")
     diff = run_vault(repo, env, "diff")
