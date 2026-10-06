@@ -14,6 +14,7 @@ of what the guards enforce.
 | | `diff [<git-ref>]` | none | yes |
 | | `set <key> --from-file <path> --create\|--replace [--strip-final-newline]` | none | on explicit request |
 | | `unset <key>` | none | on explicit request |
+| | `merge` | none | yes |
 | | `rotate --dry-run` | none | yes |
 | | `configure`, `edit`, `rotate` | none | human-only |
 | `./validate.sh` | *(default)* comprehensive handoff | none | yes |
@@ -37,6 +38,12 @@ answers `--help` with its operations.
 A human-only operation prompts at a terminal, changes the vault, or enrolls
 trust on managed infrastructure, so a person runs it. "On explicit request"
 means an agent runs it only when a person asks for that change.
+
+`./vault.sh merge` changes the vault, but agents may run it: it only
+recombines values already committed, so no secret enters or leaves the vault.
+It resolves a conflicted `inventory/vault.yml` from git's index versions and
+fails without writing when any top-level key conflicts. The caller stages the
+result.
 
 ### Grammar
 
