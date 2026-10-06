@@ -4,7 +4,7 @@
 
 The workstation role bind-mounts selected home paths from `/ephemeral/workstation/home` so they survive an intentional LXC rebuild.
 
-**Status: the original ten declared paths were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
+**Status: nine of the original ten declared paths remain (Agent of Empires was retired 2026-10); they were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
 
 Claude's sibling `~/.claude.json` is persisted separately as a file bind mount (#157).
 It holds onboarding and recent-project state; `~/.claude` holds transcripts and credentials.
@@ -272,6 +272,8 @@ findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
 ```
 
 Every declared path must appear. A missing row is an unmounted bind mount, and the play recap will not have flagged it.
+
+Removing an entry from `workstation_persistent_home_links` does not unmount it. The role only manages the paths it lists, so the mount, its `/etc/fstab` line, and the data under `/ephemeral/workstation/home` stay. Retire a path by hand, as root, in this order: `umount` it, delete its fstab line, run `systemctl daemon-reload` so the generated mount unit is dropped, then delete or archive the data under `/ephemeral/workstation/home` and remove the empty mount point.
 
 ## Restarting Afterwards
 
