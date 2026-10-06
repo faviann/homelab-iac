@@ -30,6 +30,8 @@ Operations:
   set        Transfer a UTF-8 text file into a top-level vault variable:
                set <key> --from-file <path> --create|--replace
                    [--strip-final-newline]
+  unset      Remove one top-level vault variable:
+               unset <key>
   rotate     Rotate the vault passphrase (interactive):
                rotate [--dry-run]
 EOF
@@ -323,13 +325,15 @@ stage_ciphertext_for_publication() {
     fi
 }
 
-transfer_source_into_plaintext() {
+change_key_in_plaintext() {
     local workspace="$1"
     local plaintext="$2"
     local value_file="$workspace/value"
 
-    cp -- "$SET_SOURCE" "$value_file" || return 1
-    chmod 600 "$value_file"
+    if [[ "$SET_MODE" != unset ]]; then
+        cp -- "$SET_SOURCE" "$value_file" || return 1
+        chmod 600 "$value_file"
+    fi
     uv run --locked python - \
         "$plaintext" "$value_file" "$SET_KEY" "$SET_MODE" "$SET_STRIP" \
         >/dev/null 2>&1 <<'PY'
@@ -337,7 +341,9 @@ import sys
 from pathlib import Path
 
 from ruamel.yaml import YAML
-from ruamel.yaml.error import YAMLError
+from ruamel.yaml.error import CommentMark, YAMLError
+from ruamel.yaml.scalarstring import FoldedScalarString, LiteralScalarString
+from ruamel.yaml.tokens import CommentToken
 
 vault_path = Path(sys.argv[1])
 value_path = Path(sys.argv[2])
@@ -354,15 +360,43 @@ if document is None:
     document = {}
 if not isinstance(document, dict):
     raise SystemExit(1)
-if (key in document) != (mode == "replace"):
+if (key in document) != (mode != "create"):
     raise SystemExit(1)
-try:
-    value = value_path.read_bytes().decode("utf-8")
-except (OSError, UnicodeDecodeError):
-    raise SystemExit(1)
-if strip == "1":
-    value = value.removesuffix("\n")
-document[key] = value
+if mode == "unset":
+    # ruamel files the comment lines that follow a key under that key, so
+    # they would vanish with it; hand them to whatever precedes the key.
+    keys = list(document)
+    position = keys.index(key)
+    token = (document.ca.items.pop(key, None) or [None] * 3)[2]
+    del document[key]
+    following = ""
+    if token is not None and token.column:
+        following = token.value.partition("\n")[2]
+    elif token is not None:
+        following = token.value.lstrip("\n")
+    if following and position == 0:
+        if document.ca.comment is None:
+            document.ca.comment = [None, []]
+        document.ca.comment[1] = (document.ca.comment[1] or []) + [
+            CommentToken(following, CommentMark(0))
+        ]
+    elif following:
+        previous_key = keys[position - 1]
+        previous = document.ca.items.setdefault(previous_key, [None] * 4)
+        if previous[2] is not None:
+            previous[2].value += following
+        else:
+            block = (FoldedScalarString, LiteralScalarString)
+            prefix = "" if isinstance(document[previous_key], block) else "\n"
+            previous[2] = CommentToken(prefix + following, CommentMark(0))
+else:
+    try:
+        value = value_path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise SystemExit(1)
+    if strip == "1":
+        value = value.removesuffix("\n")
+    document[key] = value
 lines = plaintext.splitlines()
 yaml.explicit_start = bool(lines) and lines[0].strip() == "---"
 with vault_path.open("w", encoding="utf-8") as stream:
@@ -445,7 +479,7 @@ PY
             return 1
         fi
     elif [[ "$operation" == set ]]; then
-        if ! transfer_source_into_plaintext "$workspace" "$plaintext"; then
+        if ! change_key_in_plaintext "$workspace" "$plaintext"; then
             cleanup_transaction || true
             printf '%s: FAIL\n' "$label" >&2
             return 1
@@ -800,6 +834,16 @@ case "$1" in
         exec 3<>/dev/null
         require_uv || exit 1
         run_mutation set "set $SET_KEY"
+        exit $?
+        ;;
+    unset)
+        (( $# == 2 )) && [[ -n "$2" && "$2" != -* ]] || { usage >&2; exit 2; }
+        SET_KEY="$2"
+        SET_MODE=unset
+        SET_STRIP=0
+        exec 3<>/dev/null
+        require_uv || exit 1
+        run_mutation set "unset $SET_KEY"
         exit $?
         ;;
     rotate)

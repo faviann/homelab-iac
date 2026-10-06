@@ -13,6 +13,7 @@ of what the guards enforce.
 | `./vault.sh` | `check` | none | yes |
 | | `diff [<git-ref>]` | none | yes |
 | | `set <key> --from-file <path> --create\|--replace [--strip-final-newline]` | none | on explicit request |
+| | `unset <key>` | none | on explicit request |
 | | `rotate --dry-run` | none | yes |
 | | `configure`, `edit`, `rotate` | none | human-only |
 | `./validate.sh` | *(default)* comprehensive handoff | none | yes |
@@ -35,7 +36,7 @@ answers `--help` with its operations.
 
 A human-only operation prompts at a terminal, changes the vault, or enrolls
 trust on managed infrastructure, so a person runs it. "On explicit request"
-means an agent runs it only when a person asks for that transfer.
+means an agent runs it only when a person asks for that change.
 
 ### Grammar
 
