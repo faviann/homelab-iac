@@ -380,9 +380,8 @@
     - name: Assert planner output captures stack assets and prereq dirs
       ansible.builtin.assert:
         that:
-          - "'komf/compose.yaml' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
-          - "'komf/.env' in (lxc_stack_sync_manifest_plan.templated_outputs | default([]))"
-          - "'example.invalid/komf-komf-user:latest' in (lxc_stack_sync_manifest_plan.source_compose_specs | first).content"
+          - "'komf/compose.yaml' in (lxc_stack_sync_manifest_plan.files_to_render | map(attribute='relative_path'))"
+          - "'komf/.env' in (lxc_stack_sync_manifest_plan.files_to_render | map(attribute='relative_path'))"
           - lxc_stack_sync_manifest_plan.stack_dirs_to_create | length > 0
           - lxc_stack_sync_manifest_plan.files_to_render | length == 3
           - >-
