@@ -10,15 +10,20 @@ Portability tier: portable app stack.
 
 ## Where it runs and how clients reach it
 
-Runs on `overmind`. The UI and API are at `https://sub2api.local.faviann.com`,
+Runs on `overmind`. The UI and API are at `https://gateway.ai.faviann.com`,
 routed by the static `sub2api` router in
 `stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml`
 and restricted to the LAN by `local-ip-restriction`. Port 8318 is also directly
 reachable at `overmind.faviann.vms:8318` over plain HTTP, because Traefik runs
 on another LXC. The LAN is the trust boundary.
 
-`sub2api.local.faviann.com` must resolve to the Traefik host. DNS is not
-managed in this repo.
+The hostname names the role, not the product, so clients keep their base URL
+if the gateway implementation changes. `*.ai.faviann.com` is the LAN/VPN-only
+AI tier and works like `*.local.faviann.com`: Firewalla overrides
+`*.ai.faviann.com` to `10.1.0.2`, while public DNS sends it to the WAN through
+the `*.faviann.com` wildcard. DNS is not managed in this repo. The tier name
+protects nothing; each `*.ai` router must carry
+`local-ip-restriction` itself.
 
 `RUN_MODE=simple` hides the SaaS billing and balance features, which are
 irrelevant for a single owner.

@@ -713,7 +713,7 @@ entries:
     signing_key: !Find [authentik_crypto.certificatekeypair, [name, {{ stack_vars.public_oidc_signing_certificate_name | tojson }}]]
     redirect_uris:
     - matching_mode: strict
-      url: https://sub2api.local.faviann.com/api/v1/auth/oauth/oidc/callback
+      url: https://gateway.ai.faviann.com/api/v1/auth/oauth/oidc/callback
     sub_mode: user_email
     issuer_mode: per_provider
 
@@ -727,7 +727,7 @@ entries:
     slug: sub2api-local
     provider: !KeyOf provider-sub2api-local
     policy_engine_mode: any
-    launch_url: https://sub2api.local.faviann.com
+    launch_url: https://gateway.ai.faviann.com
     open_in_new_tab: false
     meta_launch_url: ''
     meta_publisher: ''
