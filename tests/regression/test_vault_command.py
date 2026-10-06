@@ -1767,8 +1767,8 @@ UNSET_KEPT_LINES = [
 ]
 
 
-# Each case puts the removed key just before a comment that belongs to the
-# next key, where ruamel files that comment under the removed key.
+# Each case removes a key that sits between lines that must survive
+# byte-for-byte.
 @pytest.mark.parametrize(
     ("index", "removed"),
     [
