@@ -197,7 +197,6 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    # sub2api only performs the authorization-code exchange.
     grant_types:
       - authorization_code
     group: admins

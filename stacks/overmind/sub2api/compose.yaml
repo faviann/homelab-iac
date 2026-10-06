@@ -1,4 +1,8 @@
 ---
+x-managed-files:
+  - path: ./.env
+    mode: "0600"
+
 x-prereq-dirs:
   - ./appdata/data
   - ./appdata/postgres
@@ -12,31 +16,17 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      # Initializes the database and admin account on first start, no wizard.
       AUTO_SETUP: "true"
-      SERVER_HOST: 0.0.0.0
-      SERVER_PORT: "8080"
-      # Upstream's self-use mode: hides the SaaS features and skips
-      # billing/balance checks.
       RUN_MODE: simple
       DATABASE_HOST: postgres
-      DATABASE_PORT: "5432"
       DATABASE_USER: sub2api
       DATABASE_PASSWORD: ${SUB2API_POSTGRES_PASSWORD:?Set SUB2API_POSTGRES_PASSWORD in .env}
-      DATABASE_DBNAME: sub2api
       DATABASE_SSLMODE: disable
       REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      # ADMIN_PASSWORD unset on purpose: first start generates one and prints
-      # it in the logs. It only applies while no admin exists; change it in the UI.
       # Both are regenerated on every start when empty, which logs everyone
       # out and invalidates every enrolled TOTP secret.
       JWT_SECRET: ${SUB2API_JWT_SECRET:?Set SUB2API_JWT_SECRET in .env}
       TOTP_ENCRYPTION_KEY: ${SUB2API_TOTP_ENCRYPTION_KEY:?Set SUB2API_TOTP_ENCRYPTION_KEY in .env}
-      # Authentik login, declared as sub2api-local in
-      # stacks/auth/auth/appdata/authentik/oidc-apps.yaml. Endpoints come from
-      # the issuer's discovery document. OIDC settings saved in the admin UI
-      # override these.
       OIDC_CONNECT_ENABLED: "true"
       OIDC_CONNECT_PROVIDER_NAME: Authentik
       OIDC_CONNECT_CLIENT_ID: sub2api-local
@@ -45,16 +35,9 @@ services:
       OIDC_CONNECT_REDIRECT_URL: https://gateway.ai.faviann.com/api/v1/auth/oauth/oidc/callback
       TZ: America/Toronto
     volumes:
-      # The entrypoint chowns this to the image's uid 1000 before dropping root.
       - ./appdata/data:/app/data
     ports:
       - "8318:8080"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,7 +51,6 @@ services:
     environment:
       POSTGRES_USER: sub2api
       POSTGRES_PASSWORD: ${SUB2API_POSTGRES_PASSWORD:?Set SUB2API_POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: sub2api
     volumes:
       # Mount the parent, not a pgdata subdirectory: PostgreSQL 18 creates and
       # owns its nested PGDATA with the ownership and mode it requires.
@@ -84,8 +66,6 @@ services:
     image: docker.io/library/redis:8-alpine
     container_name: sub2api-redis
     restart: unless-stopped
-    # No password: the port is never published, so only this stack's network
-    # reaches it.
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - ./appdata/redis:/data

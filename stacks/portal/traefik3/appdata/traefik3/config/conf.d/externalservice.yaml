@@ -87,9 +87,6 @@ http:
       middlewares:
         - local-ip-restriction
 
-    # Trial of sub2api as an alternative account pool to cliproxy. Native
-    # login for the admin UI, API keys for clients. Also directly reachable at
-    # overmind.faviann.vms:8318, like cliproxy.
     sub2api:
       rule: "Host(`gateway.ai.faviann.com`)"
       entryPoints: websecure
