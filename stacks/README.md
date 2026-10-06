@@ -58,7 +58,7 @@ Do not dynamically include stack-local variable files into Ansible host scope. T
 
 - Host folder must match `inventory_hostname`.
 - Stack folder name is the Compose project name. The role pins it with `docker compose -p`, so do not set a top-level `name:` in repo-owned Compose files. Vendor files may keep upstream's. During `.j2` rendering, the role also injects `stack_name`.
-- `.j2` files are rendered with inventory, host, group, vault variables, `stack_name`, and the current stack `stack_vars` task-scoped render data, then deployed without the `.j2` suffix.
+- `.j2` files are rendered with inventory, host, group, vault variables, `stack_name`, and the current stack `stack_vars` task-scoped render data, then deployed without the `.j2` suffix. Each template renders once; the full render context, including `item`, is in [the lxc_stack_sync README](../playbooks/roles/config/lxc_stack_sync/README.md#template-render-context).
 - Other files are copied verbatim.
 - Stack-local `README.md` and `docs/**` are repo-only and are excluded from deployment.
 - Compose-relative persistent data should live under `./appdata/...`.

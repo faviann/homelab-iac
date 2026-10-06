@@ -30,6 +30,10 @@ Operations:
   set        Transfer a UTF-8 text file into a top-level vault variable:
                set <key> --from-file <path> --create|--replace
                    [--strip-final-newline]
+  unset      Remove one top-level vault variable:
+               unset <key>
+  merge      Resolve a conflicted vault by three-way merging top-level keys
+             from git's conflict versions in the index
   rotate     Rotate the vault passphrase (interactive):
                rotate [--dry-run]
 EOF
@@ -323,13 +327,15 @@ stage_ciphertext_for_publication() {
     fi
 }
 
-transfer_source_into_plaintext() {
+change_key_in_plaintext() {
     local workspace="$1"
     local plaintext="$2"
     local value_file="$workspace/value"
 
-    cp -- "$SET_SOURCE" "$value_file" || return 1
-    chmod 600 "$value_file"
+    if [[ "$SET_MODE" != unset ]]; then
+        cp -- "$SET_SOURCE" "$value_file" || return 1
+        chmod 600 "$value_file"
+    fi
     uv run --locked python - \
         "$plaintext" "$value_file" "$SET_KEY" "$SET_MODE" "$SET_STRIP" \
         >/dev/null 2>&1 <<'PY'
@@ -354,8 +360,36 @@ if document is None:
     document = {}
 if not isinstance(document, dict):
     raise SystemExit(1)
-if (key in document) != (mode == "replace"):
+must_exist = mode != "create"
+if (key in document) != must_exist:
     raise SystemExit(1)
+if mode == "unset":
+    # Cut the key's own lines so every other line stays byte-identical.
+    # Column-0 comments and blank lines ending the span sit above the next
+    # key, so they stay. Fail closed if the cut changed any other value.
+    keys = list(document)
+    lines = plaintext.splitlines(keepends=True)
+    start = document.lc.key(key)[0]
+    position = keys.index(key)
+    end = (
+        document.lc.key(keys[position + 1])[0]
+        if position + 1 < len(keys)
+        else len(lines)
+    )
+    while end > start + 1 and (
+        lines[end - 1].startswith("#") or not lines[end - 1].strip()
+    ):
+        end -= 1
+    result = "".join(lines[:start] + lines[end:])
+    expected = dict(document)
+    del expected[key]
+    try:
+        if dict(yaml.load(result) or {}) != expected:
+            raise SystemExit(1)
+    except YAMLError:
+        raise SystemExit(1)
+    vault_path.write_text(result, encoding="utf-8")
+    raise SystemExit(0)
 try:
     value = value_path.read_bytes().decode("utf-8")
 except (OSError, UnicodeDecodeError):
@@ -370,6 +404,69 @@ with vault_path.open("w", encoding="utf-8") as stream:
 PY
 }
 
+merge_into_plaintext() {
+    local workspace="$1"
+    local plaintext="$2"
+    local stage
+
+    # Stages 1, 2, and 3 are the base, ours, and theirs git itself used for
+    # this conflict, which stays correct for every commit a rebase replays.
+    # git's own errors carry no plaintext, so "not in conflict" stays visible.
+    for stage in 1 2 3; do
+        git show ":$stage:inventory/vault.yml" >"$workspace/$stage.enc" || return 1
+        uv run --locked ansible-vault view "$workspace/$stage.enc" \
+            >"$workspace/$stage.yml" 2>/dev/null || return 1
+    done
+    # Only key names leave this process; stderr is dropped because a YAML
+    # error message can quote the offending plaintext.
+    uv run --locked python - "$workspace"/{1,2,3}.yml "$plaintext" \
+        2>/dev/null <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+from ruamel.yaml import YAML
+
+texts = [Path(path).read_text(encoding="utf-8") for path in sys.argv[1:4]]
+output = Path(sys.argv[4])
+base, ours, theirs = (yaml.safe_load(text) for text in texts)
+if not all(isinstance(version, dict) for version in (base, ours, theirs)):
+    raise SystemExit(1)
+
+missing = object()
+results, conflicts = {}, []
+for key in sorted(base.keys() | ours.keys() | theirs.keys()):
+    old, mine, other = (version.get(key, missing) for version in (base, ours, theirs))
+    if mine == other or other == old:
+        continue
+    if mine == old:
+        results[key] = other
+    else:
+        conflicts.append(key)
+if conflicts:
+    print("\n".join(f"conflict: {key}" for key in conflicts))
+    raise SystemExit(1)
+
+rt = YAML(typ="rt")
+rt.preserve_quotes = True
+rt.width = sys.maxsize
+document, incoming = rt.load(texts[1]), rt.load(texts[2])
+lines = []
+for key, value in results.items():
+    if value is missing:
+        del document[key]
+        lines.append(f"removed: {key}")
+    else:
+        lines.append(f"{'changed' if key in document else 'added'}: {key}")
+        document[key] = incoming[key]
+ours_lines = texts[1].splitlines()
+rt.explicit_start = bool(ours_lines) and ours_lines[0].strip() == "---"
+with output.open("w", encoding="utf-8") as stream:
+    rt.dump(document, stream)
+print("\n".join(lines) or "no key changes")
+PY
+}
+
 run_mutation() {
     local operation="$1"
     local label="${2-$1}"
@@ -380,7 +477,9 @@ run_mutation() {
     plaintext="$workspace/vault.yml"
     encrypted="$workspace/vault.encrypted"
 
-    if ! stage_existing_vault "$plaintext"; then
+    # A conflicted vault holds conflict markers, so merge builds its plaintext
+    # from the index instead.
+    if [[ "$operation" != merge ]] && ! stage_existing_vault "$plaintext"; then
         cleanup_transaction || true
         return 1
     fi
@@ -444,8 +543,14 @@ PY
             cleanup_transaction || true
             return 1
         fi
+    elif [[ "$operation" == merge ]]; then
+        if ! merge_into_plaintext "$workspace" "$plaintext"; then
+            cleanup_transaction || true
+            printf '%s: FAIL\n' "$label" >&2
+            return 1
+        fi
     elif [[ "$operation" == set ]]; then
-        if ! transfer_source_into_plaintext "$workspace" "$plaintext"; then
+        if ! change_key_in_plaintext "$workspace" "$plaintext"; then
             cleanup_transaction || true
             printf '%s: FAIL\n' "$label" >&2
             return 1
@@ -800,6 +905,22 @@ case "$1" in
         exec 3<>/dev/null
         require_uv || exit 1
         run_mutation set "set $SET_KEY"
+        exit $?
+        ;;
+    unset)
+        (( $# == 2 )) && [[ -n "$2" && "$2" != -* ]] || { usage >&2; exit 2; }
+        SET_KEY="$2"
+        SET_MODE=unset
+        SET_STRIP=0
+        exec 3<>/dev/null
+        require_uv || exit 1
+        run_mutation set "unset $SET_KEY"
+        exit $?
+        ;;
+    merge)
+        (( $# == 1 )) || { usage >&2; exit 2; }
+        require_uv || exit 1
+        run_mutation merge
         exit $?
         ;;
     rotate)

@@ -276,9 +276,9 @@ def test_vault_requires_an_operation_and_advertises_its_complete_interface() -> 
 
     assert missing.returncode == 2
     assert help_result.returncode == 0
-    assert {"configure", "edit", "check", "diff", "set", "rotate"} <= set(
-        help_result.stdout.split()
-    )
+    assert {
+        "configure", "edit", "check", "diff", "set", "unset", "merge", "rotate"
+    } <= set(help_result.stdout.split())
 
 
 def test_vault_uses_its_project_when_invoked_from_an_unrelated_directory(
@@ -1731,6 +1731,386 @@ def test_set_refuses_the_vault_file_as_its_own_source(
         assert result.returncode == 1
         assert result.stderr == "set vault_transferred: FAIL\n"
         assert_vault_untouched(repo, original)
+
+
+def test_unset_removes_only_the_named_top_level_key(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = vault_repo
+    (repo / "inventory/vault.yml").write_text(HEADER + VALID_YAML, encoding="utf-8")
+
+    result = run_vault(repo, env, "unset", "unrelated_scalar")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "unset unrelated_scalar: PASS\n"
+    assert result.stderr == ""
+    expected = yaml.safe_load(VALID_YAML)
+    del expected["unrelated_scalar"]
+    assert published_mapping(repo) == expected
+    assert_no_transaction_artifacts(repo, env)
+
+
+UNSET_KEPT_LINES = [
+    "---",
+    "# operator note: rotate quarterly",
+    "unrelated_scalar: keep-me  # inline comment",
+    "# note about the quoted scalar",
+    'quoted_scalar: "keep-me"',
+    "unrelated_mapping:",
+    "  nested: true",
+    "",
+    "# note about the block",
+    "vault_block: |",
+    "  block-line",
+    "# note about the long value",
+    "vault_long_value: long-token-" + "x" * 96,
+]
+
+
+# Each case removes a key that sits between lines that must survive
+# byte-for-byte.
+@pytest.mark.parametrize(
+    ("index", "removed"),
+    [
+        pytest.param(1, ["vault_removed: removed-marker"], id="first-key"),
+        pytest.param(
+            3, ["vault_removed: removed-marker  # removed note"], id="inline-comment"
+        ),
+        pytest.param(
+            3, ["vault_removed:", "  nested: removed-marker"], id="removed-mapping"
+        ),
+        pytest.param(7, ["vault_removed: removed-marker"], id="previous-mapping"),
+        pytest.param(
+            11, ["vault_removed: |", "  removed-marker"], id="block-scalars"
+        ),
+        pytest.param(13, ["vault_removed: removed-marker"], id="last-key"),
+    ],
+)
+def test_unset_preserves_untouched_yaml_presentation(
+    vault_repo: tuple[Path, dict[str, str]], index: int, removed: list[str]
+) -> None:
+    repo, env = vault_repo
+    vault = repo / "inventory/vault.yml"
+    annotated = [*UNSET_KEPT_LINES[:index], *removed, *UNSET_KEPT_LINES[index:]]
+    vault.write_text(HEADER + "\n".join(annotated) + "\n", encoding="utf-8")
+
+    result = run_vault(repo, env, "unset", "vault_removed")
+
+    assert result.returncode == 0, result.stderr
+    plaintext = vault.read_text(encoding="utf-8").removeprefix(HEADER)
+    assert plaintext.splitlines() == UNSET_KEPT_LINES
+
+
+def test_unset_of_a_missing_key_fails_without_changing_the_vault(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = vault_repo
+    original = (HEADER + VALID_YAML).encode()
+    (repo / "inventory/vault.yml").write_bytes(original)
+
+    result = run_vault(repo, env, "unset", "vault_absent")
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "unset vault_absent: FAIL\n"
+    assert_vault_untouched(repo, original)
+    assert_no_transaction_artifacts(repo, env)
+
+
+def test_failed_unset_reencryption_leaves_the_vault_byte_identical(
+    vault_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+) -> None:
+    repo, env = vault_repo
+    original = (HEADER + VALID_YAML).encode()
+    (repo / "inventory/vault.yml").write_bytes(original)
+    fake_executable("uv", env, encrypt_fail=True)
+
+    result = run_vault(repo, env, "unset", "unrelated_scalar")
+
+    assert result.returncode == 1
+    assert result.stderr == "unset unrelated_scalar: FAIL\n"
+    assert_vault_untouched(repo, original)
+    assert_no_transaction_artifacts(repo, env)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [(), ("unrelated_scalar", "vault_proxmox_api_user"), ("--from-file",)],
+)
+def test_unset_accepts_exactly_one_key(
+    vault_repo: tuple[Path, dict[str, str]], arguments: tuple[str, ...]
+) -> None:
+    repo, env = vault_repo
+    original = (HEADER + VALID_YAML).encode()
+    (repo / "inventory/vault.yml").write_bytes(original)
+
+    result = run_vault(repo, env, "unset", *arguments)
+
+    assert result.returncode == 2
+    assert_vault_untouched(repo, original)
+
+
+def test_diff_reports_an_unset_key_as_removed(
+    real_vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/vault.yml"
+    vault.write_text(VALID_YAML, encoding="utf-8")
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=repo, env=env, check=True, capture_output=True, timeout=10,
+        )
+
+    git("init", "-q")
+    git("add", "inventory/vault.yml")
+    git("commit", "-q", "-m", "base")
+
+    removal = run_vault(repo, env, "unset", "unrelated_scalar")
+    diff = run_vault(repo, env, "diff")
+
+    assert removal.returncode == 0, removal.stderr
+    assert diff.returncode == 0, diff.stderr
+    assert diff.stdout.splitlines() == ["removed: unrelated_scalar"]
+
+
+CONFLICTED_WORKING_TREE = b"<<<<<<< ours\n$ANSIBLE_VAULT;1.1;AES256\n=======\n>>>>>>> theirs\n"
+
+
+def git(repo: Path, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=repo, env={**env, "GIT_EDITOR": "true"},
+        capture_output=True, text=True, timeout=30,
+    )
+
+
+def stage_vault_conflict(
+    repo: Path, env: dict[str, str], *versions: str | None
+) -> None:
+    """Record base, ours, and theirs as git's index stages 1, 2, and 3."""
+    git(repo, env, "init", "-q")
+    entries = []
+    for stage, version in enumerate(versions, start=1):
+        if version is None:
+            continue
+        blob = repo / f"stage-{stage}"
+        blob.write_text(
+            version if version.startswith("$ANSIBLE_VAULT;") else HEADER + version,
+            encoding="utf-8",
+        )
+        sha = git(repo, env, "hash-object", "-w", str(blob)).stdout.strip()
+        blob.unlink()
+        entries.append(f"100644 {sha} {stage}\tinventory/vault.yml\n")
+    subprocess.run(
+        ["git", "update-index", "--index-info"],
+        cwd=repo, env=env, input="".join(entries), text=True, check=True,
+    )
+    (repo / "inventory/vault.yml").write_bytes(CONFLICTED_WORKING_TREE)
+
+
+# One case per merge rule; each names the action reported against ours.
+@pytest.mark.parametrize(
+    ("base", "ours", "theirs", "expected", "lines"),
+    [
+        pytest.param(
+            "k: v\n", "k: v\nours: o\n", "k: v\ntheirs: t\n",
+            {"k": "v", "ours": "o", "theirs": "t"}, ["added: theirs"],
+            id="disjoint-additions",
+        ),
+        pytest.param(
+            "k: v\n", "k: v\n", "k: new\n", {"k": "new"}, ["changed: k"],
+            id="theirs-change",
+        ),
+        pytest.param(
+            "k: v\ngone: g\n", "k: v\ngone: g\n", "k: v\n", {"k": "v"},
+            ["removed: gone"], id="theirs-removal",
+        ),
+        pytest.param(
+            "k: v\n", "k: new\n", "k: v\n", {"k": "new"}, ["no key changes"],
+            id="ours-change",
+        ),
+        pytest.param(
+            "k: v\n", "k: new\n", "k: new\n", {"k": "new"}, ["no key changes"],
+            id="identical-change",
+        ),
+        pytest.param(
+            "k: v\n", "k: new\n", 'k: "v"\n', {"k": "new"}, ["no key changes"],
+            id="requote-is-not-a-change",
+        ),
+    ],
+)
+def test_merge_combines_one_sided_and_identical_changes(
+    vault_repo: tuple[Path, dict[str, str]],
+    base: str, ours: str, theirs: str,
+    expected: dict[str, str], lines: list[str],
+) -> None:
+    repo, env = vault_repo
+    stage_vault_conflict(repo, env, base, ours, theirs)
+
+    result = run_vault(repo, env, "merge")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [*lines, "merge: PASS"]
+    assert published_mapping(repo) == expected
+    assert_no_transaction_artifacts(repo, env)
+
+
+def test_merge_names_every_conflict_and_writes_nothing(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = vault_repo
+    stage_vault_conflict(
+        repo, env,
+        "both: base-marker\nremoved: base-marker\nclean: base-marker\n",
+        "both: ours-marker\nremoved: ours-marker\nclean: base-marker\n",
+        "both: theirs-marker\nclean: theirs-marker\n",
+    )
+
+    result = run_vault(repo, env, "merge")
+
+    assert result.returncode == 1
+    assert result.stdout.splitlines() == ["conflict: both", "conflict: removed"]
+    assert result.stderr == "merge: FAIL\n"
+    assert "-marker" not in result.stdout + result.stderr
+    assert_vault_untouched(repo, CONFLICTED_WORKING_TREE)
+    assert_no_transaction_artifacts(repo, env)
+
+
+def test_merge_keeps_ours_presentation_for_untouched_keys(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = vault_repo
+    ours = [
+        "---",
+        "# operator note",
+        'vault_zeta: "keep-me"',
+        "vault_single: 'keep-me'",
+        "vault_alpha: keep-me  # inline comment",
+        "vault_changed: old",
+    ]
+    base = "\n".join(ours) + "\n"
+    theirs = "vault_alpha: keep-me\nvault_changed: new\nvault_added: 'added'\n"
+    theirs = "vault_zeta: keep-me\nvault_single: keep-me\n" + theirs
+    stage_vault_conflict(repo, env, base, base, theirs)
+
+    result = run_vault(repo, env, "merge")
+
+    assert result.returncode == 0, result.stderr
+    plaintext = (repo / "inventory/vault.yml").read_text(encoding="utf-8")
+    assert plaintext.removeprefix(HEADER).splitlines() == [
+        *ours[:-1], "vault_changed: new", "vault_added: 'added'"
+    ]
+
+
+@pytest.mark.parametrize(
+    "versions",
+    [
+        pytest.param(None, id="not-in-conflict"),
+        pytest.param((None, "k: v\n", "k: w\n"), id="missing-base"),
+        pytest.param(
+            ("k: v\n", "k: v\n", "$ANSIBLE_VAULT;1.1;AES256;otherkey\nk: w\n"),
+            id="other-passphrase",
+        ),
+        pytest.param(("k: v\n", "k: v\n", "- k\n"), id="not-a-mapping"),
+    ],
+)
+def test_merge_refuses_without_a_complete_decryptable_conflict(
+    vault_repo: tuple[Path, dict[str, str]], versions: tuple[str | None, ...] | None
+) -> None:
+    repo, env = vault_repo
+    if versions is None:
+        git(repo, env, "init", "-q")
+        (repo / "inventory/vault.yml").write_bytes(CONFLICTED_WORKING_TREE)
+        git(repo, env, "add", "inventory/vault.yml")
+    else:
+        stage_vault_conflict(repo, env, *versions)
+
+    result = run_vault(repo, env, "merge")
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr.endswith("merge: FAIL\n")
+    assert_vault_untouched(repo, CONFLICTED_WORKING_TREE)
+
+
+def test_merge_accepts_no_arguments(vault_repo: tuple[Path, dict[str, str]]) -> None:
+    repo, env = vault_repo
+
+    assert run_vault(repo, env, "merge", "HEAD").returncode == 2
+
+
+def encrypt_and_commit(
+    repo: Path, env: dict[str, str], content: str, message: str
+) -> None:
+    (repo / "inventory/vault.yml").write_text(content, encoding="utf-8")
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+    git(repo, env, "add", "inventory/vault.yml")
+    assert git(repo, env, "commit", "-q", "-m", message).returncode == 0
+
+
+def decrypted_mapping(repo: Path, env: dict[str, str]) -> dict[str, object]:
+    view = run_real_ansible_vault(repo, env, "view")
+    assert view.returncode == 0, view.stderr
+    return yaml.safe_load(view.stdout)
+
+
+def test_merge_resolves_a_real_git_merge_without_disclosing_values(
+    real_vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = real_vault_repo
+    git(repo, env, "init", "-q", "-b", "main")
+    encrypt_and_commit(repo, env, "vault_shared: shared-marker\n", "base")
+    git(repo, env, "checkout", "-q", "-b", "feature")
+    encrypt_and_commit(
+        repo, env, "vault_shared: shared-marker\nvault_feature: feature-marker\n", "f"
+    )
+    git(repo, env, "checkout", "-q", "main")
+    encrypt_and_commit(
+        repo, env, "vault_shared: shared-marker\nvault_main: main-marker\n", "m"
+    )
+    assert git(repo, env, "merge", "-q", "feature").returncode != 0
+
+    result = run_vault(repo, env, "merge")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["added: vault_feature", "merge: PASS"]
+    assert "-marker" not in result.stdout + result.stderr
+    assert decrypted_mapping(repo, env) == {
+        "vault_shared": "shared-marker",
+        "vault_main": "main-marker",
+        "vault_feature": "feature-marker",
+    }
+
+
+def test_merge_resolves_each_rebase_step_against_the_replayed_base(
+    real_vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = real_vault_repo
+    git(repo, env, "init", "-q", "-b", "main")
+    encrypt_and_commit(repo, env, "vault_shared: v1\n", "base")
+    git(repo, env, "checkout", "-q", "-b", "feature")
+    encrypt_and_commit(repo, env, "vault_shared: v1\nk: added\n", "add k")
+    encrypt_and_commit(repo, env, "vault_shared: v1\n", "remove k")
+    git(repo, env, "checkout", "-q", "main")
+    encrypt_and_commit(repo, env, "vault_shared: v2\n", "change shared")
+    git(repo, env, "checkout", "-q", "feature")
+
+    # Both replayed commits conflict; the second must merge against the first
+    # commit as its base, not the branch's merge-base, or k comes back.
+    rebase = git(repo, env, "rebase", "main")
+    for _ in range(2):
+        assert rebase.returncode != 0
+        result = run_vault(repo, env, "merge")
+        assert result.returncode == 0, result.stderr
+        git(repo, env, "add", "inventory/vault.yml")
+        rebase = git(repo, env, "rebase", "--continue")
+
+    assert rebase.returncode == 0, rebase.stderr
+    assert decrypted_mapping(repo, env) == {"vault_shared": "v2"}
 
 
 OLD_PASSPHRASE = "old-passphrase-marker"

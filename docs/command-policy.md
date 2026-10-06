@@ -13,6 +13,8 @@ of what the guards enforce.
 | `./vault.sh` | `check` | none | yes |
 | | `diff [<git-ref>]` | none | yes |
 | | `set <key> --from-file <path> --create\|--replace [--strip-final-newline]` | none | on explicit request |
+| | `unset <key>` | none | on explicit request |
+| | `merge` | none | yes |
 | | `rotate --dry-run` | none | yes |
 | | `configure`, `edit`, `rotate` | none | human-only |
 | `./validate.sh` | *(default)* comprehensive handoff | none | yes |
@@ -35,7 +37,13 @@ answers `--help` with its operations.
 
 A human-only operation prompts at a terminal, changes the vault, or enrolls
 trust on managed infrastructure, so a person runs it. "On explicit request"
-means an agent runs it only when a person asks for that transfer.
+means an agent runs it only when a person asks for that change.
+
+`./vault.sh merge` changes the vault, but agents may run it: it only
+recombines values already committed, so no secret enters or leaves the vault.
+It resolves a conflicted `inventory/vault.yml` from git's index versions and
+fails without writing when any top-level key conflicts. The caller stages the
+result.
 
 ### Grammar
 
@@ -253,38 +261,14 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** when SSH fails, report that live data was not collected. Do
   not infer an answer from stale values.
 
-#### CLIProxy management-key hash
-
-- **Trigger:** preparing the original standalone CLIProxy management password
-  before one-time Home import. The runtime retains that imported hash; see
-  [the CLIProxy stack README](../stacks/overmind/cliproxy/README.md#required-carrier-and-private-state).
-- **Audience:** a person only. The plaintext password is theirs to choose and
-  keep.
-- **Scope:** the local workstation. It contacts no managed host and does not
-  touch the repository environment.
-
-  ```bash
-  uv run --with bcrypt --no-project python -c \
-    'import bcrypt,getpass;print(bcrypt.hashpw(getpass.getpass().encode(),bcrypt.gensalt()).decode())'
-  ```
-
-- **Boundary:** it reads the password from a prompt and prints its bcrypt hash.
-  It writes nothing.
-- **Sensitive output:** the hash, which belongs only in
-  `vault_overmind_cliproxy_management_key_hash` through `./vault.sh edit`.
-  The plaintext never appears in shell history or output.
-- **Escalation:** agents do not run it or handle the hash. They direct the
-  person to this entry.
-
 #### CPA/Home maintenance on overmind
 
-- **Trigger:** the reviewed CPA/Home migration, protected backup or restore,
-  an assisted pair update, or emergency termination of revoked CPA sessions.
+- **Trigger:** protected backup or restore, an assisted pair update, or
+  emergency termination of revoked CPA sessions.
 - **Audience:** people only. Agents may change and rehearse the script, but
   never run it against a managed host.
 - **Scope:** the `cliproxy` Compose project on `overmind`: containers
-  `cliproxy` and `cliproxy-home`, the temporary `cliproxy-home-bootstrap`,
-  pinned native tools, and the private
+  `cliproxy` and `cliproxy-home`, pinned native tools, and the private
   maintenance paths named in [the procedure](cliproxy-maintenance.md).
 
   ```bash
@@ -292,22 +276,18 @@ Agent use of a documented raw command is a separate decision:
   ```
 
 - **Boundary:** mutating. The script holds the exclusive lifecycle lock for
-  its whole run and exits `75` before SSH when the lock is held. It stops,
-  removes or restarts only the named containers, stops Home before CPA, and
-  aborts if any writer is still running. `start-bootstrap` requires stopped
-  writers, then starts the pinned bootstrap Home from the imported database
-  and the reviewed non-secret cluster file, publishing port 8327 on loopback
-  only. The script never handles an enrollment carrier. Import, export and
-  rollback preserve private source/state candidates; rollback replaces only the declared
-  standalone auth tree. Snapshot and restore write only under the declared
-  runtime and recovery paths. Run `./run.sh` only after the script has exited.
+  its whole run and exits `75` before SSH when the lock is held. It stops or
+  restarts only the named containers, stops Home before CPA, and aborts if any
+  writer is still running. The script never handles an enrollment carrier.
+  Snapshot and restore write only under the declared runtime and recovery
+  paths. Run `./run.sh` only after the script has exited.
   A person freezes other control nodes and Home
   administration for the whole window, including the gaps between runs.
 - **Sensitive output:** no environment dumps, credential contents, or secrets
   in command arguments, logs or evidence.
 - **Escalation:** on any abort, unknown remote result or failed acceptance,
   preserve evidence and follow the procedure's recovery branch. Never widen
-  the removal scope or restart a writer to get past a failure.
+  the container scope or restart a writer to get past a failure.
 
 #### Vendor compose sync
 

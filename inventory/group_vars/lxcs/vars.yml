@@ -16,3 +16,7 @@ lxc_ssh_uid: 1000
 lxc_ssh_gid: 1000
 lxc_github_users:
   - faviann
+
+# System timezone inside every LXC. The Proxmox-side `timezone` option is
+# deliberately unused so this stays the single owner of the setting.
+lxc_timezone: America/Toronto
