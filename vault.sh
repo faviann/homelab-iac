@@ -30,6 +30,8 @@ Operations:
   set        Transfer a UTF-8 text file into a top-level vault variable:
                set <key> --from-file <path> --create|--replace
                    [--strip-final-newline]
+  unset      Remove one top-level vault variable:
+               unset <key>
   rotate     Rotate the vault passphrase (interactive):
                rotate [--dry-run]
 EOF
@@ -323,13 +325,15 @@ stage_ciphertext_for_publication() {
     fi
 }
 
-transfer_source_into_plaintext() {
+change_key_in_plaintext() {
     local workspace="$1"
     local plaintext="$2"
     local value_file="$workspace/value"
 
-    cp -- "$SET_SOURCE" "$value_file" || return 1
-    chmod 600 "$value_file"
+    if [[ "$SET_MODE" != unset ]]; then
+        cp -- "$SET_SOURCE" "$value_file" || return 1
+        chmod 600 "$value_file"
+    fi
     uv run --locked python - \
         "$plaintext" "$value_file" "$SET_KEY" "$SET_MODE" "$SET_STRIP" \
         >/dev/null 2>&1 <<'PY'
@@ -354,8 +358,36 @@ if document is None:
     document = {}
 if not isinstance(document, dict):
     raise SystemExit(1)
-if (key in document) != (mode == "replace"):
+must_exist = mode != "create"
+if (key in document) != must_exist:
     raise SystemExit(1)
+if mode == "unset":
+    # Cut the key's own lines so every other line stays byte-identical.
+    # Column-0 comments and blank lines ending the span sit above the next
+    # key, so they stay. Fail closed if the cut changed any other value.
+    keys = list(document)
+    lines = plaintext.splitlines(keepends=True)
+    start = document.lc.key(key)[0]
+    position = keys.index(key)
+    end = (
+        document.lc.key(keys[position + 1])[0]
+        if position + 1 < len(keys)
+        else len(lines)
+    )
+    while end > start + 1 and (
+        lines[end - 1].startswith("#") or not lines[end - 1].strip()
+    ):
+        end -= 1
+    result = "".join(lines[:start] + lines[end:])
+    expected = dict(document)
+    del expected[key]
+    try:
+        if dict(yaml.load(result) or {}) != expected:
+            raise SystemExit(1)
+    except YAMLError:
+        raise SystemExit(1)
+    vault_path.write_text(result, encoding="utf-8")
+    raise SystemExit(0)
 try:
     value = value_path.read_bytes().decode("utf-8")
 except (OSError, UnicodeDecodeError):
@@ -445,7 +477,7 @@ PY
             return 1
         fi
     elif [[ "$operation" == set ]]; then
-        if ! transfer_source_into_plaintext "$workspace" "$plaintext"; then
+        if ! change_key_in_plaintext "$workspace" "$plaintext"; then
             cleanup_transaction || true
             printf '%s: FAIL\n' "$label" >&2
             return 1
@@ -800,6 +832,16 @@ case "$1" in
         exec 3<>/dev/null
         require_uv || exit 1
         run_mutation set "set $SET_KEY"
+        exit $?
+        ;;
+    unset)
+        (( $# == 2 )) && [[ -n "$2" && "$2" != -* ]] || { usage >&2; exit 2; }
+        SET_KEY="$2"
+        SET_MODE=unset
+        SET_STRIP=0
+        exec 3<>/dev/null
+        require_uv || exit 1
+        run_mutation set "unset $SET_KEY"
         exit $?
         ;;
     rotate)

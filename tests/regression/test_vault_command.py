@@ -276,7 +276,7 @@ def test_vault_requires_an_operation_and_advertises_its_complete_interface() -> 
 
     assert missing.returncode == 2
     assert help_result.returncode == 0
-    assert {"configure", "edit", "check", "diff", "set", "rotate"} <= set(
+    assert {"configure", "edit", "check", "diff", "set", "unset", "rotate"} <= set(
         help_result.stdout.split()
     )
 
@@ -1731,6 +1731,150 @@ def test_set_refuses_the_vault_file_as_its_own_source(
         assert result.returncode == 1
         assert result.stderr == "set vault_transferred: FAIL\n"
         assert_vault_untouched(repo, original)
+
+
+def test_unset_removes_only_the_named_top_level_key(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = vault_repo
+    (repo / "inventory/vault.yml").write_text(HEADER + VALID_YAML, encoding="utf-8")
+
+    result = run_vault(repo, env, "unset", "unrelated_scalar")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "unset unrelated_scalar: PASS\n"
+    assert result.stderr == ""
+    expected = yaml.safe_load(VALID_YAML)
+    del expected["unrelated_scalar"]
+    assert published_mapping(repo) == expected
+    assert_no_transaction_artifacts(repo, env)
+
+
+UNSET_KEPT_LINES = [
+    "---",
+    "# operator note: rotate quarterly",
+    "unrelated_scalar: keep-me  # inline comment",
+    "# note about the quoted scalar",
+    'quoted_scalar: "keep-me"',
+    "unrelated_mapping:",
+    "  nested: true",
+    "",
+    "# note about the block",
+    "vault_block: |",
+    "  block-line",
+    "# note about the long value",
+    "vault_long_value: long-token-" + "x" * 96,
+]
+
+
+# Each case removes a key that sits between lines that must survive
+# byte-for-byte.
+@pytest.mark.parametrize(
+    ("index", "removed"),
+    [
+        pytest.param(1, ["vault_removed: removed-marker"], id="first-key"),
+        pytest.param(
+            3, ["vault_removed: removed-marker  # removed note"], id="inline-comment"
+        ),
+        pytest.param(
+            3, ["vault_removed:", "  nested: removed-marker"], id="removed-mapping"
+        ),
+        pytest.param(7, ["vault_removed: removed-marker"], id="previous-mapping"),
+        pytest.param(
+            11, ["vault_removed: |", "  removed-marker"], id="block-scalars"
+        ),
+        pytest.param(13, ["vault_removed: removed-marker"], id="last-key"),
+    ],
+)
+def test_unset_preserves_untouched_yaml_presentation(
+    vault_repo: tuple[Path, dict[str, str]], index: int, removed: list[str]
+) -> None:
+    repo, env = vault_repo
+    vault = repo / "inventory/vault.yml"
+    annotated = [*UNSET_KEPT_LINES[:index], *removed, *UNSET_KEPT_LINES[index:]]
+    vault.write_text(HEADER + "\n".join(annotated) + "\n", encoding="utf-8")
+
+    result = run_vault(repo, env, "unset", "vault_removed")
+
+    assert result.returncode == 0, result.stderr
+    plaintext = vault.read_text(encoding="utf-8").removeprefix(HEADER)
+    assert plaintext.splitlines() == UNSET_KEPT_LINES
+
+
+def test_unset_of_a_missing_key_fails_without_changing_the_vault(
+    vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = vault_repo
+    original = (HEADER + VALID_YAML).encode()
+    (repo / "inventory/vault.yml").write_bytes(original)
+
+    result = run_vault(repo, env, "unset", "vault_absent")
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == "unset vault_absent: FAIL\n"
+    assert_vault_untouched(repo, original)
+    assert_no_transaction_artifacts(repo, env)
+
+
+def test_failed_unset_reencryption_leaves_the_vault_byte_identical(
+    vault_repo: tuple[Path, dict[str, str]],
+    fake_executable: FakeExecutableFactory,
+) -> None:
+    repo, env = vault_repo
+    original = (HEADER + VALID_YAML).encode()
+    (repo / "inventory/vault.yml").write_bytes(original)
+    fake_executable("uv", env, encrypt_fail=True)
+
+    result = run_vault(repo, env, "unset", "unrelated_scalar")
+
+    assert result.returncode == 1
+    assert result.stderr == "unset unrelated_scalar: FAIL\n"
+    assert_vault_untouched(repo, original)
+    assert_no_transaction_artifacts(repo, env)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [(), ("unrelated_scalar", "vault_proxmox_api_user"), ("--from-file",)],
+)
+def test_unset_accepts_exactly_one_key(
+    vault_repo: tuple[Path, dict[str, str]], arguments: tuple[str, ...]
+) -> None:
+    repo, env = vault_repo
+    original = (HEADER + VALID_YAML).encode()
+    (repo / "inventory/vault.yml").write_bytes(original)
+
+    result = run_vault(repo, env, "unset", *arguments)
+
+    assert result.returncode == 2
+    assert_vault_untouched(repo, original)
+
+
+def test_diff_reports_an_unset_key_as_removed(
+    real_vault_repo: tuple[Path, dict[str, str]],
+) -> None:
+    repo, env = real_vault_repo
+    vault = repo / "inventory/vault.yml"
+    vault.write_text(VALID_YAML, encoding="utf-8")
+    assert run_real_ansible_vault(repo, env, "encrypt").returncode == 0
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=repo, env=env, check=True, capture_output=True, timeout=10,
+        )
+
+    git("init", "-q")
+    git("add", "inventory/vault.yml")
+    git("commit", "-q", "-m", "base")
+
+    removal = run_vault(repo, env, "unset", "unrelated_scalar")
+    diff = run_vault(repo, env, "diff")
+
+    assert removal.returncode == 0, removal.stderr
+    assert diff.returncode == 0, diff.stderr
+    assert diff.stdout.splitlines() == ["removed: unrelated_scalar"]
 
 
 OLD_PASSPHRASE = "old-passphrase-marker"
