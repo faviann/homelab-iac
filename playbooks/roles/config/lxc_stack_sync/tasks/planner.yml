@@ -5,7 +5,6 @@
   ansible.builtin.set_fact:
     lxc_stack_sync_manifest_plan:
       templated_outputs: []
-      source_compose_specs: []
       stack_dirs_to_create: []
       files_to_render: []
       files_to_copy: []
@@ -14,96 +13,84 @@
       managed_files: []
       managed_file_parent_dirs: []
 
-- name: Build list of templated per-host output files
+- name: Build planned render items for per-host templates
   ansible.builtin.set_fact:
     lxc_stack_sync_manifest_plan: >-
       {{
         lxc_stack_sync_manifest_plan
         | combine(
             {
-              'templated_outputs': (
-                outputs
-              )
+              'templated_outputs': files_to_render | map(attribute='relative_path') | list,
+              'files_to_render': files_to_render
             },
             recursive=True
           )
       }}
   vars:
-    outputs: >-
-      {%- set planned_outputs = [] -%}
-      {%- for file in _per_host_j2_files.files | default([]) -%}
-      {%- set _ = planned_outputs.append(file.path
-        | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '')) -%}
-      {%- endfor -%}
-      {{ planned_outputs }}
-
-- name: Build source compose spec list for per-host stacks
-  ansible.builtin.set_fact:
-    _lxc_stack_sync_source_compose_specs_unrendered: >-
-      {%- set specs = [] -%}
-      {%- set compose_names = ['compose.yml', 'compose.yaml', 'compose.override.yml', 'compose.override.yaml'] -%}
+    files_to_render: >-
+      {%- set planned_files = [] -%}
       {%- for file in _per_host_j2_files.files | default([]) -%}
       {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '') -%}
-      {%- if (relative_path | basename) in compose_names -%}
-      {%- set target_path = lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path -%}
-      {%- set _ = specs.append({
+      {%- set _ = planned_files.append({
         'source_path': file.path,
+        'dest_path': lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path,
         'relative_path': relative_path,
-        'target_path': target_path,
-        'target_dir': target_path | dirname,
-        'is_templated': true,
         'stack_name': relative_path.split('/')[0]
       }) -%}
+      {%- endfor -%}
+      {{ planned_files }}
+
+# The only render of stack templates. Content stays in this registered result
+# and is never copied into a fact, so no_log keeps it out of every output.
+- name: Render planned stack templates
+  ansible.builtin.debug:
+    msg: "{{ lookup('ansible.builtin.template', item.source_path) }}"
+  vars:
+    stack_name: "{{ item.stack_name }}"
+    stack_vars: "{{ (lxc_docker_env_stack_vars | default({}))[item.stack_name] | default({}) }}"
+  loop: "{{ lxc_stack_sync_manifest_plan.files_to_render }}"
+  loop_control:
+    label: "{{ item.relative_path }}"
+  register: _lxc_stack_sync_rendered_templates
+  ignore_errors: true
+
+- name: Fail when planned stack templates cannot render
+  ansible.builtin.fail:
+    msg: >-
+      Stack templates failed to render on {{ inventory_hostname }}: {{ failed | join(', ') }}.
+      Render errors are hidden because they can contain stack values.
+  vars:
+    failed: >-
+      {{
+        _lxc_stack_sync_rendered_templates.results | default([])
+        | selectattr('failed', 'defined') | selectattr('failed')
+        | map(attribute='item.relative_path') | sort
+      }}
+  when: failed | length > 0
+  no_log: false
+
+- name: Collect compose sources for planner discovery
+  ansible.builtin.debug:
+    msg: >-
+      {%- set sources = [] -%}
+      {%- set compose_names = ['compose.yml', 'compose.yaml', 'compose.override.yml', 'compose.override.yaml'] -%}
+      {%- for rendered in _lxc_stack_sync_rendered_templates.results | default([]) -%}
+      {%- if (rendered.item.relative_path | basename) in compose_names -%}
+      {%- set _ = sources.append({'target_dir': rendered.item.dest_path | dirname, 'content': rendered.msg}) -%}
       {%- endif -%}
       {%- endfor -%}
       {%- for file in _per_host_static_files.files | default([]) -%}
       {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) -%}
       {%- if (relative_path | basename) in compose_names
-        and relative_path not in (lxc_stack_sync_manifest_plan.templated_outputs | default([])) -%}
-      {%- set target_path = lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path -%}
-      {%- set _ = specs.append({
-        'source_path': file.path,
-        'relative_path': relative_path,
-        'target_path': target_path,
-        'target_dir': target_path | dirname,
-        'is_templated': false,
-        'stack_name': relative_path.split('/')[0]
+        and relative_path not in lxc_stack_sync_manifest_plan.templated_outputs -%}
+      {%- set _ = sources.append({
+        'target_dir': (lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path) | dirname,
+        'content': lookup('ansible.builtin.file', file.path)
       }) -%}
       {%- endif -%}
       {%- endfor -%}
-      {{ specs }}
-
-- name: Render source compose manifest entries for planner discovery
-  ansible.builtin.set_fact:
-    lxc_stack_sync_manifest_plan: >-
-      {{
-        lxc_stack_sync_manifest_plan
-        | combine(
-            {
-              'source_compose_specs': (
-                lxc_stack_sync_manifest_plan.source_compose_specs
-                + [
-                    item
-                    | combine({
-                        'content': (
-                          lookup('template', item.source_path)
-                          if item.is_templated
-                          else lookup('file', item.source_path)
-                        )
-                      })
-                  ]
-              )
-            },
-            recursive=True
-          )
-      }}
-  vars:
-    stack_name: "{{ item.stack_name }}"
-    stack_vars: "{{ (lxc_docker_env_stack_vars | default({}))[item.stack_name] | default({}) }}"
-  loop: "{{ _lxc_stack_sync_source_compose_specs_unrendered | default([]) }}"
-  loop_control:
-    label: "{{ item.relative_path }}"
-  when: (_lxc_stack_sync_source_compose_specs_unrendered | default([])) | length > 0
+      {{ sources }}
+  register: _lxc_stack_sync_compose_sources
 
 - name: Build planner target stack directory list
   ansible.builtin.set_fact:
@@ -138,32 +125,19 @@
       {%- endfor -%}
       {{ planned_dirs | unique }}
 
-- name: Build planner file render and copy lists
+- name: Build planner file copy list
   ansible.builtin.set_fact:
     lxc_stack_sync_manifest_plan: >-
       {{
         lxc_stack_sync_manifest_plan
         | combine(
             {
-              'files_to_render': files_to_render,
               'files_to_copy': files_to_copy
             },
             recursive=True
           )
       }}
   vars:
-    files_to_render: >-
-      {%- set planned_files = [] -%}
-      {%- for file in _per_host_j2_files.files | default([]) -%}
-      {%- set relative_path = file.path | relpath(lxc_docker_environment_internal.stacks_source) | regex_replace('\.j2$', '') -%}
-      {%- set _ = planned_files.append({
-        'source_path': file.path,
-        'dest_path': lxc_docker_environment_internal.shared_mount_source ~ '/stacks/' ~ relative_path,
-        'relative_path': relative_path,
-        'stack_name': relative_path.split('/')[0]
-      }) -%}
-      {%- endfor -%}
-      {{ planned_files }}
     files_to_copy: >-
       {%- set planned_files = [] -%}
       {%- for file in _per_host_static_files.files | default([]) -%}
@@ -195,7 +169,7 @@
     planned_prereq_dirs: >-
       {%- set dirs = [] -%}
       {%- set override_paths = lxc_docker_environment_internal.path_ownership_overrides | default([]) | map(attribute='path') | list -%}
-      {%- for compose_spec in lxc_stack_sync_manifest_plan.source_compose_specs | default([]) -%}
+      {%- for compose_spec in _lxc_stack_sync_compose_sources.msg -%}
       {%- set compose = compose_spec.content | from_yaml -%}
       {%- if compose is mapping -%}
       {%- set prereq_dirs = compose.get('x-prereq-dirs', []) -%}
@@ -221,7 +195,7 @@
       {%- endif -%}
       {%- endfor -%}
       {{ dirs | unique(attribute='path') }}
-  when: (lxc_stack_sync_manifest_plan.source_compose_specs | default([])) | length > 0
+  when: _lxc_stack_sync_compose_sources.msg | length > 0
 
 - name: Build planner managed file list
   ansible.builtin.set_fact:
@@ -238,7 +212,7 @@
   vars:
     planned_managed_files: >-
       {%- set files = [] -%}
-      {%- for compose_spec in lxc_stack_sync_manifest_plan.source_compose_specs | default([]) -%}
+      {%- for compose_spec in _lxc_stack_sync_compose_sources.msg -%}
       {%- set compose = compose_spec.content | from_yaml -%}
       {%- if compose is mapping -%}
       {%- set managed_files = compose.get('x-managed-files', []) -%}
@@ -262,7 +236,7 @@
       {%- endif -%}
       {%- endfor -%}
       {{ files | unique(attribute='path') }}
-  when: (lxc_stack_sync_manifest_plan.source_compose_specs | default([])) | length > 0
+  when: _lxc_stack_sync_compose_sources.msg | length > 0
 
 - name: Apply managed metadata to planned synced files
   ansible.builtin.set_fact:

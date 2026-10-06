@@ -40,6 +40,8 @@ def test_selected_placeholder_credential_is_rejected_before_writing(tmp_path: Pa
     }
     source = tmp_path / "source"
     shutil.copytree(REPO_ROOT / "stacks/jellyfin/jellystat", source / stack_name)
+    (source / stack_name / "undefined.conf.j2").write_text("VALUE={{ stack_vars.not_declared }}\n")
+    (source / stack_name / "fine.conf.j2").write_text("STACK={{ stack_name }}\n")
     shared = tmp_path / "shared"
     (shared / "stacks").mkdir(parents=True)
 
@@ -75,7 +77,10 @@ def test_selected_placeholder_credential_is_rejected_before_writing(tmp_path: Pa
     }, "-vvv", "--diff")
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
-    assert "Required stack template inputs are missing or invalid" in output
+    assert (
+        f"Stack templates failed to render on localhost: {stack_name}/.env, {stack_name}/undefined.conf."
+    ) in output
+    assert "fine.conf" not in output.split("Stack templates failed to render")[1]
     for value in sensitive_values.values():
         assert value not in output
     assert not (shared / f"stacks/{stack_name}").exists()
@@ -104,7 +109,9 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
         (source / stack / "compose.yaml.j2").write_text(
             "services: {}\nx-secret: '{{ stack_vars.value }}'\nx-prereq-dirs: ['./data']\n"
         )
-        (source / stack / ".env.j2").write_text("VALUE={{ stack_vars.value }}\n")
+        (source / stack / ".env.j2").write_text(
+            "VALUE={{ stack_vars.value }}\nSOURCE={{ item.source_path | basename }} {{ item.relative_path }}\n"
+        )
     shared = tmp_path / "shared"
     agents = shared / "stacks/docker-agents"
     agents.mkdir(parents=True)
@@ -174,7 +181,13 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     assert stat.S_IMODE(shared.stat().st_mode) == 0o710
     assert stat.S_IMODE((shared / "stacks").stat().st_mode) == 0o755
     assert "TOKEN=${TOKEN}" in (agents / "compose.yml").read_text()
-    assert (shared / "stacks/selected/.env").read_text() == "VALUE=fixture-selected-value\n"
+    assert (shared / "stacks/selected/.env").read_text() == (
+        "VALUE=fixture-selected-value\nSOURCE=.env.j2 selected/.env\n"
+    )
+    assert not [
+        path for path in (tmp_path / "cache").rglob("*")
+        if path.is_file() and "fixture-selected-value" in path.read_text(errors="replace")
+    ]
     assert (retired / "compose.yaml").exists()
     commands = docker_log.read_text().splitlines()
     assert not [line for line in commands if line.startswith(f"{retired}|")]

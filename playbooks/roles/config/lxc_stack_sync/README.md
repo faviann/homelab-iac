@@ -43,7 +43,6 @@ non-directory paths and preserve metadata on existing directories.
 `lxc_stack_sync_manifest_plan` contains:
 
 - `templated_outputs`: relative target paths for `.j2` sources with the `.j2` suffix removed
-- `source_compose_specs`: compose sources with rendered or raw content plus target path metadata
 - `stack_dirs_to_create`: absolute stack directory paths under the shared mount
 - `files_to_render`: templated source files with `source_path`, `dest_path`, `relative_path`, `stack_name`, and effective `owner`, `group`, and `mode`
 - `files_to_copy`: static source files with `source_path`, `dest_path`, `relative_path`, `stack_name`, and effective `owner`, `group`, and `mode`
@@ -60,8 +59,17 @@ non-directory paths and preserve metadata on existing directories.
 - `x-prereq-dirs` paths are created with shared Docker ownership and mode `0755` only when absent; existing directory metadata is preserved
 - synced files use matching `x-managed-files` metadata during their single render or copy; undeclared files use shared ownership and mode `0644`
 - managed files that are not repository-synced are created empty when absent and keep their declared metadata enforced without truncating existing content
-- `planner.yml` and `materialize.yml` consume `stack_vars` as task-scoped render data, not host scope
 - `materialize.yml` consumes the plan and does not re-parse compose extensions inline
+
+### Template Render Context
+
+Every stack template is rendered exactly once, by the planner task "Render planned stack templates". Compose discovery reads that result, and materialization writes it, so validation and the written file cannot disagree. A template sees:
+
+- `item`: its `files_to_render` entry as built before metadata is applied, with `source_path`, `dest_path`, `relative_path`, and `stack_name`
+- `stack_name`: the stack's top-level directory name
+- `stack_vars`: `lxc_docker_env_stack_vars[stack_name]`, or `{}` when the stack declares none
+
+These are defined only on that render task, as task-scoped variables, never host facts. Rendered content stays in a registered result under `no_log`; it is never stored in a fact or in the plan. A template that fails to render fails the run before anything is written, and the message names only the failed templates by stack-relative path.
 
 ### Deploy Exclusions
 

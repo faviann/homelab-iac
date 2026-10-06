@@ -30,7 +30,6 @@
         skipped_stacks: []
     lxc_stack_sync_manifest_plan:
       templated_outputs: []
-      source_compose_specs: []
       stack_dirs_to_create: []
       files_to_render: []
       files_to_copy: []
