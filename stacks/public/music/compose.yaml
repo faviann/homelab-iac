@@ -2,6 +2,11 @@
 x-prereq-dirs:
   - ./appdata/navidrome
 
+# Python loads the script once; the loop never re-reads it.
+x-restart-on-change:
+  reconciler:
+    - ./reconciler/reconciler.py
+
 services:
   navidrome:
     image: deluan/navidrome:latest

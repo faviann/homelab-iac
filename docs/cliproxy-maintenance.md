@@ -428,9 +428,9 @@ The runtime gate materializes the actual repository stack and starts its
 rendered Compose wiring with only isolated names, paths and network/port
 overrides. It checks that a missing carrier fails rendering, the private `.env`,
 native DNS/mTLS identity, the legacy key with Broodling's `gpt-5.6-sol`
-tools/JSON request, an unchanged redeploy that recreates nothing, a cluster
-change that recreates only Home with the new document mounted read-only, and
-private startup umasks. Protocol behavior belongs to the pinned images and is a
+tools/JSON request, an unchanged redeploy that recreates nothing, the cluster
+document mounted read-only, and private startup umasks. Stack sync recreates
+Home after a cluster change; its regression covers that rule. Protocol behavior belongs to the pinned images and is a
 human acceptance check. The recovery gate, described next, owns restart from cached trust and the native matched restore.
 
 Using synthetic credentials on an internal Docker network, this verifies the

@@ -1,4 +1,9 @@
 ---
+# nginx reads its config only at startup.
+x-restart-on-change:
+  portal-entry:
+    - ./appdata/nginx/conf.d/redirect.conf
+
 services:
   portal-entry:
     image: nginx:alpine

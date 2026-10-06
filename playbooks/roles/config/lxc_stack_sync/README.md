@@ -7,10 +7,11 @@ then published after reconciliation with exactly these fields:
 
 | Field | Diagnostic use |
 |-------|----------------|
-| `changed` | Indicates whether managed assets, materialization, quarantine, or network/stack startup reported a change; a converged apply reports `false`. |
+| `changed` | Indicates whether managed assets, materialization, quarantine, network/stack startup, or a service recreate reported a change; a converged apply reports `false`. |
 | `discovered_stacks` | Lists the desired stacks selected for reconciliation, after any `stack_filter` and without stacks a busy check deferred, so an operator can verify the run's scope. |
 | `quarantined_stacks` | Identifies stale stacks moved into quarantine for operator investigation or recovery. |
 | `skipped_stacks` | Identifies discovered Compose projects whose startup was skipped, including command skips in check mode or projects outside the selected scope. |
+| `recreated_services` | Lists each service recreated because a tracked file changed after its container last started, as `{stack, service, files}`. |
 
 The initial shape is `changed: false` with empty lists for the other fields,
 including when the per-host source is absent. Failures continue to surface as
@@ -19,6 +20,10 @@ Ansible task failures; this report does not catch them or replace their diagnost
 Directory creation versus modification and network/startup classifications are
 not published. Prerequisite directory observations remain necessary to reject
 non-directory paths and preserve metadata on existing directories.
+
+## Restart on Change
+
+[stacks/README.md](../../../../stacks/README.md#restart-on-change) holds the contract.
 
 ## ComposeManifestPlanner Contract
 

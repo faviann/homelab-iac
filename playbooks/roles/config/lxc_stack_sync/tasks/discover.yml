@@ -16,6 +16,7 @@
     lxc_stack_sync_source_exists: false
     lxc_docker_env_desired_top_level_stack_dirs: []
     lxc_docker_env_stale_top_level_stack_dirs: []
+    lxc_stack_sync_restart_on_change: []
     _lxc_docker_env_reconciliation:
       discovered_stacks: []
       managed_assets:
@@ -28,6 +29,7 @@
       started:
         changed_results: []
         skipped_stacks: []
+        recreated_services: []
     lxc_stack_sync_manifest_plan:
       stack_dirs_to_create: []
       files_to_render: []
@@ -41,6 +43,7 @@
       discovered_stacks: []
       quarantined_stacks: []
       skipped_stacks: []
+      recreated_services: []
 
 - name: Check if per-host stacks source exists
   ansible.builtin.stat:

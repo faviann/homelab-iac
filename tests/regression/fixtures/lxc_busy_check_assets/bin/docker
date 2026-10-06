@@ -32,6 +32,11 @@ case "$1" in
   image)
     echo "Total reclaimed space: 0B"
     ;;
+  inspect)
+    # Containers without bind mounts: stack sync's restart probe finds nothing to recreate.
+    shift 2
+    for id do echo "app 2000-01-01T00:00:00Z"; done
+    ;;
   *)
     echo "unsupported fixture docker operation: $*" >&2
     exit 86

@@ -20,3 +20,4 @@
       discovered_stacks: "{{ _lxc_docker_env_reconciliation.discovered_stacks | default([]) }}"
       quarantined_stacks: "{{ _lxc_docker_env_reconciliation.quarantined.stacks | default([]) }}"
       skipped_stacks: "{{ _lxc_docker_env_reconciliation.started.skipped_stacks | default([]) }}"
+      recreated_services: "{{ _lxc_docker_env_reconciliation.started.recreated_services | default([]) }}"

@@ -10,10 +10,6 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     command: ["sh", "-c", "umask 077; exec ./CLIProxyAPIHome"]
-    environment:
-      # Home reads cluster.yaml at startup. Recreate it after an atomic file
-      # replacement so this single-file bind also sees the new inode.
-      HOME_CLUSTER_FINGERPRINT: ${HOME_CLUSTER_FINGERPRINT:?Set HOME_CLUSTER_FINGERPRINT in .env}
     volumes:
       - ./appdata/config/cluster.yaml:/CLIProxyAPIHome/cluster.yaml:ro
       # State and trust are root:root 0700 host directories, outside stack sync.

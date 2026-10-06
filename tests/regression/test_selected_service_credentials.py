@@ -130,7 +130,8 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
     docker.write_text(
         '#!/bin/sh\n'
         'printf "%s|%s\\n" "$PWD" "$*" >> "$DOCKER_TEST_LOG"\n'
-        'printf "Total reclaimed space: 0B\\n"\n'
+        '[ "$1" = image ] && printf "Total reclaimed space: 0B\\n"\n'
+        'exit 0\n'
     )
     docker.chmod(0o755)
     docker_log = tmp_path / "docker.log"
