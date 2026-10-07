@@ -75,19 +75,6 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
                 backend=f"http://overmind.faviann.vms:{port}",
             )
 
-    def test_aoe_external_route_contract(self) -> None:
-        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
-
-        assert_route(
-            self,
-            config,
-            "aoe",
-            host_rule="Host(`aoe.local.faviann.com`)",
-            service="aoe-workstation",
-            middlewares=["local-ip-restriction"],
-            backend="http://workstation.faviann.vms:4001",
-        )
-
     def test_openclaw_external_route_contract(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
         routers = config["http"]["routers"]

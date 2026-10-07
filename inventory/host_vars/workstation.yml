@@ -6,7 +6,6 @@ lxc_hwaddr: "BC:24:11:57:80:06"
 workstation_enabled: true
 lxc_origin_firewall_enabled: true
 lxc_origin_firewall_protected_ports:
-  - 4001 # Agent of Empires proxy
   - 9119 # Hermes dashboard
   - 18789 # OpenClaw gateway
   - 8788 # Reserved Collie origin

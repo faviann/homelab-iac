@@ -267,7 +267,7 @@ Afterwards, confirm the mounts are actually live rather than trusting the play r
 ```bash
 findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
-        ~/.config/lobu ~/.config/agent-of-empires ~/.hermes ~/.openclaw ~/.config/herdr \
+        ~/.config/lobu ~/.hermes ~/.openclaw ~/.config/herdr \
         ~/.local/state/collie ~/repos
 ```
 

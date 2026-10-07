@@ -144,11 +144,6 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/.hermes"
       register: hermes_state_dir_stat
 
-    - name: Stat AoE persistent home directory
-      ansible.builtin.stat:
-        path: "{{ temp_root }}/ephemeral/workstation/home/.config/agent-of-empires"
-      register: aoe_state_dir_stat
-
     - name: Stat OpenClaw persistent home directory
       ansible.builtin.stat:
         path: "{{ temp_root }}/ephemeral/workstation/home/.openclaw"
@@ -208,11 +203,6 @@
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.local/state/opencode"
       register: opencode_state_home_path_stat
-
-    - name: Stat AoE home path
-      ansible.builtin.stat:
-        path: "{{ workstation_home }}/.config/agent-of-empires"
-      register: aoe_home_path_stat
 
     - name: Stat repos home path
       ansible.builtin.stat:
@@ -291,10 +281,6 @@
           - repos_dir_stat.stat.uid == workstation_uid
           - repos_dir_stat.stat.gid == workstation_gid
           - repos_dir_stat.stat.mode == "0755"
-          - aoe_state_dir_stat.stat.isdir
-          - aoe_state_dir_stat.stat.uid == workstation_uid
-          - aoe_state_dir_stat.stat.gid == workstation_gid
-          - aoe_state_dir_stat.stat.mode == "0700"
           - hermes_state_dir_stat.stat.isdir
           - hermes_state_dir_stat.stat.uid == workstation_uid
           - hermes_state_dir_stat.stat.gid == workstation_gid
@@ -331,8 +317,6 @@
           - not (opencode_data_home_path_stat.stat.islnk | default(false))
           - opencode_state_home_path_stat.stat.isdir
           - not (opencode_state_home_path_stat.stat.islnk | default(false))
-          - aoe_home_path_stat.stat.isdir
-          - not (aoe_home_path_stat.stat.islnk | default(false))
           - hermes_home_path_stat.stat.isdir
           - not (hermes_home_path_stat.stat.islnk | default(false))
           - openclaw_home_path_stat.stat.isdir
