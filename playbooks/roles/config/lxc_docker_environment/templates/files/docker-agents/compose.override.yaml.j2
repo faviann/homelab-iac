@@ -4,12 +4,11 @@ services:
     container_name: traefik-kop
     security_opt:
       - no-new-privileges:true
-    depends_on:
-      - docker-metadata-proxy
     network_mode: host
     restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      DOCKER_HOST: tcp://127.0.0.1:2375
       REDIS_ADDR: ${REDISURL}
       KOP_POLL_INTERVAL: 60
       DOCKER_CONFIG: |
