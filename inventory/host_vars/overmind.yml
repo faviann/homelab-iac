@@ -5,7 +5,6 @@
 lxc_hwaddr: "BC:24:11:0B:3D:9D"
 default_domain: admin.faviann.com
 
-docker_agents_enabled: true
 traefik_kop_enabled: false
 
 lxc_docker_env_host_directories:
