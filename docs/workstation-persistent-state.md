@@ -4,7 +4,7 @@
 
 The workstation role bind-mounts selected home paths from `/ephemeral/workstation/home` so they survive an intentional LXC rebuild.
 
-**Status: nine of the original ten declared paths remain (Agent of Empires was retired 2026-10); they were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
+**Status: nine of the original ten declared paths remain (Agent of Empires was retired 2026-10); they were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Azure CLI auth state extends it at `~/.azure`; its live rebuild validation is pending. Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
 
 Claude's sibling `~/.claude.json` is persisted separately as a file bind mount (#157).
 It holds onboarding and recent-project state; `~/.claude` holds transcripts and credentials.
@@ -134,6 +134,22 @@ stat -c '%a %U:%G %n' ~/.config/lobu /ephemeral/workstation/home/.config/lobu
 Require the intended backing path and `700` with the workstation user's ownership
 on both directories before restarting the dotfiles-owned service. Lobu installation,
 login, and supervision remain owned by dotfiles; this change only persists state.
+
+### Azure CLI
+
+`~/.azure` holds the `az login` session, including its token cache; treat it as
+a credential. The fail-closed assert refuses to mount over an existing
+`~/.azure`, so move it before the first deploy that includes the mapping:
+
+```bash
+mkdir -p /ephemeral/workstation/home
+mv ~/.azure /ephemeral/workstation/home/.azure
+```
+
+Deleting it instead also works; it costs one
+`az login --use-device-code --tenant <tenant>` after deploying. Afterwards,
+`findmnt --mountpoint ~/.azure` must show the persistent target and
+`az account show --query user.name` must return the account without a new login.
 
 ### Other tools
 
@@ -267,7 +283,7 @@ Afterwards, confirm the mounts are actually live rather than trusting the play r
 ```bash
 findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
-        ~/.config/lobu ~/.hermes ~/.openclaw ~/.config/herdr \
+        ~/.config/lobu ~/.azure ~/.hermes ~/.openclaw ~/.config/herdr \
         ~/.local/state/collie ~/repos
 ```
 
@@ -433,6 +449,7 @@ Confirm:
 - Claude's `~/.claude.json` passes its pre-start hash comparison, and Claude opens without onboarding with its recent projects intact.
 - The four hashes from the before-manifest are unchanged.
 - Lobu passes its pre-start hash comparison and reconnects as the same registered device after dotfiles convergence (see [Lobu before-manifest](#lobu-before-manifest)).
+- `az account show --query user.name` returns the same account without a new `az login`.
 - The before/after OpenCode and OMP file lists match for `~/.omp` and all three durable OpenCode roots; `~/.pi` remains independently mounted.
 - `opencode --version` and `omp --version` succeed from the managed `~/.local/bin` command surface after `workstation-setup` completes.
 - herdr restores its session — `herdr-server.log` reports `session restore evaluated … workspaces=N`.
