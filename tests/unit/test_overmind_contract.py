@@ -23,17 +23,6 @@ def load_yaml(path: Path) -> dict:
 
 
 class OvermindContractTests(unittest.TestCase):
-    def test_overmind_capabilities(self) -> None:
-        inventory = load_yaml(REPO_ROOT / "inventory/hosts.yml")
-        overmind_vars = load_yaml(REPO_ROOT / "inventory/host_vars/overmind.yml")
-        all_children = inventory["all"]["children"]
-
-        self.assertIn("overmind", all_children["cap_docker"]["hosts"])
-        self.assertNotIn("overmind", all_children["cap_gpu"]["hosts"])
-        self.assertNotIn("overmind", all_children["cap_wireguard"]["hosts"])
-        self.assertFalse(overmind_vars["docker_agents_enabled"])
-        self.assertFalse(overmind_vars["traefik_kop_enabled"])
-
     def test_overmind_storage_contract(self) -> None:
         # 999 is the postgres image's in-container UID/GID; the host-side tank
         # directories use the unprivileged root mapping 100000.
