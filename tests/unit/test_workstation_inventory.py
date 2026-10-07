@@ -39,6 +39,7 @@ DURABLE_HOME_LINKS = (
     ("openclaw", "bind_mount", ".openclaw", "0700", None),
     ("moraine", "bind_mount", ".moraine", "0700", None),
     ("lobu", "bind_mount", ".config/lobu", "0700", None),
+    ("azure", "bind_mount", ".azure", "0700", None),
     ("herdr", "bind_mount", ".config/herdr", "0700", None),
     ("collie_state", "bind_mount", ".local/state/collie", "0700", None),
     ("repos", "bind_mount", "repos", "0755", None),
