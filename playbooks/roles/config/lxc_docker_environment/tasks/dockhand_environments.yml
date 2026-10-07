@@ -7,7 +7,6 @@
 - name: Check Dockhand API token
   ansible.builtin.set_fact:
     _dockhand_api_ready: "{{ dockhand_api_token | default('') | credential_is_configured }}"
-  no_log: true
 
 - name: Warn that Dockhand environment seeding is skipped
   ansible.builtin.debug:

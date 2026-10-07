@@ -17,6 +17,7 @@ Set `docker_agents_enabled: false` on hosts that need Docker without the managed
 
 Set `traefik_kop_enabled: false` on `portal`, because portal runs Traefik itself.
 `portal` is also excluded from Hawser because it hosts Dockhand rather than acting as a remote service host.
+Configuring `portal` registers a Dockhand environment for each Hawser host once `vault_dockhand_api_token` holds an API token generated in the Dockhand UI; until then it warns and skips.
 
 Portal Traefik uses its own stack-local `traefik-docker-socket-proxy` in
 `stacks/portal/traefik3/`. Keep that proxy separate from the managed
