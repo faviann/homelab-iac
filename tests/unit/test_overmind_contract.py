@@ -31,7 +31,7 @@ class OvermindContractTests(unittest.TestCase):
         self.assertIn("overmind", all_children["cap_docker"]["hosts"])
         self.assertNotIn("overmind", all_children["cap_gpu"]["hosts"])
         self.assertNotIn("overmind", all_children["cap_wireguard"]["hosts"])
-        self.assertFalse(overmind_vars["docker_agents_enabled"])
+        self.assertTrue(overmind_vars["docker_agents_enabled"])
         self.assertFalse(overmind_vars["traefik_kop_enabled"])
 
     def test_overmind_storage_contract(self) -> None:
