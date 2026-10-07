@@ -83,6 +83,8 @@ vault_workstation_mcp_auth_proxy_jwt_private_key: "REPLACE_WITH_PEM_PKCS8_RSA_PR
 # Portal Dockhand
 vault_portal_dockhand_encryption_key: "REPLACE_WITH_BASE64_32_BYTE_KEY"
 vault_dockhand_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
+# Generated in the Dockhand UI after first deploy; environment seeding is skipped until set.
+vault_dockhand_api_token: "REPLACE_ME"
 
 # Portal Traefik
 vault_portal_traefik_cloudflare_dns_api_token: "REPLACE_WITH_CLOUDFLARE_DNS_API_TOKEN"

@@ -16,6 +16,7 @@ lxc_docker_env_stack_vars:
     dashboard_credentials: "{{ vault_portal_traefik_dashboard_credentials }}"
     lobu_crawler_01_session_view_credential: "{{ vault_lobu_crawler_01_session_view_credential }}"
 
+dockhand_api_token: "{{ vault_dockhand_api_token }}"
 dockhand_discord_webhook_url: "{{ vault_dockhand_discord_webhook_url }}"
 
 # External Docker networks required by compose stacks
