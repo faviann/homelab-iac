@@ -1,101 +1,108 @@
 ---
 # Seed Dockhand with a Hawser Standard environment entry for each non-portal
-# Docker host. Runs only on portal. Idempotent: 409 = already exists = ok.
-# Skipped entirely when dockhand_api_token is not defined — generate a token
-# in the Dockhand UI, then store it as vault_dockhand_api_token and re-run.
+# Docker host that runs Hawser. Runs only on portal. Idempotent: 409 = already
+# exists = ok. Until vault_dockhand_api_token holds a token generated in the
+# Dockhand UI, seeding is skipped with a warning.
 
-- name: Validate configured Dockhand API token
-  ansible.builtin.assert:
-    that: dockhand_api_token | credential_is_configured
-    quiet: true
-  when: dockhand_api_token is defined
-  no_log: true
-
-- name: Fetch existing Dockhand environments
-  ansible.builtin.uri:
-    url: http://127.0.0.1:3004/api/environments
-    method: GET
-    return_content: true
-    status_code: 200
-    headers:
-      Authorization: "Bearer {{ dockhand_api_token }}"
-  register: _dockhand_existing_envs
-  when: dockhand_api_token is defined
-  no_log: true
-
-- name: Compute remote Hawser host list
+- name: Check Dockhand API token
   ansible.builtin.set_fact:
-    _dockhand_hawser_hosts: "{{ groups['cap_docker'] | difference([inventory_hostname]) | list }}"
-  when: dockhand_api_token is defined
+    _dockhand_api_ready: "{{ dockhand_api_token | default('') | credential_is_configured }}"
 
-- name: Compute existing environment names
-  ansible.builtin.set_fact:
-    _dockhand_existing_names: "{{ (_dockhand_existing_envs.json | default([])) | map(attribute='name') | list }}"
-  when: dockhand_api_token is defined
+- name: Warn that Dockhand environment seeding is skipped
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: Dockhand environment seeding skipped because
+      vault_dockhand_api_token is not configured. Generate an API token in the
+      Dockhand UI, store it with ./vault.sh set, and re-run.
+  when: not _dockhand_api_ready
 
-- name: Create missing Hawser environments in Dockhand
-  ansible.builtin.uri:
-    url: http://127.0.0.1:3004/api/environments
-    method: POST
-    body_format: json
-    body:
-      name: "{{ item }}"
-      connectionType: hawser-standard
-      host: "{{ item }}.{{ lxc_dns_domain }}"
-      port: 2376
-      protocol: http
-      hawserToken: "{{ dockhand_hawser_token | required_credential }}"
-    status_code: [200, 201, 409]
-    headers:
-      Authorization: "Bearer {{ dockhand_api_token }}"
-  loop: "{{ _dockhand_hawser_hosts }}"
-  when: dockhand_api_token is defined and item not in _dockhand_existing_names
-  no_log: true
+- name: Seed Dockhand environments and notifications
+  when: _dockhand_api_ready
+  block:
+    - name: Fetch existing Dockhand environments
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3004/api/environments
+        method: GET
+        return_content: true
+        status_code: 200
+        headers:
+          Authorization: "Bearer {{ dockhand_api_token }}"
+      register: _dockhand_existing_envs
+      no_log: true
 
-- name: Create local socket environment for portal itself
-  ansible.builtin.uri:
-    url: http://127.0.0.1:3004/api/environments
-    method: POST
-    body_format: json
-    body:
-      name: "{{ inventory_hostname }}"
-      connectionType: socket
-      socketPath: /var/run/docker.sock
-    status_code: [200, 201, 409]
-    headers:
-      Authorization: "Bearer {{ dockhand_api_token }}"
-  when: dockhand_api_token is defined and inventory_hostname not in _dockhand_existing_names
-  no_log: true
+    - name: Compute remote Hawser host list
+      ansible.builtin.set_fact:
+        _dockhand_hawser_hosts: "{{ groups['cap_docker'] | difference([inventory_hostname]) | list }}"
 
-- name: Fetch existing Dockhand notification channels
-  ansible.builtin.uri:
-    url: http://127.0.0.1:3004/api/notifications
-    method: GET
-    return_content: true
-    status_code: 200
-    headers:
-      Authorization: "Bearer {{ dockhand_api_token }}"
-  register: _dockhand_existing_notifications
-  when: dockhand_api_token is defined
-  no_log: true
+    - name: Compute existing environment names
+      ansible.builtin.set_fact:
+        _dockhand_existing_names: "{{ (_dockhand_existing_envs.json | default([])) | map(attribute='name') | list }}"
 
-- name: Configure Discord notification channel
-  ansible.builtin.uri:
-    url: http://127.0.0.1:3004/api/notifications
-    method: POST
-    body_format: json
-    body:
-      type: apprise
-      name: Discord
-      config:
-        urls:
-          - "{{ dockhand_discord_webhook_url | required_credential | regex_replace('^https://discord\\.com/api/webhooks/', 'discord://') }}"
-    status_code: 200
-    headers:
-      Authorization: "Bearer {{ dockhand_api_token }}"
-  when: >-
-    dockhand_api_token is defined and
-    ((_dockhand_existing_notifications.json | default([]))
-    | selectattr('name', 'equalto', 'Discord')
-    | list | length == 0)
-  no_log: true
+    - name: Create missing Hawser environments in Dockhand
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3004/api/environments
+        method: POST
+        body_format: json
+        body:
+          name: "{{ item }}"
+          connectionType: hawser-standard
+          host: "{{ item }}.{{ lxc_dns_domain }}"
+          port: 2376
+          protocol: http
+          hawserToken: "{{ dockhand_hawser_token | required_credential }}"
+        status_code: [200, 201, 409]
+        headers:
+          Authorization: "Bearer {{ dockhand_api_token }}"
+      loop: "{{ _dockhand_hawser_hosts }}"
+      when:
+        - hostvars[item].docker_agents_enabled | default(false)
+        - item not in _dockhand_existing_names
+      no_log: true
+
+    - name: Create local socket environment for portal itself
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3004/api/environments
+        method: POST
+        body_format: json
+        body:
+          name: "{{ inventory_hostname }}"
+          connectionType: socket
+          socketPath: /var/run/docker.sock
+        status_code: [200, 201, 409]
+        headers:
+          Authorization: "Bearer {{ dockhand_api_token }}"
+      when: inventory_hostname not in _dockhand_existing_names
+      no_log: true
+
+    - name: Fetch existing Dockhand notification channels
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3004/api/notifications
+        method: GET
+        return_content: true
+        status_code: 200
+        headers:
+          Authorization: "Bearer {{ dockhand_api_token }}"
+      register: _dockhand_existing_notifications
+      no_log: true
+
+    - name: Configure Discord notification channel
+      vars:
+        _discord_webhook_url: "{{ dockhand_discord_webhook_url | required_credential }}"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3004/api/notifications
+        method: POST
+        body_format: json
+        body:
+          type: apprise
+          name: Discord
+          config:
+            urls:
+              - "{{ _discord_webhook_url | regex_replace('^https://discord\\.com/api/webhooks/', 'discord://') }}"
+        status_code: 200
+        headers:
+          Authorization: "Bearer {{ dockhand_api_token }}"
+      when: >-
+        (_dockhand_existing_notifications.json | default([]))
+        | selectattr('name', 'equalto', 'Discord')
+        | list | length == 0
+      no_log: true

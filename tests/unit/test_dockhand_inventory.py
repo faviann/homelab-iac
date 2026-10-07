@@ -34,6 +34,14 @@ class DockhandInventoryTests(unittest.TestCase):
             "{{ vault_dockhand_discord_webhook_url }}",
         )
 
+    def test_api_token_uses_dockhand_named_vault_key(self) -> None:
+        portal_vars = load_yaml(REPO_ROOT / "inventory/host_vars/portal.yml")
+
+        self.assertEqual(
+            portal_vars.get("dockhand_api_token"),
+            "{{ vault_dockhand_api_token }}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
