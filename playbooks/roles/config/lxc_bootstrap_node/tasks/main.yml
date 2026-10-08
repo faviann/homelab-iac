@@ -1,0 +1,41 @@
+---
+# The bootstrap node is the control node whose only target is the workstation
+# (docs/bootstrap-node.md). Its secrets come from a person's Bitwarden unlock,
+# never from this role.
+
+- name: Install bootstrap node packages
+  ansible.builtin.apt:
+    name:
+      - git
+      # The Bitwarden CLI install below unpacks a zip.
+      - unzip
+    state: present
+    update_cache: true
+
+- name: Install chezmoi
+  ansible.builtin.shell:
+    cmd: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
+    creates: /usr/local/bin/chezmoi
+
+- name: Install uv
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      curl -LsSf https://astral.sh/uv/{{ lxc_bootstrap_node_uv_version }}/install.sh
+      | UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+    executable: /bin/bash
+    creates: /usr/local/bin/uv
+
+- name: Install Bitwarden CLI
+  ansible.builtin.import_role:
+    name: config/bitwarden_cli
+
+# The first clone only. After it, the deploy recipe alone moves the checkout.
+# Skipped in check mode, where git may not be installed yet.
+- name: Clone the repository
+  ansible.builtin.git:
+    repo: https://github.com/faviann/homelab-iac.git
+    dest: /root/homelab-iac
+    version: main
+    update: false
+  when: not ansible_check_mode

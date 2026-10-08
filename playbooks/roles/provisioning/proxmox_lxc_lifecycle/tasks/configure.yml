@@ -130,6 +130,11 @@
         name: config/lxc_workstation_baseline
       when: workstation_enabled | default(false)
 
+    - name: Configure bootstrap node
+      ansible.builtin.include_role:
+        name: config/lxc_bootstrap_node
+      when: bootstrap_node_enabled | default(false)
+
     - name: Flush handlers after guest configuration
       ansible.builtin.meta: flush_handlers
 

@@ -23,6 +23,7 @@ from vault_test_harness import run_vault_tty
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = REPO_ROOT / "vault.sh"
+BOOTSTRAP_NODE_DOC = REPO_ROOT / "docs/bootstrap-node.md"
 FAKE_FIXTURES = Path(__file__).parent / "fixtures/vault"
 HEADER = "$ANSIBLE_VAULT;1.1;AES256\n"
 VALID_YAML = """---
@@ -2260,6 +2261,8 @@ def test_rotate_publishes_only_after_a_verified_local_rekey(
     returncode, output = rotate_on_a_tty(repo, env)
 
     assert returncode == 0, output
+    # The refresh reminder is copied from either place, so they must not drift.
+    assert output.strip().splitlines()[-1].strip() in BOOTSTRAP_NODE_DOC.read_text(encoding="utf-8").splitlines()
     # Rekey and its verification are recorded strictly before the publish.
     ordered = [
         (event["boundary"], event.get("command"))

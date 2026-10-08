@@ -132,6 +132,10 @@ _Avoid_: Deployment readiness, worktree readiness
 A managed LXC holding the fleet key and vault passphrase from which `./run.sh` runs against managed hosts. There are two; a lifecycle run skips the control node it runs on unless it includes it deliberately.
 _Avoid_: Controller machine, dev machine
 
+**Bootstrap node**:
+The control node whose only targets are the workstation: consented interrupting runs, the nightly run, rebuilds, and recovery of an unreachable workstation. It is deployed by the workstation like any other LXC.
+_Avoid_: Backup controller, jump host
+
 **Controller SSH identity**:
 The machine-global SSH key pair shared by this controller's worktrees and trusted by the managed fleet. A missing key requires an onboarding-or-recovery decision because creating a new identity and restoring an existing trusted identity are different intents.
 _Avoid_: Worktree SSH key, bootstrap artifact

@@ -1,0 +1,16 @@
+---
+# Host-specific configuration for the bootstrap node, the control node whose
+# only target is the workstation (docs/bootstrap-node.md)
+# Inherits from: tier_small
+
+lxc_hwaddr: "BC:24:11:87:8C:71"
+bootstrap_node_enabled: true
+
+proxmox_lxc_overrides:
+  vmid: 311
+  hostname: bootstrap
+  description: "Bootstrap control node for interrupting workstation changes and recovery, managed via Ansible"
+  tags:
+    - ansible
+    - bootstrap
+    - control-node

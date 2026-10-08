@@ -2,7 +2,7 @@
 
 **Project Type**: Ansible infrastructure-as-code (IaC)  
 **Purpose**: Automate Proxmox LXC provisioning, configuration, and service deployments  
-**Architecture**: Portable workstation-based (runs from any Linux workstation with network access to Proxmox)
+**Architecture**: Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for interrupting workstation changes and recovery.
 
 ## Agent skills
 
@@ -137,5 +137,6 @@ Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged
 → [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read when adding hosts or debugging variable precedence.
 → [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
 → [docs/workstation-persistent-state.md](docs/workstation-persistent-state.md) — read before any workstation deploy that enables persistent home mounts.
+→ [docs/bootstrap-node.md](docs/bootstrap-node.md) — read before any interrupting workstation change or when the workstation is unreachable.
 → [docs/lobu-control-plane.md](docs/lobu-control-plane.md) — read before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.
 → [docs/lobu-browser-device.md](docs/lobu-browser-device.md) — read before touching `lobu-crawler-01` or any `cap_browser_device` host.
