@@ -124,6 +124,10 @@ _Avoid_: Bootstrap dependency, controller prerequisite
 The transition at which a workflow uses real credentials or controller identity to interact with managed infrastructure or other live mutable state. Crossing it is a distinct user intent from fresh-worktree preparation.
 _Avoid_: Deployment readiness, worktree readiness
 
+**Control node**:
+A managed LXC holding the fleet key and vault passphrase from which `./run.sh` runs against managed hosts. There are two; a lifecycle run skips the control node it runs on unless it includes it deliberately.
+_Avoid_: Controller machine, dev machine
+
 **Controller SSH identity**:
 The machine-global SSH key pair shared by this controller's worktrees and trusted by the managed fleet. A missing key requires an onboarding-or-recovery decision because creating a new identity and restoring an existing trusted identity are different intents.
 _Avoid_: Worktree SSH key, bootstrap artifact

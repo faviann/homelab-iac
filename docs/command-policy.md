@@ -32,8 +32,11 @@ of what the guards enforce.
 `./run.sh` options: `--limit <targets>` (Ansible limit grammar), `--check`,
 `--stack <name>`, `--include-controller`, `--interrupt-busy`, and `-v`, `-vv`,
 or `-vvv`. `--interrupt-busy` skips every declared busy check, so busy stacks
-and their hosts are interrupted as if no check were declared. Every command
-answers `--help` with its operations.
+and their hosts are interrupted as if no check were declared.
+`--include-controller` targets the host the run is on, and `./run.sh` rejects
+it together with `--interrupt-busy`, so a run with `--interrupt-busy` never
+targets its own control node. Every command answers `--help` with its
+operations.
 
 A human-only operation prompts at a terminal, changes the vault, or enrolls
 trust on managed infrastructure, so a person runs it. "On explicit request"
@@ -57,7 +60,11 @@ operation. None of them has a consequential default.
 
 Only `./run.sh` accepts low-level arguments, and only after `--`. Those
 arguments cannot change target selection, lifecycle intent, check mode, the
-lock, or the wrapper marker. `./run.sh` rejects them as invalid usage.
+lock, or the wrapper marker. `./run.sh` rejects them as invalid usage. Nor can
+they set `proxmox_skip_self` or `lxc_busy_check_override`, which the wrapper
+owns: `./run.sh` rejects any argument that names either, and passes its own
+values after the passthrough, so they win over any passthrough value,
+`-e @file` included.
 
 Two statuses are guaranteed across all six commands. A command that rejects
 its own grammar, such as an unknown operation or option or a missing
@@ -143,7 +150,7 @@ A raw command is any command other than the six that does work they exist to
 govern. That means running Ansible, `uv`, `pytest`, or a repository script
 directly, or acting on the Proxmox host, its API, or a managed LXC outside the
 six commands, through `ssh`, `pct`, `docker`, `curl`, or any other client.
-Local workstation tooling that touches none of these, such as `git`, `rg`, or
+Local tooling on the control node that touches none of these, such as `git`, `rg`, or
 `tail` on a local log, is not a raw command.
 
 When a supported command owns an operation, tracked guidance uses that

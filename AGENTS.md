@@ -27,7 +27,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 - Use the repository's Bash commands. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
 - When editing tracked guidance, use supported commands in examples. Never put `-e`, `--extra-vars`, or `--tags` before `--` in a documented `./run.sh` invocation; use named operations instead of `--tags`. Record intentional raw-command exceptions in the command policy.
 - Commands that consume the vault expect its passphrase at `~/.ansible/vault-pass`. `ANSIBLE_VAULT_PASSWORD_FILE` overrides that path for Ansible runs, never for `./vault.sh`.
-- Lifecycle runs skip any host whose `inventory_hostname` matches the controller's hostname. To manage the control node intentionally, run `./run.sh --include-controller`, which targets only `workstation`.
+- Lifecycle runs skip the host they run on. `./run.sh --include-controller` targets that host. An interrupting workstation run (`--interrupt-busy`) is only on explicit request and runs from the bootstrap node, never in place; `./run.sh` rejects the pair.
 
 ## Standard Paths
 
@@ -61,7 +61,7 @@ Secrets are only in encrypted `inventory/vault.yml` — never commit plaintext c
 
 `site.yml` runs three phases in sequence: **validate** → **provision** (LXC create/update via Proxmox API) → **configure** (in-container: packages, Docker, stacks). Two-tier host config: `proxmox_lxc_provision` handles API-allowed settings; `proxmox_lxc_host_config` handles restricted features (`keyctl=1`, `nesting=1`) via `pct` on the Proxmox host.
 
-Run lifecycle operations through `./run.sh`. Live commands share one machine-local lock across every worktree on the workstation: mutations take it exclusively, read-only operations take it shared. It does not coordinate runs from different control nodes.
+Run lifecycle operations through `./run.sh`. Live commands share one machine-local lock across every worktree on the control node: mutations take it exclusively, read-only operations take it shared. It does not coordinate runs from different control nodes.
 
 Roles live in `playbooks/roles/{infrastructure,provisioning,config}/`.
 
@@ -82,9 +82,9 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./run.sh --limit <targets>` | Target hosts with Ansible limit grammar |
 | `./run.sh --limit <host> --stack <stack>` | Deploy one stack on a host (skips all others) |
 | `./run.sh --check` | Dry run. Shared lock |
-| `./run.sh --include-controller` | Intentionally manage the control node (`workstation`) |
-| `./run.sh --interrupt-busy` | Skip busy checks and interrupt busy stacks and their hosts deliberately |
-| `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode |
+| `./run.sh --include-controller` | Intentionally manage this host, the control node the run is on |
+| `./run.sh --interrupt-busy` | Skip busy checks and interrupt busy stacks and their hosts deliberately. Against the workstation only on explicit request; never with `--include-controller` |
+| `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode, or set `proxmox_skip_self` or `lxc_busy_check_override` |
 | `./inspect.sh credentials` | Walk the Proxmox API credential and permission ladder |
 | `./inspect.sh connectivity [--limit <targets>]` | Check LXC SSH reachability; non-zero when a target is unreachable |
 | `./inspect.sh containers` | List every LXC on the Proxmox node |

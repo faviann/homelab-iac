@@ -410,7 +410,7 @@ ssh-keygen -R workstation && ssh-keygen -R workstation.faviann.vms
 Then deploy. Skip `--check`: it is load-bearing when an existing container might report `restart_required`, but with no container to observe it cannot tell you anything.
 
 ```bash
-./run.sh --include-controller -- \
+./run.sh --limit workstation -- \
   -e lxc_base_system_reboot_enabled=false
 ```
 
