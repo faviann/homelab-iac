@@ -25,8 +25,7 @@ all-session
 Initial migration does not change any consumer address or key. Real key rollout
 changes one actual consumer at a time, following human acceptance and a
 verified matched recovery baseline, after explicitly closing the initial
-standalone rollback window. Broodling's deployment remains
-[#353](https://github.com/faviann/homelab-iac/issues/353).
+standalone rollback window.
 Recovery is manual from matched Home snapshot and
 CPA cache sets; see
 [the recovery contract](../cliproxy-maintenance.md#matched-recovery-and-assisted-updates).
