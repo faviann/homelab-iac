@@ -1,5 +1,11 @@
 ---
 all:
+  vars:
+    # The Bitwarden CLI role defaults its release URLs to GitHub. Non-resolving
+    # targets make a test that forgets the loopback release boundary fail
+    # instead of downloading; the boundary's -e overrides them.
+    bitwarden_cli_release_api_url: https://bitwarden-release-boundary.invalid/release.json
+    bitwarden_cli_download_url: https://bitwarden-release-boundary.invalid/bw.zip
   hosts:
     auth:
       ansible_host: auth.invalid.

@@ -1,0 +1,17 @@
+---
+- name: Inspect Bitwarden CLI binary
+  ansible.builtin.stat:
+    path: "{{ bitwarden_cli_bin_path }}"
+  register: _bitwarden_cli_bin
+
+- name: Note Bitwarden CLI would be installed in normal mode
+  ansible.builtin.debug:
+    msg: "Bitwarden CLI would be installed at {{ bitwarden_cli_bin_path }}"
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not _bitwarden_cli_bin.stat.exists
+
+- name: Install Bitwarden CLI
+  ansible.builtin.include_tasks: install.yml
+  when: not ansible_check_mode

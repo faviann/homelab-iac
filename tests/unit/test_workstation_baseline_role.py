@@ -119,6 +119,23 @@ class WorkstationBaselineRoleTests(unittest.TestCase):
         ):
             self.assertIn(name, task_names)
 
+    def test_bitwarden_cli_comes_only_from_the_shared_role(self) -> None:
+        # A leftover name with the baseline's old Bitwarden prefix is a caller
+        # the move missed: the role ignores its value, or a template renders it
+        # undefined.
+        install = task_named(load_yaml(ROLE_ROOT / "tasks/main.yml"), "Install Bitwarden CLI")
+        self.assertEqual(install["ansible.builtin.import_role"], {"name": "config/bitwarden_cli"})
+
+        old_prefix = "workstation" + "_bw_"
+        leftovers = [
+            str(path.relative_to(REPO_ROOT))
+            for tree in ("playbooks", "inventory", "tests")
+            for path in (REPO_ROOT / tree).rglob("*")
+            if path.suffix in {".yml", ".yaml", ".j2", ".py", ".sh"}
+            and old_prefix in path.read_text(encoding="utf-8", errors="ignore")
+        ]
+        self.assertEqual(leftovers, [])
+
     def test_locale_entry_is_enabled_before_generation(self) -> None:
         # Debian's locale-gen generates only the uncommented entries of
         # /etc/locale.gen and can ignore a locale passed as an argument, so it

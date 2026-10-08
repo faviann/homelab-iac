@@ -70,22 +70,10 @@
     creates: /usr/local/bin/chezmoi
   when: workstation_chezmoi_install_enabled | bool
 
-- name: Inspect Bitwarden CLI binary
-  ansible.builtin.stat:
-    path: "{{ workstation_bw_bin_path }}"
-  register: _workstation_bw_bin
-
-- name: Note Bitwarden CLI would be installed in normal mode
-  ansible.builtin.debug:
-    msg: "Bitwarden CLI would be installed at {{ workstation_bw_bin_path }}"
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - not _workstation_bw_bin.stat.exists
-
+# Imported, not included: the first-login template reads bitwarden_cli_bin_path.
 - name: Install Bitwarden CLI
-  ansible.builtin.include_tasks: bitwarden_cli.yml
-  when: not ansible_check_mode
+  ansible.builtin.import_role:
+    name: config/bitwarden_cli
 
 - name: Install Determinate Nix
   ansible.builtin.include_tasks: nix.yml

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Local Bitwarden CLI release boundary for workstation regression fixtures.
 
-The `config/lxc_workstation_baseline` role resolves release metadata from
-`workstation_bw_release_api_url` and fetches the archive from
-`workstation_bw_download_url`. The role has no default for either URL, so
-regression fixtures that run the whole role must point both at this loopback
-boundary. No test reaches the live GitHub release, while the production
+The `config/bitwarden_cli` role resolves release metadata from
+`bitwarden_cli_release_api_url` and fetches the archive from
+`bitwarden_cli_download_url`. Both default to GitHub, and the fixture
+inventory points them at non-resolving hosts, so a regression fixture that runs
+the role fails unless it uses this loopback boundary. No test reaches the live
+GitHub release, while the production
 metadata shape, checksum selection, extraction, and install path stay
 exercised.
 """
@@ -27,7 +28,7 @@ from pathlib import Path
 ARCHIVE_NAME = "bw-linux-test.zip"
 RELEASE_METADATA_NAME = "release.json"
 # A same-release asset the role must skip: only the entry whose name matches the
-# final path segment of workstation_bw_download_url supplies the expected digest.
+# final path segment of bitwarden_cli_download_url supplies the expected digest.
 DECOY_ASSET_NAME = "bw-macos-test.zip"
 DECOY_ASSET_DIGEST = "sha256:" + "d0" * 32
 
@@ -82,8 +83,8 @@ def _serve_directory(directory: Path) -> Iterator[str]:
 def bitwarden_release_boundary(*, digest_matches: bool = True) -> Iterator[list[str]]:
     """Serve a Bitwarden release over loopback and yield ansible-playbook extra-var args.
 
-    The yielded fragment supplies the role's two required release URLs and is
-    spliced straight into an ansible-playbook command line.
+    The yielded fragment overrides the role's two release URLs and is spliced
+    straight into an ansible-playbook command line.
 
     With `digest_matches=False` the served archive no longer hashes to the digest
     the served metadata publishes, so the role's checksum validation must fail.
@@ -93,7 +94,7 @@ def bitwarden_release_boundary(*, digest_matches: bool = True) -> Iterator[list[
         with _serve_directory(Path(asset_root)) as base_url:
             yield [
                 "-e",
-                f"workstation_bw_download_url={base_url}/{ARCHIVE_NAME}",
+                f"bitwarden_cli_download_url={base_url}/{ARCHIVE_NAME}",
                 "-e",
-                f"workstation_bw_release_api_url={base_url}/{RELEASE_METADATA_NAME}",
+                f"bitwarden_cli_release_api_url={base_url}/{RELEASE_METADATA_NAME}",
             ]
