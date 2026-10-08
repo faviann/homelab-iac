@@ -23,6 +23,7 @@
     bitwarden_cli_owner: "{{ lookup('pipe', 'id -un') }}"
     bitwarden_cli_group: "{{ lookup('pipe', 'id -gn') }}"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
+    workstation_busy_probe_path: "{{ temp_root }}/bin/workstation-busy-probe"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
     workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"

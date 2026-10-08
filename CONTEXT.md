@@ -16,6 +16,10 @@ _Avoid_: Upload endpoint, artifact registry
 A declared command that answers, before a lifecycle run would interrupt, whether it may interrupt now: either a repo-managed stack's opt-in command, run inside one of its services, or a host's declared probe, run on the host. Only exit `0` means idle; every other answer, including no answer, defers the host's interrupting steps for that run, and a stack's check also defers that stack. A stack with no deployed containers is not checked.
 _Avoid_: Health check, readiness probe, drain
 
+**Workstation busy probe**:
+The workstation's host-level busy check. Busy while a herdr pane is `working` or the lifecycle lock is held; idle when herdr is not running; busy on any execution error. A run that includes its own control node defers without consulting it.
+_Avoid_: Idle gate, sentinel stack
+
 **Targeted LXC set**:
 The managed LXCs selected for a lifecycle run. Safety checks and the pre-action planning barrier apply to this set, not automatically to every LXC in inventory.
 _Avoid_: Fleet, all LXCs

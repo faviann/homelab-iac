@@ -93,6 +93,10 @@ argument_specs:
         type: str
         required: false
         description: Filesystem path where the interactive workstation setup command should be installed.
+      workstation_busy_probe_path:
+        type: str
+        required: false
+        description: Filesystem path where the workstation busy probe is installed.
       workstation_setup_profile_hook_path:
         type: str
         required: false
