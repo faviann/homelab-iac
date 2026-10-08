@@ -247,36 +247,13 @@ The `0700` mode in `workstation_persistent_home_links` applies to the mount poin
 
 ## Deploying
 
-The workstation is the Ansible control node, and `proxmox_skip_self` defaults to true — so a run launched here skips the workstation and reports success having changed nothing. Pass `--include-controller` to target it deliberately. Drive it from a plain SSH shell, not from inside a herdr pane.
-
-**Check before applying.** This is the load-bearing step, not an optional dry run:
+Run the workstation's lifecycle in place, from the workstation:
 
 ```bash
-./run.sh --check --include-controller > /tmp/ws-check.log 2>&1
-rg "restart_required|failed=|unreachable=" /tmp/ws-check.log
+./run.sh --include-controller > /tmp/ws-deploy.log 2>&1
 ```
 
-Require zero failed and zero unreachable, and no host-config restart. Before a migration this check *fails* at the persistent-home guard — that is expected, and is the "before" evidence.
-
-Why the restart matters more than anything else: `proxmox_lxc_host_config/tasks/main.yml` issues `pct reboot` from the Proxmox host when any host-config component reports `restart_required`, and it fires early, before guest configuration. A container restart kills any Ansible process running inside the container, so the run dies before reaching the workstation role. `restart_required` is computed in check mode, so the check reports it truthfully in advance.
-
-**Detach the apply**, so an SSH disconnect cannot kill it. Lingering is enabled and `KillUserProcesses` is unset, so a transient user unit outlives the session:
-
-```bash
-systemd-run --user --unit=ws-deploy --collect \
-  bash -lc 'cd ~/repos/homelab-iac/<worktree> && \
-    ./run.sh --include-controller -- \
-    -e lxc_base_system_reboot_enabled=false > /tmp/ws-deploy.log 2>&1'
-
-journalctl --user -u ws-deploy -f
-systemctl --user show ws-deploy -p ExecMainStatus   # 0 when it finished cleanly
-```
-
-`-e lxc_base_system_reboot_enabled=false` suppresses the end-of-run guest reboot, which fires when `/var/run/reboot-required` exists — an `apt` upgrade during the run can create it. Reboot deliberately afterwards once the recap is clean.
-
-Detaching survives an SSH drop. It does not survive a container restart — nothing running inside the container does. That is why the check comes first.
-
-**The LXC will not be destroyed by this run.** `proxmox_lxc_rebuild_on_release_mismatch` and `proxmox_lifecycle_allow_destructive_transitions` are both `false` in `inventory/group_vars/all/proxmox.yml` and unset in `host_vars/workstation.yml`, so the planner cannot emit `rebuild` or `remove`, and an unauthorized destructive plan fails the run rather than executing it. The expected transition for a running workstation is `provision`, non-destructive.
+A run that includes its own control node never interrupts it: its [interrupting steps](../stacks/README.md#busy-checks) are deferred, and everything else, the persistent home mounts included, applies in place. Exit `3` means something interrupting was deferred. Deferred items go through the bootstrap node ([the recipe](bootstrap-node.md#the-recipe)) or wait for tonight's run.
 
 Afterwards, confirm the mounts are actually live rather than trusting the play recap — an unmounted bind mount is an empty directory, not an error:
 
@@ -396,23 +373,19 @@ can legitimately update credentials, so use the pre-start hashes to prove file
 preservation and the control-plane identity to prove runtime reuse. Record the live
 result before marking Lobu rebuild validation complete.
 
-### Drive it from another machine
+### Drive it from the bootstrap node
 
-Not from the workstation. The container is replaced, so anything running inside it dies with it — including the Ansible run.
+Not from the workstation. The container is replaced, so anything running inside it dies with it, including the Ansible run. Rebuild from the bootstrap node through [the recipe](bootstrap-node.md#the-recipe).
 
-The manual destroy skips the cleanup that `provision.yml` performs on the planner's rebuild path, so do it yourself on the driving machine:
+The manual destroy skips the cleanup that `provision.yml` performs on the planner's rebuild path, so do it yourself on the bootstrap node, as root in its checkout:
 
 ```bash
+cd /root/homelab-iac
 rm -f .ansible/cache/*_workstation
 ssh-keygen -R workstation && ssh-keygen -R workstation.faviann.vms
 ```
 
-Then deploy. Skip `--check`: it is load-bearing when an existing container might report `restart_required`, but with no container to observe it cannot tell you anything.
-
-```bash
-./run.sh --limit workstation -- \
-  -e lxc_base_system_reboot_enabled=false
-```
+Then start the routine unit with a full pushed SHA, as the recipe shows. The container is absent when the run starts, so the busy check does not apply and the run applies everything, the end-of-run reboot included.
 
 `lxc_hwaddr` is pinned in `host_vars/workstation.yml`, so the container returns on the same MAC and address.
 

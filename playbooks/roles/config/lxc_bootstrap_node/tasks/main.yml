@@ -1,7 +1,7 @@
 ---
 # The bootstrap node is the control node whose only target is the workstation
-# (docs/bootstrap-node.md). Its secrets come from a person's Bitwarden unlock,
-# never from this role.
+# (docs/bootstrap-node.md). The role delivers the deploy webhook; the vault
+# passphrase and the fleet key come only from a person's Bitwarden unlock.
 
 - name: Install bootstrap node packages
   ansible.builtin.apt:
@@ -39,3 +39,52 @@
     version: main
     update: false
   when: not ansible_check_mode
+
+# Every deploy posts its outcome here; a placeholder fails the run. no_log
+# hides any message, so the name says what to set.
+- name: Assert vault_bootstrap_deploy_discord_webhook_url is configured
+  ansible.builtin.assert:
+    that:
+      - bootstrap_deploy_discord_webhook_url is defined
+      - bootstrap_deploy_discord_webhook_url | credential_is_configured
+  no_log: true
+
+- name: Install the deploy webhook environment
+  ansible.builtin.template:
+    src: workstation-deploy.env.j2
+    dest: /etc/workstation-deploy.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install the deploy script and its notifier
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/usr/local/sbin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - workstation-deploy
+    - workstation-deploy-notify
+
+- name: Install the deploy units and the nightly timer
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - workstation-deploy@.service
+    - workstation-deploy-interrupt@.service
+    - workstation-deploy.timer
+
+# Starting it again also undoes a person's `systemctl stop`.
+- name: Enable and start the nightly timer
+  ansible.builtin.systemd_service:
+    name: workstation-deploy.timer
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -8,8 +8,96 @@ second control node. Its only target is the workstation. The workstation
 creates it and keeps it patched through ordinary runs, like any other LXC, and
 it stays on. Ansible installs `git`, `unzip`, chezmoi, a pinned `uv`, and the
 native Bitwarden CLI, and makes the first clone of this repository at
-`/root/homelab-iac`. Ansible never moves that checkout again and never
-delivers the node's secrets.
+`/root/homelab-iac`. Ansible never moves that checkout again. It delivers the
+deploy notification webhook, but never the vault passphrase or the fleet key.
+
+## The recipe
+
+Interrupting workstation runs, rebuilds, and recovery of an unreachable
+workstation run on this node through two template units. The instance name is
+the git ref to deploy. People give a full commit SHA that is already on
+GitHub: the deploy fetches it from `origin` and checks it out detached, so
+unpushed code fails at the fetch.
+
+- `workstation-deploy@<sha>` runs `./run.sh --limit workstation`. It interrupts
+  the workstation only when the busy probe reports idle.
+- `workstation-deploy-interrupt@<sha>` adds `--interrupt-busy`. It is the
+  consent to interrupt a working agent, so start it only on a person's
+  explicit request.
+
+Start the unit from the workstation:
+
+```bash
+ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms \
+  'systemctl start --no-block workstation-deploy@<full-sha>'
+```
+
+The unit keeps running if the workstation restarts. Read the result from the
+journal afterwards, never by streaming it. `-I` selects the unit's latest
+invocation, so there is no ID to carry across a restart, and the last lines
+hold systemd's own record of the exit status:
+
+```bash
+ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms \
+  'journalctl --no-pager -u workstation-deploy@<full-sha>.service -I | tail -40'
+```
+
+`journalctl --list-invocations -u workstation-deploy@<full-sha>.service` lists
+earlier runs of the same unit. Every outcome is also posted to Discord with
+the unit name, which carries the ref, the SHA the checkout is at, and the exit
+status: `0` applied, `3` deferred, `75` another deploy was in flight, anything
+else failed. A failed deploy goes to a person with the journal excerpt; do not
+retry it.
+
+Two deploys never overlap. A deploy of another unit started while one runs
+exits `75` at once; starting the same unit again joins the run in flight.
+Nobody runs `./run.sh` directly in `/root/homelab-iac`: the units own that
+checkout and move it to the ref they deploy.
+
+## The nightly run
+
+`workstation-deploy.timer` starts `workstation-deploy@main` every night at
+03:00 node-local time. The deploy fetches `origin/main` at that moment, so it
+ships whatever was merged by then, and it never passes `--interrupt-busy`.
+When the busy probe reports idle, the
+[interrupting steps](../stacks/README.md#busy-checks) land with everything
+else. When it reports busy, the run applies everything else and exits `3`:
+deferred tonight. Every night's
+outcome is posted to Discord, so a streak of deferred nights or a 03:00
+failure shows up there. A missed night is not caught up, so a node restart
+during the day never starts a deploy.
+
+Read last night's run:
+
+```bash
+ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms \
+  'journalctl --no-pager -u workstation-deploy@main.service -I | tail -60'
+```
+
+Before work that must not be interrupted overnight, pause the timer:
+
+```bash
+ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms \
+  'systemctl stop workstation-deploy.timer'
+```
+
+The next run against this node starts it again.
+
+## The probe
+
+Every run against the workstation first asks its busy probe,
+`/usr/local/sbin/workstation-busy-probe`. It reports busy while a herdr agent
+is `working`, or while a run holds the workstation's lifecycle lock, which
+covers a background `./run.sh` whose agent turn already ended. A `blocked`
+pane, waiting on a permission prompt, does not count. The probe reports idle
+when herdr is not running or not installed, and busy on any other error. A run
+that includes its own control node defers without asking it.
+
+To see why a run deferred, list the agents on the workstation:
+
+```bash
+herdr agent list
+```
 
 ## Why
 

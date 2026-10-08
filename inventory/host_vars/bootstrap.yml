@@ -5,6 +5,7 @@
 
 lxc_hwaddr: "BC:24:11:87:8C:71"
 bootstrap_node_enabled: true
+bootstrap_deploy_discord_webhook_url: "{{ vault_bootstrap_deploy_discord_webhook_url }}"
 
 proxmox_lxc_overrides:
   vmid: 311
