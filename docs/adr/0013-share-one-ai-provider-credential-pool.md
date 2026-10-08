@@ -1,5 +1,9 @@
 # Share one AI provider credential pool behind a LAN-only proxy
 
+> Narrowed by [ADR-0017](0017-make-sub2api-the-ai-gateway-pool-of-record.md):
+> cliproxy is no longer the pool of record. The rest of this ADR still
+> describes how cliproxy itself is run.
+
 CPA on the `overmind` LXC serves every homelab agent from one shared pool of
 Claude and Codex provider credentials. The
 [accepted Home integration plan](https://github.com/faviann/homelab-iac/issues/476#issuecomment-5985413171)

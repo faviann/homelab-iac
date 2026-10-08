@@ -1,10 +1,10 @@
 # sub2api
 
-Trial of [sub2api](https://github.com/Wei-Shaw/sub2api) as a central pool for
-Claude, Codex, and Gemini subscription OAuth accounts. It overlaps with
-`cliproxy` on the same LXC, which stays the pool of record
-([ADR-0013](../../../docs/adr/0013-share-one-ai-provider-credential-pool.md))
-until this trial decides otherwise.
+[sub2api](https://github.com/Wei-Shaw/sub2api) is the homelab's permanent AI
+gateway and the pool of record for Claude, Codex, and Gemini subscription OAuth
+accounts
+([ADR-0017](../../../docs/adr/0017-make-sub2api-the-ai-gateway-pool-of-record.md)).
+`cliproxy` stays deployed on the same LXC but is no longer the pool of record.
 
 Portability tier: portable app stack.
 
@@ -33,7 +33,8 @@ irrelevant for a single owner.
 | Generated `config.yaml`, logs | `appdata/data/` |
 
 All three live under `appdata/` on the shared volume, which is mounted at
-`/shared` in every LXC. That exposure is accepted for this trial:
+`/shared` in every LXC. That exposure is accepted
+([ADR-0017](../../../docs/adr/0017-make-sub2api-the-ai-gateway-pool-of-record.md)):
 
 - `.env` is 0600 (`x-managed-files`), but it is owned by the docker uid, as is
   `appdata/data/config.yaml`, which holds the JWT secret and the database
@@ -44,8 +45,9 @@ All three live under `appdata/` on the shared volume, which is mounted at
   idmap.
 
 Moving the three directories under a root-owned 0700 `/data/overmind/sub2api`,
-as `cliproxy` does with `/data/overmind/cliproxy`, closes the first gap. There
-is no backup; losing the database costs re-adding the accounts.
+as `cliproxy` does with `/data/overmind/cliproxy`, would close the first gap;
+that hardening is deferred. There is no backup; losing the database costs
+re-adding the accounts.
 
 ## Vault entries
 
@@ -112,14 +114,3 @@ provider; sub2api itself starts either way.
 ./run.sh --limit overmind --stack sub2api > /tmp/sub2api-overmind.log 2>&1
 ./run.sh configure --limit portal --stack traefik3 > /tmp/sub2api-portal.log 2>&1
 ```
-
-## Retiring the trial
-
-Delete `stacks/overmind/sub2api/`, the `sub2api` entry in
-`lxc_docker_env_stack_vars`, the router and service in `externalservice.yaml`,
-and the four vault keys, and the `sub2api` entry in
-`oidc-apps.yaml` with its `auth.yml` binding. The Authentik provider stays
-until removed in Authentik. The `*.ai.faviann.com` tier is not part of the
-trial and stays. The next overmind run quarantines the stack: it runs
-`docker compose down` and moves the stack directory, data included, aside for
-recovery. Delete it from quarantine by hand once you no longer need it.
