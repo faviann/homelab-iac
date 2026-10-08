@@ -235,8 +235,6 @@ contracts. Fill the
 [non-secret inventory](../stacks/overmind/cliproxy/README.md#consumer-identities-and-inventory)
 with actual names, stable numeric Home IDs, actual credential-source owners
 and observed migration status. Keep unidentified consumers on the legacy key.
-Broodling follows its
-[fixed gateway contract](../stacks/overmind/cliproxy/README.md#broodling-gateway-contract).
 
 ### Individual native key operations
 
@@ -427,8 +425,8 @@ snapshot with the old Home pin, and run the pinned-pair gate and full
 The runtime gate materializes the actual repository stack and starts its
 rendered Compose wiring with only isolated names, paths and network/port
 overrides. It checks that a missing carrier fails rendering, the private `.env`,
-native DNS/mTLS identity, the legacy key with Broodling's `gpt-5.6-sol`
-tools/JSON request, an unchanged redeploy that recreates nothing, the cluster
+native DNS/mTLS identity, the legacy key with a `gpt-5.6-sol`
+Chat Completions tools/JSON request, an unchanged redeploy that recreates nothing, the cluster
 document mounted read-only, and private startup umasks. Stack sync recreates
 Home after a cluster change; its regression covers that rule. Protocol behavior belongs to the pinned images and is a
 human acceptance check. The recovery gate, described next, owns restart from cached trust and the native matched restore.

@@ -8,9 +8,8 @@ client addresses stay the same:
   `local-ip-restriction` route
 - `http://overmind.faviann.vms:8317`, directly on the LAN
 
-Broodling keeps its fixed gateway `/v1` URL, `gpt-5.6-sol`, Chat Completions,
-tools and JSON-object contract. The imported legacy client key keeps serving
-until consumers move to named keys.
+The imported legacy client key keeps serving until consumers move to named
+keys.
 
 Enrollment, recovery, assisted updates and the native Docker gates are in
 [the maintenance procedure](../../../docs/cliproxy-maintenance.md).
@@ -91,13 +90,6 @@ reference. Multiple legacy consumers may reference the same legacy ID. Retain
 revoked/deleted rows and the shared record so recovery can reapply later
 revocations. Update this table after each accepted administrative change; it
 does not reconcile Home state or provision secrets.
-
-### Broodling gateway contract
-
-Broodling requires `GATEWAY_BASE_URL=https://cliproxy.local.faviann.com/v1`,
-`gpt-5.6-sol`, Chat Completions, tools and JSON-object output. When its
-operator migrates it, only its separately owned gateway key changes. Its
-deployment is owned by [#353](https://github.com/faviann/homelab-iac/issues/353).
 
 ## Deploy
 
