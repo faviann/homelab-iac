@@ -13,7 +13,7 @@ The shared agreement between infrastructure and workstation user configuration t
 _Avoid_: Upload endpoint, artifact registry
 
 **Busy check**:
-A repo-managed stack's opt-in command, run inside one of its services before a lifecycle run would interrupt it, that answers whether the stack may be interrupted now. Only exit `0` means idle; every other answer, including no answer, defers the stack and its host's interrupting steps for that run. A stack with no deployed containers is not checked.
+A declared command that answers, before a lifecycle run would interrupt, whether it may interrupt now: either a repo-managed stack's opt-in command, run inside one of its services, or a host's declared probe, run on the host. Only exit `0` means idle; every other answer, including no answer, defers the host's interrupting steps for that run, and a stack's check also defers that stack. A stack with no deployed containers is not checked.
 _Avoid_: Health check, readiness probe, drain
 
 **Targeted LXC set**:

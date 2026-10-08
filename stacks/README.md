@@ -207,6 +207,8 @@ Before any step that could interrupt the stack, the run executes the check. Exit
 
 A busy stack is skipped for that run. Its files are not synced or rendered, it is not brought up or recreated, and quarantine does not take it down. Its host also skips host-side reconciliation, Docker and NVIDIA runtime configuration, the package upgrade, and the reboot. Everything else still runs. The run reports each deferred stack with its reason, and `./run.sh` exits `3` when it deferred anything and nothing failed. A scheduled caller can treat `3` as "retry later". `./run.sh --interrupt-busy` skips the checks and interrupts deliberately.
 
+A host can also declare a busy probe at the host level: a command in its `lxc_busy_check_host_command` host variable, run on the host itself with a 30-second limit. Every run against that host defers its interrupting steps while the probe reports busy, unless `--interrupt-busy` is passed. Exit `0` means idle, `1` means busy, and any other answer defers as a failed check. The probe holds back only the host's steps above, not its stacks: a stack that must be protected declares its own check. A run that includes its own control node (`./run.sh --include-controller`) defers that host's interrupting steps without asking its probe. The run reports `<host>: busy (<reason>)`, `<host>: check failed (<reason>)`, or `<host>: run includes its own control node`.
+
 Limits:
 
 - A Compose project with no containers is not checked or deferred, because nothing runs that could be interrupted.

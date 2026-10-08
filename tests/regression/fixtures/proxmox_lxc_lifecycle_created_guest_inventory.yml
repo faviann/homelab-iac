@@ -20,7 +20,7 @@ all:
         ansible_ssh_private_key_file: "~/.ansible/ssh/proxmox_lxc"
         # Keeps the operator's ssh_config and known_hosts out of the run.
         ansible_ssh_common_args: -F /dev/null -o UserKnownHostsFile=/dev/null
-        proxmox_skip_self: false
+        proxmox_skip_self: true
         proxmox_lxc_controller_pubkey_enabled: false
         proxmox_lxc_host_config_enabled: true
         proxmox_lxc_host_config_become: false

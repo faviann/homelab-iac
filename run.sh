@@ -20,7 +20,7 @@ Options:
   --check                 Run in check mode
   --stack <name>          Configure only the named stack
   --include-controller    Target this host, the control node (replaces --limit)
-  --interrupt-busy        Interrupt stacks whose busy check reports busy
+  --interrupt-busy        Interrupt stacks and hosts whose busy check reports busy
   -v, -vv, -vvv           Set Ansible verbosity
   --help                  Show this help
 EOF
