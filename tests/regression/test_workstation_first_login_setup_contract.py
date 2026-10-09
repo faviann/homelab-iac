@@ -309,6 +309,13 @@ def test_workstation_agent_harness_readiness_contract() -> None:
             )
             displaced.replace(managed)
 
+        # Version probes run concurrently; a failure must still name its tool.
+        _write_executable(home / ".local" / "bin" / "opencode", "#!/bin/sh\nexit 1\n")
+        broken = _run_setup(root, env)
+
+        assert broken.returncode != 0
+        assert "opencode missing or not working" in broken.stderr
+
 
 def test_workstation_configuration_freshness_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="workstation-freshness-") as temp_root:

@@ -289,6 +289,10 @@ authenticate_gh() {
 }
 
 validate_local_tool_readiness() {
+  local tool index failed_tool=""
+  local -a managed_tools=(codex claude pi opencode omp)
+  local -a version_tools=("${managed_tools[@]}" openclaw) probe_pids=()
+
   nix --version >/dev/null || fail "nix missing or not working"
   home-manager --version >/dev/null || fail "home-manager missing or not working"
   node --version >/dev/null || fail "node missing or not working"
@@ -299,24 +303,24 @@ validate_local_tool_readiness() {
   rg --version >/dev/null || fail "rg missing or not working"
   fd --version >/dev/null || fail "fd missing or not working"
   fzf --version >/dev/null || fail "fzf missing or not working"
-  test "$(command -v codex)" = "$WORKSTATION_HOME/.local/bin/codex" \
-    || fail "codex must resolve from $WORKSTATION_HOME/.local/bin"
-  codex --version >/dev/null || fail "codex missing or not working"
-  test "$(command -v claude)" = "$WORKSTATION_HOME/.local/bin/claude" \
-    || fail "claude must resolve from $WORKSTATION_HOME/.local/bin"
-  claude --version >/dev/null || fail "claude missing or not working"
-  test "$(command -v pi)" = "$WORKSTATION_HOME/.local/bin/pi" \
-    || fail "pi must resolve from $WORKSTATION_HOME/.local/bin"
-  pi --version >/dev/null || fail "pi missing or not working"
-  test "$(command -v opencode)" = "$WORKSTATION_HOME/.local/bin/opencode" \
-    || fail "opencode must resolve from $WORKSTATION_HOME/.local/bin"
-  opencode --version >/dev/null || fail "opencode missing or not working"
-  test "$(command -v omp)" = "$WORKSTATION_HOME/.local/bin/omp" \
-    || fail "omp must resolve from $WORKSTATION_HOME/.local/bin"
-  omp --version >/dev/null || fail "omp missing or not working"
+  for tool in "${managed_tools[@]}"; do
+    test "$(command -v "$tool")" = "$WORKSTATION_HOME/.local/bin/$tool" \
+      || fail "$tool must resolve from $WORKSTATION_HOME/.local/bin"
+  done
   required_managed_commands_ready || fail "$required_managed_command_error"
   hermes version >/dev/null || fail "hermes missing or not working"
-  openclaw --version >/dev/null || fail "openclaw missing or not working"
+
+  # These independent startup checks dominate readiness time; run them together.
+  for tool in "${version_tools[@]}"; do
+    "$tool" --version >/dev/null &
+    probe_pids+=("$!")
+  done
+  for index in "${!probe_pids[@]}"; do
+    if ! wait "${probe_pids[$index]}"; then
+      failed_tool="${failed_tool:-${version_tools[$index]}}"
+    fi
+  done
+  test -z "$failed_tool" || fail "$failed_tool missing or not working"
 }
 
 validate_environment() {
