@@ -37,16 +37,16 @@ def unit_settings(name: str) -> dict[str, list[str]]:
     return settings
 
 
-def test_both_deploy_units_report_every_outcome_and_only_one_interrupts() -> None:
+def test_both_deploy_units_target_workstation_and_only_one_interrupts() -> None:
     routine = unit_settings("workstation-deploy@.service")
     interrupting = unit_settings("workstation-deploy-interrupt@.service")
 
     for unit in (routine, interrupting):
-        [start] = unit["ExecStart"]
-        assert start.startswith("/usr/local/sbin/workstation-deploy %i")
         assert unit["ExecStopPost"]
-    assert "--interrupt-busy" not in routine["ExecStart"][0]
-    assert "--interrupt-busy" in interrupting["ExecStart"][0]
+    assert routine["ExecStart"] == ["/usr/local/sbin/homelab-deploy %i --limit workstation"]
+    assert interrupting["ExecStart"] == [
+        "/usr/local/sbin/homelab-deploy %i --limit workstation --interrupt-busy"
+    ]
 
 
 def test_the_nightly_timer_starts_the_routine_unit_without_catching_up() -> None:

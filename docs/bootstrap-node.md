@@ -6,7 +6,7 @@ unreachable.
 The `bootstrap` LXC (vmid 101, `tier_small`, no capability groups) is the
 second control node. Its only target is the workstation. The workstation
 creates it and keeps it patched through ordinary runs, like any other LXC, and
-it stays on. Its own busy probe reports busy while a workstation deploy is in
+it stays on. Its own busy probe reports busy while a deploy is in
 flight, so such a run defers the node's upgrade and reboot instead of killing
 the deploy. Ansible installs `git`, `unzip`, chezmoi, a pinned `uv`, and the
 native Bitwarden CLI, and makes the first clone of this repository at
@@ -53,7 +53,9 @@ status: `0` applied, `3` deferred, `75` another deploy was in flight, anything
 else failed. A failed deploy goes to a person with the journal excerpt; do not
 retry it.
 
-Two deploys never overlap. A deploy of another unit started while one runs
+Both units call `/usr/local/sbin/homelab-deploy` with their ref and lifecycle
+arguments. The script holds `/run/homelab-deploy.lock`, so two deploys never
+overlap. A deploy of another unit started while one runs
 exits `75` at once; starting the same unit again joins the run in flight.
 Nobody runs `./run.sh` directly in `/root/homelab-iac`: the units own that
 checkout and move it to the ref they deploy.
