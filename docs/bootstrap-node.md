@@ -218,7 +218,8 @@ never handles a secret: you type it at Bitwarden's own prompts. The stages:
 2. Install `git`, `unzip`, `curl`, `uv`, chezmoi, and `bw`, and clone this
    repository at `<full-sha>` into `/root/homelab-iac`.
 3. Unlock: press Enter, then answer Bitwarden's email, master password, and
-   2FA prompts. This is the dotfiles bootstrap-node path.
+   2FA prompts, once each. This is the dotfiles bootstrap-node path, with
+   `bw login --raw` doing the login and the unlock in one step.
 4. On `y`, `./run.sh --limit workstation`. It restarts the workstation unless
    the busy probe defers it with exit `3`.
 5. Check the workstation, then type `101` to destroy the temporary node. Any

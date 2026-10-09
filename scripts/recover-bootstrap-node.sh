@@ -22,7 +22,7 @@ hostname_of() {
 unlock() {
   read -rp "Press Enter, then log in at Bitwarden's prompts (email, master password, 2FA). "
   # shellcheck disable=SC2016  # expanded inside the container
-  pct exec "$1" -- env HOME=/root bash -c 'bw login && export BW_SESSION=$(bw unlock --raw) &&
+  pct exec "$1" -- env HOME=/root bash -c 'BW_SESSION=$(bw login --raw) && export BW_SESSION &&
     chezmoi init --apply https://github.com/faviann/dotfiles.git; rc=$?; bw lock; exit $rc'
 }
 
@@ -76,7 +76,8 @@ echo "./run.sh exited $rc (0 applied, 3 deferred, anything else failed)."
 echo "[5/7] Destroy the temporary node"
 read -rp "Check the workstation. Once it is healthy, type 101 to destroy this node: " answer
 [[ $answer == 101 ]] || { echo "101 left running; retry the deploy from it: pct enter 101"; exit 0; }
-pct stop 101 && pct destroy 101
+if [[ $(pct status 101) == "status: running" ]]; then pct stop 101; fi
+pct destroy 101
 
 echo "[6/7] Recreate the bootstrap node from the workstation (306)"
 name=$(hostname_of 306)
