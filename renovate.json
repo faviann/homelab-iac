@@ -23,6 +23,13 @@
       "matchStrings": ["AUTHENTIK_TAG=(?<currentValue>\\S+)"],
       "depNameTemplate": "ghcr.io/goauthentik/server",
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Version-pinned images in Ansible-rendered compose templates; latest and digest references are left alone",
+      "managerFilePatterns": ["/templates/.+/compose[^/]*\\.ya?ml\\.j2$/"],
+      "matchStrings": ["image: (?<depName>[^\\s:@{]+):(?<currentValue>v?\\d[^\\s@{]*)\\s"],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
@@ -41,6 +48,7 @@
     {
       "description": "Vendor version pins: no digest (variants reuse the tag), resync upstream compose",
       "matchManagers": ["custom.regex"],
+      "matchFileNames": ["**/.env.j2"],
       "pinDigests": false,
       "prBodyNotes": ["**Vendor stack:** read the compose diff and upstream release notes. A database image change needs upstream's migration steps."],
       "postUpgradeTasks": {
