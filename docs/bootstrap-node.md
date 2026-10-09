@@ -1,11 +1,11 @@
 # Bootstrap Node
 
-Read before any interrupting workstation change, or when the workstation is
-unreachable.
+Read before any interrupting workstation change, when the workstation is
+unreachable, or to read a night's nightly deploy.
 
 The `bootstrap` LXC (vmid 101, `tier_small`, no capability groups) is the
-second control node. Its only target is the workstation. The workstation
-creates it and keeps it patched through ordinary runs, like any other LXC, and
+second control node. It runs the nightly deploy of every other LXC and
+carries interrupting workstation runs. The workstation creates it and keeps it patched through ordinary runs, like any other LXC, and
 it stays on. Its own busy probe reports busy while a deploy is in
 flight, so such a run defers the node's upgrade and reboot instead of killing
 the deploy. Ansible installs `git`, `unzip`, chezmoi, a pinned `uv`, and the
@@ -60,34 +60,61 @@ exits `75` at once; starting the same unit again joins the run in flight.
 Nobody runs `./run.sh` directly in `/root/homelab-iac`: the units own that
 checkout and move it to the ref they deploy.
 
-## The nightly run
+## The nightly deploy
 
-`workstation-deploy.timer` starts `workstation-deploy@main` every night at
-03:00 node-local time. The deploy fetches `origin/main` at that moment, so it
-ships whatever was merged by then, and it never passes `--interrupt-busy`.
-When the busy probe reports idle, the
-[interrupting steps](../stacks/README.md#busy-checks) land with everything
-else. When it reports busy, the run applies everything else and exits `3`:
-deferred tonight. Every night's
-outcome is posted to Discord, so a streak of deferred nights or a 03:00
-failure shows up there. A missed night is not caught up, so a node restart
-during the day never starts a deploy.
+`nightly-deploy.timer` starts `nightly-deploy@main` every night at 03:00
+node-local time. The deploy fetches `origin/main` at that moment, so it ships
+whatever was merged by then. It runs the lifecycle with no limit, so it
+targets every managed LXC; the controller skip leaves out this node, which
+the workstation deploys. It never passes `--interrupt-busy`: busy stacks and
+hosts defer as in any run, and the workstation's
+[interrupting steps](../stacks/README.md#busy-checks) land only when its busy
+probe reports idle.
+
+The lifecycle lock is machine-local (#174), so a run on the workstation and
+this deploy could configure the same LXC at once. Before the deploy lock and
+the checkout, the unit's gate, `/usr/local/sbin/nightly-deploy-gate`, asks
+the workstation busy probe over SSH, the way the lifecycle reaches LXCs, with
+a 30-second bound:
+
+- idle: the deploy runs.
+- busy: an agent is mid-turn or a run holds the workstation's lock. The
+  night defers with `workstation: busy (<reason>); nightly deploy not started`.
+- anything else, an SSH failure included: the night defers with
+  `workstation: check failed (<reason>); nightly deploy not started`. A gate
+  that cannot read the workstation never lets the night run.
+
+A deferred night leaves the checkout untouched and exits `3`, with its line
+under the same `Deferred by busy checks:` header as a run's deferred stacks.
+A collision still happens if an agent starts a run on the workstation while
+the nightly deploy is in progress
+([ADR-0019](adr/0019-deploy-every-lxc-nightly-from-the-bootstrap-node.md)).
+
+Every night posts one Discord message, `nightly-deploy@main: <outcome>`, with
+the exit status and either the deferred hosts and stacks or the gate's line.
+A streak of deferred nights or a 03:00 failure shows up there. A run stops at
+the first failing host, as any lifecycle run does. A missed night is not
+caught up, so a node restart during the day never starts a deploy.
 
 Read last night's run:
 
 ```bash
 ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms \
-  'journalctl --no-pager -u workstation-deploy@main.service -I | tail -60'
+  'journalctl --no-pager -u nightly-deploy@main.service -I | tail -60'
 ```
 
 Before work that must not be interrupted overnight, pause the timer:
 
 ```bash
 ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms \
-  'systemctl stop workstation-deploy.timer'
+  'systemctl stop nightly-deploy.timer'
 ```
 
 The next run against this node starts it again.
+
+A person may start `nightly-deploy@<full-sha>` by hand, for verification or
+when recovery needs the other LXCs patched; agents never start it. Outside
+03:00 it reboots hosts and recreates stacks during working hours.
 
 ## The probe
 
@@ -112,10 +139,12 @@ herdr agent list
 The workstation is both a control node and where agents work, so a run that
 restarts it kills the run itself and every agent turn in flight. Interrupting
 workstation changes therefore never run in place. They run from this node,
-with `--interrupt-busy` as a person's consent, or overnight once the
-workstation's busy probe reports idle.
+with `--interrupt-busy` as a person's consent, or overnight in the nightly
+deploy once the workstation's busy probe reports idle.
 [ADR-0018](adr/0018-run-interrupting-workstation-changes-from-the-bootstrap-node.md)
-records the consent rule and the alternatives it rejected.
+records the consent rule and the alternatives it rejected;
+[ADR-0019](adr/0019-deploy-every-lxc-nightly-from-the-bootstrap-node.md)
+records the nightly deploy and its gate.
 
 ## Setting up the node
 
@@ -131,8 +160,11 @@ verify on the node, in its checkout:
 ```bash
 cd /root/homelab-iac
 ./vault.sh check
-./inspect.sh connectivity --limit workstation
+./inspect.sh connectivity
 ```
+
+The connectivity check must reach every LXC, because the nightly deploy
+targets all of them.
 
 `./vault.sh rotate` refreshes only the workstation's copy of the passphrase.
 After a rotation, commit and push the rekeyed vault, then refresh the node
