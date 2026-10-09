@@ -203,19 +203,26 @@ Agent use of a documented raw command is a separate decision:
   `./recover.sh`, or get a person's approval for that exact operation. A host
   the request did not name or clearly imply needs the same approval.
 
-#### Workstation run from the bootstrap node
+#### Runs from the bootstrap node
 
 - **Trigger:** a person's explicit request for an interrupting workstation run,
-  a rebuild, or recovery of an unreachable workstation; or the nightly timer,
-  which needs no request.
-- **Audience:** agents on explicit request, and people.
-- **Scope:** the bootstrap node and `--limit workstation` only, through its
-  two deploy units, as written in
-  [bootstrap-node.md](bootstrap-node.md#the-recipe). Reading the run's journal
-  on the node is part of the same permission.
+  a rebuild, or recovery of an unreachable workstation; or the nightly deploy,
+  started by its timer, which needs no request.
+- **Audience:** agents on explicit request, and people. Agents never start the
+  nightly deploy unit; a person may start it for verification or recovery.
+- **Scope:** the bootstrap node, through its deploy units: the two
+  workstation units with `--limit workstation` only, as written in
+  [the recipe](bootstrap-node.md#the-recipe), and `nightly-deploy@<ref>`,
+  which targets every LXC but the bootstrap node and never passes
+  `--interrupt-busy`, as written in
+  [the nightly deploy](bootstrap-node.md#the-nightly-deploy).
+  Reading a run's journal on the node is part of the same permission.
 - **Boundary:** mutating. The deploy lock on the node serializes deploys. They
-  run outside the workstation's machine-local lock, so collisions between the
-  two control nodes stay manual (#174).
+  run outside the workstation's machine-local lock (#174). The nightly
+  deploy's gate defers the night unless the workstation busy probe reads idle;
+  a run an agent starts on the workstation while the nightly deploy is in
+  progress can still collide with it, silently, and that window stays open
+  under #174.
 - **Sensitive output:** the journal only, never secrets.
 - **Escalation:** a failed run goes to a person with the journal excerpt. Do
   not retry it.

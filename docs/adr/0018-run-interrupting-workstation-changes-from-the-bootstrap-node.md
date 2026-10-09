@@ -7,6 +7,10 @@ runs that interrupt the workstation, and the workstation deploys the bootstrap
 node like any other LXC. Decided in #521, #523 and #525 under map #518, and
 specified in #529.
 
+ADR-0019 amended this decision's `--limit workstation`-only scope and its
+standing consent: the nightly deploy now runs every LXC but the bootstrap node,
+gated on the workstation busy probe.
+
 ## The consent rule
 
 A run interrupts a working agent only when a person asked for it.

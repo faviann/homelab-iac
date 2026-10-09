@@ -133,8 +133,12 @@ A managed LXC holding the fleet key and vault passphrase from which `./run.sh` r
 _Avoid_: Controller machine, dev machine
 
 **Bootstrap node**:
-The control node whose only targets are the workstation: consented interrupting runs, the nightly run, rebuilds, and recovery of an unreachable workstation. It is deployed by the workstation like any other LXC.
+The control node that runs the nightly deploy and carries consented interrupting workstation runs, rebuilds, and recovery of an unreachable workstation. It is deployed by the workstation like any other LXC.
 _Avoid_: Backup controller, jump host
+
+**Nightly deploy**:
+The bootstrap node's scheduled lifecycle run at `origin/main` against every managed LXC except itself, gated on the workstation busy probe.
+_Avoid_: Fleet deploy, fleet run
 
 **Controller SSH identity**:
 The machine-global SSH key pair shared by this controller's worktrees and trusted by the managed fleet. A missing key requires an onboarding-or-recovery decision because creating a new identity and restoring an existing trusted identity are different intents.

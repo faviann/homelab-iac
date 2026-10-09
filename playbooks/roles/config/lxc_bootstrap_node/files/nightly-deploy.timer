@@ -1,0 +1,13 @@
+# Starts the nightly deploy of origin/main. `systemctl stop` pauses it; the next
+# run against this node starts it again. A missed night is not caught up, so a
+# restart during the day never starts a deploy.
+[Unit]
+Description=Nightly deploy of every LXC at origin/main
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=false
+Unit=nightly-deploy@main.service
+
+[Install]
+WantedBy=timers.target

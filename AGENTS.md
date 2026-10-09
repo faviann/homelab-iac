@@ -2,7 +2,7 @@
 
 **Project Type**: Ansible infrastructure-as-code (IaC)  
 **Purpose**: Automate Proxmox LXC provisioning, configuration, and service deployments  
-**Architecture**: Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for interrupting workstation changes and recovery.
+**Architecture**: Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for the nightly deploy of every other LXC, interrupting workstation changes, and recovery.
 
 ## Agent skills
 

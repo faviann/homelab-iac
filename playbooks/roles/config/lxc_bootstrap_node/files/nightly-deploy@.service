@@ -1,0 +1,16 @@
+# The nightly deploy at a git ref: every LXC but this node, never interrupting
+# a busy stack or host. The gate defers the whole night unless the workstation
+# busy probe reads idle. Started by nightly-deploy.timer, or by a person for
+# verification or recovery; agents never start it. docs/bootstrap-node.md.
+[Unit]
+Description=Nightly deploy of every LXC at %i
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/homelab-iac
+EnvironmentFile=/etc/workstation-deploy.env
+ExecStart=/usr/local/sbin/nightly-deploy-gate /usr/local/sbin/homelab-deploy %i
+ExecStopPost=/usr/local/sbin/workstation-deploy-notify %N
