@@ -27,7 +27,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 - Use the repository's Bash commands. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
 - When editing tracked guidance, use supported commands in examples. Never put `-e`, `--extra-vars`, or `--tags` before `--` in a documented `./run.sh` invocation; use named operations instead of `--tags`. Record intentional raw-command exceptions in the command policy.
 - Commands that consume the vault expect its passphrase at `~/.ansible/vault-pass`. `ANSIBLE_VAULT_PASSWORD_FILE` overrides that path for Ansible runs, never for `./vault.sh`.
-- Lifecycle runs skip the host they run on. `./run.sh --include-controller` targets that host; the workstation is busy while an agent is mid-turn or a run holds its lifecycle lock, and always when a run includes its own control node, so interrupting changes defer (exit 3). An interrupting workstation run (`--interrupt-busy`) is only on explicit request and runs from the bootstrap node, never in place; `./run.sh` rejects the pair.
+- Lifecycle runs skip the host they run on. `./run.sh --include-controller` targets that host and never interrupts it: its interrupting steps wait for a run from the other control node, and the run still exits 0. The workstation is busy while an agent is mid-turn or a run holds its lifecycle lock, so a run from the bootstrap node defers its interrupting changes (exit 3). An interrupting workstation run (`--interrupt-busy`) is only on explicit request and runs from the bootstrap node, never in place; `./run.sh` rejects the pair.
 
 ## Standard Paths
 

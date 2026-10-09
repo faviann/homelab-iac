@@ -79,9 +79,10 @@ at least one stack, along with that host's host-side reconciliation, Docker
 and NVIDIA runtime configuration, package upgrade, and reboot. A host can also
 declare a busy probe, which defers those host steps without its stacks. The
 workstation does: it is busy while an agent is mid-turn or a run holds its
-lifecycle lock. A run that includes its own control node always defers that
-host's steps; they run only from the other control node. `3` means "deferred,
-not failed": run it again later. A failed run exits `1` even when it
+lifecycle lock. `3` means "deferred, not failed": run it again later. A run
+that includes its own control node always defers that host's steps, because
+they run only from the other control node. That is the rule, not a busy
+answer, so it does not make the run exit `3`; `./run.sh` notes it instead. A failed run exits `1` even when it
 also deferred something. See
 [stacks/README.md](../stacks/README.md#busy-checks).
 

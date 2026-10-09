@@ -156,12 +156,11 @@ all:
           busy_check_expected_deferrals:
             - "probe_failing_host: check failed (exited 3: broken)"
         # A run that includes its own control node defers it even with the
-        # override on and a probe that would report idle.
+        # override on and a probe that would report idle, and records no
+        # deferral line, so ./run.sh does not exit 3 for it.
         self_include_host:
           busy_check_vmid: 7311
           proxmox_skip_self: false
           lxc_busy_check_override: true
           busy_check_fixture_stacks: {}
           lxc_busy_check_host_command: "touch {{ lifecycle_test_state_dir }}/self_include_host.probed; exit 0"
-          busy_check_expected_deferrals:
-            - "self_include_host: run includes its own control node"

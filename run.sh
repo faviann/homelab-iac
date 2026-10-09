@@ -220,6 +220,10 @@ finish() {
         echo "Deferred by busy checks:" >&2
         cat -- "$deferral_file" >&2
     fi
+    if ((status == 0 || status == 3)) && $include_controller; then
+        echo "Left for a run from the other control node: this host's host-side" \
+            "reconciliation, package upgrade, runtime configuration, and reboot." >&2
+    fi
     rm -f -- "$deferral_file"
     exit "$status"
 }

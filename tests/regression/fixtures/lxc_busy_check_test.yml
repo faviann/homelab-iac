@@ -133,7 +133,8 @@
         busy_check_expected_deferrals | select('match', '^[^/:]+/')
         | map('regex_replace', '^[^/]+/([^:]+):.*$', '\1') | list
       }}
-    host_deferred: "{{ busy_check_expected_deferrals | length > 0 }}"
+    # A self-included host defers without a deferral line.
+    host_deferred: "{{ busy_check_expected_deferrals | length > 0 or not (proxmox_skip_self | bool) }}"
     events: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/' ~ busy_check_vmid ~ '.events').splitlines() }}"
     docker_calls: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/docker.log').splitlines() }}"
     shared_stacks: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/stacks"

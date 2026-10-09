@@ -88,6 +88,8 @@
   throttle: 1
   when: lxc_busy_check_deferral_file is defined
 
+# A self-included host's deferral is the rule, not a busy answer to retry, so
+# it does not make ./run.sh exit 3; the wrapper notes it instead.
 - name: Record the host's own deferral for the run wrapper
   ansible.builtin.lineinfile:
     path: "{{ lxc_busy_check_deferral_file }}"
@@ -98,4 +100,6 @@
   loop: "{{ lxc_busy_check_result.host_reasons }}"
   delegate_to: localhost
   throttle: 1
-  when: lxc_busy_check_deferral_file is defined
+  when:
+    - lxc_busy_check_deferral_file is defined
+    - proxmox_skip_self | default(true) | bool

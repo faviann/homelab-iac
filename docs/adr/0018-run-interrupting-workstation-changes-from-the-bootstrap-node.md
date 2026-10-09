@@ -30,6 +30,10 @@ A run interrupts a working agent only when a person asked for it.
   defer more. It is not the alternative #521 rejected, ignoring the busy
   override for the run's own host, which fails later and more quietly, mid-run,
   with no usage error: the deferral does not read the override at all.
+  This deferral is the rule rather than a busy answer, so it does not make
+  `./run.sh` exit `3`, which means "retry later". Retrying would defer again;
+  the nightly run lands the steps. An exit `3` on every in-place deploy would
+  carry no information and read as failure to callers.
 - **Consented runs go through the bootstrap node.** Consented interrupting
   runs, rebuilds, and recovery of an unreachable workstation run there, against
   `--limit workstation` only.
