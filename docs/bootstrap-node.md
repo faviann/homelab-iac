@@ -225,7 +225,7 @@ never handles a secret: you type it at Bitwarden's own prompts. The stages:
    busy probe reports busy, the run defers and exits `3`.
 5. Only when that run exits `0`, destroy the temporary node. On any other
    status, or when you decline stage 4, 101 stays up and the script exits
-   with that status and prints how to retry from it with `pct enter 101`.
+   with that status and prints the command to retry from the Proxmox host shell.
 6. The workstation (306, refused unless named `workstation`) runs
    `./run.sh --limit bootstrap` as `faviann` from a throwaway clone at
    `<full-sha>`, using its own vault passphrase and fleet key. On failure,

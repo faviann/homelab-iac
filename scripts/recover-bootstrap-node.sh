@@ -18,11 +18,14 @@ hostname_of() {
   done < <(pct config "$1")
 }
 
+# pct exec starts with PATH=/sbin:/bin:/usr/sbin:/usr/bin, which misses uv, chezmoi, and bw in /usr/local/bin.
+root_env=(env HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin)
+
 # Only Bitwarden prompts for secrets, inside the container.
 unlock() {
   read -rp "Press Enter, then log in at Bitwarden's prompts (email, master password, 2FA). "
   # shellcheck disable=SC2016  # expanded inside the container
-  pct exec "$1" -- env HOME=/root bash -c 'BW_SESSION=$(bw login --raw) && export BW_SESSION &&
+  pct exec "$1" -- "${root_env[@]}" bash -c 'BW_SESSION=$(bw login --raw) && export BW_SESSION &&
     chezmoi init --apply https://github.com/faviann/dotfiles.git; rc=$?; bw lock; exit $rc'
 }
 
@@ -50,7 +53,7 @@ pct start 101
 echo "[2/7] Install tools and clone the repository"
 # The loop waits for DHCP and DNS after the start; apt fails loudly if they never come.
 # shellcheck disable=SC2016  # expanded inside the container
-pct exec 101 -- env HOME=/root bash -euo pipefail -c '
+pct exec 101 -- "${root_env[@]}" bash -euo pipefail -c '
   for _ in {1..30}; do getent hosts deb.debian.org >/dev/null && break; sleep 2; done
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y git unzip curl
@@ -68,10 +71,10 @@ unlock 101
 echo "[4/7] Deploy the workstation from 101"
 echo "This may restart the workstation (pending reboot after upgrades, or a container config change); if its busy probe reports busy, the run defers and exits 3."
 read -rp "Run ./run.sh --limit workstation now? [y/N] " answer
-retry="101 stays up. Retry from it: pct enter 101, then cd /root/homelab-iac && ./run.sh --limit workstation"
+retry="101 stays up. Retry from this shell: pct exec 101 -- ${root_env[*]} bash -c 'cd /root/homelab-iac && ./run.sh --limit workstation'"
 [[ $answer == y ]] || { echo "$retry"; exit 0; }
 rc=0
-pct exec 101 -- env HOME=/root bash -c 'cd /root/homelab-iac && ./run.sh --limit workstation' || rc=$?
+pct exec 101 -- "${root_env[@]}" bash -c 'cd /root/homelab-iac && ./run.sh --limit workstation' || rc=$?
 echo "./run.sh exited $rc (0 applied, 3 deferred, anything else failed)."
 [[ $rc -eq 0 ]] || { echo "$retry"; exit "$rc"; }
 
@@ -97,4 +100,4 @@ echo "[7/7] Unlock secrets on the recreated node"
 unlock 101
 
 echo "Done. Verify the node from this shell:"
-echo "  pct exec 101 -- env HOME=/root bash -c 'cd /root/homelab-iac && ./vault.sh check && ./inspect.sh connectivity'"
+echo "  pct exec 101 -- ${root_env[*]} bash -c 'cd /root/homelab-iac && ./vault.sh check && ./inspect.sh connectivity'"
