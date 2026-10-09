@@ -184,3 +184,55 @@ Root's `authorized_keys` on the node holds only the fleet key. When the
 workstation is dead, open the Proxmox host's shell (its Shell in the Proxmox
 web UI) and run `pct enter 101`. The container's own Console tab stops at a
 login prompt, because root has no password.
+
+## Both control nodes down
+
+When neither the workstation nor this node can run `./run.sh`,
+`scripts/recover-bootstrap-node.sh` carries you from the Proxmox host shell to
+a working workstation deploy and a recreated node. It is human-only: the
+standing permission for runs from the bootstrap node does not cover it, and no
+agent runs it.
+
+Fetch it by a full commit SHA on GitHub, read it, run it, then delete it. Run
+it from a file, never `curl ... | bash`: the pipe would become the script's
+input, so its prompts and Bitwarden's would read the script instead of your
+keyboard. As root in the Proxmox host shell:
+
+```bash
+sha=<full-sha>
+curl -fsSLo /root/recover-bootstrap-node.sh \
+  "https://raw.githubusercontent.com/faviann/homelab-iac/$sha/scripts/recover-bootstrap-node.sh"
+less /root/recover-bootstrap-node.sh
+bash /root/recover-bootstrap-node.sh "$sha"
+rm /root/recover-bootstrap-node.sh
+```
+
+The host runs only `pct` and `pveam`; everything else runs inside the
+containers through `pct exec`, which keeps your terminal attached. The script
+never handles a secret: you type it at Bitwarden's own prompts. The stages:
+
+1. Create 101 (`bootstrap`, `tier_small`, DHCP on `vmbr1`, `local-zfs`, the
+   newest local `debian-13-standard` template). An existing 101 named
+   `bootstrap` is destroyed only after you type `101`; any other 101 stops the
+   script.
+2. Install `git`, `unzip`, `curl`, `uv`, chezmoi, and `bw`, and clone this
+   repository at `<full-sha>` into `/root/homelab-iac`.
+3. Unlock: press Enter, then answer Bitwarden's email, master password, and
+   2FA prompts, once each. This is the dotfiles bootstrap-node path, with
+   `bw login --raw` doing the login and the unlock in one step.
+4. On `y`, `./run.sh --limit workstation`. It may restart the workstation
+   (a pending reboot after upgrades, or a container config change); if the
+   busy probe reports busy, the run defers and exits `3`.
+5. Only when that run exits `0`, destroy the temporary node. On any other
+   status, or when you decline stage 4, 101 stays up and the script exits
+   with that status and prints how to retry from it with `pct enter 101`.
+6. The workstation (306, refused unless named `workstation`) runs
+   `./run.sh --limit bootstrap` as `faviann` from a throwaway clone at
+   `<full-sha>`, using its own vault passphrase and fleet key. On failure,
+   for example `75` while another run holds the workstation's lock, the
+   script prints the command to rerun.
+7. Unlock the recreated node, as in stage 3.
+
+It ends by printing the one remaining check, `./vault.sh check` and
+`./inspect.sh connectivity` on the node, as in
+[Setting up the node](#setting-up-the-node).
