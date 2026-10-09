@@ -1,0 +1,30 @@
+---
+- name: Inspect Bitwarden CLI binary
+  ansible.builtin.stat:
+    path: "{{ bitwarden_cli_bin_path }}"
+  register: _bitwarden_cli_bin
+
+- name: Note Bitwarden CLI would be installed in normal mode
+  ansible.builtin.debug:
+    msg: "Bitwarden CLI would be installed at {{ bitwarden_cli_bin_path }}"
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not _bitwarden_cli_bin.stat.exists
+
+- name: Read the installed Bitwarden CLI version
+  ansible.builtin.command:
+    argv: ["{{ bitwarden_cli_bin_path }}", --version]
+  register: _bitwarden_cli_installed
+  changed_when: false
+  failed_when: false
+  when:
+    - not ansible_check_mode
+    - _bitwarden_cli_bin.stat.exists
+
+# Only a missing or different version installs, so a second run changes nothing.
+- name: Install Bitwarden CLI
+  ansible.builtin.include_tasks: install.yml
+  when:
+    - not ansible_check_mode
+    - (_bitwarden_cli_installed.stdout | default('') | trim) != bitwarden_cli_version

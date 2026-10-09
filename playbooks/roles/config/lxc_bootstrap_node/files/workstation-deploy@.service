@@ -1,0 +1,14 @@
+# A routine workstation deploy at a git ref: it interrupts the workstation only
+# when the workstation's busy probe reports idle. docs/bootstrap-node.md.
+[Unit]
+Description=Deploy the workstation at %i
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/homelab-iac
+EnvironmentFile=/etc/workstation-deploy.env
+ExecStart=/usr/local/sbin/workstation-deploy %i
+ExecStopPost=/usr/local/sbin/workstation-deploy-notify %N

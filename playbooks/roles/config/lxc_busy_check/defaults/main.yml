@@ -3,6 +3,12 @@
 # not run, and every stack and host step proceeds as if no check was declared.
 lxc_busy_check_override: false
 
+# A host-level probe: a command run on the host itself before any
+# interruption. Exit 0 is idle and 1 is busy; anything else defers as a failed
+# check. Either answer other than idle defers the host's interrupting steps,
+# not its stacks. Empty declares no probe.
+lxc_busy_check_host_command: ""
+
 # Same source stack sync reads, so a declaration protects exactly what would be synced.
 lxc_busy_check_stacks_source: >-
   {{ lxc_docker_env_stacks_source | default(playbook_dir ~ '/../stacks/' ~ inventory_hostname) }}

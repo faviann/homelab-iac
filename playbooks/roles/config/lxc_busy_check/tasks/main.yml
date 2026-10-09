@@ -1,8 +1,10 @@
 ---
 # Busy-check gate. Publishes lxc_busy_check_result:
-#   {deferred_stacks: [{stack, state, reason}], host_deferred: bool}
+#   {deferred_stacks: [{stack, state, reason}], host_reasons: [str], host_deferred: bool}
 # Declarations are read on the controller, so a host without them runs no
-# remote command. Only idle and not_deployed let a stack proceed.
+# remote command. Only idle and not_deployed let a stack proceed. A run that
+# includes its own control node (the controller skip is off) defers that host
+# whatever its probe and the override say.
 
 - name: Start with no busy-check declarations
   ansible.builtin.set_fact:
@@ -33,21 +35,44 @@
   failed_when: false
   ignore_unreachable: true
 
+# Not gated on docker_enabled: the probe answers for the host, not its stacks.
+- name: Run the host's declared busy probe
+  ansible.builtin.command:
+    argv: [timeout, -k, "5", "30", sh, -c, "{{ lxc_busy_check_host_command }}"]
+  register: lxc_busy_check_host_probe
+  changed_when: false
+  failed_when: false
+  ignore_unreachable: true
+  when:
+    - lxc_busy_check_host_command | length > 0
+    - not (lxc_busy_check_override | bool)
+    - not (ansible_check_mode | bool)
+    - lxc_busy_check_applies | bool
+
 - name: Publish the busy-check result
   ansible.builtin.set_fact:
-    lxc_busy_check_result: "{{ lxc_busy_check_declarations | busy_check_result(lxc_busy_check_probes) }}"
+    lxc_busy_check_result: >-
+      {{
+        lxc_busy_check_declarations
+        | busy_check_result(
+            lxc_busy_check_probes,
+            lxc_busy_check_host_probe,
+            not (proxmox_skip_self | default(true) | bool))
+      }}
 
 - name: Report busy-check deferrals for this host
   ansible.builtin.debug:
     msg: >-
-      Deferring {{ lxc_busy_check_result.deferred_stacks | map(attribute='stack') | join(', ') }};
-      skipping host-side reconciliation, Docker and NVIDIA runtime configuration,
-      package upgrade, and reboot.
+      Deferring this host's interrupting steps
+      ({{ (lxc_busy_check_result.deferred_stacks | map(attribute='stack') | list
+      + lxc_busy_check_result.host_reasons) | join('; ') }}): skipping host-side
+      reconciliation, Docker and NVIDIA runtime configuration, package upgrade,
+      and reboot.
   when: lxc_busy_check_result.host_deferred | bool
 
 # ./run.sh exits 3 when this file is non-empty after a successful run.
 # throttle keeps concurrent hosts from overwriting each other's appends.
-- name: Record busy-check deferrals for the run wrapper
+- name: Record deferred stacks for the run wrapper
   ansible.builtin.lineinfile:
     path: "{{ lxc_busy_check_deferral_file }}"
     line: >-
@@ -62,3 +87,19 @@
   delegate_to: localhost
   throttle: 1
   when: lxc_busy_check_deferral_file is defined
+
+# A self-included host's deferral is the rule, not a busy answer to retry, so
+# it does not make ./run.sh exit 3; the wrapper notes it instead.
+- name: Record the host's own deferral for the run wrapper
+  ansible.builtin.lineinfile:
+    path: "{{ lxc_busy_check_deferral_file }}"
+    line: "{{ inventory_hostname }}: {{ item }}"
+    insertafter: EOF
+    create: true
+    mode: "0600"
+  loop: "{{ lxc_busy_check_result.host_reasons }}"
+  delegate_to: localhost
+  throttle: 1
+  when:
+    - lxc_busy_check_deferral_file is defined
+    - proxmox_skip_self | default(true) | bool

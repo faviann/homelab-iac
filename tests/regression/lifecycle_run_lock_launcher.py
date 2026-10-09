@@ -29,6 +29,9 @@ FIXTURE_COLLECTIONS = (
     REPO_ROOT
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
+# What the stub hostname prints. Not "workstation": the real machine's name
+# would let a leftover literal in the wrapper pass.
+CONTROL_NODE = "fixture-control-node"
 
 
 def busy_check_defaults(override: str = "false") -> tuple[str, ...]:
@@ -124,6 +127,9 @@ def wrapper_environment(temp_root: Path, *, mode: str = "success") -> dict[str, 
     home.mkdir()
     bin_dir.mkdir()
     make_fake_uv(bin_dir)
+    fake_hostname = bin_dir / "hostname"
+    fake_hostname.write_text(f"#!/bin/sh\necho {CONTROL_NODE}\n", encoding="utf-8")
+    fake_hostname.chmod(0o755)
     env = os.environ.copy()
     env.update(
         {
@@ -246,7 +252,7 @@ def accepted_safe_long_value_options() -> tuple[str, ...]:
 def assert_prerequisite_plays_survive_lifecycle_limits() -> None:
     for wrapper_arguments, expected_host in (
         (("--limit", "collie"), "collie"),
-        (("--include-controller",), "workstation"),
+        (("--include-controller",), CONTROL_NODE),
     ):
         with tempfile.TemporaryDirectory(prefix="lifecycle-prerequisite-limit-") as temp_dir:
             temp_root = Path(temp_dir)
@@ -257,13 +263,13 @@ def assert_prerequisite_plays_survive_lifecycle_limits() -> None:
             )
             inventory = temp_root / "inventory.yml"
             inventory.write_text(
-                """---
+                f"""---
 all:
   children:
     lxcs:
       hosts:
         collie:
-        workstation:
+        {CONTROL_NODE}:
 """,
                 encoding="utf-8",
             )
@@ -343,6 +349,13 @@ def assert_command_grammar_reports_help_and_usage_errors() -> None:
                     f"returncode={result.returncode}\n{result.stdout}\n{result.stderr}"
                 )
 
+        result = run_wrapper(env, "--include-controller", "--interrupt-busy")
+        if result.returncode != 2 or (Path(temp_dir) / "capture.json").exists():
+            raise AssertionError(
+                "an interrupting run against this host was not rejected before launch:\n"
+                f"returncode={result.returncode}\n{result.stdout}\n{result.stderr}"
+            )
+
     with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-empty-limit-") as temp_dir:
         temp_root = Path(temp_dir)
         env = wrapper_environment(temp_root)
@@ -410,9 +423,9 @@ def assert_wrapper_routes_and_propagates() -> None:
             "site.yml",
             (
                 "--limit",
-                "workstation",
+                CONTROL_NODE,
                 "-e",
-                "prerequisite_target_pattern=workstation",
+                f"prerequisite_target_pattern={CONTROL_NODE}",
                 "-e",
                 "proxmox_lifecycle_intent=full",
                 "-e",
@@ -426,9 +439,9 @@ def assert_wrapper_routes_and_propagates() -> None:
             "site.yml",
             (
                 "--limit",
-                "workstation",
+                CONTROL_NODE,
                 "-e",
-                "prerequisite_target_pattern=workstation",
+                f"prerequisite_target_pattern={CONTROL_NODE}",
                 "-e",
                 "proxmox_lifecycle_intent=full",
                 "-e",
@@ -463,9 +476,7 @@ def assert_wrapper_routes_and_propagates() -> None:
         (("--", "--extra-vars", "{harmless: true}"), "site.yml", ("--extra-vars", "{harmless: true}", *full_defaults)),
         (("--", "-e", "@vaulted-vars.yml"), "site.yml", ("-e", "@vaulted-vars.yml", *full_defaults)),
         (("--", "-e", "proxmox_lifecycle_intent=configure_only"), "site.yml", ("-e", "proxmox_lifecycle_intent=configure_only", *full_defaults)),
-        (("--", "-e", "lxc_busy_check_override=true"), "site.yml", ("-e", "lxc_busy_check_override=true", *full_defaults)),
         (("--", "-e", "prerequisite_target_pattern=workstation"), "site.yml", ("-e", "prerequisite_target_pattern=workstation", *full_defaults)),
-        (("--", '--extra-vars={"stack_filter":"beets","proxmox_skip_self":false}'), "site.yml", ('--extra-vars={"stack_filter":"beets","proxmox_skip_self":false}', *full_defaults)),
         (("--", "--private-key", "/tmp/fixture-key"), "site.yml", ("--private-key", "/tmp/fixture-key", *full_defaults)),
         (("--", "--private-key=/tmp/fixture-key"), "site.yml", ("--private-key=/tmp/fixture-key", *full_defaults)),
         (("--", "--connection", "local"), "site.yml", ("--connection", "local", *full_defaults)),
@@ -545,6 +556,8 @@ def assert_wrapper_routes_and_propagates() -> None:
             )
 
     protected_passthrough = (
+        ("--", "-e", "proxmox_skip_self=false"),
+        ("--", '--extra-vars={"lxc_busy_check_override":true}'),
         ("--", "--limit", "portal"),
         ("--", "--check"),
         ("--", "--tags", "provision"),

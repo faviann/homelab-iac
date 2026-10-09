@@ -86,6 +86,19 @@ class WorkstationInventoryTests(unittest.TestCase):
         self.assertIs(workstation_vars["docker_agents_enabled"], False)
         self.assertIs(workstation_vars["traefik_kop_enabled"], False)
 
+    def test_workstation_declares_the_busy_probe_the_baseline_installs(self) -> None:
+        # Any other path fails the probe on every run, so every run, the
+        # nightly one included, defers its interrupting steps forever.
+        workstation_vars = load_yaml(REPO_ROOT / "inventory/host_vars/workstation.yml")
+        defaults = load_yaml(
+            REPO_ROOT / "playbooks/roles/config/lxc_workstation_baseline/defaults/main.yml"
+        )
+
+        self.assertEqual(
+            workstation_vars["lxc_busy_check_host_command"],
+            defaults["workstation_busy_probe_path"],
+        )
+
     def test_workstation_user_keeps_the_uid_that_owns_its_durable_data(self) -> None:
         # Persistent-home backing files and stack appdata already on the host
         # are owned by the mapped UID/GID 1000. A different effective docker_uid

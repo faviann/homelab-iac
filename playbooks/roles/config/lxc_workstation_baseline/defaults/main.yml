@@ -119,9 +119,9 @@ workstation_nix_install_url: https://install.determinate.systems/nix
 workstation_home_manager_flake_ref: "{{ workstation_home }}/.local/share/chezmoi#workstation"
 workstation_chezmoi_install_enabled: true
 workstation_enable_linger: true
-workstation_bw_version: "2026.7.0"
-workstation_bw_bin_path: /usr/local/bin/bw
 workstation_setup_bin_path: /usr/local/bin/workstation-setup
+# host_vars/workstation.yml names this path as the workstation's busy probe.
+workstation_busy_probe_path: /usr/local/sbin/workstation-busy-probe
 workstation_setup_profile_hook_path: /etc/profile.d/workstation-setup.sh
 workstation_update_agent_tools_source_path: >-
   {{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_update-agent-tools

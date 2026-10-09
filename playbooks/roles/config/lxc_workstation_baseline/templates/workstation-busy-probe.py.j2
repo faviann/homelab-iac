@@ -1,0 +1,75 @@
+#!/usr/bin/python3
+"""Workstation busy probe: prints why, then exits 0 when idle and 1 when busy.
+
+Busy while a lifecycle run holds the workstation user's lock or a herdr agent is
+in any state but idle, done, or blocked, so `unknown` and any state a later
+herdr adds count as busy. Idle when herdr is not installed or its server is not
+running, since then no herdr agent can be working. Any other answer is busy: an
+unreadable answer never authorizes an interruption. The lifecycle's timeout
+bounds a hung herdr.
+"""
+
+import fcntl
+import json
+import os
+import subprocess
+import sys
+
+HOME = "{{ workstation_home }}"
+LOCK = os.environ.get("WORKSTATION_BUSY_PROBE_LOCK", f"{HOME}/.ansible/homelab-iac-lifecycle.lock")
+HERDR = os.environ.get("WORKSTATION_BUSY_PROBE_HERDR", f"{HOME}/.local/bin/herdr")
+SOCKET = os.environ.get("WORKSTATION_BUSY_PROBE_SOCKET", f"{HOME}/.config/herdr/herdr.sock")
+# herdr's own settled set, the `herdr agent wait` default.
+SETTLED = {"idle", "done", "blocked"}
+
+
+def answer(busy: bool, reason: str) -> None:
+    print(reason)
+    sys.exit(1 if busy else 0)
+
+
+def parse(text: str) -> object:
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None
+
+
+try:
+    with open(LOCK) as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            answer(True, "a lifecycle run holds the lock")
+except FileNotFoundError:
+    pass
+
+try:
+    herdr = subprocess.run(
+        [HERDR, "agent", "list"],
+        env={**os.environ, "HERDR_SOCKET_PATH": SOCKET},
+        capture_output=True,
+        text=True,
+    )
+except FileNotFoundError:
+    answer(False, "herdr is not installed")
+
+# herdr 0.9.3 reports a stopped server on stderr and exits 1.
+replies = [parse(herdr.stdout), parse(herdr.stderr)]
+if any(
+    isinstance(reply, dict)
+    and isinstance(reply.get("error"), dict)
+    and reply["error"].get("code") == "server_not_running"
+    for reply in replies
+):
+    answer(False, "the herdr server is not running")
+if herdr.returncode != 0:
+    answer(True, f"herdr agent list exited {herdr.returncode} {herdr.stderr.strip()[:200]}".strip())
+try:
+    statuses = [agent["agent_status"] for agent in replies[0]["result"]["agents"]]
+    active = [str(status) for status in statuses if status not in SETTLED]
+except (KeyError, TypeError):
+    answer(True, "herdr agent list returned unexpected JSON")
+if active:
+    answer(True, f"{len(active)} herdr agent(s) {', '.join(sorted(set(active)))}")
+answer(False, "no herdr agent is working")

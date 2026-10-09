@@ -13,8 +13,12 @@ The shared agreement between infrastructure and workstation user configuration t
 _Avoid_: Upload endpoint, artifact registry
 
 **Busy check**:
-A repo-managed stack's opt-in command, run inside one of its services before a lifecycle run would interrupt it, that answers whether the stack may be interrupted now. Only exit `0` means idle; every other answer, including no answer, defers the stack and its host's interrupting steps for that run. A stack with no deployed containers is not checked.
+A declared command that answers, before a lifecycle run would interrupt, whether it may interrupt now: either a repo-managed stack's opt-in command, run inside one of its services, or a host's declared probe, run on the host. Only exit `0` means idle; every other answer, including no answer, defers the host's interrupting steps for that run, and a stack's check also defers that stack. A stack with no deployed containers is not checked.
 _Avoid_: Health check, readiness probe, drain
+
+**Workstation busy probe**:
+The workstation's host-level busy check. Busy while a herdr pane is in any state but `idle`, `done`, or `blocked`, or the lifecycle lock is held; idle when herdr is not running; busy on any execution error. A run that includes its own control node defers whatever it says.
+_Avoid_: Idle gate, sentinel stack
 
 **Targeted LXC set**:
 The managed LXCs selected for a lifecycle run. Safety checks and the pre-action planning barrier apply to this set, not automatically to every LXC in inventory.
@@ -123,6 +127,14 @@ _Avoid_: Bootstrap dependency, controller prerequisite
 **Live-operation boundary**:
 The transition at which a workflow uses real credentials or controller identity to interact with managed infrastructure or other live mutable state. Crossing it is a distinct user intent from fresh-worktree preparation.
 _Avoid_: Deployment readiness, worktree readiness
+
+**Control node**:
+A managed LXC holding the fleet key and vault passphrase from which `./run.sh` runs against managed hosts. There are two; a lifecycle run skips the control node it runs on unless it includes it deliberately.
+_Avoid_: Controller machine, dev machine
+
+**Bootstrap node**:
+The control node whose only targets are the workstation: consented interrupting runs, the nightly run, rebuilds, and recovery of an unreachable workstation. It is deployed by the workstation like any other LXC.
+_Avoid_: Backup controller, jump host
 
 **Controller SSH identity**:
 The machine-global SSH key pair shared by this controller's worktrees and trusted by the managed fleet. A missing key requires an onboarding-or-recovery decision because creating a new identity and restoring an existing trusted identity are different intents.

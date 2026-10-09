@@ -1,0 +1,15 @@
+# A consented interrupting workstation deploy at a git ref: --interrupt-busy
+# skips the busy probe. Started only on a person's explicit request; the
+# nightly timer never uses it. docs/bootstrap-node.md.
+[Unit]
+Description=Deploy the workstation at %i, interrupting it even if busy
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/homelab-iac
+EnvironmentFile=/etc/workstation-deploy.env
+ExecStart=/usr/local/sbin/workstation-deploy %i --interrupt-busy
+ExecStopPost=/usr/local/sbin/workstation-deploy-notify %N

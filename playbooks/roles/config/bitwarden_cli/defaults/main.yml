@@ -1,0 +1,9 @@
+---
+bitwarden_cli_version: "2026.7.0"
+bitwarden_cli_bin_path: /usr/local/bin/bw
+bitwarden_cli_download_url: >-
+  https://github.com/bitwarden/clients/releases/download/cli-v{{
+  bitwarden_cli_version }}/bw-linux-{{ bitwarden_cli_version }}.zip
+bitwarden_cli_release_api_url: "https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v{{ bitwarden_cli_version }}"
+bitwarden_cli_owner: root
+bitwarden_cli_group: root

@@ -1,0 +1,60 @@
+---
+- name: Fetch Bitwarden CLI release metadata
+  ansible.builtin.uri:
+    url: "{{ bitwarden_cli_release_api_url }}"
+    return_content: true
+  register: _bitwarden_cli_release
+
+- name: Create temporary Bitwarden CLI download directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: bitwarden-cli
+  register: _bitwarden_cli_tmp
+
+- name: Select Bitwarden CLI asset digest
+  ansible.builtin.set_fact:
+    _bitwarden_cli_asset_name: "{{ bitwarden_cli_download_url.split('/')[-1] }}"
+    _bitwarden_cli_asset_digests: >-
+      {{
+        _bitwarden_cli_release.json.assets
+        | selectattr('name', 'equalto', bitwarden_cli_download_url.split('/')[-1])
+        | map(attribute='digest')
+        | list
+      }}
+
+- name: Assert Bitwarden CLI asset digest is available
+  ansible.builtin.assert:
+    that:
+      - _bitwarden_cli_asset_digests | length == 1
+      - _bitwarden_cli_asset_digests[0] is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      Bitwarden release metadata did not expose exactly one sha256 digest for
+      {{ _bitwarden_cli_asset_name }}.
+
+- name: Download Bitwarden CLI archive
+  ansible.builtin.get_url:
+    url: "{{ bitwarden_cli_download_url }}"
+    dest: "{{ _bitwarden_cli_tmp.path }}/bw.zip"
+    mode: "0600"
+    checksum: "{{ _bitwarden_cli_asset_digests[0] }}"
+
+- name: Extract Bitwarden CLI archive
+  ansible.builtin.unarchive:
+    src: "{{ _bitwarden_cli_tmp.path }}/bw.zip"
+    dest: "{{ _bitwarden_cli_tmp.path }}"
+    remote_src: true
+    mode: "0755"
+
+- name: Install Bitwarden CLI system binary
+  ansible.builtin.copy:
+    src: "{{ _bitwarden_cli_tmp.path }}/bw"
+    dest: "{{ bitwarden_cli_bin_path }}"
+    owner: "{{ bitwarden_cli_owner }}"
+    group: "{{ bitwarden_cli_group }}"
+    mode: "0755"
+    remote_src: true
+
+- name: Remove temporary Bitwarden CLI download directory
+  ansible.builtin.file:
+    path: "{{ _bitwarden_cli_tmp.path }}"
+    state: absent

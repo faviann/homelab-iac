@@ -164,7 +164,7 @@ def test_result_defers_only_busy_and_failed_checks_with_their_reasons() -> None:
         ]
     }
 
-    assert FILTERS["busy_check_result"](declarations, probes) == {
+    assert FILTERS["busy_check_result"](declarations, probes, {"skipped": True}, False) == {
         "deferred_stacks": [
             {"stack": "rejected", "state": "check_failed",
              "reason": "compose: compose.yaml could not be read as YAML"},
@@ -175,5 +175,34 @@ def test_result_defers_only_busy_and_failed_checks_with_their_reasons() -> None:
              "reason": "probe failed: sh: docker: not found"},
             {"stack": "garbled", "state": "check_failed", "reason": "probe failed"},
         ],
+        "host_reasons": [],
         "host_deferred": True,
+    }
+
+
+@pytest.mark.parametrize(
+    ("host_probe", "self_include", "reasons"),
+    [
+        ({"skipped": True}, False, []),
+        ({"rc": 0, "stdout": "no herdr agent is working\n"}, False, []),
+        ({"rc": 1, "stdout": "2 herdr agent(s) working\n"}, False, ["busy (2 herdr agent(s) working)"]),
+        ({"rc": 124, "stdout": "", "stderr": ""}, False, ["check failed (timed out)"]),
+        (
+            {"rc": 127, "stdout": "", "stderr": "sh: 1: probe: not found\n"},
+            False,
+            ["check failed (exited 127: sh: 1: probe: not found)"],
+        ),
+        ({"unreachable": True, "msg": "ssh: connect timed out"}, False, ["check failed (guest unreachable)"]),
+        ({"failed": True, "msg": "module crashed"}, False, ["check failed (no answer: module crashed)"]),
+        ({"skipped": True}, True, ["run includes its own control node"]),
+    ],
+    ids=["not-run", "idle", "busy", "timeout", "other-status", "unreachable", "no-answer", "self-include"],
+)
+def test_result_maps_the_host_probe_and_self_include(
+    host_probe: dict, self_include: bool, reasons: list[str]
+) -> None:
+    assert FILTERS["busy_check_result"]([], {"results": []}, host_probe, self_include) == {
+        "deferred_stacks": [],
+        "host_reasons": reasons,
+        "host_deferred": bool(reasons),
     }

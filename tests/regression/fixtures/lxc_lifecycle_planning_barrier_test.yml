@@ -288,18 +288,25 @@
       when: lifecycle_test_case == 'self_skip'
       run_once: true
 
-    - name: Assert the controller can be intentionally included
+    # Self-include defers the host's steps whether or not busy checks apply to
+    # the guest, so even this stopped controller is not started. The same rule
+    # keeps a self-included run from removing the host it runs on.
+    - name: Assert the controller can be intentionally included without its host-side steps
       ansible.builtin.assert:
         that:
           - hostvars.localhost.proxmox_lifecycle_target_hosts == ['workstation']
           - hostvars.workstation.lxc_lifecycle_result.outcome.status == 'configured'
-          - >-
+          - workstation_events is search('guest_configuration')
+          - workstation_events is not search('container_transition')
+      vars:
+        workstation_events: >-
+          {{
             lifecycle_barrier_event_records.results
             | selectattr('item', 'equalto', 'workstation')
             | map(attribute='content')
             | first
             | b64decode
-            is search('container_transition')
+          }}
       when: lifecycle_test_case == 'self_include'
       run_once: true
 

@@ -1,0 +1,4 @@
+---
+# Installed once at this version from Astral's installer; ./run.sh needs uv.
+# A running node keeps its uv until a rebuild.
+lxc_bootstrap_node_uv_version: "0.12.17"

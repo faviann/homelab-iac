@@ -2,7 +2,7 @@
 
 **Project Type**: Ansible infrastructure-as-code (IaC)  
 **Purpose**: Automate Proxmox LXC provisioning, configuration, and service deployments  
-**Architecture**: Portable workstation-based (runs from any Linux workstation with network access to Proxmox)
+**Architecture**: Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for interrupting workstation changes and recovery.
 
 ## Agent skills
 
@@ -27,7 +27,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 - Use the repository's Bash commands. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
 - When editing tracked guidance, use supported commands in examples. Never put `-e`, `--extra-vars`, or `--tags` before `--` in a documented `./run.sh` invocation; use named operations instead of `--tags`. Record intentional raw-command exceptions in the command policy.
 - Commands that consume the vault expect its passphrase at `~/.ansible/vault-pass`. `ANSIBLE_VAULT_PASSWORD_FILE` overrides that path for Ansible runs, never for `./vault.sh`.
-- Lifecycle runs skip any host whose `inventory_hostname` matches the controller's hostname. To manage the control node intentionally, run `./run.sh --include-controller`, which targets only `workstation`.
+- Lifecycle runs skip the host they run on. `./run.sh --include-controller` targets that host and never interrupts it: its interrupting steps wait for a run from the other control node, and the run still exits 0. The workstation is busy while an agent is mid-turn or a run holds its lifecycle lock, so a run from the bootstrap node defers its interrupting changes (exit 3). An interrupting workstation run (`--interrupt-busy`) is only on explicit request and runs from the bootstrap node, never in place; `./run.sh` rejects the pair.
 
 ## Standard Paths
 
@@ -61,7 +61,7 @@ Secrets are only in encrypted `inventory/vault.yml` — never commit plaintext c
 
 `site.yml` runs three phases in sequence: **validate** → **provision** (LXC create/update via Proxmox API) → **configure** (in-container: packages, Docker, stacks). Two-tier host config: `proxmox_lxc_provision` handles API-allowed settings; `proxmox_lxc_host_config` handles restricted features (`keyctl=1`, `nesting=1`) via `pct` on the Proxmox host.
 
-Run lifecycle operations through `./run.sh`. Live commands share one machine-local lock across every worktree on the workstation: mutations take it exclusively, read-only operations take it shared. It does not coordinate runs from different control nodes.
+Run lifecycle operations through `./run.sh`. Live commands share one machine-local lock across every worktree on the control node: mutations take it exclusively, read-only operations take it shared. It does not coordinate runs from different control nodes.
 
 Roles live in `playbooks/roles/{infrastructure,provisioning,config}/`.
 
@@ -82,9 +82,9 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./run.sh --limit <targets>` | Target hosts with Ansible limit grammar |
 | `./run.sh --limit <host> --stack <stack>` | Deploy one stack on a host (skips all others) |
 | `./run.sh --check` | Dry run. Shared lock |
-| `./run.sh --include-controller` | Intentionally manage the control node (`workstation`) |
-| `./run.sh --interrupt-busy` | Skip busy checks and interrupt busy stacks and their hosts deliberately |
-| `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode |
+| `./run.sh --include-controller` | Intentionally manage this host, the control node the run is on |
+| `./run.sh --interrupt-busy` | Skip busy checks and interrupt busy stacks and their hosts deliberately. Against the workstation only on explicit request; never with `--include-controller` |
+| `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode, or set `proxmox_skip_self` or `lxc_busy_check_override` |
 | `./inspect.sh credentials` | Walk the Proxmox API credential and permission ladder |
 | `./inspect.sh connectivity [--limit <targets>]` | Check LXC SSH reachability; non-zero when a target is unreachable |
 | `./inspect.sh containers` | List every LXC on the Proxmox node |
@@ -137,5 +137,6 @@ Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged
 → [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read when adding hosts or debugging variable precedence.
 → [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
 → [docs/workstation-persistent-state.md](docs/workstation-persistent-state.md) — read before any workstation deploy that enables persistent home mounts.
+→ [docs/bootstrap-node.md](docs/bootstrap-node.md) — read before any interrupting workstation change or when the workstation is unreachable.
 → [docs/lobu-control-plane.md](docs/lobu-control-plane.md) — read before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.
 → [docs/lobu-browser-device.md](docs/lobu-browser-device.md) — read before touching `lobu-crawler-01` or any `cap_browser_device` host.

@@ -127,9 +127,14 @@
   connection: local
   gather_facts: false
   vars:
+    # Stack lines read <host>/<stack>: ...; a host's own line has no /<stack>.
     deferred_stacks: >-
-      {{ busy_check_expected_deferrals | map('regex_replace', '^[^/]+/([^:]+):.*$', '\1') | list }}
-    host_deferred: "{{ busy_check_expected_deferrals | length > 0 }}"
+      {{
+        busy_check_expected_deferrals | select('match', '^[^/:]+/')
+        | map('regex_replace', '^[^/]+/([^:]+):.*$', '\1') | list
+      }}
+    # A self-included host defers without a deferral line.
+    host_deferred: "{{ busy_check_expected_deferrals | length > 0 or not (proxmox_skip_self | bool) }}"
     events: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/' ~ busy_check_vmid ~ '.events').splitlines() }}"
     docker_calls: "{{ lookup('ansible.builtin.file', lifecycle_test_state_dir ~ '/docker.log').splitlines() }}"
     shared_stacks: "{{ lifecycle_test_state_dir }}/{{ inventory_hostname }}/shared/stacks"
@@ -141,7 +146,7 @@
         fail_msg: "{{ inventory_hostname }} removal events: {{ events }}"
       when: busy_check_removed
 
-    - name: Assert host steps ran only on hosts without a busy stack
+    - name: Assert host steps ran only on hosts that were not deferred
       ansible.builtin.assert:
         that: >-
           (host_steps | intersect(events) | length == 0)
@@ -165,7 +170,17 @@
           - (shared_stacks ~ '/' ~ item ~ ' | compose -p ' ~ item ~ ' up -d') in docker_calls
         fail_msg: "{{ inventory_hostname }}/{{ item }} was not deployed"
       loop: "{{ busy_check_fixture_stacks.keys() | list | difference(deferred_stacks) + ['plain'] }}"
-      when: not busy_check_removed
+      when:
+        - not busy_check_removed
+        - docker_enabled | bool
+
+    - name: Assert host probes ran only where declared, without the override, on running hosts
+      ansible.builtin.assert:
+        that: >-
+          (lifecycle_test_state_dir ~ '/' ~ inventory_hostname ~ '.probed') is exists
+          == (lxc_busy_check_host_command is defined
+              and not (lxc_busy_check_override | default(false)) and not busy_check_removed)
+        fail_msg: "{{ inventory_hostname }} host probe ran when it should not have, or did not run"
 
     # Stack sync's restart probe also lists containers, filtered to non-one-off ones.
     - name: Assert only declared stacks were probed, and only without the override

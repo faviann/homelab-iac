@@ -3,7 +3,8 @@
 # check) and one ordinary stack, plain. busy_check_fixture_files adds repo
 # files after those are written. busy_check_expected_deferrals lists the
 # deferral-file lines the host must produce. busy_check_removed plans the
-# host's removal instead of its configuration.
+# host's removal instead of its configuration. A host-level probe touches
+# <host>.probed in the state directory before it answers.
 all:
   vars:
     proxmox_api_host: localhost
@@ -16,7 +17,9 @@ all:
     lxcs:
       vars:
         ansible_connection: local
-        proxmox_skip_self: false
+        # No host here is named after the stub hostname, so none is skipped.
+        # Turning the skip off includes a control node, which defers it.
+        proxmox_skip_self: true
         proxmox_lxc_controller_pubkey_enabled: false
         proxmox_lxc_host_config_enabled: true
         proxmox_lxc_host_config_become: false
@@ -41,6 +44,10 @@ all:
             - {vmid: 7305, name: override-host, status: running}
             - {vmid: 7306, name: invalid-host, status: running}
             - {vmid: 7307, name: remove-host, status: running}
+            - {vmid: 7308, name: probe-busy-host, status: running}
+            - {vmid: 7309, name: probe-idle-host, status: running}
+            - {vmid: 7310, name: probe-failing-host, status: running}
+            - {vmid: 7311, name: self-include-host, status: running}
         proxmox_lxc:
           state: "{{ 'absent' if busy_check_removed else 'present' }}"
           vmid: "{{ busy_check_vmid }}"
@@ -101,6 +108,7 @@ all:
           lxc_busy_check_override: true
           busy_check_fixture_stacks:
             override-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}
+          lxc_busy_check_host_command: "touch {{ lifecycle_test_state_dir }}/override_host.probed; exit 1"
         # A declaration validation rejects must fail closed at runtime too.
         # Its command would report idle.
         invalid_host:
@@ -125,3 +133,34 @@ all:
             allow_destructive_transitions: true
           busy_check_fixture_stacks:
             remove-app: {service: worker, command: [sh, -c, exit 1], timeout: 5}
+          lxc_busy_check_host_command: "touch {{ lifecycle_test_state_dir }}/remove_host.probed; exit 1"
+        # Without Docker, so a probe gated on docker_enabled would not run.
+        probe_busy_host:
+          busy_check_vmid: 7308
+          docker_enabled: false
+          busy_check_fixture_stacks: {}
+          lxc_busy_check_host_command: >-
+            touch {{ lifecycle_test_state_dir }}/probe_busy_host.probed; echo 2 agents working; exit 1
+          busy_check_expected_deferrals:
+            - "probe_busy_host: busy (2 agents working)"
+        probe_idle_host:
+          busy_check_vmid: 7309
+          busy_check_fixture_stacks: {}
+          lxc_busy_check_host_command: "touch {{ lifecycle_test_state_dir }}/probe_idle_host.probed; exit 0"
+        # A failed host probe defers the host's steps but not its stacks: plain still deploys.
+        probe_failing_host:
+          busy_check_vmid: 7310
+          busy_check_fixture_stacks: {}
+          lxc_busy_check_host_command: >-
+            touch {{ lifecycle_test_state_dir }}/probe_failing_host.probed; echo broken >&2; exit 3
+          busy_check_expected_deferrals:
+            - "probe_failing_host: check failed (exited 3: broken)"
+        # A run that includes its own control node defers it even with the
+        # override on and a probe that would report idle, and records no
+        # deferral line, so ./run.sh does not exit 3 for it.
+        self_include_host:
+          busy_check_vmid: 7311
+          proxmox_skip_self: false
+          lxc_busy_check_override: true
+          busy_check_fixture_stacks: {}
+          lxc_busy_check_host_command: "touch {{ lifecycle_test_state_dir }}/self_include_host.probed; exit 0"

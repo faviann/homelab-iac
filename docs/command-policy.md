@@ -32,8 +32,11 @@ of what the guards enforce.
 `./run.sh` options: `--limit <targets>` (Ansible limit grammar), `--check`,
 `--stack <name>`, `--include-controller`, `--interrupt-busy`, and `-v`, `-vv`,
 or `-vvv`. `--interrupt-busy` skips every declared busy check, so busy stacks
-and their hosts are interrupted as if no check were declared. Every command
-answers `--help` with its operations.
+and their hosts are interrupted as if no check were declared.
+`--include-controller` targets the host the run is on, and `./run.sh` rejects
+it together with `--interrupt-busy`, so a run with `--interrupt-busy` never
+targets its own control node. Every command answers `--help` with its
+operations.
 
 A human-only operation prompts at a terminal, changes the vault, or enrolls
 trust on managed infrastructure, so a person runs it. "On explicit request"
@@ -57,7 +60,11 @@ operation. None of them has a consequential default.
 
 Only `./run.sh` accepts low-level arguments, and only after `--`. Those
 arguments cannot change target selection, lifecycle intent, check mode, the
-lock, or the wrapper marker. `./run.sh` rejects them as invalid usage.
+lock, or the wrapper marker. `./run.sh` rejects them as invalid usage. Nor can
+they set `proxmox_skip_self` or `lxc_busy_check_override`, which the wrapper
+owns: `./run.sh` rejects any argument that names either, and passes its own
+values after the passthrough, so they win over any passthrough value,
+`-e @file` included.
 
 Two statuses are guaranteed across all six commands. A command that rejects
 its own grammar, such as an unknown operation or option or a missing
@@ -69,8 +76,13 @@ another live operation holds the lock. The live operations are every
 
 `./run.sh` also exits `3` when the playbook succeeded but a busy check deferred
 at least one stack, along with that host's host-side reconciliation, Docker
-and NVIDIA runtime configuration, package upgrade, and reboot. `3` means
-"deferred, not failed": run it again later. A failed run exits `1` even when it
+and NVIDIA runtime configuration, package upgrade, and reboot. A host can also
+declare a busy probe, which defers those host steps without its stacks. The
+workstation does: it is busy while an agent is mid-turn or a run holds its
+lifecycle lock. `3` means "deferred, not failed": run it again later. A run
+that includes its own control node always defers that host's steps, because
+they run only from the other control node. That is the rule, not a busy
+answer, so it does not make the run exit `3`; `./run.sh` notes it instead. A failed run exits `1` even when it
 also deferred something. See
 [stacks/README.md](../stacks/README.md#busy-checks).
 
@@ -143,7 +155,7 @@ A raw command is any command other than the six that does work they exist to
 govern. That means running Ansible, `uv`, `pytest`, or a repository script
 directly, or acting on the Proxmox host, its API, or a managed LXC outside the
 six commands, through `ssh`, `pct`, `docker`, `curl`, or any other client.
-Local workstation tooling that touches none of these, such as `git`, `rg`, or
+Local tooling on the control node that touches none of these, such as `git`, `rg`, or
 `tail` on a local log, is not a raw command.
 
 When a supported command owns an operation, tracked guidance uses that
@@ -190,6 +202,23 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** when diagnosis needs a mutation, use `./run.sh` or
   `./recover.sh`, or get a person's approval for that exact operation. A host
   the request did not name or clearly imply needs the same approval.
+
+#### Workstation run from the bootstrap node
+
+- **Trigger:** a person's explicit request for an interrupting workstation run,
+  a rebuild, or recovery of an unreachable workstation; or the nightly timer,
+  which needs no request.
+- **Audience:** agents on explicit request, and people.
+- **Scope:** the bootstrap node and `--limit workstation` only, through its
+  two deploy units, as written in
+  [bootstrap-node.md](bootstrap-node.md#the-recipe). Reading the run's journal
+  on the node is part of the same permission.
+- **Boundary:** mutating. The deploy lock on the node serializes deploys. They
+  run outside the workstation's machine-local lock, so collisions between the
+  two control nodes stay manual (#174).
+- **Sensitive output:** the journal only, never secrets.
+- **Escalation:** a failed run goes to a person with the journal excerpt. Do
+  not retry it.
 
 #### Proxmox-host manual key injection
 

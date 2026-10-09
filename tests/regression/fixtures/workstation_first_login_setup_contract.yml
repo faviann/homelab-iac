@@ -12,7 +12,7 @@
     workstation_gid: "{{ lookup('pipe', 'id -g') | int }}"
     workstation_home: "{{ temp_root }}/home/{{ workstation_username }}"
     workstation_marker: "{{ workstation_home }}/.local/state/workstation-setup/complete"
-    workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
+    bitwarden_cli_bin_path: "{{ temp_root }}/bin/bw"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
     workstation_update_requires_bitwarden: true
@@ -99,7 +99,7 @@
           ansible.builtin.assert:
             that:
               - (setup_command_raw.content | b64decode) is search('WORKSTATION_HOME="' ~ workstation_home ~ '"')
-              - (setup_command_raw.content | b64decode) is search('BW_BIN="' ~ workstation_bw_bin_path ~ '"')
+              - (setup_command_raw.content | b64decode) is search('BW_BIN="' ~ bitwarden_cli_bin_path ~ '"')
               - (setup_command_raw.content | b64decode) is search('MARKER_PATH="' ~ workstation_marker ~ '"')
               - (setup_command_raw.content | b64decode) is search('GITHUB_CLI_TOKEN_ITEM="dotfiles/github-cli-token"')
               - (setup_command_raw.content | b64decode) is search('SETUP_VERSION="2"')

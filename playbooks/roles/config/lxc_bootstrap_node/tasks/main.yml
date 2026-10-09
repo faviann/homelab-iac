@@ -1,0 +1,90 @@
+---
+# The bootstrap node is the control node whose only target is the workstation
+# (docs/bootstrap-node.md). The role delivers the deploy webhook; the vault
+# passphrase and the fleet key come only from a person's Bitwarden unlock.
+
+- name: Install bootstrap node packages
+  ansible.builtin.apt:
+    name:
+      - git
+      # The Bitwarden CLI install below unpacks a zip.
+      - unzip
+    state: present
+    update_cache: true
+
+- name: Install chezmoi
+  ansible.builtin.shell:
+    cmd: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
+    creates: /usr/local/bin/chezmoi
+
+- name: Install uv
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      curl -LsSf https://astral.sh/uv/{{ lxc_bootstrap_node_uv_version }}/install.sh
+      | UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+    executable: /bin/bash
+    creates: /usr/local/bin/uv
+
+- name: Install Bitwarden CLI
+  ansible.builtin.import_role:
+    name: config/bitwarden_cli
+
+# The first clone only. After it, the deploy recipe alone moves the checkout.
+# Skipped in check mode, where git may not be installed yet.
+- name: Clone the repository
+  ansible.builtin.git:
+    repo: https://github.com/faviann/homelab-iac.git
+    dest: /root/homelab-iac
+    version: main
+    update: false
+  when: not ansible_check_mode
+
+# Every deploy posts its outcome here; a placeholder fails the run. no_log
+# hides any message, so the name says what to set.
+- name: Assert the deploy webhook (vault_dockhand_discord_webhook_url) is configured
+  ansible.builtin.assert:
+    that:
+      - bootstrap_deploy_discord_webhook_url is defined
+      - bootstrap_deploy_discord_webhook_url | credential_is_configured
+  no_log: true
+
+- name: Install the deploy webhook environment
+  ansible.builtin.template:
+    src: workstation-deploy.env.j2
+    dest: /etc/workstation-deploy.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install the deploy script and its notifier
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/usr/local/sbin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - workstation-deploy
+    - workstation-deploy-notify
+
+- name: Install the deploy units and the nightly timer
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - workstation-deploy@.service
+    - workstation-deploy-interrupt@.service
+    - workstation-deploy.timer
+
+# Starting it again also undoes a person's `systemctl stop`.
+- name: Enable and start the nightly timer
+  ansible.builtin.systemd_service:
+    name: workstation-deploy.timer
+    enabled: true
+    state: started
+    daemon_reload: true

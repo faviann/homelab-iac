@@ -11,7 +11,7 @@ all:
     lxcs:
       vars:
         ansible_connection: local
-        proxmox_skip_self: false
+        proxmox_skip_self: true
         proxmox_lxc_controller_pubkey_enabled: false
         proxmox_lxc_host_config_enabled: true
         proxmox_lxc_host_config_become: false

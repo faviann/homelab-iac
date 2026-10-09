@@ -19,8 +19,8 @@ Options:
   --limit <targets>       Select hosts with Ansible limit grammar
   --check                 Run in check mode
   --stack <name>          Configure only the named stack
-  --include-controller    Include the control node
-  --interrupt-busy        Interrupt stacks whose busy check reports busy
+  --include-controller    Target this host, the control node (replaces --limit)
+  --interrupt-busy        Interrupt stacks and hosts whose busy check reports busy
   -v, -vv, -vvv           Set Ansible verbosity
   --help                  Show this help
 EOF
@@ -133,6 +133,19 @@ while (($#)); do
     esac
 done
 
+if $include_controller && $interrupt_busy; then
+    usage_error \
+        "--interrupt-busy cannot target this host: interrupting runs must come from the other control node"
+fi
+
+# The wrapper owns these. Its own values come after passthrough and would win,
+# so a passthrough value is a mistake to report, not an override to apply.
+case "${passthrough[*]}" in
+    *proxmox_skip_self*|*lxc_busy_check_override*)
+        usage_error "passthrough cannot set proxmox_skip_self or lxc_busy_check_override"
+        ;;
+esac
+
 for ((index = 0; index < ${#passthrough[@]}; index++)); do
     argument="${passthrough[index]}"
     case "$argument" in
@@ -172,23 +185,18 @@ for ((index = 0; index < ${#passthrough[@]}; index++)); do
     esac
 done
 
-arguments=("${verbosity[@]}" "${passthrough[@]}")
+# The same name the lifecycle's controller skip compares inventory_hostname to.
 if $include_controller; then
-    arguments+=("--limit" "workstation")
-elif [[ -n "$limit_pattern" ]]; then
+    limit_pattern="$(hostname)"
+fi
+arguments=("${verbosity[@]}" "${passthrough[@]}")
+if [[ -n "$limit_pattern" ]]; then
     arguments+=("--limit" "$limit_pattern")
 fi
 if $check_mode; then
     arguments+=("--check")
 fi
-if $include_controller; then
-    prerequisite_target_pattern="workstation"
-elif [[ -n "$limit_pattern" ]]; then
-    prerequisite_target_pattern="$limit_pattern"
-else
-    prerequisite_target_pattern="localhost"
-fi
-arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
+arguments+=("-e" "prerequisite_target_pattern=${limit_pattern:-localhost}")
 arguments+=("-e" "proxmox_lifecycle_intent=$lifecycle_intent")
 if $include_controller; then
     arguments+=("-e" "proxmox_skip_self=false")
@@ -211,6 +219,10 @@ finish() {
         status=3
         echo "Deferred by busy checks:" >&2
         cat -- "$deferral_file" >&2
+    fi
+    if ((status == 0 || status == 3)) && $include_controller; then
+        echo "Left for a run from the other control node: this host's host-side" \
+            "reconciliation, package upgrade, runtime configuration, and reboot." >&2
     fi
     rm -f -- "$deferral_file"
     exit "$status"

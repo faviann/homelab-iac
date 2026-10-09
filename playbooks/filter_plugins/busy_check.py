@@ -114,8 +114,30 @@ def _probe_outcome(probe: dict[str, Any]) -> tuple[str, str]:
     return lines[0], " ".join(lines[1:])
 
 
-def busy_check_result(declarations: list[dict[str, Any]], probes: dict[str, Any]) -> dict[str, Any]:
-    """The gate's result from parser entries and the probe task's registered loop result."""
+def _host_reason(probe: dict[str, Any]) -> str | None:
+    """Why the host defers, from its probe task's registered result: exit 0 is idle, 1 busy."""
+    rc = probe.get("rc")
+    if probe.get("skipped") or rc == 0:
+        return None
+    if probe.get("unreachable"):
+        return "check failed (guest unreachable)"
+    output = " ".join(f"{probe.get('stdout', '')}\n{probe.get('stderr', '')}".split())
+    if rc == 1:
+        return f"busy ({output})" if output else "busy"
+    if rc in (124, 137):
+        return "check failed (timed out)"
+    cause = "no answer" if rc is None else f"exited {rc}"
+    detail = output or " ".join(str(probe.get("msg", "")).split())
+    return f"check failed ({cause}{': ' + detail if detail else ''})"
+
+
+def busy_check_result(
+    declarations: list[dict[str, Any]],
+    probes: dict[str, Any],
+    host_probe: dict[str, Any],
+    self_include: bool,
+) -> dict[str, Any]:
+    """The gate's result from parser entries, the stack probes, the host probe, and self-include."""
     outcomes = [
         (entry["stack"], "check_failed", entry["error"]) for entry in declarations if "error" in entry
     ]
@@ -125,7 +147,14 @@ def busy_check_result(declarations: list[dict[str, Any]], probes: dict[str, Any]
         for stack, state, reason in outcomes
         if state in ("busy", "check_failed")
     ]
-    return {"deferred_stacks": deferred, "host_deferred": bool(deferred)}
+    # A run that includes its own control node defers it whatever its probe says.
+    reason = "run includes its own control node" if self_include else _host_reason(host_probe)
+    host_reasons = [reason] if reason else []
+    return {
+        "deferred_stacks": deferred,
+        "host_reasons": host_reasons,
+        "host_deferred": bool(deferred or host_reasons),
+    }
 
 
 class FilterModule:

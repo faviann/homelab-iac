@@ -70,22 +70,10 @@
     creates: /usr/local/bin/chezmoi
   when: workstation_chezmoi_install_enabled | bool
 
-- name: Inspect Bitwarden CLI binary
-  ansible.builtin.stat:
-    path: "{{ workstation_bw_bin_path }}"
-  register: _workstation_bw_bin
-
-- name: Note Bitwarden CLI would be installed in normal mode
-  ansible.builtin.debug:
-    msg: "Bitwarden CLI would be installed at {{ workstation_bw_bin_path }}"
-  changed_when: true
-  when:
-    - ansible_check_mode
-    - not _workstation_bw_bin.stat.exists
-
+# Imported, not included: the first-login template reads bitwarden_cli_bin_path.
 - name: Install Bitwarden CLI
-  ansible.builtin.include_tasks: bitwarden_cli.yml
-  when: not ansible_check_mode
+  ansible.builtin.import_role:
+    name: config/bitwarden_cli
 
 - name: Install Determinate Nix
   ansible.builtin.include_tasks: nix.yml
@@ -96,6 +84,14 @@
     cmd: "loginctl enable-linger {{ workstation_username }}"
     creates: "/var/lib/systemd/linger/{{ workstation_username }}"
   when: workstation_enable_linger | bool
+
+- name: Install the workstation busy probe
+  ansible.builtin.template:
+    src: workstation-busy-probe.py.j2
+    dest: "{{ workstation_busy_probe_path }}"
+    owner: "{{ workstation_system_bin_owner }}"
+    group: "{{ workstation_system_bin_group }}"
+    mode: "0755"
 
 - name: Install workstation first-login artifacts
   ansible.builtin.include_tasks: first_login.yml

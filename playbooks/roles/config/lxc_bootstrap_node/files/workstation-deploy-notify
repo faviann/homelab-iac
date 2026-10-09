@@ -1,0 +1,36 @@
+#!/bin/bash
+# ExecStopPost for the workstation-deploy units: posts every outcome to
+# Discord. systemd sets EXIT_STATUS, SERVICE_RESULT, and INVOCATION_ID. Never
+# fails the unit, and never prints the webhook or the message.
+# Usage: workstation-deploy-notify <unit>
+set -uo pipefail
+
+unit=$1
+case "${EXIT_STATUS:-}" in
+    0) meaning=applied ;;
+    3) meaning=deferred ;;
+    75) meaning="another deploy in flight" ;;
+    *) meaning=failed ;;
+esac
+message="$unit: $meaning (exit ${EXIT_STATUS:-unknown}, ${SERVICE_RESULT:-unknown})"
+# A deploy that lost the lock never touched the checkout.
+if [[ "${EXIT_STATUS:-}" != 75 ]]; then
+    message+=$'\n'"checkout at $(git rev-parse HEAD 2>/dev/null || echo unknown)"
+fi
+if [[ "${EXIT_STATUS:-}" == 3 ]]; then
+    # The run's last lines may still be in journald's buffers.
+    journalctl --sync 2>/dev/null
+    message+=$'\n'$(journalctl --no-pager --output=cat "_SYSTEMD_INVOCATION_ID=${INVOCATION_ID:-}" |
+        sed -n '/^Deferred by busy checks:$/,$p' | tail -n +2)
+fi
+
+# Discord rejects content over 2000 characters, which would lose the report.
+payload=$(python3 - "$message" <<'PY'
+import json
+import sys
+
+print(json.dumps({"content": sys.argv[1][:2000]}))
+PY
+)
+curl -fsS -H "Content-Type: application/json" --data "$payload" \
+    "${BOOTSTRAP_DEPLOY_DISCORD_WEBHOOK_URL:-}" >/dev/null 2>&1 || true

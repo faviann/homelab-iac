@@ -1,0 +1,20 @@
+#!/bin/bash
+# Deploys the workstation at a git ref from this node's checkout. Only the
+# workstation-deploy units run it (docs/bootstrap-node.md).
+# Usage: workstation-deploy <ref> [--interrupt-busy]
+set -euo pipefail
+
+ref=$1
+shift
+
+# Two deploys must not switch the checkout under each other. Like ./run.sh,
+# the loser fails at once with 75 instead of waiting.
+exec 9>>/run/workstation-deploy.lock
+flock --exclusive --nonblock 9 || {
+    echo "workstation-deploy: another deploy is in flight" >&2
+    exit 75
+}
+
+git fetch origin "$ref"
+git checkout --detach FETCH_HEAD
+exec ./run.sh --limit workstation "$@"

@@ -20,8 +20,11 @@
     workstation_persistent_home_fstab_path: "{{ temp_root }}/fstab"
     workstation_nix_install_enabled: false
     workstation_enable_linger: false
-    workstation_bw_bin_path: "{{ temp_root }}/bin/bw"
+    bitwarden_cli_bin_path: "{{ temp_root }}/bin/bw"
+    bitwarden_cli_owner: "{{ lookup('pipe', 'id -un') }}"
+    bitwarden_cli_group: "{{ lookup('pipe', 'id -gn') }}"
     workstation_setup_bin_path: "{{ temp_root }}/bin/workstation-setup"
+    workstation_busy_probe_path: "{{ temp_root }}/bin/workstation-busy-probe"
     workstation_setup_profile_hook_path: "{{ temp_root }}/etc/profile.d/workstation-setup.sh"
     workstation_system_bin_owner: "{{ lookup('pipe', 'id -un') }}"
     workstation_system_bin_group: "{{ lookup('pipe', 'id -gn') }}"
@@ -113,18 +116,18 @@
 
     - name: Stat installed Bitwarden CLI binary
       ansible.builtin.stat:
-        path: "{{ workstation_bw_bin_path }}"
-      register: workstation_bw_bin_stat
+        path: "{{ bitwarden_cli_bin_path }}"
+      register: bitwarden_cli_bin_stat
 
     - name: Assert the Bitwarden CLI archive was extracted and installed
       ansible.builtin.assert:
         that:
-          - workstation_bw_bin_stat.stat.exists
-          - workstation_bw_bin_stat.stat.isreg
-          - workstation_bw_bin_stat.stat.executable
+          - bitwarden_cli_bin_stat.stat.exists
+          - bitwarden_cli_bin_stat.stat.isreg
+          - bitwarden_cli_bin_stat.stat.executable
         fail_msg: >-
           Workstation baseline did not install an executable Bitwarden CLI at
-          {{ workstation_bw_bin_path }}.
+          {{ bitwarden_cli_bin_path }}.
 
     - name: Read workstation authorized_keys
       ansible.builtin.slurp:
@@ -182,3 +185,16 @@
           - first_login_artifacts.results[0].stat.mode == "0755"
           - first_login_artifacts.results[1].stat.isreg | default(false)
           - first_login_artifacts.results[1].stat.mode == "0644"
+
+    # A missing or non-executable probe fails every run's busy check, so every
+    # run against the workstation defers its interrupting steps.
+    - name: Stat the installed workstation busy probe
+      ansible.builtin.stat:
+        path: "{{ workstation_busy_probe_path }}"
+      register: workstation_busy_probe
+
+    - name: Assert the baseline role installed an executable busy probe
+      ansible.builtin.assert:
+        that:
+          - workstation_busy_probe.stat.isreg | default(false)
+          - workstation_busy_probe.stat.mode == "0755"
