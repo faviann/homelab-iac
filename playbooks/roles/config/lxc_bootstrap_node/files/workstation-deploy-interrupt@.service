@@ -11,5 +11,5 @@ Type=oneshot
 User=root
 WorkingDirectory=/root/homelab-iac
 EnvironmentFile=/etc/workstation-deploy.env
-ExecStart=/usr/local/sbin/workstation-deploy %i --interrupt-busy
+ExecStart=/usr/local/sbin/homelab-deploy %i --limit workstation --interrupt-busy
 ExecStopPost=/usr/local/sbin/workstation-deploy-notify %N

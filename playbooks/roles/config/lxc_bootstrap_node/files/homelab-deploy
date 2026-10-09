@@ -1,0 +1,20 @@
+#!/bin/bash
+# Deploys a git ref from this node's checkout with the supplied lifecycle
+# arguments. Only the deploy units run it (docs/bootstrap-node.md).
+# Usage: homelab-deploy <ref> [lifecycle arguments...]
+set -euo pipefail
+
+ref=$1
+shift
+
+# Two deploys must not switch the checkout under each other. Like ./run.sh,
+# the loser fails at once with 75 instead of waiting.
+exec 9>>/run/homelab-deploy.lock
+flock --exclusive --nonblock 9 || {
+    echo "homelab-deploy: another deploy is in flight" >&2
+    exit 75
+}
+
+git fetch origin "$ref"
+git checkout --detach FETCH_HEAD
+exec ./run.sh "$@"
