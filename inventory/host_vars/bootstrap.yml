@@ -1,6 +1,6 @@
 ---
-# Host-specific configuration for the bootstrap node, the control node whose
-# only target is the workstation (docs/bootstrap-node.md)
+# Host-specific configuration for the bootstrap node, the control node that
+# runs the nightly deploy and interrupting workstation runs (docs/bootstrap-node.md)
 # Inherits from: tier_small
 
 lxc_hwaddr: "BC:24:11:87:8C:71"

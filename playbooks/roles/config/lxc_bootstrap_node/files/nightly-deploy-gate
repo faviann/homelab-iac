@@ -1,0 +1,25 @@
+#!/bin/bash
+# The nightly deploy's gate: runs the given command only when the workstation
+# busy probe reads idle, since a run on the workstation could otherwise
+# configure the same LXCs. Busy, or any answer it cannot read, defers the night
+# with exit 3 before the deploy lock and the checkout. docs/bootstrap-node.md.
+# Usage: nightly-deploy-gate <command...>
+set -uo pipefail
+
+errors=$(mktemp)
+trap 'rm -f -- "$errors"' EXIT
+# Reaches the workstation as the lifecycle does (group_vars/all/proxmox.yml).
+reason=$(timeout -k 5 30 ssh -l root -i ~/.ansible/ssh/proxmox_lxc \
+    -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+    -o BatchMode=yes -o ConnectTimeout=10 \
+    workstation.faviann.vms /usr/local/sbin/workstation-busy-probe 2>"$errors")
+status=$?
+case $status in
+    0) rm -f -- "$errors"; exec "$@" ;;
+    1) verdict="busy ($reason)" ;;
+    *) verdict="check failed (exit $status$(grep -v '^[[:space:]]*$' "$errors" | tail -n 1 | sed 's/^/: /'))" ;;
+esac
+# The notifier posts the lines after this header, as for ./run.sh deferrals.
+echo "Deferred by busy checks:" >&2
+echo "workstation: $verdict; nightly deploy not started" >&2
+exit 3
