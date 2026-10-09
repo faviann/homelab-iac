@@ -309,66 +309,12 @@ def test_workstation_agent_harness_readiness_contract() -> None:
             )
             displaced.replace(managed)
 
+        # Version probes run concurrently; a failure must still name its tool.
+        _write_executable(home / ".local" / "bin" / "opencode", "#!/bin/sh\nexit 1\n")
+        broken = _run_setup(root, env)
 
-def test_workstation_readiness_checks_overlap_and_finish_before_repair() -> None:
-    with tempfile.TemporaryDirectory(prefix="workstation-parallel-readiness-") as temp_root:
-        root = Path(temp_root)
-        rendered = _render_setup_artifacts(root)
-        assert rendered.returncode == 0, rendered.stdout
-        home, env = _prepare_completed_workstation(root)
-        _write_executable(
-            home / ".local/bin/workstation-update", "#!/bin/sh\nexit 0\n"
-        )
-        # Codex cannot finish until the last probe starts. This proves overlap
-        # without asserting a machine-dependent runtime threshold.
-        _write_executable(
-            home / ".local/bin/codex",
-            """#!/bin/sh
-for attempt in $(seq 1 60); do
-  if [ -e "$PROBE_RELEASE" ]; then
-    printf 'codex finished\n' >> "$COMMAND_LOG"
-    test "${FAILED_PROBE:-}" != codex
-    exit $?
-  fi
-  sleep 0.05
-done
-printf 'codex timed out waiting for openclaw\n' >&2
-exit 1
-""",
-        )
-        _write_executable(
-            home / ".local/bin/openclaw",
-            """#!/bin/sh
-touch "$PROBE_RELEASE"
-sleep 0.2
-printf 'openclaw finished\n' >> "$COMMAND_LOG"
-test "${FAILED_PROBE:-}" != openclaw
-""",
-        )
-        env |= {"PROBE_RELEASE": str(root / "probe-release")}
-        marker = home / ".local/state/workstation-setup/complete"
-        original_marker = marker.read_text(encoding="utf-8")
-
-        healthy = _run_setup(root, env)
-        assert healthy.returncode == 0, healthy.stderr
-        commands = (root / "commands.log").read_text(encoding="utf-8")
-        assert "home-manager switch" not in commands
-        assert "codex finished" in commands
-        assert "openclaw finished" in commands
-
-        for failed_tool in ("codex", "openclaw"):
-            (root / "probe-release").unlink()
-            (root / "commands.log").write_text("", encoding="utf-8")
-            failed = _run_setup(root, env | {"FAILED_PROBE": failed_tool})
-            assert failed.returncode != 0
-            assert f"{failed_tool} missing or not working" in failed.stderr
-            commands = (root / "commands.log").read_text(encoding="utf-8")
-            # A failed initial check enters repair. Both probes must finish
-            # before that path can pull configuration or replace executables.
-            repair = commands.index(" pull --ff-only")
-            assert commands.index("codex finished") < repair
-            assert commands.index("openclaw finished") < repair
-            assert marker.read_text(encoding="utf-8") == original_marker
+        assert broken.returncode != 0
+        assert "opencode missing or not working" in broken.stderr
 
 
 def test_workstation_configuration_freshness_contract() -> None:

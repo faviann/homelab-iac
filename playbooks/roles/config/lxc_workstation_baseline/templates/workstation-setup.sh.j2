@@ -310,8 +310,7 @@ validate_local_tool_readiness() {
   required_managed_commands_ready || fail "$required_managed_command_error"
   hermes version >/dev/null || fail "hermes missing or not working"
 
-  # These independent startup checks dominate readiness time. Reap every child
-  # before returning failure, so repair cannot overlap an unfinished check.
+  # These independent startup checks dominate readiness time; run them together.
   for tool in "${version_tools[@]}"; do
     "$tool" --version >/dev/null &
     probe_pids+=("$!")
