@@ -69,6 +69,9 @@ def main() -> int:
         env["ANSIBLE_CACHE_PLUGIN_CONNECTION"] = str(cache_dir)
         env.pop("SSH_AUTH_SOCK", None)
 
+        # ansible.cfg multiplexes into this repo-relative directory; the live boundary creates it.
+        (REPO_ROOT / ".ansible" / "cp").mkdir(mode=0o700, parents=True, exist_ok=True)
+
         with local_sshd(root) as port:
             proc = subprocess.run(
                 [
