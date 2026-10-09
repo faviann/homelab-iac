@@ -2,6 +2,16 @@
 
 Ansible automation for managing Proxmox LXC containers via API from a remote controller.
 
+## Both Control Nodes Down
+
+If neither the `workstation` nor the `bootstrap` node can run `./run.sh`, start
+from the Proxmox host shell with `scripts/recover-bootstrap-node.sh`. It builds
+the bootstrap node, deploys the workstation from it, then rebuilds the
+bootstrap node from the workstation. It assumes the Proxmox host already trusts
+the fleet key, the vault holds the Proxmox API token, and Bitwarden holds the
+vault passphrase and fleet key; it does not set up a new Proxmox host. See
+[docs/bootstrap-node.md](docs/bootstrap-node.md#both-control-nodes-down).
+
 ## Quick Start (New Workstation)
 
 **Generic controller setup:**
@@ -45,7 +55,7 @@ commands that remain permitted.
 
 ## Overview
 
-This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for the nightly deploy of every other LXC, interrupting workstation changes, and recovery. Do not run Ansible from your dev machine.
+This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for the nightly deploy of every other LXC, interrupting workstation changes, and recovery ([when both are down](docs/bootstrap-node.md#both-control-nodes-down)). Do not run Ansible from your dev machine.
 
 ### Key Features
 
