@@ -182,7 +182,8 @@ rekeyed one.
 
 Root's `authorized_keys` on the node holds only the fleet key. When the
 workstation is dead, open the Proxmox host's shell (its Shell in the Proxmox
-web UI) and run `pct enter 101`. The container's own Console tab stops at a
+web UI) and run `pct exec 101 -- bash -l`; a login shell puts the node's
+tools in `/usr/local/bin` on PATH. The container's own Console tab stops at a
 login prompt, because root has no password.
 
 ## Both control nodes down
