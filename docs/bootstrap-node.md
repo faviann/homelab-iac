@@ -222,10 +222,10 @@ never handles a secret: you type it at Bitwarden's own prompts. The stages:
    `bw login --raw` doing the login and the unlock in one step.
 4. On `y`, `./run.sh --limit workstation`. It restarts the workstation unless
    the busy probe defers it with exit `3`.
-5. Check the workstation, then type `101` to destroy the temporary node. Any
-   other answer leaves it running, so you can retry the deploy from it with
-   `pct enter 101`.
-6. On `y`, the workstation (306, refused unless named `workstation`) runs
+5. Only when that run exits `0`, destroy the temporary node. On any other
+   status, or when you decline stage 4, 101 stays up and the script exits
+   with that status and prints how to retry from it with `pct enter 101`.
+6. The workstation (306, refused unless named `workstation`) runs
    `./run.sh --limit bootstrap` as `faviann` from a throwaway clone at
    `<full-sha>`, using its own vault passphrase and fleet key. On failure,
    for example `75` while another run holds the workstation's lock, the

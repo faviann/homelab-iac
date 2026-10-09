@@ -68,15 +68,15 @@ unlock 101
 echo "[4/7] Deploy the workstation from 101"
 echo "This restarts the workstation unless its busy probe reports busy; then the run defers and exits 3."
 read -rp "Run ./run.sh --limit workstation now? [y/N] " answer
-[[ $answer == y ]] || { echo "Stopped. 101 stays up: pct enter 101"; exit 0; }
+retry="101 stays up. Retry from it: pct enter 101, then cd /root/homelab-iac && ./run.sh --limit workstation"
+[[ $answer == y ]] || { echo "$retry"; exit 0; }
 rc=0
 pct exec 101 -- env HOME=/root bash -c 'cd /root/homelab-iac && ./run.sh --limit workstation' || rc=$?
 echo "./run.sh exited $rc (0 applied, 3 deferred, anything else failed)."
+[[ $rc -eq 0 ]] || { echo "$retry"; exit "$rc"; }
 
 echo "[5/7] Destroy the temporary node"
-read -rp "Check the workstation. Once it is healthy, type 101 to destroy this node: " answer
-[[ $answer == 101 ]] || { echo "101 left running; retry the deploy from it: pct enter 101"; exit 0; }
-if [[ $(pct status 101) == "status: running" ]]; then pct stop 101; fi
+pct stop 101
 pct destroy 101
 
 echo "[6/7] Recreate the bootstrap node from the workstation (306)"
@@ -86,8 +86,6 @@ name=$(hostname_of 306)
 # shellcheck disable=SC2016  # expanded by faviann's shell on the workstation
 recreate='d=$(mktemp -d) && trap "rm -rf $d" EXIT && cd "$d" && git init -q &&
   git fetch -q --depth 1 '"$repo $sha"' && git checkout -q FETCH_HEAD && ./run.sh --limit bootstrap'
-read -rp "Run ./run.sh --limit bootstrap on the workstation now? [y/N] " answer
-[[ $answer == y ]] || { echo "Run it later from this shell: pct exec 306 -- su - faviann -c '$recreate'"; exit 0; }
 rc=0
 pct exec 306 -- su - faviann -c "$recreate" || rc=$?
 if [[ $rc -ne 0 ]]; then
