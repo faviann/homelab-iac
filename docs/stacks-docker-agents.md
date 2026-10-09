@@ -5,10 +5,10 @@ Read when debugging the managed docker-agents stack or changing agent configurat
 By default, every `cap_docker` host gets the managed `docker-agents` stack from the role. Do not define it under `stacks/`.
 
 Base services:
-- `docker-metadata-proxy`: read-only Docker API for Homepage discovery
+- `docker-metadata-proxy`: Docker container list and stats for Homepage discovery. It denies container inspect, which returns container env.
 
 Optional when `traefik_kop_enabled: true`:
-- `traefik-kop`: copies Docker labels into portal's Redis for Traefik routing
+- `traefik-kop`: copies Docker labels into portal's Redis for Traefik routing. It reads the local Docker socket because it needs container inspect.
 
 Hawser is enabled on every non-`portal` Docker host where `docker_agents_enabled: true`:
 - `hawser`: Standard-mode remote agent for Dockhand multi-host management across the remote fleet
@@ -22,4 +22,4 @@ Configuring `portal` registers a Dockhand environment for each Hawser host once 
 Portal Traefik uses its own stack-local `traefik-docker-socket-proxy` in
 `stacks/portal/traefik3/`. Keep that proxy separate from the managed
 `docker-metadata-proxy` so edge routing does not depend on the docker-agents
-stack or its broader Homepage-oriented allowlist.
+stack, whose Homepage-only allowlist denies the container inspect Traefik needs.
