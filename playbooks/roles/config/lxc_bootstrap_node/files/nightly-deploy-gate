@@ -6,18 +6,17 @@
 # Usage: nightly-deploy-gate <command...>
 set -uo pipefail
 
-errors=$(mktemp)
-trap 'rm -f -- "$errors"' EXIT
 # Reaches the workstation as the lifecycle does (group_vars/all/proxmox.yml).
+# LogLevel=ERROR keeps the first-connect host-key notice out of the reason.
 reason=$(timeout -k 5 30 ssh -l root -i ~/.ansible/ssh/proxmox_lxc \
     -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-    -o BatchMode=yes -o ConnectTimeout=10 \
-    workstation.faviann.vms /usr/local/sbin/workstation-busy-probe 2>"$errors")
+    -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR \
+    workstation.faviann.vms /usr/local/sbin/workstation-busy-probe 2>&1)
 status=$?
 case $status in
-    0) rm -f -- "$errors"; exec "$@" ;;
+    0) exec "$@" ;;
     1) verdict="busy ($reason)" ;;
-    *) verdict="check failed (exit $status$(grep -v '^[[:space:]]*$' "$errors" | tail -n 1 | sed 's/^/: /'))" ;;
+    *) verdict="check failed (exit $status${reason:+: $(tail -n 1 <<<"$reason")})" ;;
 esac
 # The notifier posts the lines after this header, as for ./run.sh deferrals.
 echo "Deferred by busy checks:" >&2

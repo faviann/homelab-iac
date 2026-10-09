@@ -73,8 +73,9 @@ long and visible. #174 stays open for it.
   gate, such as a changed host key after a rebuild, would go unnoticed.
 - **The timer passing `--interrupt-busy`**: the flag would no longer mean that a
   person consented.
-- **Validating on the node before deploying**: it would put the validation
-  suite and its prerequisites on the node to catch at 03:00 what belongs before
-  merge. Gating `main` on validation is a separate decision.
+- **Validating on the node before deploying**: validation gives the same
+  result for a given commit whenever it runs, so running it at 03:00 only
+  repeats what belongs before merge. Gating `main` on validation is a separate
+  decision.
 - **A second timer for the workstation**: two timers at 03:00 collide on the
   deploy lock, and pausing scheduled deploys would take two commands.

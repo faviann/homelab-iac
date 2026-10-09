@@ -1,19 +1,19 @@
 # Bootstrap Node
 
 Read before any interrupting workstation change, when the workstation is
-unreachable, or to read a night's nightly deploy.
+unreachable, or to find out how last night's deploy went.
 
 The `bootstrap` LXC (vmid 101, `tier_small`, no capability groups) is the
-second control node. It runs the nightly deploy of every other LXC and
-carries interrupting workstation runs. The workstation creates it and keeps it patched through ordinary runs, like any other LXC, and
-it stays on. Its own busy probe reports busy while a deploy is in
-flight, so such a run defers the node's upgrade and reboot instead of killing
-the deploy. Ansible installs `git`, `unzip`, chezmoi, a pinned `uv`, and the
-native Bitwarden CLI, and makes the first clone of this repository at
-`/root/homelab-iac`. Ansible never moves that checkout again. It delivers the
-deploy notification webhook, Dockhand's Discord channel
-(`vault_dockhand_discord_webhook_url`), but never the vault passphrase or the
-fleet key.
+second control node. It runs the nightly deploy of every other LXC and carries
+interrupting workstation runs. The workstation creates it and keeps it patched
+through ordinary runs, like any other LXC, and it stays on. Its own busy probe
+reports busy while a deploy is in flight, so such a run defers the node's
+upgrade and reboot instead of killing the deploy. Ansible installs `git`,
+`unzip`, chezmoi, a pinned `uv`, and the native Bitwarden CLI, and makes the
+first clone of this repository at `/root/homelab-iac`. Ansible never moves
+that checkout again. It delivers the deploy notification webhook, Dockhand's
+Discord channel (`vault_dockhand_discord_webhook_url`), but never the vault
+passphrase or the fleet key.
 
 ## The recipe
 
