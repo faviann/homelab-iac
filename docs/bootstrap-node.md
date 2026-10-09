@@ -220,8 +220,9 @@ never handles a secret: you type it at Bitwarden's own prompts. The stages:
 3. Unlock: press Enter, then answer Bitwarden's email, master password, and
    2FA prompts, once each. This is the dotfiles bootstrap-node path, with
    `bw login --raw` doing the login and the unlock in one step.
-4. On `y`, `./run.sh --limit workstation`. It restarts the workstation unless
-   the busy probe defers it with exit `3`.
+4. On `y`, `./run.sh --limit workstation`. It may restart the workstation
+   (a pending reboot after upgrades, or a container config change); if the
+   busy probe reports busy, the run defers and exits `3`.
 5. Only when that run exits `0`, destroy the temporary node. On any other
    status, or when you decline stage 4, 101 stays up and the script exits
    with that status and prints how to retry from it with `pct enter 101`.

@@ -66,7 +66,7 @@ echo "[3/7] Unlock secrets on 101"
 unlock 101
 
 echo "[4/7] Deploy the workstation from 101"
-echo "This restarts the workstation unless its busy probe reports busy; then the run defers and exits 3."
+echo "This may restart the workstation (pending reboot after upgrades, or a container config change); if its busy probe reports busy, the run defers and exits 3."
 read -rp "Run ./run.sh --limit workstation now? [y/N] " answer
 retry="101 stays up. Retry from it: pct enter 101, then cd /root/homelab-iac && ./run.sh --limit workstation"
 [[ $answer == y ]] || { echo "$retry"; exit 0; }
