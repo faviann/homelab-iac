@@ -42,7 +42,7 @@
 
 # Every deploy posts its outcome here; a placeholder fails the run. no_log
 # hides any message, so the name says what to set.
-- name: Assert vault_bootstrap_deploy_discord_webhook_url is configured
+- name: Assert the deploy webhook (vault_dockhand_discord_webhook_url) is configured
   ansible.builtin.assert:
     that:
       - bootstrap_deploy_discord_webhook_url is defined

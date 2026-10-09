@@ -82,6 +82,7 @@ vault_workstation_mcp_auth_proxy_jwt_private_key: "REPLACE_WITH_PEM_PKCS8_RSA_PR
 
 # Portal Dockhand
 vault_portal_dockhand_encryption_key: "REPLACE_WITH_BASE64_32_BYTE_KEY"
+# Also the bootstrap node's deploy notifications: same Discord channel.
 vault_dockhand_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 # Generated in the Dockhand UI after first deploy; environment seeding is skipped until set.
 vault_dockhand_api_token: "REPLACE_ME"
@@ -98,9 +99,6 @@ vault_overmind_postgres_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
 vault_overmind_memsrv_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
 vault_overmind_homelab_dev_agent_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
 vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
-
-# Bootstrap node deploy notifications
-vault_bootstrap_deploy_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
 
 # CLIProxyAPI stack on overmind.
 # Required runtime carrier from native enrollment. Retain it with the matching

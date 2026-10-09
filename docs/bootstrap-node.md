@@ -3,7 +3,7 @@
 Read before any interrupting workstation change, or when the workstation is
 unreachable.
 
-The `bootstrap` LXC (vmid 311, `tier_small`, no capability groups) is the
+The `bootstrap` LXC (vmid 101, `tier_small`, no capability groups) is the
 second control node. Its only target is the workstation. The workstation
 creates it and keeps it patched through ordinary runs, like any other LXC, and
 it stays on. Its own busy probe reports busy while a workstation deploy is in
@@ -11,7 +11,9 @@ flight, so such a run defers the node's upgrade and reboot instead of killing
 the deploy. Ansible installs `git`, `unzip`, chezmoi, a pinned `uv`, and the
 native Bitwarden CLI, and makes the first clone of this repository at
 `/root/homelab-iac`. Ansible never moves that checkout again. It delivers the
-deploy notification webhook, but never the vault passphrase or the fleet key.
+deploy notification webhook, Dockhand's Discord channel
+(`vault_dockhand_discord_webhook_url`), but never the vault passphrase or the
+fleet key.
 
 ## The recipe
 
@@ -146,5 +148,5 @@ rekeyed one.
 
 Root's `authorized_keys` on the node holds only the fleet key. When the
 workstation is dead, open the Proxmox host's shell (its Shell in the Proxmox
-web UI) and run `pct enter 311`. The container's own Console tab stops at a
+web UI) and run `pct enter 101`. The container's own Console tab stops at a
 login prompt, because root has no password.
