@@ -6,6 +6,11 @@
 lxc_hwaddr: "BC:24:11:87:8C:71"
 bootstrap_node_enabled: true
 bootstrap_deploy_discord_webhook_url: "{{ vault_bootstrap_deploy_discord_webhook_url }}"
+# Busy while a workstation deploy holds its lock, so a run against this node
+# never upgrades or reboots it under that deploy.
+lxc_busy_check_host_command: >-
+  flock --nonblock /run/workstation-deploy.lock true
+  || { echo "a workstation deploy is in flight"; exit 1; }
 
 proxmox_lxc_overrides:
   vmid: 311

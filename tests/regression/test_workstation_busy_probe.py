@@ -78,7 +78,9 @@ def run_probe(
     ("world", "expected"),
     [
         ({"stdout": agents("idle", "working")}, 1),
-        ({"stdout": agents("idle", "blocked")}, 0),
+        ({"stdout": agents("idle", "blocked", "done")}, 0),
+        # A state the probe cannot place, or one a later herdr adds, is busy.
+        ({"stdout": agents("idle", "unknown")}, 1),
         ({"stderr": NOT_RUNNING, "status": 1}, 0),
         ({"herdr": False}, 0),
         ({"stdout": "not json"}, 1),
@@ -90,7 +92,8 @@ def run_probe(
     ],
     ids=[
         "working-agent",
-        "idle-and-blocked-without-lock-file",
+        "settled-states-without-lock-file",
+        "unknown-state",
         "server-not-running",
         "herdr-not-installed",
         "malformed-json",

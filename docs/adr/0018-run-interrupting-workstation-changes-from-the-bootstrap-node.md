@@ -14,17 +14,18 @@ A run interrupts a working agent only when a person asked for it.
 - **Host-level busy probe.** The workstation declares a busy probe in its host
   variables, beside the stack checks of
   [ADR-0015](0015-defer-busy-stacks-with-a-declared-check.md). The probe reports
-  busy while a herdr pane is `working` or a run holds the workstation's
-  lifecycle lock, idle when herdr is not running or not installed, and busy on
-  any probe error. While it reports busy, a run defers the workstation's
+  busy while a herdr pane is in any state but `idle`, `done`, or `blocked`, or
+  a run holds the workstation's lifecycle lock, idle when herdr is not running
+  or not installed, and busy on any probe error. Only herdr's settled states
+  read as idle, so `unknown` and any state a later herdr adds fail closed. While it reports busy, a run defers the workstation's
   interrupting steps and exits `3`.
 - **`--interrupt-busy` is the consent.** It skips the probe, and it is passed
   only on a person's explicit request.
 - **Never in place.** An interrupting run never targets the host it runs on.
   `./run.sh` rejects `--include-controller` together with `--interrupt-busy`
   before any work. Behind that usage error, the lifecycle defers every
-  interrupting step of a run that includes its own control node, without
-  running the probe and whatever the override says. The deferral keys on the
+  interrupting step of a run that includes its own control node, whatever the
+  probe and the override say. The deferral keys on the
   controller skip being off, so a raw run that turns the skip off can only
   defer more. It is not the alternative #521 rejected, ignoring the busy
   override for the run's own host, which fails later and more quietly, mid-run,

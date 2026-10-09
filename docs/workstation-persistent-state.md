@@ -253,7 +253,7 @@ Run the workstation's lifecycle in place, from the workstation:
 ./run.sh --include-controller > /tmp/ws-deploy.log 2>&1
 ```
 
-A run that includes its own control node never interrupts it: its [interrupting steps](../stacks/README.md#busy-checks) are deferred, and everything else, the persistent home mounts included, applies in place. Exit `3` means something interrupting was deferred. Deferred items go through the bootstrap node ([the recipe](bootstrap-node.md#the-recipe)) or wait for tonight's run.
+A run that includes its own control node never interrupts it: its [interrupting steps](../stacks/README.md#busy-checks) are deferred, and everything else, the persistent home mounts included, applies in place. The run therefore always exits `3`: it cannot tell whether anything interrupting was pending. Upgrades, host-config changes, and reboots go through the bootstrap node ([the recipe](bootstrap-node.md#the-recipe)) or wait for tonight's run.
 
 Afterwards, confirm the mounts are actually live rather than trusting the play recap — an unmounted bind mount is an empty directory, not an error:
 

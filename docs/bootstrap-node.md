@@ -6,7 +6,9 @@ unreachable.
 The `bootstrap` LXC (vmid 311, `tier_small`, no capability groups) is the
 second control node. Its only target is the workstation. The workstation
 creates it and keeps it patched through ordinary runs, like any other LXC, and
-it stays on. Ansible installs `git`, `unzip`, chezmoi, a pinned `uv`, and the
+it stays on. Its own busy probe reports busy while a workstation deploy is in
+flight, so such a run defers the node's upgrade and reboot instead of killing
+the deploy. Ansible installs `git`, `unzip`, chezmoi, a pinned `uv`, and the
 native Bitwarden CLI, and makes the first clone of this repository at
 `/root/homelab-iac`. Ansible never moves that checkout again. It delivers the
 deploy notification webhook, but never the vault passphrase or the fleet key.
@@ -87,11 +89,13 @@ The next run against this node starts it again.
 
 Every run against the workstation first asks its busy probe,
 `/usr/local/sbin/workstation-busy-probe`. It reports busy while a herdr agent
-is `working`, or while a run holds the workstation's lifecycle lock, which
-covers a background `./run.sh` whose agent turn already ended. A `blocked`
-pane, waiting on a permission prompt, does not count. The probe reports idle
+is in any state but `idle`, `done`, or `blocked` (`working`, but also
+`unknown` and any state a later herdr adds), or while a run holds the
+workstation's lifecycle lock, which covers a background `./run.sh` whose agent
+turn already ended. A `blocked` pane, waiting on a permission prompt, does not
+count. The probe reports idle
 when herdr is not running or not installed, and busy on any other error. A run
-that includes its own control node defers without asking it.
+that includes its own control node defers whatever it says.
 
 To see why a run deferred, list the agents on the workstation:
 

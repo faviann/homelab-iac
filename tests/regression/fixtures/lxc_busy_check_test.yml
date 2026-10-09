@@ -173,11 +173,11 @@
         - not busy_check_removed
         - docker_enabled | bool
 
-    - name: Assert host probes ran only where declared, without the override, on running hosts not self-included
+    - name: Assert host probes ran only where declared, without the override, on running hosts
       ansible.builtin.assert:
         that: >-
           (lifecycle_test_state_dir ~ '/' ~ inventory_hostname ~ '.probed') is exists
-          == (lxc_busy_check_host_command is defined and proxmox_skip_self | bool
+          == (lxc_busy_check_host_command is defined
               and not (lxc_busy_check_override | default(false)) and not busy_check_removed)
         fail_msg: "{{ inventory_hostname }} host probe ran when it should not have, or did not run"
 

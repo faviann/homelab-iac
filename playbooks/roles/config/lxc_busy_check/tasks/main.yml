@@ -4,7 +4,7 @@
 # Declarations are read on the controller, so a host without them runs no
 # remote command. Only idle and not_deployed let a stack proceed. A run that
 # includes its own control node (the controller skip is off) defers that host
-# without running its probe, whatever the override says.
+# whatever its probe and the override say.
 
 - name: Start with no busy-check declarations
   ansible.builtin.set_fact:
@@ -45,7 +45,6 @@
   ignore_unreachable: true
   when:
     - lxc_busy_check_host_command | length > 0
-    - proxmox_skip_self | default(true) | bool
     - not (lxc_busy_check_override | bool)
     - not (ansible_check_mode | bool)
     - lxc_busy_check_applies | bool

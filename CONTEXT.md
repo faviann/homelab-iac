@@ -17,7 +17,7 @@ A declared command that answers, before a lifecycle run would interrupt, whether
 _Avoid_: Health check, readiness probe, drain
 
 **Workstation busy probe**:
-The workstation's host-level busy check. Busy while a herdr pane is `working` or the lifecycle lock is held; idle when herdr is not running; busy on any execution error. A run that includes its own control node defers without consulting it.
+The workstation's host-level busy check. Busy while a herdr pane is in any state but `idle`, `done`, or `blocked`, or the lifecycle lock is held; idle when herdr is not running; busy on any execution error. A run that includes its own control node defers whatever it says.
 _Avoid_: Idle gate, sentinel stack
 
 **Targeted LXC set**:

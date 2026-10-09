@@ -147,7 +147,7 @@ def busy_check_result(
         for stack, state, reason in outcomes
         if state in ("busy", "check_failed")
     ]
-    # A run that includes its own control node defers it without asking its probe.
+    # A run that includes its own control node defers it whatever its probe says.
     reason = "run includes its own control node" if self_include else _host_reason(host_probe)
     host_reasons = [reason] if reason else []
     return {

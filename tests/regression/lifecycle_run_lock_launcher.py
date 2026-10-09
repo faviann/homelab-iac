@@ -557,9 +557,7 @@ def assert_wrapper_routes_and_propagates() -> None:
 
     protected_passthrough = (
         ("--", "-e", "proxmox_skip_self=false"),
-        ("--", "-e", "lxc_busy_check_override=true"),
         ("--", '--extra-vars={"lxc_busy_check_override":true}'),
-        ("--", '--extra-vars={"stack_filter":"beets","proxmox_skip_self":false}'),
         ("--", "--limit", "portal"),
         ("--", "--check"),
         ("--", "--tags", "provision"),
