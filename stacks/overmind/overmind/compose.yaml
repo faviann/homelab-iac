@@ -8,7 +8,7 @@ x-managed-files:
 
 services:
   postgres:
-    image: docker.io/library/postgres:18
+    image: docker.io/library/postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     container_name: overmind-postgres
     environment:
       POSTGRES_USER: postgres
@@ -24,7 +24,7 @@ services:
     stop_grace_period: 60s
 
   bootstrap:
-    image: docker.io/library/postgres:18
+    image: docker.io/library/postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     environment:
       POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD in .env}
       MEMSRV_PASSWORD: ${MEMSRV_PASSWORD:?Set MEMSRV_PASSWORD in .env}
