@@ -44,6 +44,7 @@ DURABLE_HOME_LINKS = (
     ("collie_state", "bind_mount", ".local/state/collie", "0700", None),
     ("tsk", "bind_mount", ".tsk", "0700", None),
     ("repos", "bind_mount", "repos", "0755", None),
+    ("worktrees", "bind_mount", "worktrees", "0700", None),
 )
 
 
