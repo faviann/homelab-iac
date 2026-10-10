@@ -9,7 +9,7 @@ x-restart-on-change:
 
 services:
   navidrome:
-    image: deluan/navidrome:latest
+    image: deluan/navidrome:latest@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52
     container_name: navidrome
     restart: unless-stopped
     user: "${PUID}:${PGID}"
@@ -41,7 +41,7 @@ services:
       homepage.icon: navidrome
 
   reconciler:
-    image: python:3.12-slim
+    image: python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
     container_name: navidrome-reconciler
     restart: unless-stopped
     depends_on:
