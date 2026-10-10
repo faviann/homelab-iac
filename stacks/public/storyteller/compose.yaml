@@ -4,7 +4,7 @@ x-prereq-dirs:
 
 services:
   storyteller:
-    image: registry.gitlab.com/storyteller-platform/storyteller:web-v2.11.13
+    image: registry.gitlab.com/storyteller-platform/storyteller:web-v2.11.13@sha256:466f5d468f7b524dcf5dcffa0f12fff3dd20463fd8b878f5ec228de3a1cacfa3
     container_name: storyteller
     restart: unless-stopped
     environment:
