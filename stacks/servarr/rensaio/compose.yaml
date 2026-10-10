@@ -5,7 +5,7 @@ x-prereq-dirs:
 
 services:
   rensaio:
-    image: maxpiva/rensaio:latest
+    image: maxpiva/rensaio:latest@sha256:199777c5daf62fb476882ff03914722dc723df619d03c4f61250297651083ffe
     container_name: rensaio
     restart: unless-stopped
     environment:
