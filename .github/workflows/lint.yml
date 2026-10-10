@@ -1,0 +1,14 @@
+---
+# Renovate PRs get no other check before merge; lint is the gate a pin can break.
+name: lint
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+      - run: ./validate.sh lint
