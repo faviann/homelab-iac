@@ -4,11 +4,8 @@
 
 The workstation role bind-mounts selected home paths from `/ephemeral/workstation/home` so they survive an intentional LXC rebuild.
 
-**Status: nine of the original ten declared paths remain (Agent of Empires was retired 2026-10); they were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Azure CLI auth state extends it at `~/.azure`; its live rebuild validation is pending. The tsk task board, every desk and project board in one file, extends it at `~/.tsk`. Git worktree checkouts extend it at `~/worktrees`; their branches already lived in the persisted repositories under `~/repos`, and the checkouts now keep uncommitted work and their git linkage. Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
-
 Claude's sibling `~/.claude.json` is persisted separately as a file bind mount (#157).
 It holds onboarding and recent-project state; `~/.claude` holds transcripts and credentials.
-Its live rebuild validation is pending.
 
 `workstation_persistent_home_links` supports `type: bind_mount` for directories and
 `type: bind_file` for regular files. File entries may specify `content` to initialize
@@ -189,15 +186,13 @@ The block assumes all four sources exist. Omit both the `cp` and matching `mv` l
 
 Stop both first. herdr keeps live Unix sockets in `~/.config/herdr` and rewrites `session.json` as panes change; Collie writes into `~/.local/state/collie`. Copying either directory while it is running captures a torn session snapshot, and a graceful stop is what makes herdr write its final one.
 
-Collie runs as its own generated user service, plus an origin-forwarder service and its activating socket unit. Stop the socket first — leaving it active lets the next connection reactivate the service underneath the copy. herdr currently runs as a detached `herdr server` process with no user unit, so stop it through its own API:
+Collie runs as its own generated user service, plus an origin-forwarder service and its activating socket unit. Stop the socket first — leaving it active lets the next connection reactivate the service underneath the copy. herdr runs as the `herdr` user service:
 
 ```bash
 systemctl --user stop collie-origin-forwarder.socket collie-origin-forwarder.service
 systemctl --user stop collie
-herdr server stop
+systemctl --user stop herdr
 ```
-
-Once the dotfiles herdr supervision slice lands, herdr gains a user service and `systemctl --user stop herdr` replaces the last command. Check with `systemctl --user list-unit-files | grep herdr` before assuming either form.
 
 Confirm nothing came back before copying:
 
@@ -291,8 +286,6 @@ Note that the specific `~/.local/state/collie` and `~/.local/state/opencode` chi
 
 ## Rebuilding the LXC
 
-**Status: validated 2026-08-15/16.** The procedure below is what was actually run; see #95 for the recorded observations.
-
 ### The planner cannot be asked for a rebuild
 
 `proxmox_lxc_lifecycle/tasks/decide.yml` computes `rebuild_required` as a release mismatch **and** `proxmox_lxc_rebuild_on_release_mismatch`. There is no manual override. When the guest release already matches the ostemplate — the normal case — setting both destructive policy flags to `true` still yields a `provision` transition and destroys nothing.
@@ -339,9 +332,8 @@ A graceful herdr/Collie shutdown is **not** required here. The migration procedu
 
 ### Lobu before-manifest
 
-Lobu rebuild validation is **pending**. Once initialized, quiesce Lobu as described
-above and record a hash manifest without printing file contents. Keep the daemon
-stopped while recording it:
+Quiesce Lobu as described above and record a hash manifest without printing file
+contents. Keep the daemon stopped while recording it:
 
 ```bash
 (
@@ -370,8 +362,7 @@ to the workstation user's home:
 Then complete dotfiles convergence, start the supervised daemon, and confirm the
 same registered device reconnects without login or re-enrollment. Runtime startup
 can legitimately update credentials, so use the pre-start hashes to prove file
-preservation and the control-plane identity to prove runtime reuse. Record the live
-result before marking Lobu rebuild validation complete.
+preservation and the control-plane identity to prove runtime reuse.
 
 ### Drive it from the bootstrap node
 
