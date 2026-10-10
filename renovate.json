@@ -93,6 +93,13 @@
       "matchDatasources": ["docker"],
       "matchPackageNames": ["lscr.io/linuxserver/lidarr"],
       "allowedVersions": "<8"
+    },
+    {
+      "description": "Gluetun runs a master build tagged v3.41.3 (see the compose comment): offer only newer minor and major releases. Inert once the tag moves; delete it then",
+      "matchPackageNames": ["qmcgaw/gluetun"],
+      "matchCurrentValue": "v3.41.3",
+      "matchUpdateTypes": ["digest", "patch"],
+      "enabled": false
     }
   ]
 }

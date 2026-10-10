@@ -5,7 +5,11 @@ x-prereq-dirs:
 
 services:
   gluetun:
-    image: qmcgaw/gluetun
+    # Master build e2e4a06 (2026-09-15), not v3.41.3: ws-ephemeral needs the master-only
+    # PUT /v1/portforward. The tag is only the release Renovate compares against. When
+    # Renovate offers the next release, take it and delete this comment and the gluetun
+    # rule in renovate.json.
+    image: qmcgaw/gluetun:v3.41.3@sha256:12df8b20528d4cd5e9b6e827d40f2886cf78e53e7e9afc750050648c31183793
     container_name: gluetun
     cap_add:
       - NET_ADMIN
