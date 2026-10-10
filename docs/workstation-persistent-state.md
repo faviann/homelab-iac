@@ -4,7 +4,7 @@
 
 The workstation role bind-mounts selected home paths from `/ephemeral/workstation/home` so they survive an intentional LXC rebuild.
 
-**Status: nine of the original ten declared paths remain (Agent of Empires was retired 2026-10); they were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Azure CLI auth state extends it at `~/.azure`; its live rebuild validation is pending. Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
+**Status: nine of the original ten declared paths remain (Agent of Empires was retired 2026-10); they were migrated and mounted as of 2026-08-13, and their rebuild persistence was validated 2026-08-15/16.** Four paths now extend that contract for OpenCode and Oh My Pi (OMP): `~/.omp`, `~/.config/opencode`, `~/.local/share/opencode`, and `~/.local/state/opencode`. Moraine's complete local runtime root extends it at `~/.moraine`. Lobu's durable auth/device root extends it at `~/.config/lobu`; its live rebuild validation is pending (#270). Azure CLI auth state extends it at `~/.azure`; its live rebuild validation is pending. The tsk task board, every desk and project board in one file, extends it at `~/.tsk`. Migrate newly declared paths before the first deploy that includes them, then include them in the next rebuild validation.
 
 Claude's sibling `~/.claude.json` is persisted separately as a file bind mount (#157).
 It holds onboarding and recent-project state; `~/.claude` holds transcripts and credentials.
@@ -261,7 +261,7 @@ Afterwards, confirm the mounts are actually live rather than trusting the play r
 findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
         ~/.config/lobu ~/.azure ~/.hermes ~/.openclaw ~/.config/herdr \
-        ~/.local/state/collie ~/repos
+        ~/.local/state/collie ~/.tsk ~/repos
 ```
 
 Every declared path must appear. A missing row is an unmounted bind mount, and the play recap will not have flagged it.
