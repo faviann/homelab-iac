@@ -1,7 +1,7 @@
 ---
 services:
   beets-flask:
-    image: pspitzner/beets-flask:stable
+    image: pspitzner/beets-flask:stable@sha256:98b8b87281e0526f3b9ee517ed1a75da76ae77bfc16564999c5e72d413d1ec50
     restart: unless-stopped
     ports:
       - "5001:5001"
