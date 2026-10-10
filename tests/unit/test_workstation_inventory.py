@@ -42,6 +42,7 @@ DURABLE_HOME_LINKS = (
     ("azure", "bind_mount", ".azure", "0700", None),
     ("herdr", "bind_mount", ".config/herdr", "0700", None),
     ("collie_state", "bind_mount", ".local/state/collie", "0700", None),
+    ("tsk", "bind_mount", ".tsk", "0700", None),
     ("repos", "bind_mount", "repos", "0755", None),
 )
 
