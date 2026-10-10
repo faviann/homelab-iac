@@ -11,6 +11,8 @@ rules:
   line-length:
     max: 140
     level: warning
+    # Renovate digest pins (image: ...@sha256:...) are one unbreakable token.
+    allow-non-breakable-inline-mappings: true
   # The settings below are required by ansible-lint for a compatible
   # custom yamllint config (enables `ansible-lint --fix`).
   comments:
