@@ -105,4 +105,5 @@ proxmox_lifecycle_allow_destructive_transitions: false
 # The machine-local controller SSH identity, home-dir based so every git
 # worktree shares one key. Nothing in this repository creates it.
 ansible_ssh_private_key_file: "~/.ansible/ssh/proxmox_lxc"
-ansible_ssh_common_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new'
+# Host keys are not checked; ansible.cfg says why.
+ansible_ssh_common_args: '-o IdentitiesOnly=yes'
