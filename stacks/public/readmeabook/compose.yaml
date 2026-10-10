@@ -1,7 +1,7 @@
 ---
 services:
   readmeabook:
-    image: ghcr.io/kikootwo/readmeabook:latest
+    image: ghcr.io/kikootwo/readmeabook:latest@sha256:a769c582af85cadb8b048ebd1069ee1946b4ff1930ba8da2978c9fef6fc29638
     #    build:
     #      context: .
     #      dockerfile: dockerfile.unified
