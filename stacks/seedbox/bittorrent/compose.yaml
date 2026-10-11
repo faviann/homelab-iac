@@ -2,6 +2,7 @@
 x-prereq-dirs:
   - ./appdata/gluetun
   - ./appdata/qbittorrent
+  - /ephemeral/qbittorrent
 
 services:
   gluetun:
@@ -71,7 +72,7 @@ services:
     volumes:
       - ./appdata/qbittorrent:/config
       - /data:/data
-      - /ephemeral:/downloads
+      - /ephemeral/qbittorrent:/downloads/qbittorrent
     network_mode: service:gluetun
     healthcheck:
       test: ping -c 1 www.google.com || exit 1
