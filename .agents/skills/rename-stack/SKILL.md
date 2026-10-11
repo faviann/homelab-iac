@@ -82,7 +82,8 @@ Look up `docker_uid`/`docker_gid` for the host if a `chown` is needed
 (
   flock --exclusive --nonblock 9 ||
     { echo "lifecycle lock held: nothing ran" >&2; exit 75; }
-  ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> \
+  ssh -o AddressFamily=inet -o StrictHostKeyChecking=accept-new \
+    -l root -i ~/.ansible/ssh/proxmox_lxc <host> \
     'cd /shared/<host>/stacks/<old> && docker compose down; \
      mv /shared/<host>/stacks/<old> /shared/<host>/stacks/<new> && \
      chown -R <docker_uid>:<docker_gid> /shared/<host>/stacks/<new>'
