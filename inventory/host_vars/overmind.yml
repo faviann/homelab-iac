@@ -75,6 +75,7 @@ overmind_postgres_backup:
   randomized_delay_seconds: "30m"
 
 proxmox_lxc_bind_mounts_overrides:
+  mp0: "/rpool/data/subvol-200-disk-1/overmind,mp=/shared/overmind"
   mp3: "/tank/overmind,mp=/data/overmind"
   mp4: "/tank/backups/overmind,mp=/backups/overmind"
 
