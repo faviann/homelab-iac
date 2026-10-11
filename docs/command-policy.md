@@ -186,8 +186,14 @@ Agent use of a documented raw command is a separate decision:
 - **Scope:** the named host only.
 
   ```bash
-  ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> '<read-only command>'
+  ssh -o AddressFamily=inet -o StrictHostKeyChecking=accept-new \
+    -l root -i ~/.ansible/ssh/proxmox_lxc <host> '<read-only command>'
   ```
+
+  `accept-new` records a host missing from `known_hosts` instead of prompting,
+  which a command without a terminal cannot answer. A changed host key still
+  fails: report it to a person, never clear it with `ssh-keygen -R`. IPv4 keeps
+  a dead target from falling back to this machine, as in `ansible.cfg`.
 
 - **Boundary:** observational. Non-secret files, logs, processes, memory,
   disks, networking, and service state may be inspected without asking for
@@ -256,7 +262,8 @@ Agent use of a documented raw command is a separate decision:
   (
     flock --exclusive --nonblock 9 ||
       { echo "lifecycle lock held: nothing ran" >&2; exit 75; }
-    ssh -l root -i ~/.ansible/ssh/proxmox_lxc <host> '<rename commands>'
+    ssh -o AddressFamily=inet -o StrictHostKeyChecking=accept-new \
+      -l root -i ~/.ansible/ssh/proxmox_lxc <host> '<rename commands>'
   ) 9>>~/.ansible/homelab-iac-lifecycle.lock
   ```
 

@@ -9,7 +9,8 @@ if [[ ! -r "$key" ]]; then
   exit 2
 fi
 
-ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$key" "$host" python3 - <<'PY'
+ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+  -o AddressFamily=inet -i "$key" "$host" python3 - <<'PY'
 import json
 import re
 import subprocess
