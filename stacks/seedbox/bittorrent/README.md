@@ -31,9 +31,8 @@ Previously considered Montreal Expo 67 hostnames:
 - `ca-052.whiskergalaxy.com`
 - `ca-053.whiskergalaxy.com`
 
-Current New York hostnames:
+Current New York hostname:
 
-- `us-east-116.whiskergalaxy.com`
 - `us-east-120.whiskergalaxy.com`
 
 ## Ownership
