@@ -35,6 +35,9 @@ lxc_docker_env_stack_vars:
     komga_user: "{{ vault_servarr_komf_komga_user }}"
     komga_password: "{{ vault_servarr_komf_komga_password }}"
 
+proxmox_lxc_bind_mounts_overrides:
+  mp0: "/rpool/data/subvol-200-disk-1/servarr,mp=/shared/servarr"
+
 # Container definition for proxmox_lxc_provision role
 # NOTE: Confirm vmid matches the existing Proxmox container if already created.
 proxmox_lxc_overrides:
