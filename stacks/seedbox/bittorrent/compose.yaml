@@ -29,9 +29,8 @@ services:
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
       - WIREGUARD_PRESHARED_KEY=${WIREGUARD_PRESHARED_KEY}
       - WIREGUARD_ENDPOINT_PORT=443
-      - SERVER_HOSTNAMES=us-east-116.whiskergalaxy.com,us-east-120.whiskergalaxy.com
+      - SERVER_HOSTNAMES=us-east-120.whiskergalaxy.com
       - FIREWALL_VPN_INPUT_PORTS=${WS_LAST_PORT:-10412}
-      - HEALTH_VPN_DURATION_INITIAL=120s
     healthcheck:
       test: ping -c 1 www.google.com || exit 1
       interval: 60s
