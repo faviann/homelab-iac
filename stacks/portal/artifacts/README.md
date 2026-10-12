@@ -6,10 +6,10 @@ publication root written by the `publish-artifact` skill on the `workstation`, r
 fetch artifacts without logging in. Every published file is readable by anyone holding its
 URL; the random generation segment in each URL is the only access control.
 
-The server runs on portal rather than beside its publisher because every LXC mounts the
-Proxmox host's `/ephemeral` with the same UID mapping. Portal reads the workstation's
-publication root directly, so artifacts stay available while the workstation is down, and
-no origin port or cross-host route is needed.
+The server runs on portal rather than beside its publisher because portal binds the
+workstation's publication root from the Proxmox host's `/ephemeral`, read-only and with the
+same UID mapping. Portal reads it directly, so artifacts stay available while the workstation
+is down, and no origin port or cross-host route is needed.
 
 The container runs as the Docker user's UID/GID, which is the workstation user's UID, so
 publications created under umask `077` stay readable without loosening their permissions.
@@ -59,7 +59,7 @@ Stack-owned:
 
 Host-owned:
 
-- the `/ephemeral` mount on every LXC
+- portal's read-only `/ephemeral/workstation/artifacts` bind mount (`inventory/host_vars/portal.yml`)
 
 ## Deploy
 

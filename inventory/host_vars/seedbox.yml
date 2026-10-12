@@ -17,6 +17,19 @@ lxc_docker_env_stack_vars:
     ws_password: "{{ vault_seedbox_ws_password }}"
     ws_session_cookie: "{{ vault_seedbox_ws_session_cookie }}"
 
+# This host mounts only its own /ephemeral folders, at the same paths.
+proxmox_lxc_bind_mounts_overrides:
+  mp2: "/ephemeral/qbittorrent,mp=/ephemeral/qbittorrent"
+  mp4: "/ephemeral/sabnzbd,mp=/ephemeral/sabnzbd"
+
+proxmox_lxc_host_directories:
+  - path: /ephemeral/qbittorrent
+    owner: "1001"
+    group: "1001"
+  - path: /ephemeral/sabnzbd
+    owner: "1001"
+    group: "1001"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 302
