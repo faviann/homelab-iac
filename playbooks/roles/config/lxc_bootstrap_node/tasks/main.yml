@@ -1,8 +1,8 @@
 ---
 # The bootstrap node is the control node that runs the nightly deploy and
 # carries interrupting workstation runs (docs/bootstrap-node.md). The role
-# delivers the deploy webhook; the vault passphrase and the fleet key come only
-# from a person's Bitwarden unlock.
+# delivers the deploy webhook, and copies the controller's vault passphrase and
+# fleet key (ADR-0020).
 
 - name: Install bootstrap node packages
   ansible.builtin.apt:
@@ -40,6 +40,23 @@
     version: main
     update: false
   when: not ansible_check_mode
+
+# From the controller running this play; no_log and diff: false keep the
+# contents out of output and diffs.
+- name: Copy the vault passphrase and the fleet key
+  ansible.builtin.copy:
+    src: "{{ [lookup('env', 'HOME'), '.ansible', item.path] | path_join }}"
+    dest: "/root/.ansible/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+    directory_mode: "0700"
+  diff: false
+  no_log: true
+  loop:
+    - { path: vault-pass, mode: "0600" }
+    - { path: ssh/proxmox_lxc, mode: "0600" }
+    - { path: ssh/proxmox_lxc.pub, mode: "0644" }
 
 # Every deploy posts its outcome here; a placeholder fails the run. no_log
 # hides any message, so the name says what to set.

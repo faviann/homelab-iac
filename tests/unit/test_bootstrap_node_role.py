@@ -63,3 +63,14 @@ def test_the_nightly_timer_starts_the_nightly_deploy_without_catching_up() -> No
 
     assert timer["Unit"] == ["nightly-deploy@main.service"]
     assert timer.get("Persistent", ["false"]) == ["false"]
+
+
+def test_the_controller_secrets_copy_stays_out_of_output_and_diffs() -> None:
+    [copy] = [
+        task
+        for task in load_yaml(ROLE_ROOT / "tasks/main.yml")
+        if "vault-pass" in str(task.get("loop", ""))
+    ]
+
+    assert copy["no_log"] is True
+    assert copy["diff"] is False

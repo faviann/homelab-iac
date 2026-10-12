@@ -35,7 +35,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily 
 |------|----------|
 | SSH key (private) | `~/.ansible/ssh/proxmox_lxc` (home-dir, machine-local, shared across worktrees) |
 | SSH key (public) | `~/.ansible/ssh/proxmox_lxc.pub` (home-dir, machine-local, shared across worktrees) |
-| Vault password | `~/.ansible/vault-pass` (home-dir, written by chezmoi from Bitwarden) |
+| Vault password | `~/.ansible/vault-pass` (home-dir, written by chezmoi from Bitwarden; copied to the bootstrap node by its deploy) |
 | Vaulted secrets | `inventory/vault.yml` (encrypted) |
 | Fact cache | `.ansible/cache/` (project-relative, gitignored, 1h TTL) |
 | Venv | `.venv/` (project-relative, gitignored) |

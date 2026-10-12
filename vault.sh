@@ -822,8 +822,7 @@ rotate_passphrase() {
     printf 'rotate: PASS\n'
     printf 'Backup of the old ciphertext retained at %s\n' "$ROTATION_BACKUP"
     # docs/bootstrap-node.md gives the same line.
-    # shellcheck disable=SC2016 # printed for a person to run, not expanded here
-    printf '%s\n' 'Refresh the bootstrap node: ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms, then export BW_SESSION="$(bw unlock --raw)" && bw sync && chezmoi apply ~/.ansible/vault-pass && bw lock'
+    printf '%s\n' 'Refresh the bootstrap node: once the rekeyed vault is on main, run ./run.sh --limit bootstrap from main before the 03:00 nightly deploy'
     return 0
 }
 
