@@ -1,7 +1,7 @@
 ---
 services:
   komf:
-    image: sndxr/komf:latest
+    image: sndxr/komf:latest@sha256:88111b8a3ca83ce17f341fc63c1908388015e5b33fd08b1baf0d1eeaa026e176
     container_name: komf
     restart: unless-stopped
     user: "1000:1000"
