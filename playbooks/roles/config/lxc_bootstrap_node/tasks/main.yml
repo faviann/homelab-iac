@@ -29,6 +29,16 @@
     update: false
   when: not ansible_check_mode
 
+# The copy below does not create a missing parent for a single file, and a
+# new node has no /root/.ansible/ssh.
+- name: Create the fleet key directory
+  ansible.builtin.file:
+    path: /root/.ansible/ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
 # From the controller running this play; no_log and diff: false keep the
 # contents out of output and diffs.
 - name: Copy the vault passphrase and the fleet key
@@ -38,7 +48,6 @@
     owner: root
     group: root
     mode: "{{ item.mode }}"
-    directory_mode: "0700"
   diff: false
   no_log: true
   loop:
