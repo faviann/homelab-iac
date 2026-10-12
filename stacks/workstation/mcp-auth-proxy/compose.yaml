@@ -4,7 +4,7 @@ x-prereq-dirs:
 
 services:
   mcp-auth-proxy:
-    image: ghcr.io/sigbit/mcp-auth-proxy:v2.10.2
+    image: ghcr.io/sigbit/mcp-auth-proxy:v2.10.2@sha256:f92e0ccd22b2a7585bccedc366a3c872bbfa3500c7fa5e7443b40962bf248e8d
     restart: unless-stopped
     network_mode: host
     env_file:
