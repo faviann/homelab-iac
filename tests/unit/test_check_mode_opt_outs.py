@@ -29,6 +29,8 @@ ACKNOWLEDGED_OPT_OUTS: dict[tuple[str, str], str] = {
         "docker info probe",
     ("playbooks/roles/config/lxc_origin_firewall/tasks/main.yml", "Resolve origin firewall allowlist address"):
         "DNS lookup the firewall validation needs",
+    ("playbooks/roles/config/lxc_stack_sync/tasks/discover.yml", "List git-ignored paths in per-host stacks"):
+        "git check-ignore read the sync plan needs",
     ("playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml", "Inspect existing mount status for persistent home paths"):
         "findmnt read the mount plan needs",
     ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/check_ssh.yml", "Test selected identity trust on Proxmox host"):

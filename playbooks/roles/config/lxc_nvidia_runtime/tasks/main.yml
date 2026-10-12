@@ -22,19 +22,21 @@
         path: "{{ lxc_nvidia_runtime_keyring_path }}"
       register: _nvidia_keyring_stat
 
+    # Fetched only while the keyring is missing, so a steady run changes
+    # nothing. To pick up a rotated key, delete the keyring and run again.
     - name: Download NVIDIA GPG key
       ansible.builtin.get_url:
         url: "{{ lxc_nvidia_runtime_gpg_key_url }}"
         dest: /tmp/nvidia-container-toolkit.gpgkey
         mode: "0644"
         force: true
-      register: _nvidia_gpg_download
+      when: not _nvidia_keyring_stat.stat.exists
 
     - name: Install NVIDIA GPG keyring
       ansible.builtin.shell: |
         gpg --batch --yes --dearmor -o {{ lxc_nvidia_runtime_keyring_path }} < /tmp/nvidia-container-toolkit.gpgkey
-      when: _nvidia_gpg_download is changed or not _nvidia_keyring_stat.stat.exists
-      # Guarded above: every actual run rewrites the keyring.
+      when: not _nvidia_keyring_stat.stat.exists
+      # Guarded above: every actual run writes the keyring.
       changed_when: true
 
     - name: Clean up temporary GPG key
