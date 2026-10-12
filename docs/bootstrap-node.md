@@ -8,12 +8,12 @@ second control node. It runs the nightly deploy of every other LXC and carries
 interrupting workstation runs. The workstation creates it and keeps it patched
 through ordinary runs, like any other LXC, and it stays on. Its own busy probe
 reports busy while a deploy is in flight, so such a run defers the node's
-upgrade and reboot instead of killing the deploy. Ansible installs `git`,
-`unzip`, chezmoi, a pinned `uv`, and the native Bitwarden CLI, and makes the
-first clone of this repository at `/root/homelab-iac`. Ansible never moves
-that checkout again. It delivers the deploy notification webhook, Dockhand's
-Discord channel (`vault_dockhand_discord_webhook_url`), and copies the
-deploying controller's vault passphrase and fleet key to root
+upgrade and reboot instead of killing the deploy. Ansible installs `git` and
+a pinned `uv`, and makes the first clone of this repository at
+`/root/homelab-iac`. Ansible never moves that checkout again. It delivers
+the deploy notification webhook, Dockhand's Discord channel
+(`vault_dockhand_discord_webhook_url`), and copies the deploying controller's
+vault passphrase and fleet key to root
 ([ADR-0020](adr/0020-copy-control-node-secrets-from-the-workstation.md)).
 
 ## The recipe
@@ -183,7 +183,7 @@ rekeyed one.
 Root's `authorized_keys` on the node holds only the fleet key. When the
 workstation is dead, open the Proxmox host's shell (its Shell in the Proxmox
 web UI) and run `pct exec 101 -- bash -l`; a login shell adds
-`/usr/local/bin`, where the node's `bw`, `chezmoi`, and `uv` live, to PATH.
+`/usr/local/bin`, where the node's `uv` lives, to PATH.
 The container's own Console tab stops at a login prompt, because root has no
 password.
 

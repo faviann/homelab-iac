@@ -4,19 +4,11 @@
 # delivers the deploy webhook, and copies the controller's vault passphrase and
 # fleet key (ADR-0020).
 
-- name: Install bootstrap node packages
+- name: Install git
   ansible.builtin.apt:
-    name:
-      - git
-      # The Bitwarden CLI install below unpacks a zip.
-      - unzip
+    name: git
     state: present
     update_cache: true
-
-- name: Install chezmoi
-  ansible.builtin.shell:
-    cmd: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
-    creates: /usr/local/bin/chezmoi
 
 - name: Install uv
   ansible.builtin.shell:
@@ -26,10 +18,6 @@
       | UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
     executable: /bin/bash
     creates: /usr/local/bin/uv
-
-- name: Install Bitwarden CLI
-  ansible.builtin.import_role:
-    name: config/bitwarden_cli
 
 # The first clone only. After it, the deploy recipe alone moves the checkout.
 # Skipped in check mode, where git may not be installed yet.

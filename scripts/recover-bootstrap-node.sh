@@ -39,7 +39,7 @@ done < <(pveam list local)
 # nesting=1: Debian 13's journald fails without it (inventory/group_vars/all/proxmox.yml).
 pct create 101 "$template" --hostname bootstrap --unprivileged 1 --features nesting=1 \
   --cores 2 --memory 4096 --swap 512 --rootfs local-zfs:8 \
-  --net0 name=eth0,bridge=vmbr1,ip=dhcp,ip6=auto
+  --net0 name=eth0,bridge=vmbr1,ip=dhcp
 pct start 101
 
 echo "[2/6] Install tools and clone the repository"
