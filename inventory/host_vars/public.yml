@@ -44,6 +44,23 @@ lxc_docker_env_path_ownership_overrides:
     group: '1000'
     recurse: true
 
+# This host mounts only its own /ephemeral folders, at the same paths.
+proxmox_lxc_bind_mounts_overrides:
+  mp2: "/ephemeral/romm,mp=/ephemeral/romm"
+  mp4: "/ephemeral/readmeabook,mp=/ephemeral/readmeabook"
+  mp5: "/ephemeral/calibre-web-automated,mp=/ephemeral/calibre-web-automated"
+
+proxmox_lxc_host_directories:
+  - path: /ephemeral/romm
+    owner: "1001"
+    group: "1001"
+  - path: /ephemeral/readmeabook
+    owner: "1001"
+    group: "1001"
+  - path: /ephemeral/calibre-web-automated
+    owner: "1001"
+    group: "1001"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 305

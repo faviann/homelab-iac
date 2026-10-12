@@ -35,6 +35,15 @@ lxc_docker_env_stack_vars:
     komga_user: "{{ vault_servarr_komf_komga_user }}"
     komga_password: "{{ vault_servarr_komf_komga_password }}"
 
+# This host mounts only its own /ephemeral folder, at the same path.
+proxmox_lxc_bind_mounts_overrides:
+  mp2: "/ephemeral/kapowarr,mp=/ephemeral/kapowarr"
+
+proxmox_lxc_host_directories:
+  - path: /ephemeral/kapowarr
+    owner: "1001"
+    group: "1001"
+
 # Container definition for proxmox_lxc_provision role
 # NOTE: Confirm vmid matches the existing Proxmox container if already created.
 proxmox_lxc_overrides:

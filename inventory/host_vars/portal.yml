@@ -23,6 +23,19 @@ dockhand_discord_webhook_url: "{{ vault_dockhand_discord_webhook_url }}"
 lxc_docker_env_external_networks:
   - shared
 
+# Portal reads only the workstation's artifact publication root, read-only.
+proxmox_lxc_bind_mounts_overrides:
+  mp2: "/ephemeral/workstation/artifacts,mp=/ephemeral/workstation/artifacts,ro=1"
+
+proxmox_lxc_host_directories:
+  - path: /ephemeral/workstation
+    owner: "1001"
+    group: "1001"
+    mode: "0700"
+  - path: /ephemeral/workstation/artifacts
+    owner: "1001"
+    group: "1001"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 300

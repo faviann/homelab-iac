@@ -10,6 +10,15 @@ lxc_docker_env_stack_vars:
     jwt_secret: "{{ vault_jellystat_jwt_secret }}"
     postgres_password: "{{ vault_jellystat_postgres_password }}"
 
+# This host mounts only its own /ephemeral folder, at the same path.
+proxmox_lxc_bind_mounts_overrides:
+  mp2: "/ephemeral/jellyfin,mp=/ephemeral/jellyfin"
+
+proxmox_lxc_host_directories:
+  - path: /ephemeral/jellyfin
+    owner: "1001"
+    group: "1001"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 304
