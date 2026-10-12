@@ -49,6 +49,16 @@
         argv: "{{ ['touch'] + (repo_only_stack_files + ['config.ini']) | map('regex_replace', '^', myapp_source ~ '/') | list }}"
       changed_when: true
 
+    # config.ini stays untracked but not ignored, so it must still deploy.
+    - name: Put the source in a Git checkout that ignores bytecode
+      ansible.builtin.shell: |
+        set -o errexit
+        git init -q {{ temp_root | quote }}
+        printf '__pycache__/\n' > {{ temp_root | quote }}/.gitignore
+        mkdir {{ myapp_source | quote }}/__pycache__
+        touch {{ myapp_source | quote }}/__pycache__/app.pyc
+      changed_when: true
+
     - name: Seed stale deployed stack compose file
       ansible.builtin.copy:
         dest: "{{ lxc_docker_environment_internal.shared_mount_source }}/stacks/stale-app/compose.yaml"
@@ -144,7 +154,7 @@
           - not _stale_stack.stat.exists
           - (_quarantined_compose.content | b64decode | from_yaml).services.old.image == 'old:latest'
 
-    # Deployed tree: deployable files arrive while stack-local docs stay repo-only.
+    # Deployed tree: deployable files arrive while stack-local docs and ignored files stay behind.
     - name: Find the deployed desired stack tree
       ansible.builtin.find:
         paths: "{{ deployed_myapp }}"
@@ -153,11 +163,11 @@
         file_type: any
       register: _deployed_myapp_tree
 
-    - name: Assert deployable files arrived and repo-only files did not
+    - name: Assert deployable files arrived and repo-only and ignored files did not
       ansible.builtin.assert:
         that:
           - "['compose.yaml', 'config.ini'] | difference(deployed_files) == []"
-          - "(['docs'] + repo_only_stack_files) | intersect(deployed_files) == []"
+          - "(['docs', '__pycache__'] + repo_only_stack_files) | intersect(deployed_files) == []"
       vars:
         deployed_files: "{{ _deployed_myapp_tree.files | map(attribute='path') | map('relpath', deployed_myapp) | list }}"
 
