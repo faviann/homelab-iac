@@ -42,6 +42,9 @@ lxc_docker_env_path_ownership_overrides:
     group: "70"
     recurse: true
 
+proxmox_lxc_bind_mounts_overrides:
+  mp0: "/rpool/data/subvol-200-disk-1/auth,mp=/shared/auth"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 301
