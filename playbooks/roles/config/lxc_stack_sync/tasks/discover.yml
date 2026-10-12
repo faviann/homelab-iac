@@ -250,11 +250,11 @@
 
 # Files Git ignores, such as bytecode a local test run leaves behind, never
 # deploy; untracked files that are not ignored still do. A source outside a
-# Git checkout ignores nothing.
+# Git checkout ignores nothing. Paths go as arguments, not stdin: git exits
+# without reading stdin outside a checkout, and the write then breaks the pipe.
 - name: List git-ignored paths in per-host stacks # noqa: command-instead-of-module
   ansible.builtin.command:
-    cmd: git -C {{ lxc_docker_environment_internal.stacks_source | quote }} check-ignore --stdin
-    stdin: "{{ paths | join('\n') }}"
+    argv: "{{ ['git', '-C', lxc_docker_environment_internal.stacks_source, 'check-ignore', '--'] + paths }}"
   vars:
     paths: >-
       {{
@@ -275,7 +275,9 @@
   check_mode: false
   delegate_to: localhost
   become: false
-  when: _per_host_stacks_dir.stat.exists | default(false)
+  when:
+    - _per_host_stacks_dir.stat.exists | default(false)
+    - paths | length > 0
 
 - name: Filter stack-local docs and metadata from deployment discovery
   ansible.builtin.set_fact:
