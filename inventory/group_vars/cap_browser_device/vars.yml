@@ -11,6 +11,7 @@ browser_device_session_uid: 1001
 # No fleet bind mounts. Shared directories are 0755 and files 0644, so any uid
 # could read them; the Chrome profile stays on the root disk.
 proxmox_default_bind_mounts: {}
+proxmox_default_host_directories: []
 
 browser_device_display_geometry: 1920x1080
 

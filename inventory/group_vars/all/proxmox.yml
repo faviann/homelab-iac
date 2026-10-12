@@ -21,20 +21,26 @@ proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zs
 
 # ==============================================================================
 # Shared Storage Configuration
-# The shared volume is mounted to all containers except browser devices via
-# config file (not mount_volumes)
-# because the volume is owned by container 200 and shared across containers
+# Each container binds only its own folder of container 200's shared volume,
+# at the same path inside the container. Container 200 mounts the whole volume.
 # ==============================================================================
-proxmox_shared_volume_path: "local-zfs:subvol-200-disk-1"
-proxmox_shared_mount_point: "/shared"
+proxmox_shared_host_path: "/rpool/data/subvol-200-disk-1/{{ inventory_hostname }}"
 
 # Bind mounts requiring config file editing (API restriction)
-# mp0 is the shared volume from container 200
 proxmox_default_bind_mounts:
-  mp0: "{{ proxmox_shared_volume_path }},mp={{ proxmox_shared_mount_point }},size=256G"
+  mp0: "{{ proxmox_shared_host_path }},mp=/shared/{{ inventory_hostname }}"
   mp1: "/conf,mp=/conf,ro=1"
   mp2: "/ephemeral,mp=/ephemeral"
   mp3: "/tank,mp=/data"
+
+# Bind sources created on the Proxmox host before the config edit; a missing
+# source stops the container from starting. Hosts add their own through
+# proxmox_lxc_host_directories. Host uid/gid 1001 is container uid/gid 1000.
+proxmox_default_host_directories:
+  - path: "{{ proxmox_shared_host_path }}"
+    owner: "1001"
+    group: "1001"
+    mode: "0755"
 
 # ==============================================================================
 # UID/GID Mapping for Unprivileged Containers

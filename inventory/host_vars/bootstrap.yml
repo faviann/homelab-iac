@@ -12,15 +12,6 @@ lxc_busy_check_host_command: >-
   flock --nonblock /run/homelab-deploy.lock true
   || { echo "a deploy is in flight"; exit 1; }
 
-proxmox_lxc_host_directories:
-  - path: /rpool/data/subvol-200-disk-1/bootstrap
-    owner: "1001"
-    group: "1001"
-    mode: "0755"
-
-proxmox_lxc_bind_mounts_overrides:
-  mp0: "/rpool/data/subvol-200-disk-1/bootstrap,mp=/shared/bootstrap"
-
 proxmox_lxc_overrides:
   vmid: 101
   hostname: bootstrap

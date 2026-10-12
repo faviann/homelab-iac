@@ -44,9 +44,6 @@ lxc_docker_env_path_ownership_overrides:
     group: '1000'
     recurse: true
 
-proxmox_lxc_bind_mounts_overrides:
-  mp0: "/rpool/data/subvol-200-disk-1/public,mp=/shared/public"
-
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 305
