@@ -28,6 +28,10 @@ lxc_docker_env_stack_vars:
     jwt_private_key: "{{ vault_workstation_mcp_auth_proxy_jwt_private_key }}"
     trusted_proxies: "{{ hostvars['portal'].portal_traefik_source_cidr }}"
 
+# The persistent home lives under /ephemeral/workstation.
+proxmox_lxc_bind_mounts_overrides:
+  mp2: "/ephemeral,mp=/ephemeral"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 306

@@ -26,11 +26,11 @@ proxmox_default_ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zs
 # ==============================================================================
 proxmox_shared_host_path: "/rpool/data/subvol-200-disk-1/{{ inventory_hostname }}"
 
-# Bind mounts requiring config file editing (API restriction)
+# Bind mounts requiring config file editing (API restriction). Hosts that
+# use /ephemeral add their own folders through proxmox_lxc_bind_mounts_overrides.
 proxmox_default_bind_mounts:
   mp0: "{{ proxmox_shared_host_path }},mp=/shared/{{ inventory_hostname }}"
   mp1: "/conf,mp=/conf,ro=1"
-  mp2: "/ephemeral,mp=/ephemeral"
   mp3: "/tank,mp=/data"
 
 # Bind sources created on the Proxmox host before the config edit; a missing
