@@ -12,8 +12,9 @@ upgrade and reboot instead of killing the deploy. Ansible installs `git`,
 `unzip`, chezmoi, a pinned `uv`, and the native Bitwarden CLI, and makes the
 first clone of this repository at `/root/homelab-iac`. Ansible never moves
 that checkout again. It delivers the deploy notification webhook, Dockhand's
-Discord channel (`vault_dockhand_discord_webhook_url`), but never the vault
-passphrase or the fleet key.
+Discord channel (`vault_dockhand_discord_webhook_url`), and copies the
+deploying controller's vault passphrase and fleet key to root
+([ADR-0020](adr/0020-copy-control-node-secrets-from-the-workstation.md)).
 
 ## The recipe
 
@@ -149,13 +150,12 @@ records the nightly deploy and its gate.
 ## Setting up the node
 
 The node needs the vault passphrase and the fleet key before it can run
-anything. Set them up after the first `./run.sh --limit bootstrap` and after
-every rebuild of the node, because a rebuild wipes `/root` and the secrets in
-it, and nothing keeps them on host storage. Follow the bootstrap-node path in
-the dotfiles `BOOTSTRAP.md` for the Bitwarden and `chezmoi init --apply`
-steps. They run as root on the node, which you reach with the fleet key:
-`ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms`. Then
-verify on the node, in its checkout:
+anything. Every `./run.sh --limit bootstrap` from the workstation copies
+both from the workstation's `~/.ansible`, so a new or rebuilt node is ready
+after its first run, with no unlock on the node. Bitwarden stays their backup
+of record and the workstation's source. To verify, reach the node with the
+fleet key, `ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms`,
+and in its checkout run:
 
 ```bash
 cd /root/homelab-iac
@@ -166,12 +166,12 @@ cd /root/homelab-iac
 The connectivity check must reach every LXC, because the nightly deploy
 targets all of them.
 
-`./vault.sh rotate` refreshes only the workstation's copy of the passphrase.
-After a rotation, commit and push the rekeyed vault, then refresh the node
-with the line rotate prints:
+`./vault.sh rotate` refreshes only the workstation's copy of the passphrase,
+and the nightly deploy cannot decrypt a rekeyed vault with the node's old
+copy. Refresh the node as rotate prints:
 
 ```text
-Refresh the bootstrap node: ssh -l root -i ~/.ansible/ssh/proxmox_lxc bootstrap.faviann.vms, then export BW_SESSION="$(bw unlock --raw)" && bw sync && chezmoi apply ~/.ansible/vault-pass && bw lock
+Refresh the bootstrap node: once the rekeyed vault is on main, run ./run.sh --limit bootstrap from main before the 03:00 nightly deploy
 ```
 
 Skip `./vault.sh check` on the node after a rotation: its checkout keeps the
@@ -211,17 +211,19 @@ rm /root/recover-bootstrap-node.sh
 
 The host runs only `pct` and `pveam`; everything else runs inside the
 containers through `pct exec`, which keeps your terminal attached. The script
-never handles a secret: you type it at Bitwarden's own prompts. The stages:
+never prints a secret: you type yours at Bitwarden's own prompts, and it
+writes the passphrase and the fleet key straight to files. The stages:
 
 1. Create 101 (`bootstrap`, `tier_small`, DHCP on `vmbr1`, `local-zfs`, the
    newest local `debian-13-standard` template). An existing 101 named
    `bootstrap` is destroyed only after you type `101`; any other 101 stops the
    script.
-2. Install `git`, `unzip`, `curl`, `uv`, chezmoi, and `bw`, and clone this
+2. Install `git`, `unzip`, `curl`, `uv`, and `bw`, and clone this
    repository at `<full-sha>` into `/root/homelab-iac`.
 3. Unlock: press Enter, then answer Bitwarden's email, master password, and
-   2FA prompts, once each. This is the dotfiles bootstrap-node path, with
-   `bw login --raw` doing the login and the unlock in one step.
+   2FA prompts, once each. `bw login --raw` does the login and the unlock in
+   one step; the script writes the vault passphrase and the fleet key from
+   their Bitwarden items, then locks Bitwarden again.
 4. On `y`, `./run.sh --limit workstation`. It may restart the workstation
    (a pending reboot after upgrades, or a container config change); if the
    busy probe reports busy, the run defers and exits `3`.
@@ -230,10 +232,9 @@ never handles a secret: you type it at Bitwarden's own prompts. The stages:
    with that status and prints the command to retry from the Proxmox host shell.
 6. The workstation (306, refused unless named `workstation`) runs
    `./run.sh --limit bootstrap` as `faviann` from a throwaway clone at
-   `<full-sha>`, using its own vault passphrase and fleet key. On failure,
-   for example `75` while another run holds the workstation's lock, the
-   script prints the command to rerun.
-7. Unlock the recreated node, as in stage 3.
+   `<full-sha>`, using its own vault passphrase and fleet key, and copies
+   both to the node. On failure, for example `75` while another run holds
+   the workstation's lock, the script prints the command to rerun.
 
 It ends by printing the one remaining check, `./vault.sh check` and
 `./inspect.sh connectivity` on the node, as in
