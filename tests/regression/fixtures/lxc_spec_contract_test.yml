@@ -42,6 +42,9 @@
       mp1: /srv/config,mp=/config
     proxmox_lxc_bind_mounts_overrides:
       mp1: /srv/custom-config,mp=/config
+    proxmox_default_host_directories:
+      - path: /srv/media
+        owner: "1001"
     proxmox_lxc_host_directories:
       - path: /srv/custom-config
         mode: "0755"
@@ -109,7 +112,7 @@
         that:
           - proxmox_lxc_contract.host_config.bind_mounts.mp0 == '/srv/media,mp=/media'
           - proxmox_lxc_contract.host_config.bind_mounts.mp1 == '/srv/custom-config,mp=/config'
-          - proxmox_lxc_contract.host_config.host_directories == proxmox_lxc_host_directories
+          - proxmox_lxc_contract.host_config.host_directories == proxmox_default_host_directories + proxmox_lxc_host_directories
           - proxmox_lxc_contract.host_config.idmap == proxmox_default_idmap
           - proxmox_lxc_contract.host_config.features | sort == proxmox_lxc_capability_defaults.features | sort
           - proxmox_lxc_contract.host_config.configure_nvidia_runtime

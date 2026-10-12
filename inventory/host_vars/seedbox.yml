@@ -17,9 +17,6 @@ lxc_docker_env_stack_vars:
     ws_password: "{{ vault_seedbox_ws_password }}"
     ws_session_cookie: "{{ vault_seedbox_ws_session_cookie }}"
 
-proxmox_lxc_bind_mounts_overrides:
-  mp0: "/rpool/data/subvol-200-disk-1/seedbox,mp=/shared/seedbox"
-
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 302
