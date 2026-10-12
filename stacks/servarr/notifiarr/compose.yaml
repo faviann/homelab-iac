@@ -4,7 +4,7 @@ x-prereq-dirs:
 
 services:
   notifiarr:
-    image: golift/notifiarr
+    image: golift/notifiarr@sha256:2b0a8784d8a43177cbc5a19110e7eb066d9321572c3352eda79c0a89898c7735
     container_name: notifiarr
     restart: unless-stopped
     environment:
