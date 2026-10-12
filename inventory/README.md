@@ -87,7 +87,7 @@ proxmox_lxc_group_defaults:
   memory: 16384
   disk: "8"
   netif:
-    net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,ip6=auto,type=veth"
+    net0: "name=eth0,bridge=vmbr1,firewall=0,ip=dhcp,type=veth"
 
 # group_vars/cap_docker/vars.yml
 install_docker: true
