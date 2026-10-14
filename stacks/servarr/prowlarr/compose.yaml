@@ -13,6 +13,7 @@ services:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
+      - PROWLARR__SERVER__ALLOWEDHOSTS=prowlarr,${HOMEPAGE_FQDN}
     volumes:
       - ./appdata/prowlarr:/config
       - /data:/data
