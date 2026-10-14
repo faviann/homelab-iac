@@ -64,6 +64,7 @@ def main() -> int:
             "    esac\n"
             "    ;;\n"
             "  exec)\n"
+            "    case \"$*\" in *ssh_host_*) echo 'ssh-ed25519 AAAA'; exit 0 ;; esac\n"
             "    for last_argument do :; done\n"
             f"    [ \"$last_argument\" = '{encoded_public_key}' ] || exit 97\n"
             f"    printf '%s\\n' \"$2\" >> '{pct_key_log}'\n"
@@ -195,7 +196,8 @@ def main() -> int:
             return 1
 
         calls = pct_log.read_text().splitlines()
-        if calls != ["status 4201", "config 4201", "exec 4201", "exec 4201"]:
+        # The first exec is host-key pinning, before the injector's status check.
+        if calls != ["exec 4201", "status 4201", "config 4201", "exec 4201", "exec 4201"]:
             print(f"unexpected pct calls: {calls}", file=sys.stderr)
             return 1
         key_consumers = pct_key_log.read_text().splitlines()
@@ -229,7 +231,7 @@ def main() -> int:
         expected_pct_calls = Counter(
             f"{operation} {vmid}"
             for vmid in (4201, 4202, 4203)
-            for operation in ("status", "config", "exec", "exec")
+            for operation in ("exec", "status", "config", "exec", "exec")
         )
         no_limit_pct_calls = pct_log.read_text().splitlines()
         if Counter(no_limit_pct_calls) != expected_pct_calls:

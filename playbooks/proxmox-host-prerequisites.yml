@@ -11,3 +11,14 @@
     - role: infrastructure/proxmox_host_bootstrap
       proxmox_validate_api: false
       run_once: true
+
+# Before any play connects to a targeted guest. Proxmox trust is verified above.
+- name: Pin targeted guest host keys through Proxmox
+  hosts: lxcs
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Pin the guest's host keys
+      ansible.builtin.include_role:
+        name: infrastructure/ssh_key_shared
+        tasks_from: pin_host_keys

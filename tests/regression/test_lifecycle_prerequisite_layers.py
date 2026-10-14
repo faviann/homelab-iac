@@ -19,6 +19,7 @@ L3_CONSUMERS = {
     Path("site.yml"),
     Path("playbooks/add-ssh-keys-to-lxcs.yml"),
     Path("playbooks/configure-lxcs.yml"),
+    Path("playbooks/lab-connectivity.yml"),
     Path("playbooks/lifecycle-lxcs.yml"),
     Path("playbooks/provision-lxcs.yml"),
     Path("playbooks/validate-infrastructure.yml"),
@@ -27,7 +28,6 @@ L1_ONLY_CONSUMERS = {
     # Enrollment establishes the trust the L3 layer verifies, so routing it
     # through L3 would make it require its own outcome.
     Path("playbooks/enroll-proxmox-host-ssh.yml"),
-    Path("playbooks/lab-connectivity.yml"),
     Path("playbooks/proxmox_api_check.yml"),
     PROXMOX_HOST_LAYER,
     Path("playbooks/validate-credentials.yml"),
@@ -158,8 +158,8 @@ def test_required_l3_consumer_cannot_substitute_l1() -> None:
 
 def test_l1_only_consumer_cannot_import_l3() -> None:
     graph = {path: deepcopy(documents(path)) for path in current_entrypoints()}
-    connectivity = Path("playbooks/lab-connectivity.yml")
-    graph[connectivity][0]["ansible.builtin.import_playbook"] = (
+    containers = Path("playbooks/proxmox_api_check.yml")
+    graph[containers][0]["ansible.builtin.import_playbook"] = (
         "proxmox-host-prerequisites.yml"
     )
 

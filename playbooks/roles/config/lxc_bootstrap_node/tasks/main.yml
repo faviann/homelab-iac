@@ -1,8 +1,8 @@
 ---
 # The bootstrap node is the control node that runs the nightly deploy and
 # carries interrupting workstation runs (docs/bootstrap-node.md). The role
-# delivers the deploy webhook, and copies the controller's vault passphrase and
-# fleet key (ADR-0020).
+# delivers the deploy webhook, and copies the controller's vault passphrase,
+# fleet key, and fleet known_hosts (ADR-0020, ADR-0021).
 
 - name: Install git
   ansible.builtin.apt:
@@ -40,8 +40,9 @@
     mode: "0700"
 
 # From the controller running this play; no_log and diff: false keep the
-# contents out of output and diffs.
-- name: Copy the vault passphrase and the fleet key
+# contents out of output and diffs. The known_hosts carries the Proxmox
+# host-key anchor, so the node never trusts Proxmox on first use.
+- name: Copy the vault passphrase, the fleet key, and the fleet known_hosts
   ansible.builtin.copy:
     src: "{{ [lookup('env', 'HOME'), '.ansible', item.path] | path_join }}"
     dest: "/root/.ansible/{{ item.path }}"
@@ -54,6 +55,7 @@
     - { path: vault-pass, mode: "0600" }
     - { path: ssh/proxmox_lxc, mode: "0600" }
     - { path: ssh/proxmox_lxc.pub, mode: "0644" }
+    - { path: known_hosts, mode: "0600" }
 
 # Every deploy posts its outcome here; a placeholder fails the run. no_log
 # hides any message, so the name says what to set.

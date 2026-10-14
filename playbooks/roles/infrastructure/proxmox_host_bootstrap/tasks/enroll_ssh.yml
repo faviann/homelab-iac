@@ -30,6 +30,17 @@
   no_log: true
   delegate_to: localhost
 
+# Enrollment is the person's trust decision, so the host it reaches becomes the
+# new Proxmox host-key anchor, as after a reinstall.
+- name: Forget the Proxmox host-key anchor
+  ansible.builtin.known_hosts:
+    path: "{{ lookup('env', 'HOME') }}/.ansible/known_hosts"
+    name: >-
+      {{ proxmox_host if proxmox_ssh_port | int == 22
+         else '[' ~ proxmox_host ~ ']:' ~ proxmox_ssh_port }}
+    state: absent
+  delegate_to: localhost
+
 # ssh-copy-id appends only the -i key, even when an agent holds others, to the
 # login user's own ~/.ssh/authorized_keys. -f skips its already-installed check:
 # enrollment runs only after the trust probe failed, and that check is a login
@@ -52,6 +63,8 @@
       - "{{ proxmox_ssh_port | string }}"
       - -o
       - StrictHostKeyChecking=accept-new
+      - -o
+      - UserKnownHostsFile=${HOME}/.ansible/known_hosts
       - -o
       - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
       - -o

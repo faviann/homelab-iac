@@ -1,6 +1,6 @@
 ---
-- name: Validate control node health
-  ansible.builtin.import_playbook: controller-prerequisites.yml
+- name: Validate prerequisites and pin guest host keys
+  ansible.builtin.import_playbook: proxmox-host-prerequisites.yml
 
 - name: Validate SSH connectivity to managed hosts
   hosts: lxcs

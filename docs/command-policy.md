@@ -195,6 +195,13 @@ Agent use of a documented raw command is a separate decision:
   fails: report it to a person, never clear it with `ssh-keygen -R`. IPv4 keeps
   a dead target from falling back to this machine, as in `ansible.cfg`.
 
+  The same rule holds for Ansible runs, which check host keys strictly against
+  the fleet file `~/.ansible/known_hosts`. Each run pins every running guest
+  there through Proxmox, and `./recover.sh proxmox-host-ssh` alone replaces the
+  Proxmox host-key anchor. A guest that fails on a host-key mismatch, or a
+  Proxmox key that differs from the anchor, goes to a person. Never edit, clear,
+  or delete the fleet file, and never turn host-key checking off.
+
 - **Boundary:** observational. Non-secret files, logs, processes, memory,
   disks, networking, and service state may be inspected without asking for
   each observation. No file edits, service restarts, package installs, process

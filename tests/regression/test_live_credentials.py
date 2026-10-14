@@ -1,4 +1,4 @@
-"""Credential consumers load the vault without widening SSH-only workflows."""
+"""Credential consumers load the vault."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from ansible.parsing.vault import VaultLib, VaultSecret
 import pytest
 import yaml
 
-from ansible_test_helper import ansible_playbook_command, write_controller_identity
+from ansible_test_helper import ansible_playbook_command
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -77,36 +77,3 @@ def test_api_consumer_checks_credentials_before_effects(
         assert result.returncode != 0, output
         assert "Proxmox API credentials require" in output
         assert not effect.exists()
-
-
-def test_ssh_connectivity_ignores_encrypted_vault_and_missing_passphrase(tmp_path: Path) -> None:
-    inventory = tmp_path / "inventory.yml"
-    inventory.write_text(yaml.safe_dump({
-        "all": {"children": {"lxcs": {"hosts": {
-            "credential_free_target": {"ansible_connection": "local"},
-        }}}},
-    }), encoding="utf-8")
-    group_vars = tmp_path / "group_vars/all"
-    group_vars.mkdir(parents=True)
-    (group_vars / "proxmox.yml").write_bytes(
-        (REPO_ROOT / "inventory/group_vars/all/proxmox.yml").read_bytes()
-    )
-    vault = VaultLib([("default", VaultSecret(b"unavailable-fixture-passphrase"))])
-    (tmp_path / "vault.yml").write_bytes(vault.encrypt("vault_unrelated: unused\n"))
-    home = tmp_path / "home"
-    home.mkdir()
-    write_controller_identity(home)
-    result = subprocess.run(
-        [str(REPO_ROOT / "inspect.sh"), "connectivity", "--limit", "credential_free_target"],
-        cwd=REPO_ROOT,
-        env={
-            **os.environ,
-            "HOME": str(home),
-            "ANSIBLE_INVENTORY": str(inventory),
-            "ANSIBLE_VAULT_PASSWORD_FILE": str(tmp_path / "missing-passphrase"),
-        },
-        capture_output=True, text=True, timeout=30,
-    )
-    output = result.stdout + result.stderr
-    assert result.returncode == 0, output
-    assert "SSH reachable: credential_free_target" in output

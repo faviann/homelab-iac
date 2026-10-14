@@ -349,9 +349,14 @@ def main(
         # (issue #89). The overlay is handed to each launcher explicitly rather
         # than written into os.environ, so pooled launchers can be given
         # private namespaces off this same root.
+        #
+        # Host-key pinning writes ${HOME}/.ansible/known_hosts, the file every
+        # fleet SSH connection checks, so fixture guests must never reach the
+        # operator's. Launchers that stage their own HOME still override this.
         environment = {
             **FIXTURE_ENVIRONMENT,
             "ANSIBLE_CACHE_PLUGIN_CONNECTION": str(cache_root / "fact-cache"),
+            "HOME": str(cache_root / "home"),
         }
         return run_regressions(
             full=args.full,

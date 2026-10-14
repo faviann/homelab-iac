@@ -60,6 +60,13 @@
               {{ proxmox_lifecycle_guest_address_retries | int * proxmox_lifecycle_guest_address_delay | int }}s
               after start.
 
+    # A create, rebuild, or start in this run leaves keys the prerequisite pin
+    # never saw, and a created guest is reached under a new name.
+    - name: Pin the guest's current host keys before connecting
+      ansible.builtin.include_role:
+        name: infrastructure/ssh_key_shared
+        tasks_from: pin_host_keys
+
     - name: Ensure container is accessible via SSH
       ansible.builtin.wait_for_connection:
         timeout: "{{ 60 if (proxmox_lifecycle_rebuilt | bool) else 15 }}"

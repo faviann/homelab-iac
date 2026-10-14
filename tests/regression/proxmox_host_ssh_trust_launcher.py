@@ -3,6 +3,8 @@
 
 Runs the real ordinary prerequisite playbook with the real ssh client against an
 unprivileged real sshd, so only the credential that actually logs in decides.
+The probe records the Proxmox host-key anchor on first contact, then fails on a
+different key without replacing the anchor.
 """
 
 from __future__ import annotations
@@ -45,7 +47,7 @@ all:
 # This stands in for it: the operator's ssh_config, applied first, so any -F the
 # caller passes still takes precedence as it would over the real file.
 SSH_WRAPPER = """#!/bin/sh
-exec '{ssh}' -F '{operator_config}' -o UserKnownHostsFile='{root}/known_hosts' "$@"
+exec '{ssh}' -F '{operator_config}' "$@"
 """
 
 
@@ -68,7 +70,7 @@ def main() -> int:
         wrapper_dir.mkdir()
         wrapper = wrapper_dir / "ssh"
         wrapper.write_text(
-            SSH_WRAPPER.format(ssh=real_ssh, operator_config=operator_config, root=root)
+            SSH_WRAPPER.format(ssh=real_ssh, operator_config=operator_config)
         )
         wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
 
@@ -135,6 +137,8 @@ def main() -> int:
                     "BatchMode=yes",
                     "-o",
                     "StrictHostKeyChecking=accept-new",
+                    "-o",
+                    f"UserKnownHostsFile={root}/known_hosts",
                     "-p",
                     str(port),
                     f"{user}@127.0.0.1",
@@ -176,9 +180,31 @@ def main() -> int:
                 print(f"{trusted.stdout}\n{trusted.stderr}", file=sys.stderr)
                 return 1
 
+            fleet_file = home / ".ansible" / "known_hosts"
+            host_key = " ".join((root / "host_key.pub").read_text().split()[:2])
+            anchor = f"[127.0.0.1]:{port} "
+            if fleet_file.read_text() != f"{anchor}{host_key}\n":
+                print("the probe did not record the Proxmox host-key anchor", file=sys.stderr)
+                return 1
+            changed = f"{anchor}{' '.join(other.with_suffix('.pub').read_text().split()[:2])}\n"
+            fleet_file.write_text(changed)
+            impostor = run_prerequisites(canonical, "")
+            if (
+                impostor.returncode == 0
+                or "./recover.sh proxmox-host-ssh" not in impostor.stdout
+                or fleet_file.read_text() != changed
+            ):
+                print(
+                    "the probe accepted or replaced a Proxmox host key that "
+                    "differs from the anchor",
+                    file=sys.stderr,
+                )
+                print(f"{impostor.stdout}\n{impostor.stderr}", file=sys.stderr)
+                return 1
+
     print(
         "ok: Proxmox trust holds only when the selected identity itself "
-        "authenticates to the configured target"
+        "authenticates to the configured target that presents its anchored key"
     )
     return 0
 

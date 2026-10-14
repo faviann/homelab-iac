@@ -1,0 +1,55 @@
+---
+# Host-key pinning (ADR-0021): the guest's host keys, read through Proxmox by
+# VMID and never over the fleet network, replace its entries in the fleet
+# known_hosts that ansible.cfg checks strictly. A guest that is not running
+# gets no entry and no failure, because nothing connects to it.
+- name: Read the guest's host keys through Proxmox
+  delegate_to: "{{ proxmox_pct_delegate_host }}"
+  vars:
+    ansible_user: "{{ proxmox_host_delegate_user | default('root') }}"
+    ssh_key_shared_vmid: >-
+      {{ (proxmox_lxc_overrides | default({}) | combine(proxmox_lxc | default({}))).vmid }}
+  block:
+    - name: Read the guest's host public keys
+      proxmox_pct:
+        vmid: "{{ ssh_key_shared_vmid }}"
+        command: exec
+        exec_command: cat /etc/ssh/ssh_host_*_key.pub
+      register: ssh_key_shared_host_keys
+      failed_when: false
+
+    # Only a failed read pays for the status call.
+    - name: Observe why the guest's host keys could not be read
+      proxmox_pct:
+        vmid: "{{ ssh_key_shared_vmid }}"
+        command: status
+      register: ssh_key_shared_guest_status
+      when: ssh_key_shared_host_keys.rc != 0
+
+    - name: Fail a guest whose host keys cannot be read
+      ansible.builtin.fail:
+        msg: "{{ ssh_key_shared_host_keys.msg }}"
+      when:
+        - ssh_key_shared_host_keys.rc != 0
+        - ssh_key_shared_guest_status.status not in ['stopped', 'absent']
+
+# Keyed by inventory name, so the block replaces whatever an earlier pin wrote,
+# under whichever name and port Ansible connects to now. Those come from
+# hostvars, because delegation rebinds ansible_host to localhost. Serialized
+# because every host writes the same file.
+- name: Pin the guest's host keys in the fleet known_hosts
+  ansible.builtin.blockinfile:
+    path: "{{ lookup('env', 'HOME') }}/.ansible/known_hosts"
+    create: true
+    mode: "0600"
+    marker: "# {mark} {{ inventory_hostname }}"
+    block: |-
+      {% set guest = hostvars[inventory_hostname] %}
+      {% set name = guest.ansible_ssh_host | default(guest.ansible_host | default(inventory_hostname)) %}
+      {% set port = guest.ansible_port | default(22) | int %}
+      {% for key in ssh_key_shared_host_keys.stdout_lines | default([]) if key | trim %}
+      {{ name if port == 22 else '[' ~ name ~ ']:' ~ port }} {{ key.split()[:2] | join(' ') }}
+      {% endfor %}
+  throttle: 1
+  check_mode: false
+  delegate_to: localhost
