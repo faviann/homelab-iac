@@ -152,6 +152,14 @@ _Avoid_: Dependency reconciliation, automatic key repair
 An explicitly invoked transition that establishes trust for a selected controller SSH identity on named managed infrastructure. Ordinary inspection or deployment does not authorize enrollment, except that creating or rebuilding a guest may install the already selected identity as part of that authorized effect.
 _Avoid_: SSH prerequisite repair, automatic trust setup
 
+**Host-key pinning**:
+Recording a managed guest's current host keys, read through the Proxmox host by VMID, as the only keys a control node accepts from that guest. The keys are read afresh before each run connects and again after a create or rebuild; they are never remembered between runs.
+_Avoid_: Host key scanning, trust on first use
+
+**Proxmox host-key anchor**:
+The Proxmox host's own host key as recorded by a control node at its first contact with it. It is the one host key pinning cannot supply, and only identity enrollment replaces it.
+_Avoid_: Pinned Proxmox key, root of trust
+
 **Live credential requirement**:
 The credential material and authority semantically consumed by one live workflow. Inventory layout or incidental startup behavior must not impose unrelated credentials on that workflow.
 _Avoid_: Global live readiness, controller bootstrap prerequisite
