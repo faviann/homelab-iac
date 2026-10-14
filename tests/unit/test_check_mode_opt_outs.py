@@ -35,6 +35,8 @@ ACKNOWLEDGED_OPT_OUTS: dict[tuple[str, str], str] = {
         "findmnt read the mount plan needs",
     ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/check_ssh.yml", "Test selected identity trust on Proxmox host"):
         "ssh reachability probe",
+    ("playbooks/roles/infrastructure/ssh_key_shared/tasks/pin_host_keys.yml", "Pin the guest's host keys in the fleet known_hosts"):
+        "check mode connects to guests too, so it needs their keys pinned",
     ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Verify pct command works"):
         "read-only host validation",
     ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/validation.yml", "Check installed lxc-pve version"):

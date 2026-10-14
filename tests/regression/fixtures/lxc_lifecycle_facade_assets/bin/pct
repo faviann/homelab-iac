@@ -37,6 +37,9 @@ case "$1" in
       *'grep -cxF'*)
         echo 1
         ;;
+      *ssh_host_*)
+        cat "$LIFECYCLE_TEST_STATE_DIR/$vmid.host_keys" 2>/dev/null || :
+        ;;
       *)
         exit 99
         ;;

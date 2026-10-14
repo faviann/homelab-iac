@@ -22,6 +22,8 @@
 # Trust means a fresh public-key login with the selected identity. -F none keeps
 # ssh_config from adding identities, remapping the host, or reusing a connection
 # something else authenticated; IdentitiesOnly still ignores other agent keys.
+# accept-new records the Proxmox host-key anchor in the fleet known_hosts only
+# when it has none; a key that differs from the anchor fails the probe.
 - name: Test selected identity trust on Proxmox host
   ansible.builtin.command:
     argv:
@@ -38,6 +40,8 @@
       - "ConnectTimeout={{ proxmox_ssh_connect_timeout }}"
       - -o
       - StrictHostKeyChecking=accept-new
+      - -o
+      - UserKnownHostsFile=${HOME}/.ansible/known_hosts
       - -o
       - IdentitiesOnly=yes
       - -o

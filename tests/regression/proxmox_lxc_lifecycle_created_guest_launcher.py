@@ -4,7 +4,9 @@
 The inventory names each guest by a DNS name no resolver answers, as the LAN
 resolver does for a fresh lease. The lifecycle learns the address from the
 Proxmox host double and configures the first guest over a real ssh session to
-it. The second guest never obtains an address and fails by vmid, not by name
+it. Host-key checking stays on: the session succeeds only because the run pins
+the keys the Proxmox host double reads from the guest after creating it. The
+second guest never obtains an address and fails by vmid, not by name
 resolution. The fixture playbook asserts both outcomes.
 """
 
@@ -73,6 +75,9 @@ def main() -> int:
         (REPO_ROOT / ".ansible" / "cp").mkdir(mode=0o700, parents=True, exist_ok=True)
 
         with local_sshd(root) as port:
+            (state_dir / f"{ADDRESSED}.host_keys").write_text(
+                (root / "host_key.pub").read_text(encoding="utf-8"), encoding="utf-8"
+            )
             proc = subprocess.run(
                 [
                     *ANSIBLE_PLAYBOOK,

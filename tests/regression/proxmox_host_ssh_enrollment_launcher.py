@@ -223,6 +223,11 @@ def main() -> int:
         # No single quote, so a shell-quoted copy still contains it verbatim.
         # The random tail keeps the process scan from matching anything else.
         password = f'fixture $(false) "x" {secrets.token_hex(8)}'
+        # A Proxmox host-key anchor from before a reinstall; enrollment replaces it.
+        old_host_key = write_controller_identity(temp_root / "reinstalled").with_suffix(".pub")
+        fleet_file = home / ".ansible" / "known_hosts"
+        old_anchor = f"[127.0.0.1]:{ssh_port} {' '.join(old_host_key.read_text().split()[:2])}"
+        fleet_file.write_text(f"{old_anchor}\n")
 
         untrusted = enrollment_run(
             temp_root, home, ssh_port, "untrusted", password=password, already_trusted=False
@@ -234,6 +239,9 @@ def main() -> int:
                 file=sys.stderr,
             )
             print(untrusted.output, file=sys.stderr)
+            return 1
+        if old_anchor in fleet_file.read_text():
+            print("enrollment kept the old Proxmox host-key anchor", file=sys.stderr)
             return 1
         if untrusted.passwords != [password]:
             print("the target did not receive the typed password verbatim", file=sys.stderr)

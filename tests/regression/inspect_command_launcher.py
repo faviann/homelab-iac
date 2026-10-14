@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import fcntl
+import getpass
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -13,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from ansible_test_helper import local_ssh_port, write_controller_identity
+from ansible_test_helper import local_ssh_port, local_sshd, write_controller_identity
 from proxmox_api_fixture import (
     COMMON_OBSERVATION,
     LXC_API_PATHS,
@@ -503,50 +505,140 @@ def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str
     return env
 
 
-def assert_connectivity_fails_after_reporting_unreachable_targets() -> None:
-    with tempfile.TemporaryDirectory(prefix="inspect-connectivity-live-") as temp_dir:
-        temp_root = Path(temp_dir)
-        env = live_fixture_environment(
-            temp_root,
-            """---
+# Beside a copy of the production group_vars/all/proxmox.yml, which it follows
+# alphabetically and so overrides.
+CONNECTIVITY_PROXMOX = """
+proxmox_api_host: 127.0.0.1
+proxmox_pct_delegate_host: localhost
+proxmox_ssh_port: {proxmox_port}
+proxmox_ssh_user: {user}
+proxmox_validate_pct: false
+"""
+
+CONNECTIVITY_INVENTORY = """
 all:
   children:
     lxcs:
+      vars:
+        ansible_connection: ssh
+        ansible_port: {guest_port}
+        ansible_user: {user}
+        ansible_ssh_private_key_file: "~/.ansible/ssh/proxmox_lxc"
+        ansible_ssh_common_args: -F /dev/null
       hosts:
-        reachable_fixture:
-          ansible_connection: local
-        unreachable_fixture:
-          ansible_connection: ssh
+        pinned:
           ansible_host: 127.0.0.1
-          ansible_port: 1
-          ansible_user: nobody
-          ansible_ssh_common_args: -o ConnectTimeout=1 -o BatchMode=yes
-""",
-        )
-        (temp_root / "vault.yml").write_text(
-            "$ANSIBLE_VAULT;1.1;AES256\ninvalid-unrelated-ciphertext\n",
-            encoding="utf-8",
-        )
+          proxmox_lxc_overrides: {{vmid: 7401}}
+        impostor:
+          ansible_host: localhost
+          proxmox_lxc_overrides: {{vmid: 7402}}
+        unreadable:
+          ansible_host: 127.0.0.1
+          proxmox_lxc_overrides: {{vmid: 7403}}
+        stopped:
+          ansible_host: localhost
+          proxmox_lxc_overrides: {{vmid: 7404}}
+"""
+
+# The Proxmox host double: what each guest's host keys are, read by VMID.
+CONNECTIVITY_PCT = """#!/bin/sh
+case "$1 $2" in
+  "exec 7401") cat '{guest_key}' ;;
+  "exec 7402") cat '{other_key}' ;;
+  "status 7403") echo 'status: running' ;;
+  "status 7404") echo 'status: stopped' ;;
+  *) exit 1 ;;
+esac
+"""
+
+
+def assert_connectivity_trusts_only_keys_pinned_through_proxmox() -> None:
+    """One real sshd stands in for Proxmox, another for every guest.
+
+    The pinned guest starts with a stale fleet entry and must connect. The
+    impostor presents a key other than the one Proxmox reports and must be
+    unreachable. A running guest whose keys cannot be read fails before any
+    connection. A stopped guest gets no entry and does not fail the pin. None
+    of it reads the vault, which here cannot be decrypted.
+    """
+    # A short root keeps ControlPath sockets under the Unix socket length limit.
+    with tempfile.TemporaryDirectory(prefix="pxpin-", dir="/tmp") as temp_dir:
+        temp_root = Path(temp_dir)
+        env = live_fixture_environment(temp_root, "")
+        home = temp_root / "home"
+        servers = {name: temp_root / name for name in ("proxmox", "guest")}
+        bin_dir = temp_root / "bin"
+        bin_dir.mkdir()
+        for server in servers.values():
+            server.mkdir()
+            (server / "authorized_keys").write_text(
+                (home / ".ansible/ssh/proxmox_lxc.pub").read_text()
+            )
+        env["PATH"] = f"{bin_dir}:{env['PATH']}"
         env["ANSIBLE_VAULT_PASSWORD_FILE"] = str(temp_root / "missing-vault-pass")
-        result = run_inspect("connectivity", env=env)
-    output = f"{result.stdout}\n{result.stderr}"
-    if (
-        result.returncode == 0
-        or "reachable_fixture" not in output
-        or "unreachable_fixture" not in output
-        or "SSH unreachable" not in output
-    ):
-        raise AssertionError(
-            "connectivity did not report the complete targeted result and fail:\n"
-            f"returncode={result.returncode}\n{output}"
+        env.pop("SSH_AUTH_SOCK", None)
+        (temp_root / "vault.yml").write_text(
+            "$ANSIBLE_VAULT;1.1;AES256\ninvalid-unrelated-ciphertext\n"
         )
-    for credential_value in (
-        CONTROLLED_API_USER,
-        CONTROLLED_API_TOKEN_ID,
-        CONTROLLED_API_TOKEN_SECRET,
+        group_vars = temp_root / "group_vars" / "all"
+        group_vars.mkdir(parents=True)
+        (group_vars / "proxmox.yml").write_bytes(
+            (REPO_ROOT / "inventory/group_vars/all/proxmox.yml").read_bytes()
+        )
+        guest_public_key = servers["guest"] / "host_key.pub"
+        other_public_key = servers["proxmox"] / "host_key.pub"
+        pct = bin_dir / "pct"
+        pct.write_text(
+            CONNECTIVITY_PCT.format(guest_key=guest_public_key, other_key=other_public_key)
+        )
+        pct.chmod(0o755)
+        with (
+            local_sshd(servers["proxmox"]) as proxmox_port,
+            local_sshd(servers["guest"]) as guest_port,
+        ):
+            (group_vars / "zz_fixture.yml").write_text(
+                CONNECTIVITY_PROXMOX.format(proxmox_port=proxmox_port, user=getpass.getuser())
+            )
+            (temp_root / "inventory.yml").write_text(
+                CONNECTIVITY_INVENTORY.format(guest_port=guest_port, user=getpass.getuser())
+            )
+            guest_key = " ".join(guest_public_key.read_text().split()[:2])
+            other_key = " ".join(other_public_key.read_text().split()[:2])
+            pinned_entry = f"[127.0.0.1]:{guest_port}"
+            fleet_file = home / ".ansible" / "known_hosts"
+            fleet_file.write_text(f"# BEGIN pinned\n{pinned_entry} {other_key}\n# END pinned\n")
+            result = subprocess.run(
+                [str(INSPECT), "connectivity"],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+                env=env,
+            )
+        output = f"{result.stdout}\n{result.stderr}"
+        fleet = fleet_file.read_text()
+
+    failures = []
+    if result.returncode == 0:
+        failures.append("connectivity succeeded although targets were unreachable")
+    if "SSH reachable: pinned" not in output:
+        failures.append("the pinned guest did not connect over its stale entry")
+    if f"# BEGIN pinned\n{pinned_entry} {guest_key}\n# END pinned" not in fleet:
+        failures.append("pinning did not replace the pinned guest's stale entry")
+    if (
+        "SSH unreachable: impostor" not in output
+        or "Host key verification failed" not in output
     ):
-        if credential_value in output:
-            raise AssertionError("connectivity disclosed a controlled credential value")
+        failures.append("the impostor's key was not refused as unreachable")
+    if not re.search(r"unreadable\s+:.*failed=1", output) or ": unreadable (" in output:
+        failures.append("an unreadable running guest did not fail before connecting")
+    if "SSH unreachable: stopped" not in output or "BEGIN stopped" in fleet:
+        failures.append("a stopped guest was pinned or failed the pin")
+    if failures:
+        raise AssertionError(
+            "\n".join(failures) + f"\n{output}\nfleet known_hosts:\n{fleet}"
+        )
 
 
 def assert_containers_includes_unreserved_node_container(*, deny_audit: bool = False) -> None:
@@ -728,7 +820,7 @@ def main() -> int:
         assert_vars_graph_reports_inventory_failure_without_disclosure()
         assert_operations_route_through_shared_live_execution()
         assert_exclusive_contention_names_holder()
-        assert_connectivity_fails_after_reporting_unreachable_targets()
+        assert_connectivity_trusts_only_keys_pinned_through_proxmox()
         assert_containers_includes_unreserved_node_container()
         assert_containers_includes_unreserved_node_container(deny_audit=True)
         assert_credentials_walks_permission_ladder_without_disclosure()

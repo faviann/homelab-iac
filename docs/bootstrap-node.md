@@ -13,8 +13,9 @@ a pinned `uv`, and makes the first clone of this repository at
 `/root/homelab-iac`. Ansible never moves that checkout again. It delivers
 the deploy notification webhook, Dockhand's Discord channel
 (`vault_dockhand_discord_webhook_url`), and copies the deploying controller's
-vault passphrase and fleet key to root
-([ADR-0020](adr/0020-copy-control-node-secrets-from-the-workstation.md)).
+vault passphrase, fleet key, and fleet `known_hosts` to root
+([ADR-0020](adr/0020-copy-control-node-secrets-from-the-workstation.md),
+[ADR-0021](adr/0021-pin-fleet-host-keys-through-proxmox.md)).
 
 ## The recipe
 
@@ -177,6 +178,10 @@ Refresh the bootstrap node: once the rekeyed vault is on main, run ./run.sh --li
 Skip `./vault.sh check` on the node after a rotation: its checkout keeps the
 vault from the last ref it deployed until its next deploy fetches the
 rekeyed one.
+
+`./recover.sh proxmox-host-ssh` after a Proxmox reinstall likewise replaces
+only the workstation's Proxmox host-key anchor. Run `./run.sh --limit bootstrap`
+afterward so the node's copy of `~/.ansible/known_hosts` carries the new one.
 
 ## Reaching the node when the workstation is dead
 
