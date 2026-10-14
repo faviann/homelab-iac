@@ -148,6 +148,27 @@ Deleting it instead also works; it costs one
 `findmnt --mountpoint ~/.azure` must show the persistent target and
 `az account show --query user.name` must return the account without a new login.
 
+### Tailscale
+
+`~/.local/share/tailscale` is the state directory of the userspace `tailscaled`
+user service from [faviann/dotfiles#171](https://github.com/faviann/dotfiles/pull/171).
+It holds the node identity, so treat it as a credential. If this deploys before
+the first `tailscale up`, nothing needs migrating. Otherwise stop the dotfiles-owned
+`tailscaled` user service, then:
+
+```bash
+mkdir -p /ephemeral/workstation/home/.local/share
+cp -a ~/.local/share/tailscale /ephemeral/workstation/home/.local/share/tailscale
+mv ~/.local/share/tailscale ~/.local/share/tailscale.pre-persist
+```
+
+Persistence only helps if key expiry is disabled for the device in the Tailscale
+admin console; otherwise the device signs in again every 180 days.
+
+Never run two workstations from the same persisted state at once, for example a
+replacement LXC started before the old one is destroyed. Both claim the same
+tailnet device.
+
 ### Other tools
 
 Before enabling the Moraine mapping, stop Moraine through the dotfiles-owned
@@ -255,7 +276,7 @@ Afterwards, confirm the mounts are actually live rather than trusting the play r
 ```bash
 findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
-        ~/.config/lobu ~/.azure ~/.hermes ~/.openclaw ~/.config/herdr \
+        ~/.config/lobu ~/.azure ~/.local/share/tailscale ~/.hermes ~/.openclaw ~/.config/herdr \
         ~/.local/state/collie ~/.tsk ~/repos ~/worktrees
 ```
 
@@ -414,6 +435,7 @@ Confirm:
 - The four hashes from the before-manifest are unchanged.
 - Lobu passes its pre-start hash comparison and reconnects as the same registered device after dotfiles convergence (see [Lobu before-manifest](#lobu-before-manifest)).
 - `az account show --query user.name` returns the same account without a new `az login`.
+- `tailscale status` shows the same tailnet device without a new `tailscale up`.
 - The before/after OpenCode and OMP file lists match for `~/.omp` and all three durable OpenCode roots; `~/.pi` remains independently mounted.
 - `opencode --version` and `omp --version` succeed from the managed `~/.local/bin` command surface after `workstation-setup` completes.
 - herdr restores its session — `herdr-server.log` reports `session restore evaluated … workspaces=N`.
