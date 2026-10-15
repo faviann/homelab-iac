@@ -30,6 +30,7 @@ L1_ONLY_CONSUMERS = {
     Path("playbooks/enroll-proxmox-host-ssh.yml"),
     Path("playbooks/proxmox_api_check.yml"),
     PROXMOX_HOST_LAYER,
+    Path("playbooks/service-probe.yml"),
     Path("playbooks/validate-credentials.yml"),
 }
 PlaybookGraph = dict[Path, list[dict[str, object]]]

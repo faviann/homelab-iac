@@ -365,6 +365,7 @@ After initial setup, all subsequent playbook runs will use passwordless SSH auth
 ./inspect.sh connectivity    # SSH reachability of the LXCs; non-zero when one is unreachable
 ./inspect.sh containers      # every LXC on the Proxmox node
 ./inspect.sh vars portal     # merged variables, vault-derived values masked
+./inspect.sh probe https://jellyfin.public.faviann.com/health  # GET a routed service as a user would
 ```
 
 ## TLS Certificate Verification

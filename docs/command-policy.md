@@ -23,6 +23,7 @@ of what the guards enforce.
 | | `tests [<target>...]` | none | yes |
 | `./inspect.sh` | `credentials`, `containers` | shared | yes |
 | | `connectivity [--limit <targets>]`, `plan [--limit <targets>]` | shared | yes |
+| | `probe <https-url>...` | shared | yes |
 | | `vars <host>`, `vars --graph` | none | yes |
 | `./recover.sh` | `ssh-keys [--limit <targets>]` | exclusive | human-only |
 | | `proxmox-host-ssh` | exclusive | human-only |
@@ -370,6 +371,7 @@ Agent use of a documented raw command is a separate decision:
 | `--tags bootstrap` | `./recover.sh proxmox-host-ssh` |
 | `ansible-playbook` on a repository playbook | the operation that runs it |
 | `ansible -m ping` | `./inspect.sh connectivity` |
+| a `curl` `GET` against a routed service URL | `./inspect.sh probe <https-url>` |
 | `ansible-inventory --host <host>` | `./inspect.sh vars <host>` |
 | `ansible-inventory --list` | none. The whole-inventory dump was removed; `./inspect.sh vars <host>` shows one host |
 | `ansible-inventory --graph` | `./inspect.sh vars --graph` |

@@ -17,6 +17,8 @@ Operations:
   containers                  List every LXC on the Proxmox node
   plan [--limit <targets>]    Report lifecycle planning problems without execution
   vars <host> | vars --graph  Show merged variables masked, or the inventory graph
+  probe <https-url>...        GET routed service URLs as a user would, without
+                              following redirects; fails on no response or 4xx/5xx
 
 Options:
   --limit <targets>           Select hosts with Ansible limit grammar
@@ -31,6 +33,7 @@ usage_error() {
 }
 
 requires_check_mode=false
+takes_urls=false
 case "${1:-}" in
     --help)
         usage
@@ -55,6 +58,12 @@ case "${1:-}" in
         playbook="playbooks/validate-infrastructure.yml"
         supports_limit=true
         requires_check_mode=true
+        shift
+        ;;
+    probe)
+        playbook="playbooks/service-probe.yml"
+        supports_limit=false
+        takes_urls=true
         shift
         ;;
     vars)
@@ -94,6 +103,7 @@ case "${1:-}" in
 esac
 
 limit_pattern=""
+probe_urls=""
 while (($#)); do
     case "$1" in
         --limit)
@@ -107,7 +117,15 @@ while (($#)); do
             usage
             exit 0
             ;;
+        https://*)
+            $takes_urls || usage_error "unknown option"
+            [[ "$1" != *[,[:space:]\'\"\\{]* ]] || \
+                usage_error "a URL cannot contain commas, whitespace, quotes, backslashes, or braces"
+            probe_urls+="${probe_urls:+,}$1"
+            shift
+            ;;
         *)
+            $takes_urls && [[ "$1" != -* ]] && usage_error "probe takes only https:// URLs"
             usage_error "unknown option"
             ;;
     esac
@@ -121,6 +139,10 @@ else
     prerequisite_target_pattern="localhost"
 fi
 $requires_check_mode && arguments+=("--check")
+if $takes_urls; then
+    [[ -n "$probe_urls" ]] || usage_error "probe requires at least one https:// URL"
+    arguments+=("-e" "probe_urls=$probe_urls")
+fi
 arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
 
 run_live_playbook shared "$playbook" "${arguments[@]}"

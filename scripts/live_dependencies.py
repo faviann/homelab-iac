@@ -80,6 +80,7 @@ LIVE_OPERATIONS: dict[str, LiveOperation] = {
     "playbooks/validate-credentials.yml": LiveOperation((), (), False),
     "playbooks/lab-connectivity.yml": LiveOperation((), (), True),
     "playbooks/proxmox_api_check.yml": LiveOperation((), (), False),
+    "playbooks/service-probe.yml": LiveOperation((), (), False),
 }
 
 

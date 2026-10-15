@@ -138,16 +138,19 @@ without the canonical origin, tunnel to loopback:
 Against the public origin:
 
 ```bash
-curl -s https://lobu.admin.faviann.com/.well-known/oauth-protected-resource
-curl -s https://lobu.admin.faviann.com/.well-known/oauth-authorization-server
-curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
-  https://lobu.admin.faviann.com/api/organizations  # must be 200 application/json
+# api/organizations must report status=200 content_type=application/json
+./inspect.sh probe \
+  https://lobu.admin.faviann.com/.well-known/oauth-protected-resource \
+  https://lobu.admin.faviann.com/.well-known/oauth-authorization-server \
+  https://lobu.admin.faviann.com/api/organizations
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://lobu.admin.faviann.com/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'   # must be 401
 ```
 
-All three discovery values should name `https://lobu.admin.faviann.com`. Where
+All three discovery values should name `https://lobu.admin.faviann.com`. The
+probe prints the first 160 characters of each body, and today `resource`,
+`authorization_servers`, and `issuer` all fall inside them. Where
 each comes from, with `AUTH_COOKIE_DOMAIN` unset:
 
 - **`issuer`** (authorization-server document): the origin that served the
