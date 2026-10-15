@@ -56,7 +56,7 @@ def assert_explicit_operation_and_help() -> None:
 
     help_result = run_inspect("--help")
     help_output = f"{help_result.stdout}\n{help_result.stderr}"
-    operations = ("credentials", "connectivity", "containers", "plan", "vars")
+    operations = ("credentials", "connectivity", "containers", "plan", "vars", "probe")
     if help_result.returncode != 0 or not all(
         operation in help_output for operation in operations
     ):
@@ -408,17 +408,25 @@ Path(os.environ["INSPECT_TEST_CAPTURE"]).write_text(json.dumps({
 
 def assert_operations_route_through_shared_live_execution() -> None:
     cases = (
-        ("credentials", (), "playbooks/validate-credentials.yml", "localhost"),
-        ("connectivity", (), "playbooks/lab-connectivity.yml", "localhost"),
-        ("containers", (), "playbooks/proxmox_api_check.yml", "localhost"),
+        ("credentials", (), "playbooks/validate-credentials.yml", "localhost", ()),
+        ("connectivity", (), "playbooks/lab-connectivity.yml", "localhost", ()),
+        ("containers", (), "playbooks/proxmox_api_check.yml", "localhost", ()),
         (
             "plan",
             ("--limit", "target_conflict,release_problem"),
             "playbooks/validate-infrastructure.yml",
             "target_conflict,release_problem",
+            ("--limit", "target_conflict,release_problem", "--check"),
+        ),
+        (
+            "probe",
+            ("https://a.example/health", "https://b.example/?q=1"),
+            "playbooks/service-probe.yml",
+            "localhost",
+            ("-e", "probe_urls=https://a.example/health,https://b.example/?q=1"),
         ),
     )
-    for operation, options, playbook, prerequisite_target in cases:
+    for operation, options, playbook, prerequisite_target, operation_arguments in cases:
         with tempfile.TemporaryDirectory(prefix=f"inspect-{operation}-") as temp_dir:
             temp_root = Path(temp_dir)
             env = controlled_environment(temp_root)
@@ -435,15 +443,12 @@ def assert_operations_route_through_shared_live_execution() -> None:
             capture = json.loads(
                 (temp_root / "capture.json").read_text(encoding="utf-8")
             )
-            expected_operation_arguments = [*options]
-            if operation == "plan":
-                expected_operation_arguments.append("--check")
             expected_arguments = [
                 "run",
                 "--locked",
                 "ansible-playbook",
                 playbook,
-                *expected_operation_arguments,
+                *operation_arguments,
                 "-e",
                 f"prerequisite_target_pattern={prerequisite_target}",
             ]
@@ -451,6 +456,28 @@ def assert_operations_route_through_shared_live_execution() -> None:
                 raise AssertionError(
                     f"{operation} routed incorrectly:\n"
                     f"expected={expected_arguments!r}\nactual={capture!r}"
+                )
+
+
+def assert_probe_rejects_invalid_urls_before_live_execution() -> None:
+    for arguments in (
+        ("probe",),
+        ("probe", "http://a.example/"),
+        ("probe", "https://a.example/,https://b.example/"),
+        ("probe", "https://a.example/{{x}}"),
+        ("connectivity", "https://a.example/"),
+    ):
+        with tempfile.TemporaryDirectory(prefix="inspect-probe-usage-") as temp_dir:
+            temp_root = Path(temp_dir)
+            result = run_inspect(*arguments, env=controlled_environment(temp_root))
+            if (
+                result.returncode != 2
+                or not result.stderr.startswith("inspect.sh: ")
+                or (temp_root / "capture.json").exists()
+            ):
+                raise AssertionError(
+                    f"inspect {arguments!r} was not rejected as usage:\n"
+                    f"{result.returncode}\n{result.stderr}"
                 )
 
 
@@ -819,6 +846,7 @@ def main() -> int:
         assert_vars_graph_preserves_inventory_tree_without_live_execution()
         assert_vars_graph_reports_inventory_failure_without_disclosure()
         assert_operations_route_through_shared_live_execution()
+        assert_probe_rejects_invalid_urls_before_live_execution()
         assert_exclusive_contention_names_holder()
         assert_connectivity_trusts_only_keys_pinned_through_proxmox()
         assert_containers_includes_unreserved_node_container()

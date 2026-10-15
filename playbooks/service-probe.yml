@@ -1,0 +1,49 @@
+---
+- name: Validate control node health
+  ansible.builtin.import_playbook: controller-prerequisites.yml
+
+- name: Probe routed service URLs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    probe_passing_statuses: "{{ range(100, 400) | list }}"
+  tasks:
+    - name: Request each URL
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        method: GET
+        follow_redirects: none
+        status_code: "{{ [-1] + range(100, 600) | list }}"
+        return_content: true
+        timeout: 15
+      loop: "{{ probe_urls.split(',') }}"
+      register: probe_results
+
+    - name: Report each response
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'PASS' if result.status in probe_passing_statuses else 'FAIL' }}
+          {{ result.item }}
+          status={{ result.status }}
+          elapsed={{ result.elapsed | default('-') }}s
+          location={{ location_without_query }}
+          content_type={{ result.content_type | default('-') }}
+          detail={{ result.msg | default('-') | to_json }}
+          body={{ (result.content | default('') | regex_replace('\s+', ' '))[:160] }}
+      vars:
+        location_without_query: "{{ result.location | default('-') | regex_replace('[?#].*$', '') }}"
+      loop: "{{ probe_results.results }}"
+      loop_control:
+        loop_var: result
+        label: "{{ result.item }}"
+
+    - name: Fail when a URL had no response or answered 400 or above
+      ansible.builtin.fail:
+        msg: "Probe failed for: {{ failed_urls | join(', ') }}"
+      vars:
+        failed_urls: >-
+          {{ probe_results.results
+             | rejectattr('status', 'in', probe_passing_statuses)
+             | map(attribute='item') | list }}
+      when: failed_urls | length > 0

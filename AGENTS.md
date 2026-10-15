@@ -89,6 +89,7 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./inspect.sh connectivity [--limit <targets>]` | Check LXC SSH reachability; non-zero when a target is unreachable |
 | `./inspect.sh containers` | List every LXC on the Proxmox node |
 | `./inspect.sh plan [--limit <targets>]` | Report lifecycle planning problems without executing anything |
+| `./inspect.sh probe <https-url>...` | GET routed service URLs through Traefik as a user would, redirects reported not followed; non-zero on no response or a 4xx/5xx |
 | `./inspect.sh vars <host>` / `vars --graph` | Merged variables with vault-derived values masked, or the group tree. No lock |
 | `./recover.sh ssh-keys [--limit <targets>]` | Human-only. Enroll the controller key in existing LXCs |
 | `./recover.sh proxmox-host-ssh` | Human-only. Enroll the controller key on the Proxmox host (prompts for its root password) |

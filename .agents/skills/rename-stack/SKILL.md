@@ -118,7 +118,7 @@ rg "failed=|unreachable=|quarantin|<new>" /tmp/rename-<new>.log
 ## Verify
 
 1. Repo: folder moved, no stray hits — `rg -n '<old>' stacks/ inventory/ docs/`.
-2. Routing followed the rename — `curl -sSI https://<new>.<default_domain>` returns the app.
+2. Routing followed the rename — `./inspect.sh probe https://<new>.<default_domain>/` reports `PASS` with the app's response, or a 302 to `auth.faviann.com` for a protected route, not Traefik's `404 page not found`.
 3. On the LXC: `ls /shared/<host>/stacks` shows `<new>` not `<old>`; `ls /shared/<host>/stale-stacks`
    shows **nothing new** (proves the in-place `mv` path, not a quarantine/fresh-start).
 4. State preserved: the app keeps its prior config/state (login, library, settings intact).
