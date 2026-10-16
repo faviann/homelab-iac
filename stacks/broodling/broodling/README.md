@@ -87,6 +87,12 @@ and mode, as `x-managed-files` in `compose.yaml` declares. Native accepts a
 token or key of exactly 64 lowercase hex characters with no newline. Ansible
 keeps a template's final newline, so these templates end without one.
 
+`GATEWAY_API_KEY` (`vault_broodling_gateway_api_key`) is a sub2api key
+dedicated to Broodling, in the Claude group, with a spend quota. Create it in
+the sub2api admin UI, so the quota caps what agent runs can spend and revoking
+it affects nothing else. Every model call goes through
+`https://gateway.ai.faviann.com`; nothing here uses the paid Anthropic API.
+
 ## Image updates
 
 Renovate is disabled for this stack in `renovate.json`. `check-target` requires
