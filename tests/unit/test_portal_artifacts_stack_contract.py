@@ -90,7 +90,7 @@ def test_server_serves_exact_paths_without_listing_symlinks_or_fallback() -> Non
     assert "SERVER_FALLBACK_PAGE" not in env
 
 
-def test_markdown_is_served_as_utf8_plain_text_and_nothing_else_changes() -> None:
+def test_config_only_retypes_markdown_and_revalidates_latest() -> None:
     env = load_env_template(STACK_ROOT / ".env.j2")
     config = tomllib.loads(
         (STACK_ROOT / "appdata" / "config.toml").read_text(encoding="utf-8")
@@ -104,7 +104,11 @@ def test_markdown_is_served_as_utf8_plain_text_and_nothing_else_changes() -> Non
                 {
                     "source": "**/*.[mM][dD]",
                     "headers": {"Content-Type": "text/plain; charset=utf-8"},
-                }
+                },
+                {
+                    "source": "**/latest/**",
+                    "headers": {"Cache-Control": "no-cache"},
+                },
             ]
         }
     }
