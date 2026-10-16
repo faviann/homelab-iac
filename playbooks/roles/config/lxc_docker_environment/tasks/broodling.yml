@@ -1,0 +1,156 @@
+---
+# Broodling's initialization, target bootstrap, and readiness check, in the
+# order its deployment guide requires. Stack sync has already run `up -d`.
+# Names and host paths come from the deployed catalog's one environment.
+
+- name: Read the deployed Broodling environment catalog
+  ansible.builtin.slurp:
+    src: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/broodling/appdata/broodling/invocation.json"
+  register: _broodling_catalog_file
+
+- name: Initialize, bootstrap, and check the Broodling target
+  vars:
+    _stack_dir: "{{ lxc_docker_environment_internal.root_docker_conf_path }}/stacks/broodling"
+    _catalog: "{{ _broodling_catalog_file.content | b64decode | from_json }}"
+    _target: "{{ _catalog.environments | first }}"
+    _compose: [docker, compose, -p, broodling]
+    _check_dir: "{{ lxc_docker_env_broodling_check_target_dir }}"
+    _runtime_dir: "{{ _check_dir }}/{{ lxc_docker_env_stack_vars.broodling.broodling_image | regex_replace('^.*@sha256:', '') }}"
+  block:
+    # Explicit and one-time: ./run.sh --limit broodling -- -e broodling_initialize=true
+    # initialize-tls refuses a non-empty root, so on an initialized
+    # installation this stops at the first step and changes nothing.
+    - name: Initialize a fresh Broodling installation
+      when: broodling_initialize | default(false) | bool
+      block:
+        - name: Create the TLS root
+          ansible.builtin.command:
+            argv: "{{ _compose + ['run', '--rm', '--no-deps', 'initialize-tls'] }}"
+            chdir: "{{ _stack_dir }}"
+          changed_when: true
+
+        # Native relaxes these modes for its worker UIDs, so no later run
+        # enforces them.
+        - name: Create the target's empty state and home
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: "0700"
+          loop:
+            - "{{ _target.stateMount }}"
+            - "{{ _target.homeMount }}"
+
+        # A restart-looping container keeps its backoff under a plain `up -d`.
+        - name: Start zeroshot-tls with the new root
+          ansible.builtin.command:
+            argv: "{{ _compose + ['up', '-d', '--force-recreate', '--no-deps', 'zeroshot-tls'] }}"
+            chdir: "{{ _stack_dir }}"
+          changed_when: true
+
+        - name: Initialize the target's native state for its origin
+          ansible.builtin.command:
+            argv: >-
+              {{ _compose + ['run', '--rm', '--no-deps', '--use-aliases', _target.container, 'initialize',
+              '--listen', '0.0.0.0:18770', '--public-origin', _target.origin, '--storage', '/state'] }}
+            chdir: "{{ _stack_dir }}"
+          changed_when: true
+
+        - name: Initialize the Broodling store
+          ansible.builtin.command:
+            argv: "{{ _compose + ['run', '--rm', '--no-deps', 'broodling', 'initialize-store', '/var/lib/broodling/state.sqlite3'] }}"
+            chdir: "{{ _stack_dir }}"
+          changed_when: true
+
+        - name: Start Broodling and the target
+          ansible.builtin.command:
+            argv: "{{ _compose + ['up', '-d', '--force-recreate', '--no-deps', 'broodling', _target.container] }}"
+            chdir: "{{ _stack_dir }}"
+          changed_when: true
+
+    # A started target refuses all control until it holds the control token,
+    # and any restart loses it. A target that already holds it is sent nothing.
+    - name: Install the control token in the target
+      ansible.builtin.command:
+        argv: >-
+          {{ _compose + ['run', '--rm', '--no-deps',
+          '-v', _stack_dir ~ '/credentials/bootstrap/' ~ _target.container ~ '-bootstrap-key:/run/secrets/zeroshot-bootstrap-key:ro',
+          'broodling', 'bootstrap-target', '/etc/broodling/invocation.json', _target.name, '/run/secrets/zeroshot-bootstrap-key'] }}
+        chdir: "{{ _stack_dir }}"
+      register: _broodling_bootstrap
+      changed_when: "'\"installed\"' in _broodling_bootstrap.stdout"
+
+    - name: Read the running target's image ID
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, "{% raw %}{{.Image}}{% endraw %}", "{{ _target.container }}"]
+      register: _broodling_target_image
+      changed_when: false
+
+    - name: Ensure the check-target directory exists
+      ansible.builtin.file:
+        path: "{{ _check_dir }}"
+        state: directory
+        mode: "0700"
+
+    # The host's view of the deployed catalog: the same entries with host paths
+    # for the root certificate and the root-owned token copy.
+    - name: Write the check-target configuration
+      ansible.builtin.copy:
+        content: >-
+          {{ _catalog | combine({
+            'directRootCertificate': '/data/broodling/zeroshot-tls/root/root.crt',
+            'environments': [_target | combine({
+              'controlTokenFile': _stack_dir ~ '/credentials/check/' ~ _target.container ~ '-control-token'})]
+          }) | to_nice_json }}
+        dest: "{{ _check_dir }}/config.json"
+        mode: "0600"
+
+    # Paths must be the exact source strings Docker recorded from the stack directory.
+    - name: Write the check-target inventory
+      ansible.builtin.copy:
+        content: >-
+          {{ {
+            'network': 'broodling_default',
+            'tlsContainerName': 'zeroshot-tls',
+            'rootKeyMount': '/data/broodling/zeroshot-tls/key',
+            'rootCertificateMount': '/data/broodling/zeroshot-tls/root',
+            'broodlingContainerName': 'broodling',
+            'targets': [{
+              'environment': _target.name,
+              'imageId': _broodling_target_image.stdout,
+              'bootstrapKeyFile': _stack_dir ~ '/credentials/' ~ _target.container ~ '-bootstrap-key'}]
+          } | to_nice_json }}
+        dest: "{{ _check_dir }}/target-inventory.json"
+        mode: "0600"
+
+    # check-target needs the Docker socket, which the image never mounts, so it
+    # runs on the LXC from the pinned image's own application and runtime.
+    - name: Copy the check-target runtime out of the Broodling image
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          staging="$(mktemp -d "$CHECK_DIR/.staging.XXXXXX")"
+          container="$(docker create "$IMAGE")"
+          trap 'docker rm "$container" >/dev/null; rm -rf "$staging"' EXIT
+          docker cp "$container:/app" "$staging/app"
+          docker cp "$container:/usr/share/dotnet" "$staging/dotnet"
+          mv "$staging" "$RUNTIME_DIR"
+        creates: "{{ _runtime_dir }}"
+      environment:
+        CHECK_DIR: "{{ _check_dir }}"
+        IMAGE: "{{ lxc_docker_env_stack_vars.broodling.broodling_image }}"
+        RUNTIME_DIR: "{{ _runtime_dir }}"
+
+    - name: Check that the target is ready
+      ansible.builtin.command:
+        argv:
+          - "{{ _runtime_dir }}/dotnet/dotnet"
+          - "{{ _runtime_dir }}/app/Broodling.Host.dll"
+          - check-target
+          - "{{ _check_dir }}/target-inventory.json"
+          - "{{ _check_dir }}/config.json"
+      environment:
+        # Nothing installs ICU on the LXC, and readiness does no culture-sensitive work.
+        DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+      register: _broodling_readiness
+      changed_when: false
+      failed_when: _broodling_readiness.rc != 0 or not (_broodling_readiness.stdout | from_json).ready
