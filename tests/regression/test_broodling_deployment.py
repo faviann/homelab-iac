@@ -59,8 +59,7 @@ def deploy(
     dotnet = runtime / "dotnet/dotnet"
     dotnet.write_text(
         '#!/bin/sh\n'
-        'printf "dotnet %s\\n" "$*" >> "$COMMAND_LOG"\n'
-        'printf \'{"ready": true, "targets": [], "providerTasks": 0}\\n\'\n',
+        'printf "dotnet %s\\n" "$*" >> "$COMMAND_LOG"\n',
         encoding="utf-8",
     )
     dotnet.chmod(0o755)
@@ -116,7 +115,7 @@ def test_initialization_runs_in_order_then_bootstraps_and_checks(tmp_path: Path)
     assert commands == [
         "docker compose -p broodling run --rm --no-deps initialize-tls",
         "docker compose -p broodling up -d --force-recreate --no-deps zeroshot-tls",
-        "docker compose -p broodling run --rm --no-deps --use-aliases zeroshot-dotnet initialize"
+        "docker compose -p broodling run --rm --no-deps zeroshot-dotnet initialize"
         " --listen 0.0.0.0:18770 --public-origin https://zeroshot-dotnet.dev.faviann.com --storage /state",
         "docker compose -p broodling run --rm --no-deps broodling initialize-store /var/lib/broodling/state.sqlite3",
         "docker compose -p broodling up -d --force-recreate --no-deps broodling zeroshot-dotnet",

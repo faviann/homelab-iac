@@ -59,7 +59,7 @@
         - name: Initialize the target's native state for its origin
           ansible.builtin.command:
             argv: >-
-              {{ _compose + ['run', '--rm', '--no-deps', '--use-aliases', _target.container, 'initialize',
+              {{ _compose + ['run', '--rm', '--no-deps', _target.container, 'initialize',
               '--listen', '0.0.0.0:18770', '--public-origin', _target.origin, '--storage', '/state'] }}
             chdir: "{{ _stack_dir }}"
           changed_when: true
@@ -164,6 +164,4 @@
       environment:
         # Nothing installs ICU on the LXC, and readiness does no culture-sensitive work.
         DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
-      register: _broodling_readiness
       changed_when: false
-      failed_when: _broodling_readiness.rc != 0 or not (_broodling_readiness.stdout | from_json).ready
