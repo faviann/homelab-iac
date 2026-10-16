@@ -69,6 +69,7 @@
 
     # A started target refuses all control until it holds the control token,
     # and any restart loses it. A target that already holds it is sent nothing.
+    # A target started in this run may not listen yet, so only that failure is retried.
     - name: Install the control token in the target
       ansible.builtin.command:
         argv: >-
@@ -77,6 +78,9 @@
           'broodling', 'bootstrap-target', '/etc/broodling/invocation.json', _target.name, '/run/secrets/zeroshot-bootstrap-key'] }}
         chdir: "{{ _stack_dir }}"
       register: _broodling_bootstrap
+      until: _broodling_bootstrap.rc == 0 or 'native_transport_error' not in _broodling_bootstrap.stdout
+      retries: 30
+      delay: 2
       changed_when: "'\"installed\"' in _broodling_bootstrap.stdout"
 
     - name: Read the running target's image ID

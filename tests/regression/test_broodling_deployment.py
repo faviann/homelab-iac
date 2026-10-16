@@ -17,9 +17,14 @@ from ansible_test_helper import ansible_playbook_command
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STACK_SOURCE = REPO_ROOT / "stacks/broodling/broodling"
 BROODLING_DIGEST = "a" * 64
+INSTALLED = (0, '{"bootstrapped":true,"environment":"dotnet","result":"installed"}')
+NOT_LISTENING = (1, '{"bootstrapped":false,"code":"native_transport_error"}')
+WRONG_KEY = (1, '{"bootstrapped":false,"code":"bootstrap_failed"}')
 
 
-def deploy(tmp_path: Path, *arguments: str, bootstrap_exit: int = 0) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+def deploy(
+    tmp_path: Path, *arguments: str, bootstrap_replies: tuple[tuple[int, str], ...] = (INSTALLED,),
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     stack = tmp_path / "conf/stacks/broodling"
     catalog = json.loads(jinja2.Template(
         (STACK_SOURCE / "appdata/broodling/invocation.json.j2").read_text(encoding="utf-8"),
@@ -32,6 +37,8 @@ def deploy(tmp_path: Path, *arguments: str, bootstrap_exit: int = 0) -> tuple[su
     (stack / "appdata/broodling/invocation.json").write_text(json.dumps(catalog), encoding="utf-8")
 
     log = tmp_path / "commands.log"
+    replies = tmp_path / "bootstrap-replies"
+    replies.write_text("".join(f"{code} {output}\n" for code, output in bootstrap_replies), encoding="utf-8")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     docker = bin_dir / "docker"
@@ -39,7 +46,9 @@ def deploy(tmp_path: Path, *arguments: str, bootstrap_exit: int = 0) -> tuple[su
         '#!/bin/sh\n'
         'printf "docker %s\\n" "$*" >> "$COMMAND_LOG"\n'
         'case "$*" in\n'
-        '  *bootstrap-target*) printf \'{"bootstrapped":true,"result":"installed"}\\n\'; exit "$BOOTSTRAP_EXIT" ;;\n'
+        '  *bootstrap-target*)\n'
+        '    reply="$(head -n 1 "$BOOTSTRAP_REPLIES")"; sed -i 1d "$BOOTSTRAP_REPLIES"\n'
+        '    printf "%s\\n" "${reply#* }"; exit "${reply%% *}" ;;\n'
         '  inspect*) printf "sha256:fixture-target-image\\n" ;;\n'
         'esac\n',
         encoding="utf-8",
@@ -62,7 +71,7 @@ def deploy(tmp_path: Path, *arguments: str, bootstrap_exit: int = 0) -> tuple[su
         "environment": {
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "COMMAND_LOG": str(log),
-            "BOOTSTRAP_EXIT": str(bootstrap_exit),
+            "BOOTSTRAP_REPLIES": str(replies),
         },
         "vars": {
             "lxc_docker_environment_internal": {"root_docker_conf_path": str(tmp_path / "conf")},
@@ -125,8 +134,16 @@ def test_ordinary_run_bootstraps_before_checking_and_never_initializes(tmp_path:
     assert stat.S_IMODE((tmp_path / "stateMount").stat().st_mode) == 0o755
 
 
-def test_failed_bootstrap_fails_the_run_before_the_readiness_check(tmp_path: Path) -> None:
-    result, commands = deploy(tmp_path, bootstrap_exit=1)
+def test_bootstrap_refusal_fails_the_run_without_retry_or_readiness_check(tmp_path: Path) -> None:
+    result, commands = deploy(tmp_path, bootstrap_replies=(WRONG_KEY,))
 
     assert result.returncode != 0, result.stdout + result.stderr
     assert commands == bootstrap_and_check(tmp_path)[:1]
+
+
+def test_bootstrap_retries_while_the_just_started_target_is_not_listening(tmp_path: Path) -> None:
+    result, commands = deploy(tmp_path, bootstrap_replies=(NOT_LISTENING, INSTALLED))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    bootstrap, *check = bootstrap_and_check(tmp_path)
+    assert commands == [bootstrap, bootstrap, *check]
