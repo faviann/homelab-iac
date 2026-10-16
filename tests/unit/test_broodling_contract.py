@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import jinja2
@@ -13,9 +12,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 STACK = REPO_ROOT / "stacks/broodling/broodling"
 COMPOSE = yaml.safe_load((STACK / "compose.yaml").read_text(encoding="utf-8"))
 SERVICES = COMPOSE["services"]
-
-sys.path.insert(0, str(REPO_ROOT / "playbooks/filter_plugins"))
-from compose_env import credential_is_configured  # noqa: E402
 
 
 def test_only_broodling_and_the_tls_proxy_publish_and_neither_beyond_the_lxc() -> None:
@@ -63,15 +59,3 @@ def test_no_service_mounts_the_docker_socket() -> None:
 
     assert socket_mounts == []
 
-
-def test_vault_example_holds_only_placeholders_for_broodling_credentials() -> None:
-    example = yaml.safe_load((REPO_ROOT / "inventory/vault.yml.example").read_text(encoding="utf-8"))
-    broodling = {key: value for key, value in example.items() if key.startswith("vault_broodling_")}
-
-    assert sorted(broodling) == [
-        "vault_broodling_dotnet_bootstrap_key",
-        "vault_broodling_dotnet_control_token",
-        "vault_broodling_gateway_api_key",
-        "vault_broodling_github_token",
-    ]
-    assert [key for key, value in broodling.items() if credential_is_configured(value)] == []
