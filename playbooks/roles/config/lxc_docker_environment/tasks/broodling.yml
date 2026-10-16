@@ -17,6 +17,15 @@
     _check_dir: "{{ lxc_docker_env_broodling_check_target_dir }}"
     _runtime_dir: "{{ _check_dir }}/{{ lxc_docker_env_stack_vars.broodling.broodling_image | regex_replace('^.*@sha256:', '') }}"
   block:
+    - name: Assert that the catalog names one environment
+      ansible.builtin.assert:
+        that: _catalog.environments | length == 1
+        fail_msg: >-
+          This task initializes, bootstraps, and checks one target only. Extend it
+          before the catalog adds another environment, or that target is never
+          bootstrapped or checked.
+        quiet: true
+
     # Explicit and one-time: ./run.sh --limit broodling -- -e broodling_initialize=true
     # initialize-tls refuses a non-empty root, so on an initialized
     # installation this stops at the first step and changes nothing.
