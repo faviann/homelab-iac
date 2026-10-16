@@ -2,16 +2,15 @@
 
 Broodling accepts a GitHub issue URL over HTTP and dispatches the work to a
 Zeroshot target that runs the coding agent and opens the pull request. This
-stack is the installation that Broodling's
-[ADR 0002](https://github.com/faviann/broodling/blob/main/docs/adr/0002-one-directtarget-per-environment-behind-one-tls-proxy.md)
-describes. It has one Compose project with `broodling`, one target per
-environment (`zeroshot-dotnet`), and `zeroshot-tls`, a Caddy proxy that
-terminates each target's HTTPS origin (`https://zeroshot-dotnet.dev.faviann.com`).
+stack is the installation that Broodling's ADR 0002 describes. It has one
+Compose project with `broodling`, one target per environment
+(`zeroshot-dotnet`), and `zeroshot-tls`, a Caddy proxy that terminates each
+target's HTTPS origin (`https://zeroshot-dotnet.dev.faviann.com`).
 
-Broodling's [deployment guide](https://github.com/faviann/broodling/blob/main/deployment/README.md)
-owns the image contract, the initialization helpers, `bootstrap-target`,
-`check-target`, root rotation, and target image changes. This README covers
-what this repository adds.
+Broodling's deployment guide, `deployment/README.md` in the Broodling
+repository, owns the image contract, the initialization helpers,
+`bootstrap-target`, `check-target`, root rotation, and target image changes.
+This README covers what this repository adds.
 
 ## Reach it
 
@@ -48,10 +47,8 @@ origin, and the Broodling store:
 ./run.sh --limit broodling -- -e broodling_initialize=true > /tmp/broodling.log 2>&1
 ```
 
-Stack sync starts the project first. Until the initialization finishes,
-`broodling` and `zeroshot-tls` restart and the target stays exited. Then
-`tasks/broodling.yml` in `config/lxc_docker_environment` runs the steps in the
-order the deployment guide requires.
+Until the initialization finishes, `broodling` and `zeroshot-tls` restart and
+the target stays exited.
 
 Use the flag on an empty installation only. Each helper refuses existing
 state, so a rerun on an initialized installation fails at the TLS root and
@@ -64,8 +61,8 @@ retains.
 ### Recover from a failed initialization
 
 A first initialization that failed partway refuses to run again. Nothing in
-the installation is worth keeping until one initialization succeeds, so reset
-it on the LXC and rerun the command above:
+the installation is worth keeping until one initialization succeeds. A human
+resets it on the LXC and reruns the command above:
 
 1. In `/conf/docker/stacks/broodling`, run `docker compose -p broodling down -v`.
    This also removes Caddy's data volume, which holds an intermediate signed by
@@ -77,34 +74,18 @@ it on the LXC and rerun the command above:
 
 ## Every deploy
 
-After stack sync, every run that reconciles this stack does two things:
-
-1. It runs `bootstrap-target`, which installs the control token in the target.
-   A started target refuses all control until then, and every restart loses
-   the token. A target that already holds the token is sent nothing.
-2. It runs `check-target` on the LXC as root, because it needs the Docker
-   socket that no container mounts. The run copies the application and the
-   .NET runtime out of the pinned Broodling image into
-   `/opt/broodling/check-target/<digest>/` once per image digest, and writes
-   its configuration beside them. The configuration is the deployed catalog
-   with host paths for the root certificate and the root-owned token copy.
-
-The run fails when either command fails or the target is not ready. Check mode
-runs neither.
+After stack sync, every run installs the control token with `bootstrap-target`
+and then runs `check-target`. The check runs on the LXC as root, because it
+needs the Docker socket, from a copy of the pinned image's application and
+runtime in `/opt/broodling/check-target/<digest>/`. Either failure fails the
+run. Check mode runs neither.
 
 ## Credentials
 
-| File in the stack directory | Owner, mode | Recipient |
-| --- | --- | --- |
-| `broodling.env` | Docker user, `0600` | `broodling` only, through `env_file`: `GH_TOKEN`, `GATEWAY_API_KEY`, and the gateway URL |
-| `zeroshot-dotnet-control-token` | `1654:1654`, `0400` | `broodling`, as a Compose secret that the catalog names |
-| `zeroshot-dotnet-control-token.check` | `0:0`, `0400` | `check-target` |
-| `zeroshot-dotnet-bootstrap-key` | `0:0`, `0400` | the target, as a Compose secret |
-| `zeroshot-dotnet-bootstrap-key.bootstrap` | `1654:1654`, `0400` | the one-off `bootstrap-target` container only |
-
-Native accepts a token or key of exactly 64 lowercase hex characters with no
-newline. Ansible keeps a template's final newline, so these templates end
-without one.
+Each credential is a file in the stack directory with its recipient's owner
+and mode, as `x-managed-files` in `compose.yaml` declares. Native accepts a
+token or key of exactly 64 lowercase hex characters with no newline. Ansible
+keeps a template's final newline, so these templates end without one.
 
 ## Image updates
 
@@ -124,4 +105,5 @@ together, and follow the deployment guide's target image transition.
   broodling#240.
 - The target has restart policy `no`, as readiness requires. A target that
   stops outside Ansible stays stopped until the next deploy starts and
-  bootstraps it.
+  bootstraps it. This includes the LXC reboot that a run makes after the
+  readiness check when a package upgrade requires one.
