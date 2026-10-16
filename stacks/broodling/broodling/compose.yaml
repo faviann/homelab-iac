@@ -5,21 +5,23 @@
 # See README.md.
 
 x-managed-files:
+  # Stack sync gives the stack directory the first entry's owner, so this
+  # Docker-user file stays first and the directory keeps its owner.
   - path: ./broodling.env
     mode: "0600"
-  - path: ./credentials/zeroshot-dotnet-control-token
+  - path: ./zeroshot-dotnet-control-token
     owner: "1654"
     group: "1654"
     mode: "0400"
-  - path: ./credentials/check/zeroshot-dotnet-control-token
+  - path: ./zeroshot-dotnet-control-token.check
     owner: "0"
     group: "0"
     mode: "0400"
-  - path: ./credentials/zeroshot-dotnet-bootstrap-key
+  - path: ./zeroshot-dotnet-bootstrap-key
     owner: "0"
     group: "0"
     mode: "0400"
-  - path: ./credentials/bootstrap/zeroshot-dotnet-bootstrap-key
+  - path: ./zeroshot-dotnet-bootstrap-key.bootstrap
     owner: "1654"
     group: "1654"
     mode: "0400"
@@ -106,6 +108,6 @@ volumes:
 
 secrets:
   zeroshot-dotnet-control-token:
-    file: ./credentials/zeroshot-dotnet-control-token
+    file: ./zeroshot-dotnet-control-token
   zeroshot-dotnet-bootstrap-key:
-    file: ./credentials/zeroshot-dotnet-bootstrap-key
+    file: ./zeroshot-dotnet-bootstrap-key

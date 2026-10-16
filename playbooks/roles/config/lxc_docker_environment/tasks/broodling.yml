@@ -74,7 +74,7 @@
       ansible.builtin.command:
         argv: >-
           {{ _compose + ['run', '--rm', '--no-deps',
-          '-v', _stack_dir ~ '/credentials/bootstrap/' ~ _target.container ~ '-bootstrap-key:/run/secrets/zeroshot-bootstrap-key:ro',
+          '-v', _stack_dir ~ '/' ~ _target.container ~ '-bootstrap-key.bootstrap:/run/secrets/zeroshot-bootstrap-key:ro',
           'broodling', 'bootstrap-target', '/etc/broodling/invocation.json', _target.name, '/run/secrets/zeroshot-bootstrap-key'] }}
         chdir: "{{ _stack_dir }}"
       register: _broodling_bootstrap
@@ -103,7 +103,7 @@
           {{ _catalog | combine({
             'directRootCertificate': '/data/broodling/zeroshot-tls/root/root.crt',
             'environments': [_target | combine({
-              'controlTokenFile': _stack_dir ~ '/credentials/check/' ~ _target.container ~ '-control-token'})]
+              'controlTokenFile': _stack_dir ~ '/' ~ _target.container ~ '-control-token.check'})]
           }) | to_nice_json }}
         dest: "{{ _check_dir }}/config.json"
         mode: "0600"
@@ -121,7 +121,7 @@
             'targets': [{
               'environment': _target.name,
               'imageId': _broodling_target_image.stdout,
-              'bootstrapKeyFile': _stack_dir ~ '/credentials/' ~ _target.container ~ '-bootstrap-key'}]
+              'bootstrapKeyFile': _stack_dir ~ '/' ~ _target.container ~ '-bootstrap-key'}]
           } | to_nice_json }}
         dest: "{{ _check_dir }}/target-inventory.json"
         mode: "0600"

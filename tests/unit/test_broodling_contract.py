@@ -43,15 +43,15 @@ def test_credential_files_have_their_recipients_owner_and_mode() -> None:
 
     assert managed == {
         "./broodling.env": (None, None, "0600"),
-        "./credentials/zeroshot-dotnet-control-token": ("1654", "1654", "0400"),
-        "./credentials/check/zeroshot-dotnet-control-token": ("0", "0", "0400"),
-        "./credentials/zeroshot-dotnet-bootstrap-key": ("0", "0", "0400"),
-        "./credentials/bootstrap/zeroshot-dotnet-bootstrap-key": ("1654", "1654", "0400"),
+        "./zeroshot-dotnet-control-token": ("1654", "1654", "0400"),
+        "./zeroshot-dotnet-control-token.check": ("0", "0", "0400"),
+        "./zeroshot-dotnet-bootstrap-key": ("0", "0", "0400"),
+        "./zeroshot-dotnet-bootstrap-key.bootstrap": ("1654", "1654", "0400"),
     }
     # Native accepts exactly 64 hex characters, and Ansible keeps a template's
     # final newline in the rendered file.
     for path in managed:
-        if path.startswith("./credentials/"):
+        if path.startswith("./zeroshot-dotnet-"):
             assert not (STACK / f"{path}.j2").read_bytes().endswith(b"\n"), path
 
 

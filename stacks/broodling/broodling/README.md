@@ -97,15 +97,14 @@ runs neither.
 | File in the stack directory | Owner, mode | Recipient |
 | --- | --- | --- |
 | `broodling.env` | Docker user, `0600` | `broodling` only, through `env_file`: `GH_TOKEN`, `GATEWAY_API_KEY`, and the gateway URL |
-| `credentials/zeroshot-dotnet-control-token` | `1654:1654`, `0400` | `broodling`, as a Compose secret that the catalog names |
-| `credentials/check/zeroshot-dotnet-control-token` | `0:0`, `0400` | `check-target` |
-| `credentials/zeroshot-dotnet-bootstrap-key` | `0:0`, `0400` | the target, as a Compose secret |
-| `credentials/bootstrap/zeroshot-dotnet-bootstrap-key` | `1654:1654`, `0400` | the one-off `bootstrap-target` container only |
+| `zeroshot-dotnet-control-token` | `1654:1654`, `0400` | `broodling`, as a Compose secret that the catalog names |
+| `zeroshot-dotnet-control-token.check` | `0:0`, `0400` | `check-target` |
+| `zeroshot-dotnet-bootstrap-key` | `0:0`, `0400` | the target, as a Compose secret |
+| `zeroshot-dotnet-bootstrap-key.bootstrap` | `1654:1654`, `0400` | the one-off `bootstrap-target` container only |
 
 Native accepts a token or key of exactly 64 lowercase hex characters with no
-newline. Ansible keeps a template's final newline, so the templates in
-`credentials/` end without one. Do not rename that directory to `secrets/`.
-Git ignores `stacks/**/secrets/`, and stack sync never deploys an ignored file.
+newline. Ansible keeps a template's final newline, so these templates end
+without one.
 
 ## Image updates
 

@@ -101,7 +101,7 @@ def bootstrap_and_check(tmp_path: Path) -> list[str]:
     check = tmp_path / "check"
     return [
         "docker compose -p broodling run --rm --no-deps"
-        f" -v {stack}/credentials/bootstrap/zeroshot-dotnet-bootstrap-key:/run/secrets/zeroshot-bootstrap-key:ro"
+        f" -v {stack}/zeroshot-dotnet-bootstrap-key.bootstrap:/run/secrets/zeroshot-bootstrap-key:ro"
         " broodling bootstrap-target /etc/broodling/invocation.json dotnet /run/secrets/zeroshot-bootstrap-key",
         "docker inspect --format {{.Image}} zeroshot-dotnet",
         f"dotnet {check}/{BROODLING_DIGEST}/app/Broodling.Host.dll check-target"
