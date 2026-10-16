@@ -113,8 +113,8 @@ vault_renovate_token: "REPLACE_WITH_GITHUB_FINE_GRAINED_TOKEN"
 # Broodling on broodling. See stacks/broodling/broodling/README.md.
 # The GitHub token is fine-grained: contents and pull-request write, issues
 # read, on the repositories Broodling works on. The gateway key is a
-# dedicated Claude-group sub2api key with a spend quota, created for Broodling
-# alone in the sub2api admin UI.
+# dedicated Claude-group sub2api key with a spend quota and a model allowlist
+# of exactly claude-opus-5-5, created for Broodling alone in the sub2api admin UI.
 vault_broodling_github_token: "REPLACE_WITH_GITHUB_FINE_GRAINED_TOKEN"
 vault_broodling_gateway_api_key: "REPLACE_WITH_SUB2API_KEY"
 # Two different values, each from `openssl rand -hex 32 | tr -d '\n'`.
