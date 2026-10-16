@@ -28,8 +28,18 @@ Markdown is served as `text/plain; charset=utf-8` instead of `text/markdown`, be
 fetchers such as ChatGPT's reject `text/markdown`. `appdata/config.toml` overrides the
 `Content-Type` header for any path ending in `.md` in any letter case, and leaves every other
 type to the server's own detection. The override also applies to the 404 for a missing `.md`
-path. The server reads this file only at startup, and `docker compose up -d` does not recreate
-the container when only the file changes, so restart the container after editing it.
+path.
+
+Files under any `latest/` directory are served with `Cache-Control: no-cache` instead of the
+server's default `max-age=86400`, because `publish-artifact` rewrites `latest/` in place on every
+republish. A browser revalidates them on each load and gets a cheap `304` when nothing changed.
+Both header rules apply to a `.md` file under `latest/`, and the custom `Cache-Control` replaces
+the built-in one rather than adding a second.
+
+The server reads `appdata/config.toml` only at startup, and `docker compose up -d` does not
+recreate the container when only the file changes. The deploy below handles this. Stack sync
+recreates the service because it bind-mounts the file on its own (see
+[Restart on Change](../../README.md#restart-on-change)).
 
 ## Publishing mapping
 

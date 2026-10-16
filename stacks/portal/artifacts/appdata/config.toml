@@ -3,3 +3,9 @@
 [[advanced.headers]]
 source = "**/*.[mM][dD]"
 headers = { Content-Type = "text/plain; charset=utf-8" }
+
+# Publications rewrite files under latest/ in place on every republish, so a
+# browser must revalidate them. This replaces the server's built-in max-age.
+[[advanced.headers]]
+source = "**/latest/**"
+headers = { Cache-Control = "no-cache" }
