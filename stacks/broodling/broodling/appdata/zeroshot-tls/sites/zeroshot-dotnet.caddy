@@ -1,0 +1,4 @@
+zeroshot-dotnet.dev.faviann.com {
+	tls internal
+	reverse_proxy zeroshot-dotnet:18770
+}

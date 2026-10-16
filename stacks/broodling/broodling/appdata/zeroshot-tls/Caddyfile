@@ -1,0 +1,24 @@
+# zeroshot-tls: the one TLS proxy in front of every environment target. Caddy signs only with the root
+# that `broodling-target initialize-tls` created; it never generates one, so a missing or mismatched root
+# file stops it. Each environment's site is its own file in /etc/caddy/sites, rendered per installation:
+#
+#   zeroshot-<name>.dev.faviann.com {
+#   	tls internal
+#   	reverse_proxy zeroshot-<name>:18770
+#   }
+#
+# one site per origin, forwarding over the project network to that target's alias and native's fixed inner port.
+{
+	skip_install_trust
+	auto_https disable_redirects
+	pki {
+		ca local {
+			root {
+				cert /tls-root/root.crt
+				key /tls-root-key/root.key
+			}
+		}
+	}
+}
+
+import /etc/caddy/sites/*.caddy

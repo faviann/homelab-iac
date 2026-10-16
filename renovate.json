@@ -46,6 +46,11 @@
       "enabled": false
     },
     {
+      "description": "Broodling's readiness check pins the zeroshot-tls image; its images change only with a Broodling release",
+      "matchFileNames": ["stacks/broodling/**"],
+      "enabled": false
+    },
+    {
       "description": "Vendor version pins: no digest (variants reuse the tag), resync upstream compose",
       "matchManagers": ["custom.regex"],
       "matchFileNames": ["**/.env.j2"],
