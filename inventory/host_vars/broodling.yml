@@ -1,0 +1,73 @@
+---
+# Host-specific configuration for the Broodling PR agent service
+# Inherits from: tier_medium, cap_docker
+# See stacks/broodling/broodling/README.md
+
+lxc_hwaddr: "BC:24:11:99:89:7B"
+
+# Its agents run untrusted code, so no Docker-API agent, and no Traefik route
+# until #354.
+docker_agents_enabled: false
+traefik_kop_enabled: false
+
+# The ownership Broodling's deployment guide requires for its service users
+# (broodling 1654, Caddy 10443). The targets' state and home are created once
+# by the initialization instead, because native relaxes their modes.
+lxc_docker_env_host_directories:
+  - path: /data/broodling/broodling
+    owner: "1654"
+    group: "1654"
+    mode: "0700"
+  - path: /data/broodling/broodling/repositories
+    owner: "1654"
+    group: "1654"
+    mode: "0700"
+  - path: /data/broodling/zeroshot-tls/key
+    owner: "10443"
+    group: "10443"
+    mode: "0700"
+  - path: /data/broodling/zeroshot-tls/root
+    owner: "0"
+    group: "0"
+    mode: "0755"
+
+proxmox_lxc_host_directories:
+  - path: /tank/broodling
+    owner: "100000"
+    group: "100000"
+    mode: "0755"
+
+# Replace the fleet-wide /tank mount with this LXC's own subtree.
+proxmox_lxc_bind_mounts_overrides:
+  mp3: "/tank/broodling,mp=/data/broodling"
+
+lxc_docker_env_stack_vars:
+  broodling:
+    # TODO(coordinator): the published image of a Broodling revision that
+    # contains broodling#245 and #246, and that revision.
+    broodling_image: "ghcr.io/faviann/broodling@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    broodling_revision: "0000000000000000000000000000000000000000"
+    github_token: "{{ vault_broodling_github_token }}"
+    gateway_api_key: "{{ vault_broodling_gateway_api_key }}"
+    dotnet:
+      # TODO(coordinator): image and manifest.sha256 from that revision's
+      # src/Broodling/environments/dotnet-r3.adoption.json. The image must be
+      # byte-identical, because the catalog image must match a bundled adoption.
+      release: dotnet-r3
+      image: "ghcr.io/faviann/zeroshot-environments/dotnet@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      manifest_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+      control_token: "{{ vault_broodling_dotnet_control_token }}"
+      bootstrap_key: "{{ vault_broodling_dotnet_bootstrap_key }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 311
+  hostname: broodling
+  # tier_medium's 8 GB root cannot hold the ~3.3 GB dotnet environment image
+  # beside Broodling's and their upgrades.
+  disk: "16"
+  description: "Broodling PR agent service managed via Ansible"
+  tags:
+    - ansible
+    - broodling
+    - agents
