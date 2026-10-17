@@ -264,6 +264,81 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             ],
         )
 
+    def test_collie_mobile_route_contract(self) -> None:
+        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
+        routers = config["http"]["routers"]
+
+        assert_route(
+            self,
+            config,
+            "collie-mobile",
+            host_rule="Host(`collie-mobile.admin.faviann.com`)",
+            service="collie-workstation",
+            middlewares=["protected-edge-auth@file"],
+            backend="http://workstation.faviann.vms:8788",
+        )
+        assert_route(
+            self,
+            config,
+            "collie-mobile-auth-recovery",
+            host_rule="Host(`collie-mobile.admin.faviann.com`) && PathPrefix(`/auth/`)",
+            service="authentik",
+            middlewares=["collie-mobile-auth-recovery"],
+        )
+        assert_route(
+            self,
+            config,
+            "collie-mobile-outpost",
+            host_rule=(
+                "Host(`collie-mobile.admin.faviann.com`) "
+                "&& PathPrefix(`/outpost.goauthentik.io`)"
+            ),
+            service="authentik",
+            middlewares=["sslheader"],
+        )
+        # Traefik picks TLS options by SNI, so one router on this host without
+        # mtls would serve it with the default options and no client-cert gate.
+        self.assertEqual(
+            {
+                name: router.get("tls")
+                for name, router in routers.items()
+                if "collie-mobile.admin.faviann.com" in router["rule"]
+            },
+            {
+                "collie-mobile": {"options": "mtls"},
+                "collie-mobile-auth-recovery": {"options": "mtls"},
+                "collie-mobile-outpost": {"options": "mtls"},
+            },
+        )
+        self.assertGreater(
+            routers["collie-mobile-auth-recovery"]["priority"],
+            routers["collie-mobile"]["priority"],
+        )
+        self.assertGreater(
+            routers["collie-mobile-outpost"]["priority"],
+            routers["collie-mobile"]["priority"],
+        )
+        # The outpost catch-all carries default TLS options; if it won on this
+        # host, Traefik would answer 421 for the SNI/Host options mismatch.
+        self.assertGreater(
+            routers["collie-mobile-outpost"]["priority"],
+            routers["authentik-outpost-admin-subdomains"]["priority"],
+        )
+        self.assertEqual(
+            config["http"]["middlewares"]["collie-mobile-auth-recovery"],
+            {
+                "redirectRegex": {
+                    "regex": r"^https://collie-mobile\.admin\.faviann\.com/auth/.*$",
+                    "replacement": (
+                        "https://collie-mobile.admin.faviann.com/"
+                        "outpost.goauthentik.io/start?"
+                        "rd=https%3A%2F%2Fcollie-mobile.admin.faviann.com%2F"
+                    ),
+                    "permanent": False,
+                }
+            },
+        )
+
     def test_lobu_external_route_contract(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
         routers = config["http"]["routers"]
