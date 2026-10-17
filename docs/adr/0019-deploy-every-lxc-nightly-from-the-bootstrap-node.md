@@ -11,6 +11,10 @@ This decision amends
 runs from the bootstrap node are no longer `--limit workstation` only, and its
 standing consent through the nightly timer now covers every LXC.
 
+[ADR-0022](0022-take-the-local-lock-then-read-the-other-control-node.md)
+amends this one: the gate now reads the workstation after the deploy lock, and
+the residual window below is closed.
+
 ## Standing consent
 
 faviann installed the timer, so the nightly deploy is consent granted once, in
@@ -43,11 +47,11 @@ is for the interrupt decision.
 
 ## The residual window
 
-The gate reads the workstation once, at 03:00. An agent run started on the
-workstation while the nightly deploy is in progress can still configure the
-same LXC. The window lasts the whole run, and a collision is silent. That is
-unlike ADR-0018's window between the probe and the reboot, which is minutes
-long and visible. #174 stays open for it.
+The gate read the workstation once, at 03:00. An agent run started on the
+workstation while the nightly deploy was in progress could still configure the
+same LXC. The window lasted the whole run, and a collision was silent.
+[ADR-0022](0022-take-the-local-lock-then-read-the-other-control-node.md)
+closes it: each control node takes its own lock, then reads the other.
 
 ## Accepted costs
 

@@ -137,7 +137,7 @@ The control node that runs the nightly deploy and carries consented interrupting
 _Avoid_: Backup controller, jump host
 
 **Nightly deploy**:
-The bootstrap node's scheduled lifecycle run at `origin/main` against every managed LXC except itself, gated on the workstation busy probe.
+The bootstrap node's scheduled lifecycle run at `origin/main` against every managed LXC except itself, gated on the workstation busy probe, which it reads once it holds the deploy lock.
 _Avoid_: Fleet deploy, fleet run
 
 **Controller SSH identity**:

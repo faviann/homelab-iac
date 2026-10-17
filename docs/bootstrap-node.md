@@ -57,8 +57,10 @@ retry it.
 
 Both units call `/usr/local/sbin/homelab-deploy` with their ref and lifecycle
 arguments. The script holds `/run/homelab-deploy.lock`, so two deploys never
-overlap. A deploy of another unit started while one runs
-exits `75` at once; starting the same unit again joins the run in flight.
+overlap. A deploy of another unit started while one runs waits one second for
+the lock, then exits `75`. The wait outlasts a busy probe, which takes the lock
+for an instant to read it. Starting the same unit again joins the run in
+flight.
 Nobody runs `./run.sh` directly in `/root/homelab-iac`: the units own that
 checkout and move it to the ref they deploy.
 
@@ -73,11 +75,11 @@ hosts defer as in any run, and the workstation's
 [interrupting steps](../stacks/README.md#busy-checks) land only when its busy
 probe reports idle.
 
-The lifecycle lock is machine-local (#174), so a run on the workstation and
-this deploy could configure the same LXC at once. Before the deploy lock and
-the checkout, the unit's gate, `/usr/local/sbin/nightly-deploy-gate`, asks
-the workstation busy probe over SSH, the way the lifecycle reaches LXCs, with
-a 30-second bound:
+The lifecycle lock is machine-local, so a run on the workstation and this
+deploy could configure the same LXC at once. The unit runs
+`homelab-deploy --when-workstation-idle`. Once it holds the deploy lock, and
+before it touches the checkout, it asks the workstation busy probe over SSH
+with the fleet's pinned host keys and a 30-second bound:
 
 - idle: the deploy runs.
 - busy: an agent is mid-turn or a run holds the workstation's lock. The
@@ -88,9 +90,20 @@ a 30-second bound:
 
 A deferred night leaves the checkout untouched and exits `3`, with its line
 under the same `Deferred by busy checks:` header as a run's deferred stacks.
-A collision still happens if an agent starts a run on the workstation while
-the nightly deploy is in progress
-([ADR-0019](adr/0019-deploy-every-lxc-nightly-from-the-bootstrap-node.md)).
+
+The workstation reads this node in turn. Every mutating `./run.sh` and every
+`./recover.sh` there takes its lifecycle lock, then asks this node's busy
+command whether a deploy is in flight. While one is, the run prints
+`bootstrap: busy (a deploy is in flight); this run not started` under the same
+header and exits `3` before anything runs. `--interrupt-busy` does not skip
+that read. When the workstation cannot read this node, the run prints
+`bootstrap: check failed (<reason>); this run proceeds` and continues, so the
+workstation can still repair this node. Each side takes its own lock before it
+reads the other, so of two overlapping runs that read each other, at least one
+backs off
+([ADR-0022](adr/0022-take-the-local-lock-then-read-the-other-control-node.md)).
+A `workstation-deploy@` unit started while `./run.sh --include-controller` runs
+on the workstation is still not coordinated.
 
 Every night posts one Discord message, `nightly-deploy@main: <outcome>`, with
 the exit status and either the deferred hosts and stacks or the gate's line.
@@ -146,7 +159,9 @@ deploy once the workstation's busy probe reports idle.
 [ADR-0018](adr/0018-run-interrupting-workstation-changes-from-the-bootstrap-node.md)
 records the consent rule and the alternatives it rejected;
 [ADR-0019](adr/0019-deploy-every-lxc-nightly-from-the-bootstrap-node.md)
-records the nightly deploy and its gate.
+records the nightly deploy and its gate;
+[ADR-0022](adr/0022-take-the-local-lock-then-read-the-other-control-node.md)
+records why each control node takes its own lock before it reads the other.
 
 ## Setting up the node
 
