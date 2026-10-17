@@ -141,3 +141,4 @@ Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged
 → [docs/bootstrap-node.md](docs/bootstrap-node.md) — read before any interrupting workstation change or when the workstation is unreachable.
 → [docs/lobu-control-plane.md](docs/lobu-control-plane.md) — read before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.
 → [docs/lobu-browser-device.md](docs/lobu-browser-device.md) — read before touching `lobu-crawler-01` or any `cap_browser_device` host.
+→ [stacks/broodling/broodling/README.md](stacks/broodling/broodling/README.md) — read before touching the `broodling` LXC, its stack, or its initialization.

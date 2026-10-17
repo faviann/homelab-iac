@@ -1,0 +1,113 @@
+---
+# Broodling's ADR 0002 topology: one target per environment behind one TLS
+# proxy. Broodling's readiness check (check-target) verifies the target and
+# zeroshot-tls settings, so change them only with a Broodling release.
+# See README.md.
+
+x-managed-files:
+  # Stack sync gives the stack directory the first entry's owner, so this
+  # Docker-user file stays first and the directory keeps its owner.
+  - path: ./broodling.env
+    mode: "0600"
+  - path: ./zeroshot-dotnet-control-token
+    owner: "1654"
+    group: "1654"
+    mode: "0400"
+  - path: ./zeroshot-dotnet-control-token.check
+    owner: "0"
+    group: "0"
+    mode: "0400"
+  - path: ./zeroshot-dotnet-bootstrap-key
+    owner: "0"
+    group: "0"
+    mode: "0400"
+  - path: ./zeroshot-dotnet-bootstrap-key.bootstrap
+    owner: "1654"
+    group: "1654"
+    mode: "0400"
+
+x-restart-on-change:
+  zeroshot-tls:
+    - ./appdata/zeroshot-tls/sites/zeroshot-dotnet.caddy
+
+services:
+  broodling:
+    image: ${BROODLING_IMAGE:?}
+    container_name: broodling
+    restart: unless-stopped
+    env_file: ./broodling.env
+    environment:
+      Broodling__Invocation: /etc/broodling/invocation.json
+      Broodling__RepositoryRoot: /var/lib/broodling/repositories
+    ports:
+      # The LXC's private address only (#354). An unset value fails closed.
+      - "${BROODLING_HTTP_BIND:?}:8080:8080"
+    secrets:
+      - zeroshot-dotnet-control-token
+    volumes:
+      - /data/broodling/broodling:/var/lib/broodling
+      - ./appdata/broodling/invocation.json:/etc/broodling/invocation.json:ro
+      - /data/broodling/zeroshot-tls/root:/tls-root:ro
+
+  zeroshot-dotnet:
+    image: ${ZEROSHOT_DOTNET_IMAGE:?}
+    container_name: zeroshot-dotnet
+    restart: "no"
+    command:
+      - --listen
+      - 0.0.0.0:18770
+      - --public-origin
+      - https://zeroshot-dotnet.dev.faviann.com
+      - --storage
+      - /state
+    secrets:
+      - source: zeroshot-dotnet-bootstrap-key
+        target: zeroshot-bootstrap-key
+    volumes:
+      - /data/broodling/targets/dotnet/state:/state
+      - /data/broodling/targets/dotnet/home:/home/node
+      - /data/broodling/zeroshot-tls/root:/tls-root:ro
+
+  zeroshot-tls:
+    # check-target requires this exact image; renovate.json disables updates.
+    image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    container_name: zeroshot-tls
+    restart: unless-stopped
+    user: "10443:10443"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    ports:
+      - "127.0.0.1:443:443"
+    networks:
+      default:
+        aliases:
+          - zeroshot-dotnet.dev.faviann.com
+    volumes:
+      - /data/broodling/zeroshot-tls/key:/tls-root-key:ro
+      - /data/broodling/zeroshot-tls/root:/tls-root:ro
+      - ./appdata/zeroshot-tls/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./appdata/zeroshot-tls/sites:/etc/caddy/sites:ro
+      - zeroshot-tls-data:/data
+
+  # One-off TLS root helper for the initialization. `up` skips profiled services.
+  initialize-tls:
+    image: ${ZEROSHOT_DOTNET_IMAGE:?}
+    profiles:
+      - initialize
+    network_mode: none
+    command:
+      - initialize-tls
+    volumes:
+      - /data/broodling/zeroshot-tls/key:/tls-root-key
+      - /data/broodling/zeroshot-tls/root:/tls-root
+
+volumes:
+  zeroshot-tls-data:
+
+secrets:
+  zeroshot-dotnet-control-token:
+    file: ./zeroshot-dotnet-control-token
+  zeroshot-dotnet-bootstrap-key:
+    file: ./zeroshot-dotnet-bootstrap-key

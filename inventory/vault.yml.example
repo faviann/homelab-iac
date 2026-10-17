@@ -110,6 +110,18 @@ vault_overmind_cliproxy_home_jwt: "REPLACE_WITH_NATIVE_HOME_ENROLLMENT"
 # See stacks/devserver/renovate/README.md for the permissions.
 vault_renovate_token: "REPLACE_WITH_GITHUB_FINE_GRAINED_TOKEN"
 
+# Broodling on broodling. See stacks/broodling/broodling/README.md.
+# The GitHub token is currently the owner's own token, not a token scoped to
+# Broodling's repositories. The gateway key is a Claude-group sub2api key used
+# by Broodling alone. Nothing enforces a spend limit on it, and it has no
+# model allowlist. The environment image's managed settings choose the model.
+vault_broodling_github_token: "REPLACE_WITH_GITHUB_TOKEN"
+vault_broodling_gateway_api_key: "REPLACE_WITH_SUB2API_KEY"
+# Two different values, each from `openssl rand -hex 32 | tr -d '\n'`.
+# Native accepts exactly 64 lowercase hex characters.
+vault_broodling_dotnet_control_token: "REPLACE_WITH_RANDOM_64_HEX"
+vault_broodling_dotnet_bootstrap_key: "REPLACE_WITH_RANDOM_64_HEX"
+
 # Lobu control plane
 # ENCRYPTION_KEY is long-lived state, not a rotatable secret: replacing it
 # makes every credential already encrypted in Lobu's database unreadable.

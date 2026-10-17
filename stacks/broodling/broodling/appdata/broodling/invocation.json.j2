@@ -1,0 +1,15 @@
+{
+  "directRootCertificate": "/tls-root/root.crt",
+  "defaultEnvironment": "dotnet",
+  "environments": [
+    {
+      "name": "dotnet",
+      "origin": "https://zeroshot-dotnet.dev.faviann.com",
+      "controlTokenFile": "/run/secrets/zeroshot-dotnet-control-token",
+      "image": "{{ stack_vars.dotnet.image }}",
+      "container": "zeroshot-dotnet",
+      "stateMount": "/data/broodling/targets/dotnet/state",
+      "homeMount": "/data/broodling/targets/dotnet/home"
+    }
+  ]
+}

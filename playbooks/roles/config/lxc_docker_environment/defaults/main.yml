@@ -42,3 +42,6 @@ lxc_docker_env_host_directories: []
 lxc_docker_env_absent_containers:
   - dockwatch
   - dockwatch-socket-proxy
+
+# Broodling's check-target configuration and the runtime copied out of its image.
+lxc_docker_env_broodling_check_target_dir: /opt/broodling/check-target

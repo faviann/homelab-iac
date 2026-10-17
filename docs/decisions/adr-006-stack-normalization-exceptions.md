@@ -24,6 +24,7 @@ accepted exceptions and must not be normalized blindly.
 | `seedbox/bittorrent` | VPN namespace routing | [`stacks/seedbox/bittorrent/README.md`](../../stacks/seedbox/bittorrent/README.md) |
 | `public/music` | Split native-auth and protected-browser routes | [`stacks/public/music/README.md`](../../stacks/public/music/README.md), [ADR-005](adr-005-navidrome-authentik-sync.md) |
 | `portal/traefik3` | Domain-edge reverse proxy infrastructure | [`stacks/portal/traefik3/README.md`](../../stacks/portal/traefik3/README.md) |
+| `broodling/broodling` | Broodling-contract topology: target restart `no`, explicit initialization, bootstrap and readiness check on every run | [`stacks/broodling/broodling/README.md`](../../stacks/broodling/broodling/README.md) |
 
 These stacks are judgment-heavy examples, not canonical templates for new
 stacks.
