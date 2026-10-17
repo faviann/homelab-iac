@@ -83,7 +83,7 @@ keeps a template's final newline, so these templates end without one.
 
 `GH_TOKEN` (`vault_broodling_github_token`) is currently the owner's own
 GitHub token, with all of its access. Narrowing it to the repositories
-Broodling works on is a tracked follow-up.
+Broodling works on is tracked in broodling#253.
 
 `GATEWAY_API_KEY` (`vault_broodling_gateway_api_key`) is a Claude-group
 sub2api key used by Broodling alone, so revoking it affects no other client.
@@ -106,6 +106,9 @@ together, and follow the deployment guide's target image transition.
   bootstrap node can upgrade packages, restart Docker, reboot the LXC, or
   change an image, and each of these ends a run. Broodling has no idle signal
   to probe yet.
+- Deploys do not pause the installation around a target start, as
+  Broodling's guide recommends. If work is pending when a run restarts the
+  target, Broodling can dispatch it before `check-target` finishes.
 - Native agents can reach the mutating routes on `broodling:8080` until
   broodling#240.
 - The target has restart policy `no`, as readiness requires. A target that
