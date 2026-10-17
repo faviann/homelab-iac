@@ -16,3 +16,33 @@ tls:
         - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
         - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
         - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    # Named options do not inherit from default.
+    mtls:
+      minVersion: VersionTLS12
+      sniStrict: true
+      curvePreferences:
+        - CurveP256
+        - CurveP384
+        - CurveP521
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+      clientAuth:
+        clientAuthType: RequireAndVerifyClientCert
+        caFiles:
+          - |
+            -----BEGIN CERTIFICATE-----
+            MIIBnjCCAUSgAwIBAgIUXVhmJi6ZybvZka0i93npJbGhxuYwCgYIKoZIzj0EAwIw
+            GzEZMBcGA1UEAwwQQ29sbGllIGNsaWVudCBDQTAeFw0yNjEwMTcwMTM2NDNaFw0z
+            NjEwMTQwMTM2NDNaMBsxGTAXBgNVBAMMEENvbGxpZSBjbGllbnQgQ0EwWTATBgcq
+            hkjOPQIBBggqhkjOPQMBBwNCAAQNaf/2ocMxu1TmYzH2VjwNCHx9TsVCOugypfUt
+            BBg0wJkfW8YwCZyUTDMOG9xaYNYxAb6GMOsomcBCzJp1sgugo2YwZDAdBgNVHQ4E
+            FgQUuM2GNkyfOEw49mJAXc3cVHJVKEkwHwYDVR0jBBgwFoAUuM2GNkyfOEw49mJA
+            Xc3cVHJVKEkwEgYDVR0TAQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8EBAMCAQYwCgYI
+            KoZIzj0EAwIDSAAwRQIhALOLnSbAtymfKanqwxM2QboKXv1bXF/g6J2EijRBSYo5
+            AiAyJhcCOmOXKlkJ0EL3KZlOb8TALk5H/VSwYHKtIjOcjQ==
+            -----END CERTIFICATE-----

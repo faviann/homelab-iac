@@ -68,6 +68,85 @@ printf 'CONNECT pvespiceproxy:x:0:proxmox:61000 HTTP/1.0\r\n\r\n' \
 A refused connection means Traefik is not publishing 3128. A connection that
 closes with no bytes means the client IP is outside the allowlist.
 
+## Collie Mobile Client Certificate
+
+`collie-mobile.admin.faviann.com` lets the phone reach Collie while a
+commercial VPN is active. Android runs one VPN at a time, so WireGuard cannot
+run beside it. A client certificate gates this hostname instead of a source IP.
+Its routers use the `mtls` TLS option in `conf.d/tls.yaml`, which holds the
+client CA certificate inline. `collie.admin.faviann.com` keeps the
+LAN and WireGuard allowlist and stays the recovery path.
+
+The CA and the phone credentials live in `~/.ansible/collie-ca/` on the
+workstation. Never commit them. Only `ca.crt` goes into `tls.yaml`.
+
+### Reissue the phone certificate
+
+Run the commands on the workstation:
+
+```bash
+cd ~/.ansible/collie-ca
+umask 077
+openssl ecparam -name prime256v1 -genkey -noout -out phone.key
+openssl req -new -key phone.key -subj "/CN=Collie phone" -out phone.csr
+openssl x509 -req -in phone.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -days 1825 -extfile <(printf 'extendedKeyUsage=clientAuth\n') -out phone.crt
+openssl rand -base64 12 > phone.p12.pass
+openssl pkcs12 -export -inkey phone.key -in phone.crt \
+  -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1 \
+  -passout file:phone.p12.pass -out phone.p12
+```
+
+The export uses legacy PKCS#12 encryption because the Android certificate
+installer imports only that format reliably. The bundle omits `ca.crt` so
+Android does not add it as a trusted CA. Copy `phone.p12` to the phone and
+install it as a VPN and app user certificate with the password in `phone.p12.pass`.
+
+### Set up a new phone
+
+If the old phone is lost or still holds its certificate, rotate the CA first.
+Otherwise reuse `phone.p12`.
+
+1. On home Wi-Fi, serve the file from the workstation. Android's installer
+   grays out a `.p12` that is not served as `application/x-pkcs12`:
+
+   ```bash
+   cd "$(mktemp -d)" && cp ~/.ansible/collie-ca/phone.p12 .
+   python3 -c 'import http.server as h; h.SimpleHTTPRequestHandler.extensions_map[".p12"] = "application/x-pkcs12"; h.test(h.SimpleHTTPRequestHandler, bind="10.1.4.25", port=8799)'
+   ```
+
+   Stop it with Ctrl-C once the phone has
+   `http://10.1.4.25:8799/phone.p12`, then delete the temporary directory. Read
+   `phone.p12.pass` in your own terminal, never in an agent chat.
+2. On the phone, in Settings, search for "certificate" and choose **Install a
+   certificate**, then **VPN & app user certificate**.
+3. In Chrome, open `https://collie-mobile.admin.faviann.com`, select the
+   certificate, and log in.
+4. Pair Collie on this hostname. On the workstation, run `collie pair` from
+   the Collie plugin's `bin/`, then enter the code on the phone under
+   **Settings → Paired devices**. Remove the old phone with
+   `collie devices revoke <label>`.
+
+### Rotate the CA
+
+Rotation also revokes every issued certificate. There is no other revocation.
+
+1. Create a new CA in `~/.ansible/collie-ca/`:
+
+   ```bash
+   cd ~/.ansible/collie-ca
+   umask 077
+   openssl ecparam -name prime256v1 -genkey -noout -out ca.key
+   openssl req -x509 -new -key ca.key -subj "/CN=Collie client CA" -days 3650 \
+     -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
+     -addext "keyUsage=critical,keyCertSign,cRLSign" -out ca.crt
+   ```
+
+2. Replace the PEM block under `mtls.clientAuth.caFiles` in `conf.d/tls.yaml`
+   with the new `ca.crt`.
+3. Deploy with `./run.sh --limit portal --stack traefik3`.
+4. Reissue the phone certificate.
+
 ## Deploy
 
 ```bash
