@@ -7,6 +7,8 @@ readonly LIVE_EXECUTION_HOLDER_DIR="${LIVE_EXECUTION_LOCK_FILE}.holders"
 readonly LIVE_EXECUTION_METADATA_LOCK_FILE="${LIVE_EXECUTION_LOCK_FILE}.metadata"
 readonly LIVE_EXECUTION_METADATA_LOCK_WAIT_SECONDS=0.1
 readonly LIVE_EXECUTION_WRAPPER_MARKER="HOMELAB_IAC_LIFECYCLE_WRAPPER"
+# Must match the bootstrap node's lxc_busy_check_host_command; a test pins it.
+readonly LIVE_EXECUTION_PEER_BUSY_COMMAND='flock --nonblock /run/homelab-deploy.lock true || { echo "a deploy is in flight"; exit 1; }'
 
 source "$LIVE_EXECUTION_PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 
@@ -179,11 +181,39 @@ run_live_playbook() {
     export "$LIVE_EXECUTION_WRAPPER_MARKER=1"
     cd "$LIVE_EXECUTION_PROJECT_ROOT"
 
+    # Each control node takes its own lock, then reads the other, so one of two
+    # overlapping runs backs off (ADR-0022). Only the workstation reads: on the
+    # bootstrap node, this would find its own deploy's lock. An unreadable
+    # bootstrap node must not block the run that repairs it. ssh runs without
+    # the lock's fd, so nothing it leaves behind keeps the lock.
+    local status=0
+    if [[ "$lock_class" == exclusive && "$(hostname)" == workstation ]]; then
+        local peer_reason peer_status=0
+        peer_reason=$(timeout -k 5 30 ssh -l root -i "$HOME/.ansible/ssh/proxmox_lxc" \
+            -o IdentitiesOnly=yes -o AddressFamily=inet -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ansible/known_hosts" \
+            -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR \
+            bootstrap.faviann.vms "$LIVE_EXECUTION_PEER_BUSY_COMMAND" \
+            2>&1 {live_execution_lock_fd}>&-) || peer_status=$?
+        case $peer_status in
+            0) ;;
+            1)
+                echo "Deferred by busy checks:" >&2
+                echo "bootstrap: busy ($peer_reason); this run not started" >&2
+                status=3
+                ;;
+            *)
+                echo "bootstrap: check failed (exit $peer_status${peer_reason:+: $(tail -n 1 <<<"$peer_reason")}); this run proceeds" >&2
+                ;;
+        esac
+    fi
+
     # Reconciling under the held lock keeps contention fail-fast: a caller that
     # cannot run must not spend a download first.
-    local status=0
-    uv run --locked python -m scripts.live_dependencies \
-        --playbook "$playbook" || status=$?
+    if ((status == 0)); then
+        uv run --locked python -m scripts.live_dependencies \
+            --playbook "$playbook" || status=$?
+    fi
     if ((status == 0)); then
         echo "Running Ansible playbook through uv: $playbook"
         echo "────────────────────────────────────────"

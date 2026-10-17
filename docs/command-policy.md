@@ -33,7 +33,8 @@ of what the guards enforce.
 `./run.sh` options: `--limit <targets>` (Ansible limit grammar), `--check`,
 `--stack <name>`, `--include-controller`, `--interrupt-busy`, and `-v`, `-vv`,
 or `-vvv`. `--interrupt-busy` skips every declared busy check, so busy stacks
-and their hosts are interrupted as if no check were declared.
+and their hosts are interrupted as if no check were declared. It does not skip
+the workstation's read of the bootstrap node (ADR-0022).
 `--include-controller` targets the host the run is on, and `./run.sh` rejects
 it together with `--interrupt-busy`, so a run with `--interrupt-busy` never
 targets its own control node. Every command answers `--help` with its
@@ -87,6 +88,12 @@ answer, so it does not make the run exit `3`; `./run.sh` notes it instead. A fai
 also deferred something. See
 [stacks/README.md](../stacks/README.md#busy-checks).
 
+On the workstation, every mutating `./run.sh` and every `./recover.sh` also
+exits `3`, before anything runs, while the bootstrap node deploys. It prints
+`bootstrap: busy (a deploy is in flight); this run not started` under the same
+header. When it cannot read the bootstrap node, it warns and proceeds. See
+[bootstrap-node.md](bootstrap-node.md#the-nightly-deploy).
+
 Every other non-zero status is a failure, and its value depends on the
 command. Some operations pass the status of the tool they run through
 unchanged:
@@ -129,8 +136,9 @@ lock implementation.
 
 The lock covers every worktree on one machine. Its path is under `$HOME`, so a
 run with a different home directory takes a different lock and is not
-coordinated. It does not coordinate two control nodes either (#174). ADR-0009
-records the split.
+coordinated. Between the two control nodes, each takes its own lock and then
+reads the other, so of two overlapping runs that read each other, at least one
+backs off (ADR-0022). ADR-0009 records the split.
 
 The lock gates whether a live run may start and is held for its duration.
 Inside one admitted lifecycle run, `playbooks/lifecycle-lxcs.yml` executes
@@ -232,11 +240,12 @@ Agent use of a documented raw command is a separate decision:
   [the nightly deploy](bootstrap-node.md#the-nightly-deploy).
   Reading a run's journal on the node is part of the same permission.
 - **Boundary:** mutating. The deploy lock on the node serializes deploys. They
-  run outside the workstation's machine-local lock (#174). The nightly
-  deploy's gate defers the night unless the workstation busy probe reads idle;
-  a run an agent starts on the workstation while the nightly deploy is in
-  progress can still collide with it, silently, and that window stays open
-  under #174.
+  run outside the workstation's machine-local lock. Once the nightly deploy
+  holds the deploy lock, it defers the night unless the workstation busy probe
+  reads idle. A mutating run an agent starts on the workstation while a deploy
+  is in flight exits `3` before anything runs (ADR-0022). A
+  `workstation-deploy@` unit started while `./run.sh --include-controller`
+  runs on the workstation is still not coordinated.
 - **Sensitive output:** the journal only, never secrets.
 - **Escalation:** a failed run goes to a person with the journal excerpt. Do
   not retry it.
@@ -416,8 +425,10 @@ These are known limits, not defects waiting for a fix.
   `localhost` or when it imports the Proxmox-host layer. A controller-only
   playbook that delegates to the Proxmox host without importing that layer is
   not detected.
-- The lifecycle lock is machine-local. Two control nodes can still collide
-  (#174).
+- A workstation run that cannot read the bootstrap node warns and proceeds,
+  so it can run alongside a deploy in flight there.
+- A `workstation-deploy@` unit does not read the workstation, so it can run
+  alongside `./run.sh --include-controller` there.
 - `./validate.sh` requires `/usr/sbin/sshd` (Debian package `openssh-server`).
   The Proxmox trust regression starts an unprivileged `sshd` on `127.0.0.1` so
   that the real `ssh` client decides trust. Validation fails on a machine

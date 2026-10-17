@@ -75,7 +75,7 @@
     mode: "0600"
   no_log: true
 
-- name: Install the deploy script, the nightly gate, and the notifier
+- name: Install the deploy script and the notifier
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/usr/local/sbin/{{ item }}"
@@ -84,7 +84,6 @@
     mode: "0755"
   loop:
     - homelab-deploy
-    - nightly-deploy-gate
     - workstation-deploy-notify
 
 - name: Install the deploy units and the nightly timer
