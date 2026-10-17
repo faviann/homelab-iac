@@ -102,6 +102,31 @@ installer imports only that format reliably. The bundle omits `ca.crt` so
 Android does not add it as a trusted CA. Copy `phone.p12` to the phone and
 install it as a VPN and app user certificate with the password in `phone.p12.pass`.
 
+### Set up a new phone
+
+If the old phone is lost or still holds its certificate, rotate the CA first.
+Otherwise reuse `phone.p12`.
+
+1. On home Wi-Fi, serve the file from the workstation. Android's installer
+   grays out a `.p12` that is not served as `application/x-pkcs12`:
+
+   ```bash
+   cd "$(mktemp -d)" && cp ~/.ansible/collie-ca/phone.p12 .
+   python3 -c 'import http.server as h; h.SimpleHTTPRequestHandler.extensions_map[".p12"] = "application/x-pkcs12"; h.test(h.SimpleHTTPRequestHandler, bind="10.1.4.25", port=8799)'
+   ```
+
+   Stop it with Ctrl-C once the phone has
+   `http://10.1.4.25:8799/phone.p12`, then delete the temporary directory. Read
+   `phone.p12.pass` in your own terminal, never in an agent chat.
+2. On the phone, in Settings, search for "certificate" and choose **Install a
+   certificate**, then **VPN & app user certificate**.
+3. In Chrome, open `https://collie-mobile.admin.faviann.com`, select the
+   certificate, and log in.
+4. Pair Collie on this hostname. On the workstation, run `collie pair` from
+   the Collie plugin's `bin/`, then enter the code on the phone under
+   **Settings → Paired devices**. Remove the old phone with
+   `collie devices revoke <label>`.
+
 ### Rotate the CA
 
 Rotation also revokes every issued certificate. There is no other revocation.
