@@ -1,19 +1,52 @@
 #!/bin/bash
 # Deploys a git ref from this node's checkout with the supplied lifecycle
 # arguments. Only the deploy units run it (docs/bootstrap-node.md).
-# Usage: homelab-deploy <ref> [lifecycle arguments...]
+# Usage: homelab-deploy [--when-workstation-idle] <ref> [lifecycle arguments...]
 set -euo pipefail
 
+when_workstation_idle=false
+if [[ ${1:-} == --when-workstation-idle ]]; then
+    when_workstation_idle=true
+    shift
+fi
 ref=$1
 shift
 
-# Two deploys must not switch the checkout under each other. Like ./run.sh,
-# the loser fails at once with 75 instead of waiting.
-exec 9>>/run/homelab-deploy.lock
-flock --exclusive --nonblock 9 || {
+# Two deploys must not switch the checkout under each other, so the loser
+# exits 75. The one-second wait only outlasts a busy probe, which takes this
+# lock for an instant to read it.
+exec 9>>"${HOMELAB_DEPLOY_LOCK:-/run/homelab-deploy.lock}"
+flock --exclusive --wait 1 9 || {
     echo "homelab-deploy: another deploy is in flight" >&2
     exit 75
 }
+
+defer_the_night() {
+    # The notifier posts the lines after this header, as for ./run.sh deferrals.
+    echo "Deferred by busy checks:" >&2
+    echo "workstation: $1; nightly deploy not started" >&2
+    exit 3
+}
+
+# The nightly deploy reads the workstation only while it holds the deploy lock,
+# so a workstation run that read this node first still finds it held (ADR-0022).
+# Busy, or any answer it cannot read, defers the night before the checkout. The
+# ssh runs without fd 9, so nothing it leaves behind keeps the lock.
+if $when_workstation_idle; then
+    status=0
+    # LogLevel=ERROR keeps ssh's notices out of the reason.
+    reason=$(timeout -k 5 30 ssh -l root -i ~/.ansible/ssh/proxmox_lxc \
+        -o IdentitiesOnly=yes -o AddressFamily=inet -o StrictHostKeyChecking=yes \
+        -o UserKnownHostsFile="$HOME/.ansible/known_hosts" \
+        -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR \
+        workstation.faviann.vms /usr/local/sbin/workstation-busy-probe 2>&1 9>&-) \
+        || status=$?
+    case $status in
+        0) ;;
+        1) defer_the_night "busy ($reason)" ;;
+        *) defer_the_night "check failed (exit $status${reason:+: $(tail -n 1 <<<"$reason")})" ;;
+    esac
+fi
 
 git fetch origin "$ref"
 git checkout --detach FETCH_HEAD

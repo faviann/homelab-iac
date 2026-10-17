@@ -53,9 +53,7 @@ def test_the_nightly_deploy_runs_behind_the_gate_and_never_interrupts() -> None:
     nightly = unit_settings("nightly-deploy@.service")
 
     assert nightly["ExecStopPost"]
-    assert nightly["ExecStart"] == [
-        "/usr/local/sbin/nightly-deploy-gate /usr/local/sbin/homelab-deploy %i"
-    ]
+    assert nightly["ExecStart"] == ["/usr/local/sbin/homelab-deploy --when-workstation-idle %i"]
 
 
 def test_the_nightly_timer_starts_the_nightly_deploy_without_catching_up() -> None:
