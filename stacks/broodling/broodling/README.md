@@ -25,18 +25,12 @@ This README covers what this repository adds.
 
 ## Before the first deploy
 
-1. Replace the placeholders marked `TODO(coordinator)` in
-   `inventory/host_vars/broodling.yml`. They are the Broodling image and its
-   source revision, and the `dotnet-r3` image and manifest digest from that
-   revision's `src/Broodling/environments/dotnet-r3.adoption.json`. Copy the
-   image reference byte for byte, because the catalog image must match an
-   adoption bundled in the Broodling image.
-2. Add the four `vault_broodling_*` keys from `inventory/vault.yml.example` with
+1. Add the four `vault_broodling_*` keys from `inventory/vault.yml.example` with
    `./vault.sh edit`. Generate the control token and the bootstrap key as two
    different values.
-3. On Firewalla, reserve an address for the MAC in `lxc_hwaddr` and name it
+2. On Firewalla, reserve an address for the MAC in `lxc_hwaddr` and name it
    `broodling.faviann.vms`.
-4. Run `./inspect.sh plan --limit broodling`.
+3. Run `./inspect.sh plan --limit broodling`.
 
 ## Initialize a fresh installation
 

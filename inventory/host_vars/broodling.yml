@@ -43,19 +43,18 @@ proxmox_lxc_bind_mounts_overrides:
 
 lxc_docker_env_stack_vars:
   broodling:
-    # TODO(coordinator): the published image of a Broodling revision that
-    # contains broodling#245 and #246, and that revision.
-    broodling_image: "ghcr.io/faviann/broodling@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-    broodling_revision: "0000000000000000000000000000000000000000"
+    # Published as sha-3955ee171f12fe2b83ee9f326d2de4ac09e21e21.
+    broodling_image: "ghcr.io/faviann/broodling@sha256:482969b0f57cccab921f4bd465cb607f6074412edc7789861359cff641cf35e0"
+    broodling_revision: "3955ee171f12fe2b83ee9f326d2de4ac09e21e21"
     github_token: "{{ vault_broodling_github_token }}"
     gateway_api_key: "{{ vault_broodling_gateway_api_key }}"
     dotnet:
-      # TODO(coordinator): image and manifest.sha256 from that revision's
-      # src/Broodling/environments/dotnet-r3.adoption.json. The image must be
+      # The image and manifest.sha256 come from that revision's
+      # src/Broodling/environments/dotnet-r6.adoption.json. The image must be
       # byte-identical, because the catalog image must match a bundled adoption.
-      release: dotnet-r3
-      image: "ghcr.io/faviann/zeroshot-environments/dotnet@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      manifest_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+      release: dotnet-r6
+      image: "ghcr.io/faviann/zeroshot-environments/dotnet@sha256:b10a72289a66fc9caeaa5c3bb79a953dd225c6fba75d882d42a0dfe57d69dc4c"
+      manifest_sha256: "304a417ca752e22652b66f3de47a5995247a45339ccd9fad8221f8f0b29fb89b"
       control_token: "{{ vault_broodling_dotnet_control_token }}"
       bootstrap_key: "{{ vault_broodling_dotnet_bootstrap_key }}"
 
