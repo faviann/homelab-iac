@@ -7,7 +7,7 @@ x-managed-files:
 
 services:
   lidarr:
-    image: lscr.io/linuxserver/lidarr:3.1.0
+    image: lscr.io/linuxserver/lidarr:3.1.0@sha256:67887807b13ae025c0fe979da298347c8609969087ab064c81d8e9acc1e06bbf
     container_name: lidarr
     restart: unless-stopped
     environment:
