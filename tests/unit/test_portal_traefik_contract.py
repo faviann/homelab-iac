@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cryptography import x509
 import yaml
 
 
@@ -132,3 +133,17 @@ def test_protected_edge_auth_chain_keeps_its_forward_auth_address() -> None:
     assert middleware["forwardAuth-authentik"]["forwardAuth"]["address"] == (
         "http://auth.faviann.vms:9000/outpost.goauthentik.io/auth/traefik"
     )
+
+
+def test_mtls_option_is_default_plus_a_required_client_ca() -> None:
+    options = load_yaml(
+        TRAEFIK_STACK / "appdata/traefik3/config/conf.d/tls.yaml"
+    )["tls"]["options"]
+    mtls = dict(options["mtls"])
+    client_auth = mtls.pop("clientAuth")
+    (ca_pem,) = client_auth["caFiles"]
+    ca = x509.load_pem_x509_certificate(ca_pem.encode())
+
+    assert mtls == options["default"]
+    assert client_auth["clientAuthType"] == "RequireAndVerifyClientCert"
+    assert ca.extensions.get_extension_for_class(x509.BasicConstraints).value.ca
