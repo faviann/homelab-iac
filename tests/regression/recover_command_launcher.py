@@ -52,6 +52,10 @@ def controlled_environment(temp_root: Path) -> dict[str, str]:
     bin_dir = temp_root / "bin"
     home.mkdir()
     bin_dir.mkdir()
+    # Not this machine's name: a workstation run reads the bootstrap node first.
+    fake_hostname = bin_dir / "hostname"
+    fake_hostname.write_text("#!/bin/sh\necho fixture-control-node\n", encoding="utf-8")
+    fake_hostname.chmod(0o755)
     fake_uv = bin_dir / "uv"
     fake_uv.write_text(
         """#!/usr/bin/env python3

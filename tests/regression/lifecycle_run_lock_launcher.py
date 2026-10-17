@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from ansible.cli.playbook import PlaybookCLI
+import yaml
 
 from ansible_test_helper import ansible_playbook_command
 
@@ -29,9 +30,25 @@ FIXTURE_COLLECTIONS = (
     REPO_ROOT
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
-# What the stub hostname prints. Not "workstation": the real machine's name
-# would let a leftover literal in the wrapper pass.
+# What the stub hostname prints. Not "workstation", the real machine's name:
+# the wrapper reads the bootstrap node there, and only the peer cases want that.
 CONTROL_NODE = "fixture-control-node"
+BOOTSTRAP_BUSY_COMMAND = yaml.safe_load(
+    (REPO_ROOT / "inventory/host_vars/bootstrap.yml").read_text(encoding="utf-8")
+)["lxc_busy_check_host_command"]
+PEER_DEFERRAL = (
+    "Deferred by busy checks:\n"
+    "bootstrap: busy (a deploy is in flight); this run not started\n"
+)
+FAKE_SSH = """#!/bin/bash
+lock="$HOME/.ansible/homelab-iac-lifecycle.lock"
+flock --nonblock "$lock" true && { echo "probe ran without the lifecycle lock" >&2; exit 99; }
+printf '%s\\n' "$@" >"$LIFECYCLE_TEST_SSH_ARGV"
+case "$LIFECYCLE_TEST_PEER" in
+    busy) echo "a deploy is in flight"; exit 1 ;;
+    unreadable) echo "Host key verification failed." >&2; exit 255 ;;
+esac
+"""
 
 
 def busy_check_defaults(override: str = "false") -> tuple[str, ...]:
@@ -66,6 +83,8 @@ import time
 from pathlib import Path
 
 arguments = sys.argv[1:]
+with open(os.environ["LIFECYCLE_TEST_CAPTURE"] + ".uv-calls", "a", encoding="utf-8") as calls:
+    calls.write(" ".join(arguments) + "\\n")
 if "ansible-playbook" not in arguments:
     raise SystemExit(0)
 
@@ -121,14 +140,20 @@ if mode == "fail":
     fake_uv.chmod(0o755)
 
 
-def wrapper_environment(temp_root: Path, *, mode: str = "success") -> dict[str, str]:
+def wrapper_environment(
+    temp_root: Path,
+    *,
+    mode: str = "success",
+    hostname: str = CONTROL_NODE,
+    peer: str | None = None,
+) -> dict[str, str]:
     home = temp_root / "home"
     bin_dir = temp_root / "bin"
     home.mkdir()
     bin_dir.mkdir()
     make_fake_uv(bin_dir)
     fake_hostname = bin_dir / "hostname"
-    fake_hostname.write_text(f"#!/bin/sh\necho {CONTROL_NODE}\n", encoding="utf-8")
+    fake_hostname.write_text(f"#!/bin/sh\necho {hostname}\n", encoding="utf-8")
     fake_hostname.chmod(0o755)
     env = os.environ.copy()
     env.update(
@@ -139,6 +164,12 @@ def wrapper_environment(temp_root: Path, *, mode: str = "success") -> dict[str, 
             "LIFECYCLE_TEST_MODE": mode,
         }
     )
+    if peer is not None:
+        fake_ssh = bin_dir / "ssh"
+        fake_ssh.write_text(FAKE_SSH, encoding="utf-8")
+        fake_ssh.chmod(0o755)
+        env["LIFECYCLE_TEST_PEER"] = peer
+        env["LIFECYCLE_TEST_SSH_ARGV"] = str(temp_root / "ssh-argv")
     return env
 
 
@@ -674,6 +705,53 @@ def assert_busy_check_deferral_sets_exit_status() -> None:
                 )
 
 
+def assert_bootstrap_deploy_defers_workstation_runs() -> None:
+    unreadable = (
+        "bootstrap: check failed (exit 255: Host key verification failed.); "
+        "this run proceeds\n"
+    )
+    cases = (
+        ("workstation", "busy", (), 3, PEER_DEFERRAL, True),
+        ("workstation", "idle", (), 0, "", True),
+        ("workstation", "unreadable", (), 0, unreadable, True),
+        ("workstation", "busy", ("--check",), 0, "", False),
+        ("bootstrap", "busy", (), 0, "", False),
+    )
+    for hostname, peer, arguments, expected_status, expected_stderr, probed in cases:
+        with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-peer-") as temp_dir:
+            temp_root = Path(temp_dir)
+            env = wrapper_environment(temp_root, hostname=hostname, peer=peer)
+            proc = run_wrapper(env, *arguments)
+            ran = expected_status == 0
+            ssh_argv = temp_root / "ssh-argv"
+            if (
+                proc.returncode != expected_status
+                or proc.stderr != expected_stderr
+                or ssh_argv.exists() != probed
+                or (temp_root / "capture.json.uv-calls").exists() != ran
+                or (temp_root / "capture.json").exists() != ran
+            ):
+                raise AssertionError(
+                    f"{hostname} with bootstrap {peer} and {arguments!r} did not "
+                    f"exit {expected_status}, probe={probed}, playbook ran={ran}: "
+                    f"returncode={proc.returncode} probed={ssh_argv.exists()}\n"
+                    f"{proc.stdout}\n{proc.stderr}"
+                )
+            if not probed:
+                continue
+            argv = ssh_argv.read_text(encoding="utf-8").splitlines()
+            trust = {
+                "AddressFamily=inet",
+                "StrictHostKeyChecking=yes",
+                f"UserKnownHostsFile={env['HOME']}/.ansible/known_hosts",
+            }
+            if argv[-2:] != ["bootstrap.faviann.vms", BOOTSTRAP_BUSY_COMMAND] or not trust <= set(argv):
+                raise AssertionError(
+                    "the bootstrap probe did not run its inventory busy command over "
+                    f"the fleet's SSH trust:\n{argv!r}"
+                )
+
+
 def assert_contention_fails_fast() -> None:
     with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-contention-") as temp_dir:
         temp_root = Path(temp_dir)
@@ -1196,6 +1274,7 @@ def main() -> int:
         assert_command_grammar_reports_help_and_usage_errors()
         assert_wrapper_routes_and_propagates()
         assert_busy_check_deferral_sets_exit_status()
+        assert_bootstrap_deploy_defers_workstation_runs()
         assert_contention_fails_fast()
         assert_lock_class_follows_operation_class()
         assert_contention_names_a_remaining_shared_holder()
