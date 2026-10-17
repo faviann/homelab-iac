@@ -10,7 +10,7 @@ x-prereq-dirs:
 
 services:
   sub2api:
-    image: weishaw/sub2api:0.2.15@sha256:da0fd94daebf890419e21e956821fd6c2008fc666f9617f2eb917f4492245da3
+    image: weishaw/sub2api:0.2.17@sha256:44b59fc74b0b582750ef5f38146782db177767ef9d3f34351f1c75c157b1bb88
     container_name: sub2api
     restart: unless-stopped
     security_opt:
