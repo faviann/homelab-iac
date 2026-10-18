@@ -149,7 +149,7 @@ Renovate opens image update PRs against this repository on Saturdays. It runs as
 - Renovate merges digest pins, digest updates and patches once lint passes, and the nightly deploy ships them. A group PR that also holds a minor waits for a person, and so do other vendor version pins and other updates held on the Dependency Dashboard. Revert the merge commit to undo one.
 - Minors open as PRs for a person. Application majors open as PRs labelled `major` once the release is 14 days old, or at once when the registry gives no release date.
 - Database majors (`postgres`, `pgvector`, `mariadb`, `valkey`, `redis` in the image name) wait on the Dependency Dashboard issue, because they need a dump and restore rather than a tag change.
-- Every update under `stacks/auth/` and `stacks/portal/` waits on the Dependency Dashboard. A tick there opens the PR. Authentik patches are the exception. They open at any time and merge once lint passes, because Authentik ships security backports in patches. Authentik minors and majors stay held.
+- Every update under `stacks/auth/` and `stacks/portal/` waits on the Dependency Dashboard. A tick there opens the PR. Authentik patches are the exception. They open at any time and merge once lint passes, because Authentik ships security backports in patches. Renovate offers a patch only while it is the newest release, so take each new Authentik minor to keep patches flowing. Authentik minors and majors stay held.
 
 **Assisted stacks.** When a stack's upgrade needs a runbook, hold its updates on the dashboard and link the runbook from the PR body. Add one rule to `renovate.json` in the same change as the runbook:
 

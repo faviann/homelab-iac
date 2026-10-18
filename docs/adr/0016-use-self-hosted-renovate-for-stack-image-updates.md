@@ -59,9 +59,11 @@ stack, one whose upgrade needs a runbook, is held with a note linking the
 runbook. Authentik patches are the one exception. They open at any time, with
 no tick, and automerge once lint passes, because Authentik ships security
 backports in patches. A bad patch can lock everyone out of most services until
-someone reverts it. The patch pin rewrites `stacks/auth/auth/compose.yaml` from
-an unversioned upstream URL, and from 2026.8.3 to 2026.8.4 that rewrite changed
-only the default tag. Authentik minors and majors stay held.
+someone reverts it. Renovate offers a patch only while it is the newest
+Authentik release, so the unversioned upstream `compose.yml` that the vendor
+sync downloads describes that patch. Once a newer minor ships, Renovate offers
+the minor instead, held for a tick, and patches stop until someone takes it.
+Authentik minors and majors stay held.
 
 **Automerge.** Renovate merges digest pins, digest updates and patches once
 lint passes, and the nightly deploy ships them. Nobody reads their release
