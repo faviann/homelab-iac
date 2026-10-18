@@ -17,7 +17,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "tests/fixtures/ansible"
 FIXTURE_INVENTORY = FIXTURE_ROOT / "inventory.yml"
 FIXTURE_VAULT_PASSWORD_FILE = FIXTURE_ROOT / "vault-pass"
-ANSIBLE_PLAYBOOK = ["uv", "run", "--locked", "ansible-playbook"]
+# A playbook that outlives its caller loses its stdout reader, and the free
+# strategy then spins forever on a task it failed to queue. Die with the caller.
+ANSIBLE_PLAYBOOK = ["setpriv", "--pdeathsig", "TERM", "uv", "run", "--locked", "ansible-playbook"]
 SSHD = Path("/usr/sbin/sshd")
 
 SSHD_CONFIG = """
