@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Regression coverage for the ./setup.sh command facade.
 
-`setup.sh` has one operation, `sync`, which delegates to `uv sync --locked`.
+`setup.sh` has two operations. `sync` delegates to `uv sync --locked`, and
+`upgrade` delegates to one `uv lock` call with an `--upgrade-package` per name.
 These tests observe the process, its exit status, and the work it delegates.
 """
 
@@ -113,6 +114,18 @@ def test_sync_failure_is_not_reported_as_success(project, env) -> None:
     assert result.returncode == 1, result.stdout
 
 
+# --- upgrade --------------------------------------------------------------
+
+
+def test_upgrade_relocks_only_the_named_packages_in_one_call(project, env) -> None:
+    result = run(project, env, "upgrade", "ansible-core", "pytest")
+
+    assert result.returncode == 0, result.stderr
+    assert delegated(env) == [
+        ["uv", "lock", "--upgrade-package", "ansible-core", "--upgrade-package", "pytest"]
+    ]
+
+
 # --- grammar --------------------------------------------------------------
 
 
@@ -126,7 +139,15 @@ def test_help_exits_zero_without_delegating(project, env) -> None:
 
 @pytest.mark.parametrize(
     "arguments",
-    [(), ("bogus",), ("--bogus",), ("sync", "extra"), ("--help", "extra")],
+    [
+        (),
+        ("bogus",),
+        ("--bogus",),
+        ("sync", "extra"),
+        ("--help", "extra"),
+        ("upgrade",),
+        ("upgrade", "pytest", "--all"),
+    ],
 )
 def test_missing_unknown_or_surplus_input_is_invalid_usage(
     project, env, arguments
