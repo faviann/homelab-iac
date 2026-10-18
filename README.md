@@ -124,7 +124,6 @@ These defaults are configured for the target homelab:
 - **API host**: `proxmox.lan`
 - **Node name**: `proxmox`
 - **Network bridge**: `vmbr1`
-- **Default template**: `local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst`
 
 Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variables, or playbook vars as needed for your environment.
 
