@@ -92,6 +92,15 @@
       "automerge": false
     },
     {
+      "description": "Authentik patches ship security backports, so they skip the hold and the Saturday window and merge once lint passes",
+      "matchFileNames": ["stacks/auth/auth/.env.j2"],
+      "matchDepNames": ["ghcr.io/goauthentik/server"],
+      "matchUpdateTypes": ["patch"],
+      "schedule": ["at any time"],
+      "dependencyDashboardApproval": false,
+      "automerge": true
+    },
+    {
       "description": "CPA/Home: every pair update needs protected recovery and compatibility approval",
       "matchFileNames": ["stacks/overmind/cliproxy/**"],
       "dependencyDashboardApproval": true,

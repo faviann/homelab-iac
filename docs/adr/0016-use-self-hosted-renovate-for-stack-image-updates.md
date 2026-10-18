@@ -57,6 +57,12 @@ Authentik or Traefik bump takes every other service down with it. Database
 majors are held the same way, because they need a dump and restore. An
 assisted stack, one whose upgrade needs a runbook, is held with a note linking
 the runbook.
+Authentik patches are the one exception. They open at any time, with no tick,
+and automerge once lint passes, because Authentik ships security backports in
+patches. A bad patch can lock everyone out of most services until someone
+reverts it. The patch pin rewrites `stacks/auth/auth/compose.yaml` from an
+unversioned upstream URL, so between patches the sync changes only the default
+tag. Authentik minors and majors stay held.
 
 **Automerge.** Renovate merges digest pins, digest updates and patches once
 lint passes, and the nightly deploy ships them. Nobody reads their release
@@ -67,8 +73,8 @@ one, or a revert of the merge commit restores the previous image reference.
 `platformAutomerge` is off because `main` has no required checks, and GitHub's
 auto-merge would not wait for lint. A group PR merges only when every update in
 it qualifies. Minors stay PRs for a person, because upstreams ship breaking
-changes in minors, as Seerr did in 3.3.0 and 3.5.0. Updates held for a tick and
-vendor version pins always wait for a person. On 2026-10-18 this paragraph
+changes in minors, as Seerr did in 3.3.0 and 3.5.0. Every other update held for a tick,
+and every other vendor version pin, waits for a person. On 2026-10-18 this paragraph
 replaced "Nothing merges automatically".
 
 **Undated majors.** Application majors open as PRs labelled `major` once the
