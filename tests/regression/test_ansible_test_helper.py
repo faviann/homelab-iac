@@ -14,7 +14,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO_ROOT / "tests/fixtures/ansible"
-RAW_LOCKED_PLAYBOOK = ("uv", "run", "--locked", "ansible-playbook")
+RAW_LOCKED_PLAYBOOK = ("setpriv", "--pdeathsig", "TERM", "uv", "run", "--locked", "ansible-playbook")
 
 
 def load_helper() -> ModuleType:
