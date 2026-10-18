@@ -74,7 +74,11 @@ one, or a revert of the merge commit restores the previous image reference.
 `platformAutomerge` is off because `main` has no required checks, and GitHub's
 auto-merge would not wait for lint. A group PR merges only when every update in
 it qualifies. Minors stay PRs for a person, because upstreams ship breaking
-changes in minors, as Seerr did in 3.3.0 and 3.5.0. Every other update held for
+changes in minors, as Seerr did in 3.3.0 and 3.5.0. Renovate's own updates wait
+for a person, because a bad Renovate update stops the run that would fix it.
+Database images wait for a person on every update, digests included, because a
+floating tag such as `postgres:18` takes new versions as digest updates and a
+database release can need steps such as a reindex. Every other update held for
 a tick, and every other vendor version pin, waits for a person. On 2026-10-18
 this paragraph replaced "Nothing merges automatically".
 
