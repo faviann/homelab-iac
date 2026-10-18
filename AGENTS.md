@@ -108,6 +108,7 @@ Six commands are the whole interface. Each answers `--help`; [docs/command-polic
 | `./validate.sh lint` | Targeted repo-wide lint feedback (production profile). Prefer `./validate.sh` for handoff verification |
 | `./validate.sh tests [<target>...]` | Run the test suite (~5 min), optionally restricted to targets inside `tests/` (a path, optionally with a `::` node-id suffix). Targets outside the test tree are invalid usage |
 | `./setup.sh sync` | Optionally synchronize the locked Python environment ahead of use (non-interactive; no OS packages, no managed host). Every command reconciles it on its own |
+| `./setup.sh upgrade <package>...` | Upgrade the named packages in `uv.lock` to the newest versions `pyproject.toml` allows |
 
 **Timing**: `./run.sh` against live hosts typically takes 5–10 minutes, and `--limit` or `--stack` shortens it. Live `./inspect.sh` operations take about 10 seconds for `credentials`, `containers`, and `connectivity`, and about half a minute for a fleet-wide `plan`; a first run in a fresh worktree also reconciles dependencies. Do not assume a hang — wait for completion before acting on the result. A live command that cannot take the lock exits 75 at once, naming the holder when it is another live command; it never waits. A `./run.sh` that succeeds but defers a busy stack exits 3, which means deferred, not failed.
 

@@ -10,6 +10,7 @@ of what the guards enforce.
 | Command | Operation | Lock | Agent use |
 | --- | --- | --- | --- |
 | `./setup.sh` | `sync` | none | yes |
+| | `upgrade <package>...` | none | yes |
 | `./vault.sh` | `check` | none | yes |
 | | `diff [<git-ref>]` | none | yes |
 | | `set <key> --from-file <path> --create\|--replace [--strip-final-newline]` | none | on explicit request |
@@ -388,6 +389,7 @@ Agent use of a documented raw command is a separate decision:
 | `ansible-vault edit` | `./vault.sh edit` |
 | `ansible-vault view` | `./vault.sh check`, which verifies the vault, or `./vault.sh diff`, which names changed keys. No operation prints decrypted contents |
 | `ansible-lint` | `./validate.sh lint` |
+| `uv lock --upgrade-package <package>` | `./setup.sh upgrade <package>...` |
 | the lifecycle regression runner | `./validate.sh lifecycle [--full] [--only <launcher.py>]... [--fail-fast]` |
 | `pytest`, `python -m unittest`, or a test file run with `python` | `./validate.sh tests [<target>...]` |
 | `python -c "import proxmoxer, requests"` | none. `./setup.sh sync` repairs the environment it only probed |
