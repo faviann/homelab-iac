@@ -50,7 +50,6 @@ proxmox_lxc_overrides:
   vmid: 303
   hostname: servarr
   disk: "16"
-  ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst"
   description: "Servarr services host managed via Ansible"
   tags:
     - ansible

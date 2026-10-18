@@ -139,7 +139,7 @@ For one-off reprovisioning or migration waves, add an `ostemplate` override in t
 proxmox_lxc_overrides:
   vmid: 303
   hostname: servarr
-  ostemplate: "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst"
+  ostemplate: "local:vztmpl/debian-14-standard_<version>_amd64.tar.zst"
 ```
 
 This is the preferred way to do a Debian release canary. The per-host override is merged after
