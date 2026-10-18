@@ -43,9 +43,9 @@ proxmox_lxc_bind_mounts_overrides:
 
 lxc_docker_env_stack_vars:
   broodling:
-    # Published as sha-91440455e29f67e79894fc074c66b0bec655d8ec.
-    broodling_image: "ghcr.io/faviann/broodling@sha256:35a46992f8fa32f603e254a39d44eb1c365b20aafb1a3d7e8ef97dd7d471742b"
-    broodling_revision: "91440455e29f67e79894fc074c66b0bec655d8ec"
+    # Published as sha-76180b626b7bd96a568fbedac18de1f9f3a73032.
+    broodling_image: "ghcr.io/faviann/broodling@sha256:9589a06c6ab27cc89663140c6c0bc35f029c7a02f4ea665c634eb70633ed5742"
+    broodling_revision: "76180b626b7bd96a568fbedac18de1f9f3a73032"
     github_token: "{{ vault_broodling_github_token }}"
     gateway_api_key: "{{ vault_broodling_gateway_api_key }}"
     dotnet:
