@@ -59,19 +59,20 @@ assisted stack, one whose upgrade needs a runbook, is held with a note linking
 the runbook.
 
 **Automerge.** Renovate merges digest pins, digest updates and patches once
-lint passes and the release is 3 days old, and the nightly deploy ships them.
-Nobody reads their release notes or runs the new image first. Reverting the
-merge commit restores the previous image reference. `platformAutomerge` is off
-because `main` has no required checks, and GitHub's auto-merge would not wait
-for lint. A group PR merges only when every update in it qualifies. Minors stay
-PRs for a person, because upstreams ship breaking changes in minors, as Seerr
-did in 3.3.0 and 3.5.0. Application majors open as PRs labelled `major` once
-the release is 14 days old. Updates held for a tick and vendor version pins
-always wait for a person. On 2026-10-18 this paragraph replaced "Nothing merges
-automatically".
+lint passes, and the nightly deploy ships them. Nobody reads their release
+notes or runs the new image first. There is no release-age wait, because
+Renovate can only count from a registry release date, and most automerged
+images, every `lscr.io` one among them, have none. The next release fixes a bad
+one, or a revert of the merge commit restores the previous image reference.
+`platformAutomerge` is off because `main` has no required checks, and GitHub's
+auto-merge would not wait for lint. A group PR merges only when every update in
+it qualifies. Minors stay PRs for a person, because upstreams ship breaking
+changes in minors, as Seerr did in 3.3.0 and 3.5.0. Updates held for a tick and
+vendor version pins always wait for a person. On 2026-10-18 this paragraph
+replaced "Nothing merges automatically".
 
-**Undated releases.** A release-age wait counts only when the registry reports
-a release date. Most digest updates and many tags have none, and Renovate's
-default holds an undated update forever, so both age rules set
-`minimumReleaseAgeBehaviour` to `timestamp-optional`. An undated update goes
-ahead without the wait.
+**Undated majors.** Application majors open as PRs labelled `major` once the
+release is 14 days old, counted only when the registry reports a release date.
+Renovate's default holds an undated update forever, so the majors rule sets
+`minimumReleaseAgeBehaviour` to `timestamp-optional`, and an undated major
+opens at once.

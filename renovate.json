@@ -42,11 +42,9 @@
       "commitMessageTopic": "images in {{packageFileDir}}"
     },
     {
-      "description": "Pins, digests and patches merge once lint passes; a release with a registry date waits 3 days, one without (most digests) does not",
+      "description": "Pins, digests and patches merge once lint passes; the nightly deploy ships them",
       "matchFileNames": ["stacks/**"],
       "matchUpdateTypes": ["pin", "pinDigest", "digest", "patch"],
-      "minimumReleaseAge": "3 days",
-      "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
     },
     {
