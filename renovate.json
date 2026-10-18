@@ -7,6 +7,7 @@
   "timezone": "America/Montreal",
   "schedule": ["* * * * 6"],
   "prHourlyLimit": 0,
+  "platformAutomerge": false,
   "customManagers": [
     {
       "customType": "regex",
@@ -41,6 +42,12 @@
       "commitMessageTopic": "images in {{packageFileDir}}"
     },
     {
+      "description": "Pins, digests and patches merge once lint passes; the nightly deploy ships them",
+      "matchFileNames": ["stacks/**"],
+      "matchUpdateTypes": ["pin", "pinDigest", "digest", "patch"],
+      "automerge": true
+    },
+    {
       "description": "Vendored compose files change only through the vendor sync",
       "matchFileNames": ["stacks/auth/auth/compose.yaml", "stacks/public/immich/compose.yaml"],
       "enabled": false
@@ -55,6 +62,7 @@
       "matchManagers": ["custom.regex"],
       "matchFileNames": ["**/.env.j2"],
       "pinDigests": false,
+      "automerge": false,
       "prBodyNotes": ["**Vendor stack:** read the compose diff and upstream release notes. A database image change needs upstream's migration steps."],
       "postUpgradeTasks": {
         "commands": ["sh scripts/vendor-sync.sh {{{packageFileDir}}}/compose.yaml {{{currentValue}}} {{{newValue}}}"],
@@ -62,10 +70,11 @@
       }
     },
     {
-      "description": "Application majors: labelled PR after 14 days, never automerged",
+      "description": "Application majors: labelled PR after 14 days when the registry dates the release, never automerged",
       "matchUpdateTypes": ["major"],
       "addLabels": ["major"],
-      "minimumReleaseAge": "14 days"
+      "minimumReleaseAge": "14 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     },
     {
       "description": "Database majors need a dump and restore, not a tag change",
@@ -79,12 +88,23 @@
     {
       "description": "Foundational stacks: every update is a deliberate tick",
       "matchFileNames": ["stacks/auth/**", "stacks/portal/**"],
-      "dependencyDashboardApproval": true
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Authentik patches ship security backports, so they skip the hold and the Saturday window and merge once lint passes",
+      "matchFileNames": ["stacks/auth/auth/.env.j2"],
+      "matchDepNames": ["ghcr.io/goauthentik/server"],
+      "matchUpdateTypes": ["patch"],
+      "schedule": ["at any time"],
+      "dependencyDashboardApproval": false,
+      "automerge": true
     },
     {
       "description": "CPA/Home: every pair update needs protected recovery and compatibility approval",
       "matchFileNames": ["stacks/overmind/cliproxy/**"],
       "dependencyDashboardApproval": true,
+      "automerge": false,
       "prBodyNotes": ["**Assisted CPA/Home update:** take a matched snapshot with the old pinned Home image and follow [snapshot, restore and compatibility acceptance](https://github.com/faviann/homelab-iac/blob/main/docs/cliproxy-maintenance.md#matched-recovery-and-assisted-updates) before approving any tag or digest change."]
     },
     {
