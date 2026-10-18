@@ -1,5 +1,5 @@
 #!/bin/bash
-# Optional locked Python-environment synchronization.
+# Locked Python-environment synchronization and lock-file upgrades.
 
 set -uo pipefail
 
@@ -13,6 +13,9 @@ Usage: ./setup.sh <operation>
 Operations:
   sync       Synchronize the locked Python environment. Optional: every
              command that uses the environment reconciles it itself.
+  upgrade    Upgrade the named packages in uv.lock to the newest versions
+             pyproject.toml allows:
+               upgrade <package>...
 
 Options:
   --help     Show this help
@@ -25,13 +28,20 @@ usage_error() {
     exit 2
 }
 
+upgrades=()
 case "${1-}" in
-    --help | sync) ;;
+    --help | sync) (($# == 1)) || usage_error "$1 takes no arguments" ;;
+    upgrade)
+        (($# > 1)) || usage_error "upgrade needs at least one package name"
+        for package in "${@:2}"; do
+            [[ "$package" != -* ]] || usage_error "unknown option"
+            upgrades+=(--upgrade-package "$package")
+        done
+        ;;
     "") usage_error "an operation is required" ;;
     -*) usage_error "unknown option" ;;
     *) usage_error "unknown operation" ;;
 esac
-(($# == 1)) || usage_error "$1 takes no arguments"
 
 if [[ "$1" == --help ]]; then
     usage
@@ -40,4 +50,8 @@ fi
 
 require_uv || exit 1
 cd "$PROJECT_ROOT" || exit 1
-uv sync --locked || exit 1
+if [[ "$1" == sync ]]; then
+    uv sync --locked || exit 1
+else
+    uv lock "${upgrades[@]}" || exit 1
+fi
