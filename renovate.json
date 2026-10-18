@@ -72,10 +72,11 @@
       }
     },
     {
-      "description": "Application majors: labelled PR after 14 days, never automerged",
+      "description": "Application majors: labelled PR after 14 days when the registry dates the release, never automerged",
       "matchUpdateTypes": ["major"],
       "addLabels": ["major"],
-      "minimumReleaseAge": "14 days"
+      "minimumReleaseAge": "14 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     },
     {
       "description": "Database majors need a dump and restore, not a tag change",
