@@ -4,4 +4,4 @@
 
 roles:
   - name: geerlingguy.docker
-    version: 7.9.0
+    version: 8.0.0
