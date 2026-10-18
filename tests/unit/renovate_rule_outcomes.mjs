@@ -24,6 +24,7 @@ for (const update of JSON.parse(readFileSync(0, 'utf8'))) {
     automerge: result.automerge,
     dependencyDashboardApproval: result.dependencyDashboardApproval,
     schedule: result.schedule,
+    groupName: result.groupName ?? null,
   });
 }
 console.log(JSON.stringify(outcomes));

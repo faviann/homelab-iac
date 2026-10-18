@@ -18,7 +18,7 @@ HELPER = Path(__file__).with_name("renovate_rule_outcomes.mjs")
 CASES = {
     "sonarr patch": (
         "stacks/servarr/sonarr/compose.yaml", "lscr.io/linuxserver/sonarr", "patch",
-        {"automerge": True, "schedule": ["* * * * 6"]},
+        {"automerge": True, "schedule": ["* * * * 6"], "groupName": "stack images"},
     ),
     "sonarr digest": (
         "stacks/servarr/sonarr/compose.yaml", "lscr.io/linuxserver/sonarr", "digest",
@@ -50,7 +50,7 @@ CASES = {
     ),
     "postgres digest": (
         "stacks/overmind/overmind/compose.yaml", "docker.io/library/postgres", "digest",
-        {"automerge": False},
+        {"automerge": False, "groupName": None},
     ),
 }
 
@@ -89,7 +89,7 @@ def test_renovate_rules_decide_each_update() -> None:
     updates = [
         {
             "packageFile": package_file,
-            "manager": "custom.regex" if package_file.endswith(".env.j2") else "docker-compose",
+            "manager": "regex" if package_file.endswith(".env.j2") else "docker-compose",
             "depName": dep_name,
             "updateType": update_type,
         }

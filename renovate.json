@@ -53,9 +53,10 @@
       "automerge": false
     },
     {
-      "description": "Database images wait for a person, digests included, because a floating tag such as postgres:18 takes new versions as digest updates and a release can need steps such as a reindex",
+      "description": "Database images wait for a person in their own PR, digests included, because a floating tag such as postgres:18 takes new versions as digest updates and a release can need steps such as a reindex; their own PR keeps the app beside them automerging",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["/postgres/", "/pgvector/", "/mariadb/", "/valkey/", "/redis/"],
+      "groupName": null,
       "automerge": false
     },
     {

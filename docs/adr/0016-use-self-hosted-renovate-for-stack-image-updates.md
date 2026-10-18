@@ -78,8 +78,9 @@ changes in minors, as Seerr did in 3.3.0 and 3.5.0. Renovate's own updates wait
 for a person, because a bad Renovate update stops the run that would fix it.
 Database images wait for a person on every update, digests included, because a
 floating tag such as `postgres:18` takes new versions as digest updates and a
-database release can need steps such as a reindex. Every other update held for
-a tick, and every other vendor version pin, waits for a person. On 2026-10-18
+database release can need steps such as a reindex. Each database update opens
+its own PR, so the app beside it keeps merging. Every other update held for a
+tick, and every other vendor version pin, waits for a person. On 2026-10-18
 this paragraph replaced "Nothing merges automatically".
 
 **Undated majors.** Application majors open as PRs labelled `major` once the
