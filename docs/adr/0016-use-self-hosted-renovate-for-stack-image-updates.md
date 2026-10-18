@@ -31,7 +31,8 @@ immediate run.
 - Floating tags such as `latest` become `latest@sha256:...` rather than a
   readable version. Switching an image to a real version tag is the remedy.
 - Scans run every six hours and open new PRs weekly, not only on demand.
-- Release notes appear in the PR for a person to read. Nothing assesses them.
+- Release notes appear in the PR for a person to read. Nothing assesses them,
+  and nobody reads them for an update Renovate merges.
 
 ## Rules that follow
 
@@ -57,5 +58,17 @@ majors are held the same way, because they need a dump and restore. An
 assisted stack, one whose upgrade needs a runbook, is held with a note linking
 the runbook.
 
-Nothing merges automatically. Application majors open as PRs labelled `major`
-once the release is 14 days old.
+**Automerge.** Renovate merges digest pins, digest updates and patches once
+lint passes, and the nightly deploy ships them. A release waits until it is 3
+days old only when its registry reports a release date. Most digest updates
+have none, and Renovate's default would hold an undated update forever, so the
+rule sets `minimumReleaseAgeBehaviour` to `timestamp-optional`. Nobody reads
+their release notes or runs the new image first. Reverting the merge commit
+restores the previous image reference. `platformAutomerge` is off because
+`main` has no required checks, and GitHub's auto-merge would not wait for lint.
+A group PR merges only when every update in it qualifies. Minors stay PRs for a
+person, because upstreams ship breaking changes in minors, as Seerr did in
+3.3.0 and 3.5.0. Application majors open as PRs labelled `major` once the
+release is 14 days old. Updates held for a tick and vendor version pins always
+wait for a person. On 2026-10-18 this paragraph replaced "Nothing merges
+automatically".

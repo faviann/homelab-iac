@@ -7,6 +7,7 @@
   "timezone": "America/Montreal",
   "schedule": ["* * * * 6"],
   "prHourlyLimit": 0,
+  "platformAutomerge": false,
   "customManagers": [
     {
       "customType": "regex",
@@ -41,6 +42,14 @@
       "commitMessageTopic": "images in {{packageFileDir}}"
     },
     {
+      "description": "Pins, digests and patches merge once lint passes; a release with a registry date waits 3 days, one without (most digests) does not",
+      "matchFileNames": ["stacks/**"],
+      "matchUpdateTypes": ["pin", "pinDigest", "digest", "patch"],
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
+      "automerge": true
+    },
+    {
       "description": "Vendored compose files change only through the vendor sync",
       "matchFileNames": ["stacks/auth/auth/compose.yaml", "stacks/public/immich/compose.yaml"],
       "enabled": false
@@ -55,6 +64,7 @@
       "matchManagers": ["custom.regex"],
       "matchFileNames": ["**/.env.j2"],
       "pinDigests": false,
+      "automerge": false,
       "prBodyNotes": ["**Vendor stack:** read the compose diff and upstream release notes. A database image change needs upstream's migration steps."],
       "postUpgradeTasks": {
         "commands": ["sh scripts/vendor-sync.sh {{{packageFileDir}}}/compose.yaml {{{currentValue}}} {{{newValue}}}"],
@@ -79,12 +89,14 @@
     {
       "description": "Foundational stacks: every update is a deliberate tick",
       "matchFileNames": ["stacks/auth/**", "stacks/portal/**"],
-      "dependencyDashboardApproval": true
+      "dependencyDashboardApproval": true,
+      "automerge": false
     },
     {
       "description": "CPA/Home: every pair update needs protected recovery and compatibility approval",
       "matchFileNames": ["stacks/overmind/cliproxy/**"],
       "dependencyDashboardApproval": true,
+      "automerge": false,
       "prBodyNotes": ["**Assisted CPA/Home update:** take a matched snapshot with the old pinned Home image and follow [snapshot, restore and compatibility acceptance](https://github.com/faviann/homelab-iac/blob/main/docs/cliproxy-maintenance.md#matched-recovery-and-assisted-updates) before approving any tag or digest change."]
     },
     {
