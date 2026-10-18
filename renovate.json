@@ -48,6 +48,17 @@
       "automerge": true
     },
     {
+      "description": "Renovate's own image waits for a person, because a bad update stops the run that would fix it",
+      "matchFileNames": ["stacks/devserver/renovate/**"],
+      "automerge": false
+    },
+    {
+      "description": "Database images wait for a person, digests included, because a floating tag such as postgres:18 takes new versions as digest updates and a release can need steps such as a reindex",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/postgres/", "/pgvector/", "/mariadb/", "/valkey/", "/redis/"],
+      "automerge": false
+    },
+    {
       "description": "Vendored compose files change only through the vendor sync",
       "matchFileNames": ["stacks/auth/auth/compose.yaml", "stacks/public/immich/compose.yaml"],
       "enabled": false
