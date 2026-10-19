@@ -8,7 +8,7 @@ x-prereq-dirs:
 
 services:
   romm:
-    image: rommapp/romm:4.8.1
+    image: rommapp/romm:4.9.2@sha256:c81778afcafe7c865bdf156d1c62349aec3dfca3aca5ec0d6c2c2e8bfa9fb071
     container_name: romm
     restart: unless-stopped
     environment:
