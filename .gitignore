@@ -46,9 +46,6 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Git worktrees
-.worktrees/
-
 # Temporary files
 /tmp/
 

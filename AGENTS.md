@@ -23,7 +23,7 @@ Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/age
 ## Non-negotiables
 
 - Never request, paste, print, or commit secrets (API token secret, vault passphrase, private keys). Secrets live only in the encrypted `inventory/vault.yml`. Use placeholders like `<REPLACE_ME>` in docs and examples.
-- Use the repository's commands below. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
+- Use the repository's commands below, both in what you run and in the command examples you write. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
 - Lifecycle runs silently skip the control node they run on. `./run.sh --include-controller` targets it, but its interrupting steps wait for a run from the other control node. Run `--interrupt-busy` against the workstation only on explicit request, and only from the bootstrap node.
 - Roles gate on capability flags (`when: docker_enabled | default(false)`), never on group membership (`'cap_docker' in group_names`).
 
@@ -40,7 +40,7 @@ Six commands are the whole interface. `<command> --help` lists each one's operat
 | `./recover.sh` | Human-only. Enrolls the controller SSH key |
 | `./setup.sh sync\|upgrade <package>...` | `sync` is optional, because every command reconciles its own environment. `upgrade` bumps named packages in `uv.lock` |
 
-A live command that cannot take the machine-local lock exits 75 at once and never waits. Exit 3 means deferred, not failed. A busy stack defers, and so does a mutating workstation run while a deploy is in flight on the bootstrap node.
+A live command that cannot take the machine-local lock exits 75 at once and never waits. Exit 3 means deferred, not failed. A run defers a stack whose busy check reports busy, and the workstation while any agent on it is mid-turn, including the agent that started the run. A mutating workstation run also exits 3 while a deploy is in flight on the bootstrap node.
 
 `./run.sh` against live hosts takes 5 to 10 minutes, less with `--limit` or `--stack`. Wait for it to finish instead of assuming a hang. Redirect live output to a log and read only the summary:
 
@@ -49,7 +49,7 @@ A live command that cannot take the machine-local lock exits 75 at once and neve
 rg "failed=|unreachable=|FAILED|changed=" /tmp/<task>.log
 ```
 
-Before handoff, always run `./validate.sh` with no arguments (about 5 minutes). A targeted run never substitutes, with one exception. When every file the branch changes ends in `.md` and none is under `playbooks/`, run only the two checks that read Markdown:
+Before handoff, always run `./validate.sh` with no arguments (about 5 minutes). A targeted run never substitutes, with one exception. When every path in `git diff --name-only origin/main...HEAD` and `git status --short` ends in `.md`, and none is under `playbooks/`, run only the two tests a Markdown edit can fail:
 
 ```bash
 ./validate.sh tests tests/unit/test_workstation_mcp_auth_proxy_contract.py tests/regression/test_vault_command.py::test_rotate_publishes_only_after_a_verified_local_rekey

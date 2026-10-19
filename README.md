@@ -261,6 +261,7 @@ control nodes.
 |-- playbooks/                     # Playbooks and roles behind the commands
 |-- inventory/                     # hosts.yml, group_vars/, host_vars/, encrypted vault.yml
 |-- stacks/<host>/<stack>/         # Docker Compose stacks, discovered per host
+|-- library/                       # Custom Ansible modules (proxmox_pct)
 |-- scripts/                       # Helpers the commands call
 |-- tests/                         # pytest suite and lifecycle regression launchers
 |-- docs/                          # Command policy, guides, and ADRs (docs/adr/)

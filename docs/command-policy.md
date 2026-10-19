@@ -412,8 +412,8 @@ options before `--`.
 These are known limits, not defects waiting for a fix.
 
 - The enforcement tests catch only someone who runs `./validate.sh`.
-  `AGENTS.md` requires that run before handoff, and nothing enforces anything
-  outside it. The wrapper marker is the same kind of guard. It stops accidents,
+  `AGENTS.md` requires that run before handoff for any change that is not
+  docs-only, and nothing enforces anything outside it. The wrapper marker is the same kind of guard. It stops accidents,
   not intent.
 - `./inspect.sh vars` masks a value that contains a vault value only when that
   vault value has 8 characters or more. A shorter secret can print inside a

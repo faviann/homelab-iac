@@ -65,6 +65,7 @@ proxmox_api_host: "proxmox.lan"
 proxmox_default_node: "proxmox"
 
 # 2. group_vars/cap_docker/vars.yml
+docker_enabled: true
 install_docker: true
 proxmox_lxc_capability_defaults:
   features: [nesting=1, keyctl=1]
