@@ -4,7 +4,7 @@ x-prereq-dirs:
 
 services:
   lazylibrarian:
-    image: lscr.io/linuxserver/lazylibrarian:latest@sha256:8ae532447aacd83ff0476212451be8cdde3e2fdccded3661d7111ecdbf641fc2
+    image: lscr.io/linuxserver/lazylibrarian:latest@sha256:c9962355207bbee0e852992cc9e50161fbc1b6b5cdf174f3f96fcbdd65ea091e
     container_name: lazylibrarian
     restart: unless-stopped
     environment:
