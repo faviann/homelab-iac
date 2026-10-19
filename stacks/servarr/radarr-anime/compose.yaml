@@ -5,7 +5,7 @@ x-prereq-dirs:
 services:
   # TODO: After first boot, register /data/media/movies/anime as a root folder in the Radarr Anime web UI.
   radarr-anime:
-    image: lscr.io/linuxserver/radarr:6.1.1
+    image: lscr.io/linuxserver/radarr:6.4.4@sha256:ea6822c956d26db648b237919f41340318f32e5b7dcc4ba702cf256a0f5f3c12
     container_name: radarr-anime
     restart: unless-stopped
     environment:
