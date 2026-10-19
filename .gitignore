@@ -1,10 +1,3 @@
-# Ansible artifacts
-ansible/*.log
-ansible/*.retry
-ansible/.ansible/
-ansible/__pycache__/
-ansible/*.pyc
-
 # Ansible collections (installed dependencies)
 collections/ansible_collections/
 collections/**/*.info/
@@ -21,11 +14,9 @@ vault-pass.txt
 *.retry
 
 # Fact cache
-/tmp/ansible_facts/
 .ansible/cache/
 
 # Local control node artifacts (portable project setup)
-.ansible/venv/
 .ansible/vault-pass.txt
 .ansible/ssh/
 .ansible/cp/

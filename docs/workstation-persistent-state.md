@@ -14,7 +14,7 @@ with mode `0600`, because an empty file is invalid JSON. Modes and ownership are
 reconciled on both the backing target and mount point, preserving existing file
 contents and modification times.
 
-`~/.pi` remains the Pi harness state root. OMP is a separate harness with separate state under `~/.omp`; neither path replaces or contains the other. OpenCode's three durable XDG roots preserve its configuration, authentication, and session state. Read this runbook before the first `site.yml` run that enables any newly declared path.
+`~/.pi` remains the Pi harness state root. OMP is a separate harness with separate state under `~/.omp`; neither path replaces or contains the other. OpenCode's three durable XDG roots preserve its configuration, authentication, and session state. Read this runbook before the first `./run.sh` that enables any newly declared path.
 
 ## The Fail-Closed Assert
 

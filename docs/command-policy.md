@@ -431,10 +431,15 @@ These are known limits, not defects waiting for a fix.
   so it can run alongside a deploy in flight there.
 - A `workstation-deploy@` unit does not read the workstation, so it can run
   alongside `./run.sh --include-controller` there.
-- `./validate.sh` requires `/usr/sbin/sshd` (Debian package `openssh-server`).
-  The Proxmox trust regression starts an unprivileged `sshd` on `127.0.0.1` so
-  that the real `ssh` client decides trust. Validation fails on a machine
-  without it, and it installs nothing.
+- `./validate.sh` requires three host tools and installs none of them. The
+  `debian-13-standard` template the `workstation` guest uses ships the first two.
+  - `/usr/sbin/sshd` (Debian package `openssh-server`). The Proxmox trust
+    regression starts an unprivileged `sshd` on `127.0.0.1` so that the real
+    `ssh` client decides trust.
+  - `/usr/sbin/nft` (Debian package `nftables`). The origin firewall regression
+    loads its ruleset in an unprivileged network namespace.
+  - `npx`, with network access on its first run. The Renovate rule test runs
+    Renovate at the deployed version.
 - `./validate.sh` needs no machine-local secret, so a build server can now run
-  it after a checkout, a `uv` install, and `openssh-server`. None exists yet
+  it after a checkout, a `uv` install, and those three tools. None exists yet
   (#200).
