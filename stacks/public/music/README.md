@@ -5,8 +5,8 @@ This stack runs Navidrome on the `public` Docker host with a split auth model.
 Subsonic clients. `music.media.faviann.com` uses `protected-edge-auth@file` for
 browser access.
 
-ADR-005 documents the Authentik/Navidrome sync decision:
-[`docs/decisions/adr-005-navidrome-authentik-sync.md`](../../../docs/decisions/adr-005-navidrome-authentik-sync.md).
+ADR-0023 documents the Authentik/Navidrome sync decision:
+[`docs/adr/0023-use-navidrome-native-auth-on-the-public-music-hostname.md`](../../../docs/adr/0023-use-navidrome-native-auth-on-the-public-music-hostname.md).
 
 ## Normalization Boundary
 

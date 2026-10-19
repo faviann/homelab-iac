@@ -87,3 +87,64 @@ Providers that predate 2026.5 were backfilled by migration and omit the key, so
 the manifest leaves their live grant sets untouched.
 
 RomM is the current concrete native OIDC example. Its app-specific notes live in [stacks/public/romm/README.md](../stacks/public/romm/README.md).
+
+## Blueprint `!Find` Lookups
+
+Read when a blueprint must reference an Authentik object without hardcoding an
+instance-specific UUID.
+
+`!Find [<model>, [<field>, <value>, ...]]` resolves to one database lookup in
+`authentik/blueprints/v1/common.py`. Its behavior was confirmed against that
+source in April 2026:
+
+- The field name passes unmodified into Django's `Q()`, so `__` traversals such
+  as `stage__name`, `flow__slug`, and `target__slug` work.
+- The condition list alternates fields and values,
+  `[field1, value1, field2, value2]`. All conditions are ANDed.
+- The lookup uses `.first()`, not `.get()`. When several objects match, it
+  returns the first without an error, so make each lookup unambiguous.
+- The model is `app_label.model_name`, with the Django app label rather than
+  the Python module path. Exported blueprints use
+  `authentik_flows.flowstagebinding`, `authentik_flows.flow`,
+  `authentik_policies_expression.expressionpolicy`, and
+  `authentik_policies.policybindingmodel`.
+
+Some object types carry a `managed` value that survives a fresh deploy, so
+`!Find [<model>, [managed, goauthentik.io/...]]` finds them:
+
+| Object type | Example `managed` value |
+| --- | --- |
+| `Flow` | `goauthentik.io/flows/default-password-change` |
+| `Stage` subclasses | `goauthentik.io/stages/prompt/default-password-change-prompt` |
+| `PropertyMapping` | `goauthentik.io/providers/oauth2/scope-openid` |
+| `Policy` (some) | varies |
+
+A fresh deploy regenerates these keys, so never hardcode them:
+
+| Key | Stable alternative |
+| --- | --- |
+| `FlowStageBinding.pk` / `pbm_uuid` | A `stage__name` traversal. A flow stage binding has no `managed` field, as the exported blueprints in `stacks/auth/auth/appdata/authentik/blueprints/20-flows/` confirm. |
+| `PolicyBinding.pk` / `pbm_uuid` | The bound object's own stable fields. A policy binding has no `managed` field. |
+| Auto-created `Application`, `Provider`, and `Group` PKs | `slug` or `name`. An application has no `managed` field, but its `slug` is stable. |
+
+Find a flow stage binding by its stage's name:
+
+```yaml
+!Find [authentik_flows.flowstagebinding, [stage__name, default-password-change-prompt]]
+```
+
+Add the flow's slug when the same stage is bound to several flows:
+
+```yaml
+!Find [authentik_flows.flowstagebinding, [stage__name, default-password-change-prompt, target__slug, default-password-change]]
+```
+
+Find a flow by its slug. This also works for a policy binding that targets a
+flow, because `Flow` extends `PolicyBindingModel`:
+
+```yaml
+!Find [authentik_flows.flow, [slug, default-password-change]]
+```
+
+[ADR-0023](adr/0023-use-navidrome-native-auth-on-the-public-music-hostname.md)
+uses the first lookup in the password-change blueprint.
