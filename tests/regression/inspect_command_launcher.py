@@ -39,7 +39,7 @@ def run_inspect(
     *arguments: str,
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    # Assert completed command behavior, independent of control node scheduling.
+    # Assert completed command behavior, independent of process scheduling.
     return subprocess.run(
         [str(INSPECT), *arguments],
         cwd=REPO_ROOT,

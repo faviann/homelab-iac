@@ -70,7 +70,7 @@ The categories of an LXC's configuration on the Proxmox host that its LXC contra
 _Avoid_: Proxmox host configuration
 
 **Fleet preflight**:
-The planning step that checks rules spanning several LXCs, such as identity reservations and shared Proxmox access, and takes one common Proxmox observation for every target. It decides nothing about any single LXC's transitions.
+The planning step that checks rules spanning several LXCs, such as identity reservations and shared Proxmox access. It decides nothing about any single LXC's transitions.
 _Avoid_: Global validation, fleet validation
 
 **LXC observation**:
@@ -104,7 +104,7 @@ A question declared in the repository and asked before a lifecycle run takes an 
 _Avoid_: Health check, readiness probe
 
 **Busy probe**:
-A host's own busy check, which defers that host's interrupting steps but not its stacks. The workstation's probe reports busy while an agent is mid-turn or a lifecycle run holds its lock, and the bootstrap node's while a deploy is in flight.
+A host's own busy check, which defers that host's interrupting steps but not its stacks. The workstation's probe reports busy while an agent is mid-turn or a lifecycle run holds its lock, and the bootstrap node's while it is running any deploy.
 _Avoid_: Idle gate
 
 ### Control nodes and trust
@@ -122,7 +122,7 @@ The control node that runs the nightly deploy and carries consented interrupting
 _Avoid_: Backup controller, jump host
 
 **Live operation**:
-An operation that reaches managed hosts or the Proxmox API with real credentials, requiring only the credentials it consumes. Every other operation, validation included, is non-live: it needs no managed host, vault secret, or machine-local credential.
+An operation that reaches managed hosts or the Proxmox API with real credentials, requiring only the credentials it consumes. Every other operation is non-live. Validation in particular needs no managed host, vault secret, or machine-local credential.
 _Avoid_: Live workflow, deployment, online mode
 
 **Fleet key**:
@@ -130,7 +130,7 @@ The one SSH key pair, shared by both control nodes and every worktree on them, t
 _Avoid_: Controller SSH identity, controller identity, controller key, worktree SSH key
 
 **Enrollment**:
-A person's explicit step that makes the Proxmox host or existing LXCs trust the fleet key, without reading any LXC contract, so invalid desired state elsewhere cannot block it. Lifecycle runs never enroll; a guest a run creates or rebuilds receives the key as part of creation.
+A person's explicit step that makes the Proxmox host or existing LXCs trust the fleet key, without reading any LXC contract, so invalid desired state elsewhere cannot block it. Lifecycle runs never enroll the Proxmox host; they reinstall the fleet key in every guest they prepare.
 _Avoid_: Manual SSH recovery, key injection, SSH repair
 
 **Host-key pinning**:

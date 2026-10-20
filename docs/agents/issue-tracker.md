@@ -10,7 +10,7 @@ Group related unanswered questions and check for existing issues first. Mark def
 
 ## Pull requests as a triage surface
 
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
+**PRs as a request surface: no.** _(`/triage` reads this flag.)_
 
 ## Wayfinding operations
 
