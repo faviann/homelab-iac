@@ -1,11 +1,11 @@
 ---
-# Adds the control node SSH key to existing LXC containers. It never deletes a
+# Adds the fleet key to existing LXC containers. It never deletes a
 # container; it only appends the public key to authorized_keys.
 #
 # Run it through ./recover.sh ssh-keys [--limit <targets>]. Direct invocation
-# fails the controller prerequisite, which requires the serializing wrapper.
+# fails the control-node prerequisite, which requires the serializing wrapper.
 
-- name: Validate manual SSH recovery prerequisites
+- name: Validate enrollment prerequisites
   ansible.builtin.import_playbook: proxmox-host-prerequisites.yml
   vars:
     prerequisite_target_pattern: lxcs
@@ -15,12 +15,12 @@
   gather_facts: false
 
   pre_tasks:
-    - name: Resolve control-node SSH public key
+    - name: Resolve fleet public key
       ansible.builtin.include_role:
         name: infrastructure/ssh_key_shared
         tasks_from: resolve_pubkey
 
-    - name: Validate minimal manual SSH recovery identity
+    - name: Validate minimal enrollment identity
       ansible.builtin.assert:
         that:
           - proxmox_lxc_overrides is defined
@@ -29,10 +29,10 @@
           - proxmox_lxc_overrides.hostname is defined
           - proxmox_lxc_overrides.hostname | string | length > 0
         fail_msg: >-
-          Manual SSH recovery requires vmid and hostname in proxmox_lxc_overrides
+          Enrollment requires vmid and hostname in proxmox_lxc_overrides
           for {{ inventory_hostname }}.
 
-    - name: Build minimal manual SSH recovery input
+    - name: Build minimal enrollment input
       ansible.builtin.set_fact:
         proxmox_lxc_manual_guest_bootstrap:
           vmid: "{{ proxmox_lxc_overrides.vmid }}"

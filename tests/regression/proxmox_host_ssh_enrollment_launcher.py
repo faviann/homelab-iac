@@ -19,7 +19,7 @@ from pathlib import Path
 from ansible_test_helper import (
     ansible_playbook_command,
     local_ssh_port,
-    write_controller_identity,
+    write_fleet_key,
 )
 
 
@@ -45,7 +45,7 @@ all:
           ansible_python_interpreter: "{{ ansible_playbook_python }}"
 """
 
-# Key authentication succeeds only for the selected private identity against the
+# Key authentication succeeds only for the fleet private key against the
 # intended target, and only once that target trusts it.
 SSH_STUB = """#!/bin/sh
 case " $* " in *" -i {private} "*) ;; *) exit 255 ;; esac
@@ -68,7 +68,7 @@ exec "$@" < /dev/null
 """
 
 # ssh-copy-id owns the authorized_keys mutation; the stub only decides whether
-# the request named the selected identity and target, and then grants trust.
+# the request named the fleet key and target, and then grants trust.
 SSH_COPY_ID_STUB = """#!/bin/sh
 printf '%s\\n' "$*" >> '{requests}'
 identity=
@@ -218,13 +218,13 @@ def main() -> int:
     ):
         temp_root = Path(temp_dir)
         home = temp_root / "home"
-        write_controller_identity(home)
+        write_fleet_key(home)
         public_key = (home / ".ansible" / "ssh" / "proxmox_lxc.pub").read_text().strip()
         # No single quote, so a shell-quoted copy still contains it verbatim.
         # The random tail keeps the process scan from matching anything else.
         password = f'fixture $(false) "x" {secrets.token_hex(8)}'
         # A Proxmox host-key anchor from before a reinstall; enrollment replaces it.
-        old_host_key = write_controller_identity(temp_root / "reinstalled").with_suffix(".pub")
+        old_host_key = write_fleet_key(temp_root / "reinstalled").with_suffix(".pub")
         fleet_file = home / ".ansible" / "known_hosts"
         old_anchor = f"[127.0.0.1]:{ssh_port} {' '.join(old_host_key.read_text().split()[:2])}"
         fleet_file.write_text(f"{old_anchor}\n")
@@ -235,7 +235,7 @@ def main() -> int:
         if untrusted.returncode != 0 or not untrusted.prompted or not untrusted.requests:
             print(
                 "explicit enrollment did not establish key-based trust for the "
-                "selected identity on the intended target",
+                "fleet key on the intended target",
                 file=sys.stderr,
             )
             print(untrusted.output, file=sys.stderr)
@@ -266,7 +266,7 @@ def main() -> int:
         )
         if unverified.returncode == 0:
             print(
-                "enrollment reported success although the selected identity "
+                "enrollment reported success although the fleet key "
                 "still cannot authenticate",
                 file=sys.stderr,
             )
@@ -278,15 +278,15 @@ def main() -> int:
         if trusted.returncode != 0 or trusted.prompted or trusted.requests or trusted.passwords:
             print(
                 "enrollment did not stay a no-op when the target already trusts "
-                "the selected identity",
+                "the fleet key",
                 file=sys.stderr,
             )
             print(trusted.output, file=sys.stderr)
             return 1
 
     print(
-        "ok: explicit Proxmox host enrollment prompts, installs the selected "
-        "identity, verifies it, and does nothing once trusted"
+        "ok: explicit Proxmox host enrollment prompts, installs the fleet key, "
+        "verifies it, and does nothing once trusted"
     )
     return 0
 

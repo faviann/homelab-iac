@@ -1,7 +1,7 @@
 ---
 # The bootstrap node is the control node that runs the nightly deploy and
 # carries interrupting workstation runs (docs/bootstrap-node.md). The role
-# delivers the deploy webhook, and copies the controller's vault passphrase,
+# delivers the deploy webhook, and copies the control node's vault passphrase,
 # fleet key, and fleet known_hosts (ADR-0020, ADR-0021).
 
 - name: Install git
@@ -39,7 +39,7 @@
     group: root
     mode: "0700"
 
-# From the controller running this play; no_log and diff: false keep the
+# From the control node running this play; no_log and diff: false keep the
 # contents out of output and diffs. The known_hosts carries the Proxmox
 # host-key anchor, so the node never trusts Proxmox on first use.
 - name: Copy the vault passphrase, the fleet key, and the fleet known_hosts

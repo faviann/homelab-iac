@@ -17,11 +17,11 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from ansible_test_helper import write_controller_identity  # noqa: E402
+from ansible_test_helper import write_fleet_key  # noqa: E402
 
 from scripts.live_dependencies import (  # noqa: E402
     COLLECTIONS_PATH,
-    CONTROLLER_IDENTITY_CREATION,
+    FLEET_KEY_CREATION,
     LIVE_OPERATIONS,
     ROLES_PATH,
     SSH_CONTROL_PATH_PARENT,
@@ -125,7 +125,7 @@ def fixture_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("PATH", f"{fixture_bin}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("GALAXY_LOG", str(tmp_path / "galaxy.log"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    write_controller_identity(tmp_path / "home")
+    write_fleet_key(tmp_path / "home")
     monkeypatch.chdir(project_root)
     return project_root
 
@@ -419,7 +419,7 @@ def test_ssh_operation_creates_the_repository_control_path_parent(
     assert control_path_parent.stat().st_mode & 0o777 == 0o700
 
 
-def test_documented_first_controller_identity_works_from_a_fresh_home(
+def test_documented_first_fleet_key_works_from_a_fresh_home(
     fixture_project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fresh_home = tmp_path / "fresh-home"
@@ -431,7 +431,7 @@ def test_documented_first_controller_identity_works_from_a_fresh_home(
     assert list(fresh_home.iterdir()) == []
 
     subprocess.run(
-        ["bash", "-c", CONTROLLER_IDENTITY_CREATION],
+        ["bash", "-c", FLEET_KEY_CREATION],
         check=True,
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -471,18 +471,18 @@ def test_dependency_free_ssh_operation_does_not_wait_for_dependency_lock(
     assert (fixture_project / ".ansible/cp").is_dir()
 
 
-def stage_controller_identity(home: Path, state: str) -> None:
+def stage_fleet_key(home: Path, state: str) -> None:
     if state == "absent":
         return
     if state == "encrypted":
-        write_controller_identity(home, passphrase="fixture-passphrase")
+        write_fleet_key(home, passphrase="fixture-passphrase")
         return
-    declared = Path(f"{write_controller_identity(home)}.pub")
+    declared = Path(f"{write_fleet_key(home)}.pub")
     if state == "mismatched":
-        unrelated = write_controller_identity(home, name="unrelated")
+        unrelated = write_fleet_key(home, name="unrelated")
         declared.write_bytes(Path(f"{unrelated}.pub").read_bytes())
     elif state == "extra-key":
-        unrelated = write_controller_identity(home, name="unrelated")
+        unrelated = write_fleet_key(home, name="unrelated")
         declared.write_text(
             declared.read_text(encoding="utf-8")
             + Path(f"{unrelated}.pub").read_text(encoding="utf-8"),
@@ -497,12 +497,12 @@ def run_boundary(
     tmp_path: Path,
     *arguments: str,
     hold_lock: bool = False,
-    identity: str = "absent",
+    fleet_key: str = "absent",
     extra_environment: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     home = tmp_path / "home"
     (home / ".ansible").mkdir(parents=True)
-    stage_controller_identity(home, identity)
+    stage_fleet_key(home, fleet_key)
     fixture_bin = tmp_path / "bin"
     fixture_bin.mkdir()
     write_executable(fixture_bin / "uv", RECORDING_UV)
@@ -586,7 +586,7 @@ def test_reconciliation_precedes_ansible_at_the_live_boundary(tmp_path: Path) ->
 
 @pytest.mark.serial
 @pytest.mark.parametrize(
-    ("identity", "condition"),
+    ("fleet_key", "condition"),
     [
         ("present", ""),
         ("recommented", ""),
@@ -595,11 +595,11 @@ def test_reconciliation_precedes_ansible_at_the_live_boundary(tmp_path: Path) ->
         ("extra-key", "is inconsistent"),
     ],
 )
-def test_ssh_operation_requires_a_consistent_controller_identity(
-    tmp_path: Path, identity: str, condition: str
+def test_ssh_operation_requires_a_consistent_fleet_key(
+    tmp_path: Path, fleet_key: str, condition: str
 ) -> None:
     result, _ = run_boundary(
-        tmp_path, "shared", "playbooks/lab-connectivity.yml", identity=identity
+        tmp_path, "shared", "playbooks/lab-connectivity.yml", fleet_key=fleet_key
     )
     output = result.stdout + result.stderr
 
@@ -609,7 +609,7 @@ def test_ssh_operation_requires_a_consistent_controller_identity(
 
     assert result.returncode != 0
     assert condition in output
-    assert "controller-identity problem" in output
+    assert "fleet-key problem" in output
     assert "not a managed-host trust failure" in output
     contradicting = {"is absent": "is inconsistent", "is inconsistent": "is absent"}
     assert contradicting[condition] not in output
@@ -620,7 +620,7 @@ def test_ssh_operation_requires_a_consistent_controller_identity(
 
 
 @pytest.mark.serial
-def test_identity_check_never_prompts_for_a_passphrase(tmp_path: Path) -> None:
+def test_fleet_key_check_never_prompts_for_a_passphrase(tmp_path: Path) -> None:
     """An encrypted key must fail, not reach for an interactive prompt.
 
     Without a controlling tty, ssh-keygen falls back to reading the closed
@@ -639,7 +639,7 @@ def test_identity_check_never_prompts_for_a_passphrase(tmp_path: Path) -> None:
         tmp_path,
         "shared",
         "playbooks/lab-connectivity.yml",
-        identity="encrypted",
+        fleet_key="encrypted",
         extra_environment={
             "SSH_ASKPASS": str(askpass),
             "SSH_ASKPASS_REQUIRE": "force",

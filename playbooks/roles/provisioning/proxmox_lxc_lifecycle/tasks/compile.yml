@@ -1,5 +1,5 @@
 ---
-- name: Resolve control-node SSH public key for LXC provisioning
+- name: Resolve fleet public key for LXC provisioning
   ansible.builtin.include_role:
     name: infrastructure/ssh_key_shared
     tasks_from: resolve_pubkey

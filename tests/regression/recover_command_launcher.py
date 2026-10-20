@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression coverage for the Manual SSH recovery command."""
+"""Regression coverage for the enrollment command."""
 
 from __future__ import annotations
 

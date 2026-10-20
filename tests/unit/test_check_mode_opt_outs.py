@@ -33,7 +33,7 @@ ACKNOWLEDGED_OPT_OUTS: dict[tuple[str, str], str] = {
         "git check-ignore read the sync plan needs",
     ("playbooks/roles/config/lxc_workstation_baseline/tasks/persistent_home.yml", "Inspect existing mount status for persistent home paths"):
         "findmnt read the mount plan needs",
-    ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/check_ssh.yml", "Test selected identity trust on Proxmox host"):
+    ("playbooks/roles/infrastructure/proxmox_host_bootstrap/tasks/check_ssh.yml", "Test fleet key trust on Proxmox host"):
         "ssh reachability probe",
     ("playbooks/roles/infrastructure/ssh_key_shared/tasks/pin_host_keys.yml", "Pin the guest's host keys in the fleet known_hosts"):
         "check mode connects to guests too, so it needs their keys pinned",

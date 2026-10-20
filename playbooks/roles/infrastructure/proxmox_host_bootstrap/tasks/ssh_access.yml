@@ -7,7 +7,7 @@
     that:
       - ssh_key_test.rc == 0
     fail_msg: >-
-      The selected controller SSH identity is not trusted by
+      The fleet key is not trusted by
       {{ proxmox_ssh_user }}@{{ proxmox_host }}:{{ proxmox_ssh_port }}, or the
       host presented a key other than its anchor in ~/.ansible/known_hosts.
       This operation will not modify authorized_keys or the anchor. Enroll it

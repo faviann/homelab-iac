@@ -15,7 +15,7 @@ from pathlib import Path
 from ansible_test_helper import (
     ansible_playbook_command,
     local_ssh_port,
-    write_controller_identity,
+    write_fleet_key,
 )
 
 
@@ -31,7 +31,7 @@ def main() -> int:
     ):
         temp_root = Path(temp_dir)
         home = temp_root / "home"
-        public_key = Path(f"{write_controller_identity(home)}.pub")
+        public_key = Path(f"{write_fleet_key(home)}.pub")
         encoded_public_key = base64.b64encode(
             public_key.read_text().strip().encode()
         ).decode()
@@ -122,7 +122,7 @@ def main() -> int:
         )
 
         env = os.environ.copy()
-        # The resolver reads the canonical HOME-relative identity, so the run
+        # The resolver reads the canonical HOME-relative fleet key, so the run
         # must use the staged one rather than the operator's own key.
         env["HOME"] = str(home)
         env["PATH"] = f"{temp_root}:{env['PATH']}"
@@ -148,11 +148,11 @@ def main() -> int:
             missing_marker.returncode == 0
             or "Lifecycle runs must use ./run.sh" not in missing_marker_output
         ):
-            print("target-limited recovery bypassed controller health", file=sys.stderr)
+            print("target-limited enrollment bypassed control-node health", file=sys.stderr)
             print(missing_marker_output, file=sys.stderr)
             return 1
         if ssh_log.exists() or pct_log.exists():
-            print("failed controller health allowed recovery side effects", file=sys.stderr)
+            print("failed control-node health allowed enrollment side effects", file=sys.stderr)
             return 1
 
         env["HOMELAB_IAC_LIFECYCLE_WRAPPER"] = "1"
@@ -187,7 +187,7 @@ def main() -> int:
 
         output = f"{proc.stdout}\n{proc.stderr}"
         if proc.returncode != 0:
-            print("manual SSH recovery playbook failed unexpectedly", file=sys.stderr)
+            print("enrollment playbook failed unexpectedly", file=sys.stderr)
             print(output, file=sys.stderr)
             return 1
 
@@ -219,7 +219,7 @@ def main() -> int:
         )
         no_limit_output = f"{no_limit.stdout}\n{no_limit.stderr}"
         if no_limit.returncode != 0:
-            print("no-limit manual SSH recovery failed unexpectedly", file=sys.stderr)
+            print("no-limit enrollment failed unexpectedly", file=sys.stderr)
             print(no_limit_output, file=sys.stderr)
             return 1
 
@@ -248,7 +248,7 @@ def main() -> int:
             )
             return 1
 
-    print("ok: manual SSH recovery ignores unrelated invalid desired infrastructure")
+    print("ok: enrollment ignores unrelated invalid desired infrastructure")
     return 0
 
 

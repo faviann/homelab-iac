@@ -6,7 +6,7 @@
     fail_msg: Proxmox host SSH enrollment cannot run in check mode.
     quiet: true
 
-- name: Resolve selected controller SSH identity fingerprint
+- name: Resolve fleet key fingerprint
   ansible.builtin.command:
     argv:
       - ssh-keygen
@@ -19,7 +19,7 @@
 - name: Identify the authorized Proxmox host enrollment
   ansible.builtin.debug:
     msg: >-
-      Selected identity {{ pubkey_fingerprint.stdout }} for
+      Fleet key {{ pubkey_fingerprint.stdout }} for
       {{ proxmox_ssh_user }}@{{ proxmox_host }}:{{ proxmox_ssh_port }}.
 
 - name: Prompt for Proxmox host password
@@ -49,7 +49,7 @@
 # so unrelated agent keys cannot exhaust the server's attempt limit first. The
 # password goes in on stdin because Ansible prepends `environment` values to the
 # module's shell command line.
-- name: Enroll selected identity on Proxmox host
+- name: Enroll fleet key on Proxmox host
   ansible.builtin.command:
     argv:
       - sshpass
@@ -75,15 +75,15 @@
   no_log: true
   delegate_to: localhost
 
-- name: Probe selected identity trust after enrollment
+- name: Probe fleet key trust after enrollment
   ansible.builtin.include_tasks: check_ssh.yml
 
-- name: Require the selected identity to authenticate after enrollment
+- name: Require the fleet key to authenticate after enrollment
   ansible.builtin.assert:
     that:
       - ssh_key_test.rc == 0
     fail_msg: >-
-      Enrollment ran, but the selected controller SSH identity still cannot
+      Enrollment ran, but the fleet key still cannot
       authenticate to {{ proxmox_ssh_user }}@{{ proxmox_host }}:{{ proxmox_ssh_port }}.
       Check that host's SSH configuration; this operation does not repair it.
     quiet: true

@@ -4,9 +4,9 @@
 Issue #225: `controller-prerequisites.yml` runs `hosts: <lifecycle target>` with
 `connection: local` because the checks inspect the control node. With a cold or
 expired fact cache the first module invocation triggers interpreter discovery
-for that host over the local connection, so the controller's venv interpreter is
+for that host over the local connection, so the control node's venv interpreter is
 recorded as a fact *of the target* and persisted. The next play, which really
-does connect over SSH, then tries to execute the controller's venv python inside
+does connect over SSH, then tries to execute the control node's venv python inside
 the container and fails as an opaque `timed out waiting for ping module test`.
 
 The play is exercised against a remote-SSH target identity with a cold jsonfile

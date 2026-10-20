@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test: Proxmox trust means the selected identity itself authenticates.
+"""Regression test: Proxmox trust means the fleet key itself authenticates.
 
 Runs the real ordinary prerequisite playbook with the real ssh client against an
 unprivileged real sshd, so only the credential that actually logs in decides.
@@ -22,14 +22,14 @@ from ansible_test_helper import (
     SSHD,
     ansible_playbook_command,
     local_sshd,
-    write_controller_identity,
+    write_fleet_key,
 )
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK = REPO_ROOT / "playbooks" / "proxmox-host-prerequisites.yml"
 ANSIBLE_PLAYBOOK = ansible_playbook_command(supplies_own_inventory=True)
-UNTRUSTED = "selected controller SSH identity is not trusted"
+UNTRUSTED = "fleet key is not trusted"
 
 INVENTORY = """
 all:
@@ -62,8 +62,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="pxtrust-", dir="/tmp") as temp_dir:
         root = Path(temp_dir)
         home = root / "home"
-        canonical = write_controller_identity(home)
-        other = write_controller_identity(root / "elsewhere")
+        canonical = write_fleet_key(home)
+        other = write_fleet_key(root / "elsewhere")
         (root / "inventory.yml").write_text(INVENTORY)
         operator_config = root / "operator_ssh_config"
         wrapper_dir = root / "bin"
@@ -112,8 +112,8 @@ def main() -> int:
             named = run_prerequisites(other, f"Host *\n  IdentityFile {other}\n")
             if named.returncode == 0 or UNTRUSTED not in named.stdout:
                 print(
-                    "the trust probe accepted an unrelated identity that ssh_config "
-                    "named, although the target does not trust the selected one",
+                    "the trust probe accepted an unrelated key that ssh_config "
+                    "named, although the target does not trust the fleet key",
                     file=sys.stderr,
                 )
                 print(f"{named.stdout}\n{named.stderr}", file=sys.stderr)
@@ -163,8 +163,8 @@ def main() -> int:
             )
             if shared.returncode == 0 or UNTRUSTED not in shared.stdout:
                 print(
-                    "the trust probe reused a connection another identity "
-                    "authenticated instead of logging in with the selected one",
+                    "the trust probe reused a connection another key "
+                    "authenticated instead of logging in with the fleet key",
                     file=sys.stderr,
                 )
                 print(f"{shared.stdout}\n{shared.stderr}", file=sys.stderr)
@@ -173,7 +173,7 @@ def main() -> int:
             trusted = run_prerequisites(canonical, "")
             if trusted.returncode != 0:
                 print(
-                    "the trust probe refused the selected identity although the "
+                    "the trust probe refused the fleet key although the "
                     "target trusts it",
                     file=sys.stderr,
                 )
@@ -203,7 +203,7 @@ def main() -> int:
                 return 1
 
     print(
-        "ok: Proxmox trust holds only when the selected identity itself "
+        "ok: Proxmox trust holds only when the fleet key itself "
         "authenticates to the configured target that presents its anchored key"
     )
     return 0

@@ -6,7 +6,7 @@ This directory organizes inventory variables by purpose:
 - `lxcs/` holds defaults for every managed LXC.
 - `tier_*` describe each LXC's baseline CPU, RAM, and disk.
 - `cap_*` set capability flags (Docker, GPU, WireGuard, browser device).
-- `proxmox_api/` configures the controller host that drives API calls.
+- `proxmox_api/` configures the control node, which drives API calls.
 
 A tier overrides a capability where both set the same variable.
 [docs/inventory-structure-guide.md](../../docs/inventory-structure-guide.md#variable-precedence)

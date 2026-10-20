@@ -185,7 +185,7 @@ for ((index = 0; index < ${#passthrough[@]}; index++)); do
     esac
 done
 
-# The same name the lifecycle's controller skip compares inventory_hostname to.
+# The same name the lifecycle's control node skip compares inventory_hostname to.
 if $include_controller; then
     limit_pattern="$(hostname)"
 fi
