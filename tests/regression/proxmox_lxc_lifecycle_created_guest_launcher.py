@@ -23,7 +23,7 @@ from ansible_test_helper import (
     SSHD,
     ansible_playbook_command,
     local_sshd,
-    write_controller_identity,
+    write_fleet_key,
 )
 
 
@@ -49,7 +49,7 @@ def main() -> int:
         home = root / "home"
         state_dir.mkdir()
         cache_dir.mkdir()
-        identity = write_controller_identity(home)
+        identity = write_fleet_key(home)
         (root / "authorized_keys").write_text(identity.with_suffix(".pub").read_text())
         for vmid in (ADDRESSED, UNADDRESSED):
             (state_dir / f"{vmid}.state").write_text("absent", encoding="utf-8")

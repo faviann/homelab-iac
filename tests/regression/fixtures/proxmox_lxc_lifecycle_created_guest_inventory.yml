@@ -2,7 +2,7 @@
 # Two guests the lifecycle creates in one run. Each inventory address is a name
 # no resolver answers, as the LAN resolver leaves a fresh lease's name for
 # minutes. The first guest obtains 127.0.0.1, where the launcher's sshd trusts
-# the fixture controller identity; the second never obtains an address.
+# the fixture fleet key; the second never obtains an address.
 all:
   vars:
     proxmox_api_host: localhost

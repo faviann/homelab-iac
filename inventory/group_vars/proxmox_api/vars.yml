@@ -1,3 +1,3 @@
 ---
-# Variables for the Proxmox API controller host(s).
+# Variables for the Proxmox API host, which is the control node itself.
 # Populate with connection details or leave empty if using host_vars.

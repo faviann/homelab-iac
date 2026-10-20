@@ -1,6 +1,6 @@
 # homelab-iac
 
-Ansible automation for managing Proxmox LXC containers via API from a remote controller.
+Ansible automation for managing Proxmox LXC containers via API from two control nodes inside the fleet.
 
 ## Both Control Nodes Down
 
@@ -14,28 +14,28 @@ vault passphrase and fleet key; it does not set up a new Proxmox host. See
 
 ## Quick Start (New Workstation)
 
-**Generic controller setup:**
+The fleet has two control nodes. The `workstation` LXC is where people and
+agents work. The `bootstrap` LXC runs the nightly deploy and interrupting
+workstation runs. The workstation deploys the bootstrap node and copies it the
+vault passphrase and the fleet key, so only the workstation needs this setup.
+
+On the workstation, complete `workstation-setup` first. That command applies
+the dotfiles Home Manager flake for Node/npm, `uv`, `gh`, and other baseline
+tools, then repairs missing npm-managed agent CLIs. It also restores the vault
+passphrase and the fleet key from Bitwarden. Use `update-agent-tools` when you
+want the latest Codex, Claude Code, and Pi.dev CLIs. Then clone the repository:
 
 ```bash
 git clone https://github.com/faviann/homelab-iac.git
 cd homelab-iac
 ```
 
-On the Ansible-managed `workstation` LXC, complete `workstation-setup` first.
-That command applies the dotfiles Home Manager flake for Node/npm, `uv`, `gh`,
-and other baseline tools, then repairs missing npm-managed agent CLIs. Use
-`update-agent-tools` on the workstation when you want the latest Codex, Claude
-Code, and Pi.dev CLIs. On any other controller, install `uv` yourself; this
-repository runs it but never installs it.
-
 `./setup.sh sync` optionally synchronizes the locked Python environment ahead
 of time. It is not prerequisite sequencing: every command reconciles the
 environment through `uv run --locked`, and `./run.sh`, `./recover.sh`, and the
 live `./inspect.sh` operations install and verify the collections and roles
-they consume.
-Nothing establishes controller identity either, so a new controller still needs
-`~/.ansible/ssh/proxmox_lxc` put in place explicitly before any managed-host
-operation.
+they consume. No command creates the fleet key. A managed-host operation fails
+before any live effect until `~/.ansible/ssh/proxmox_lxc` is in place.
 
 **After setup, validate your credentials:**
 
@@ -59,7 +59,7 @@ This repository provides Ansible playbooks and configuration to manage LXC conta
 
 ### Key Features
 
-- **Remote API-driven**: Manage Proxmox via API from a controller
+- **Remote API-driven**: Manage Proxmox via API from a control node
 - **LXC-only**: Focused exclusively on LXC container management (no VMs)
 - **Secure**: API token authentication stored in Ansible Vault
 - **Static Inventory**: Version-controlled configuration
@@ -109,13 +109,13 @@ change. An existing installation can otherwise mask a stale row.
 Reconciliation installs into the repository-owned `collections/` and
 `.ansible/roles/` paths configured in `ansible.cfg`. SSH-consuming operations
 also create the repository's configured `.ansible/cp/` directory before
-Ansible starts. They verify the controller SSH identity and never create it:
+Ansible starts. They verify the fleet key and never create it:
 when `~/.ansible/ssh/proxmox_lxc` is missing, or does not pair with its `.pub`,
 the operation fails before any live effect and names the condition.
 
 IMPORTANT: Some LXC operations (notably changing LXC "feature" flags such as `nesting=1` or `keyctl=1`) require privileged API access and are only permitted when performed by the local Proxmox root account (`root@pam`). If your automation will set or change LXC feature flags, create and use an API token for `root@pam` (see "Creating API Tokens in Proxmox" below). If you prefer not to use a `root@pam` token, avoid providing `features` in your LXC specs and configure those flags manually on the Proxmox host.
 
-**Note**: This repository handles restricted feature flags (like `keyctl=1`) by applying them via `pct` commands directly on the Proxmox host after API-based provisioning. Ordinary lifecycle runs require the selected controller identity to be trusted already; they never prompt for a password or enroll it implicitly.
+**Note**: This repository handles restricted feature flags (like `keyctl=1`) by applying them via `pct` commands directly on the Proxmox host after API-based provisioning. Ordinary lifecycle runs require the fleet key to be trusted already; they never prompt for a password or enroll it implicitly.
 
 ### Proxmox Environment Defaults
 
@@ -131,7 +131,7 @@ Adjust or override them in `inventory/group_vars/all/proxmox.yml`, host variable
 
 ### Manual Setup
 
-On the managed `workstation` LXC, run `workstation-setup` first so Home Manager provides `uv` and the other base tools. On any other controller:
+On the `workstation` LXC, run `workstation-setup` first so Home Manager provides `uv` and the other base tools. To set up the workstation by hand instead:
 
 1. **Install system prerequisites:**
 
@@ -158,18 +158,19 @@ On the managed `workstation` LXC, run `workstation-setup` first so Home Manager 
    ./setup.sh sync
    ```
 
-4. **Establish the controller SSH identity:**
+4. **Put the fleet key in place:**
 
-   Managed-host operations authenticate with `~/.ansible/ssh/proxmox_lxc`.
+   Managed-host operations authenticate with the fleet key at
+   `~/.ansible/ssh/proxmox_lxc`.
    Nothing in this repository creates it. Live commands verify it and fail
    before any live effect when it is missing, because which of the two cases
    below you are in is yours to decide.
 
-   On a rebuilt controller, restore the previously trusted private key and its
-   `.pub` from your own backup. Minting a new identity loses the trust the
-   fleet already grants, and managed hosts will still reject it.
+   When the fleet already trusts a key, restore that private key and its
+   `.pub` from your own backup. Minting a new key loses the trust the fleet
+   already grants, and managed hosts will still reject it.
 
-   On a genuinely first controller, create one:
+   When the fleet has no key yet, create one:
 
    ```bash
    mkdir -p -m 700 ~/.ansible/ssh
@@ -236,7 +237,7 @@ Test connectivity:
 ```
 
 A full run verifies control node prerequisites, **verifies that the Proxmox
-host already trusts the controller identity** (stopping before any effect when
+host already trusts the fleet key** (stopping before any effect when
 it does not), validates API connectivity, provisions LXC containers, applies
 host-side configuration (including restricted feature flags via `pct`), and
 configures each container.
@@ -245,7 +246,7 @@ A lifecycle run never prompts for the Proxmox root password. Enroll trust once
 with `./recover.sh proxmox-host-ssh`.
 
 Live commands share one machine-local lock across every worktree on the
-controller. A mutating run takes it exclusively; `--check` and the live
+control node. A mutating run takes it exclusively; `--check` and the live
 `./inspect.sh` operations take it shared. `./inspect.sh vars` reads only local
 inventory and takes no lock. A command that cannot take the lock exits 75 at
 once, and names the holder when it is another live command. The lock does not coordinate two
@@ -265,7 +266,7 @@ control nodes.
 |-- scripts/                       # Helpers the commands call
 |-- tests/                         # pytest suite and lifecycle regression launchers
 |-- docs/                          # Command policy, guides, and ADRs (docs/adr/)
-|-- CONTEXT.md                     # Domain language
+|-- GLOSSARY.md                    # Domain language
 |-- collections/requirements.yml   # Pinned Ansible collections
 |-- requirements/roles.yml         # Pinned external roles
 |-- pyproject.toml, uv.lock        # Locked Python environment
@@ -311,7 +312,7 @@ Every top-level key starts with `vault_`, as in `inventory/vault.yml.example`.
 
 The `inventory/hosts.yml` defines two groups:
 
-- **proxmox_api**: Controller host for API operations (runs locally)
+- **proxmox_api**: The control node itself, as the host for API operations (runs locally)
 - **lxcs**: Add your LXC containers here if you want to manage them via SSH after provisioning
 
 ## Creating API Tokens in Proxmox
@@ -330,7 +331,7 @@ The `inventory/hosts.yml` defines two groups:
 
 The automation requires SSH access to the Proxmox host to apply certain configuration that cannot be done via API (such as restricted LXC feature flags like `keyctl=1`).
 
-Check whether the selected controller identity is already trusted by running the
+Check whether the fleet key is already trusted by running the
 intended lifecycle or inspection operation. If it is not, that operation stops
 before its effects and points to the explicit enrollment transition:
 
@@ -362,7 +363,7 @@ After initial setup, all subsequent playbook runs will use passwordless SSH auth
 **Current status**: TLS verification is **disabled** by default (`proxmox_verify_ssl: false`) to support self-signed certificates commonly used in homelabs.
 
 **TODO/Future hardening**:
-1. Install a trusted certificate on Proxmox or distribute your CA bundle to the controller
+1. Install a trusted certificate on Proxmox or distribute your CA bundle to both control nodes
 2. Set `proxmox_verify_ssl: true` in `inventory/group_vars/all/proxmox.yml`
 3. Configure CA path if needed via `api_ca_path` parameter
 

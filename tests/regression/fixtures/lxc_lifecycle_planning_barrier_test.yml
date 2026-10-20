@@ -4,7 +4,7 @@
   connection: local
   gather_facts: false
   pre_tasks:
-    - name: Seed stale controller state as if an earlier included invocation left it
+    - name: Seed stale control node state as if an earlier included invocation left it
       ansible.builtin.set_fact:
         proxmox_lifecycle_selected: true
         proxmox_lifecycle_planning_problem: stale
@@ -259,7 +259,7 @@
       when: lifecycle_test_case == 'compile_failure'
       run_once: true
 
-    - name: Assert the default controller guard crosses neither split phase
+    - name: Assert the default control node skip crosses neither split phase
       ansible.builtin.assert:
         that:
           - not (hostvars.workstation.proxmox_lifecycle_selected | bool)
@@ -289,9 +289,9 @@
       run_once: true
 
     # Self-include defers the host's steps whether or not busy checks apply to
-    # the guest, so even this stopped controller is not started. The same rule
+    # the guest, so even this stopped control node is not started. The same rule
     # keeps a self-included run from removing the host it runs on.
-    - name: Assert the controller can be intentionally included without its host-side steps
+    - name: Assert the control node can be intentionally included without its host-side steps
       ansible.builtin.assert:
         that:
           - hostvars.localhost.proxmox_lifecycle_target_hosts == ['workstation']

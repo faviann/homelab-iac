@@ -12,7 +12,7 @@ upgrade and reboot instead of killing the deploy. Ansible installs `git` and
 a pinned `uv`, and makes the first clone of this repository at
 `/root/homelab-iac`. Ansible never moves that checkout again. It delivers
 the deploy notification webhook, Dockhand's Discord channel
-(`vault_dockhand_discord_webhook_url`), and copies the deploying controller's
+(`vault_dockhand_discord_webhook_url`), and copies the deploying control node's
 vault passphrase, fleet key, and fleet `known_hosts` to root
 ([ADR-0020](adr/0020-copy-control-node-secrets-from-the-workstation.md),
 [ADR-0021](adr/0021-pin-fleet-host-keys-through-proxmox.md)).
@@ -69,7 +69,7 @@ checkout and move it to the ref they deploy.
 `nightly-deploy.timer` starts `nightly-deploy@main` every night at 03:00
 node-local time. The deploy fetches `origin/main` at that moment, so it ships
 whatever was merged by then. It runs the lifecycle with no limit, so it
-targets every managed LXC; the controller skip leaves out this node, which
+targets every managed LXC; the control node skip leaves out this node, which
 the workstation deploys. It never passes `--interrupt-busy`: busy stacks and
 hosts defer as in any run, and the workstation's
 [interrupting steps](../stacks/README.md#busy-checks) land only when its busy

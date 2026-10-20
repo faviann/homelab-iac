@@ -1,6 +1,6 @@
 ---
 # Reads target trust only. The live execution boundary already verified that
-# the controller identity exists and pairs with its public key.
+# the fleet key exists and its two halves pair.
 - name: Test Proxmox host SSH port
   ansible.builtin.wait_for:
     host: "{{ proxmox_host }}"
@@ -19,12 +19,12 @@
       connectivity and firewall rules.
     quiet: true
 
-# Trust means a fresh public-key login with the selected identity. -F none keeps
+# Trust means a fresh public-key login with the fleet key. -F none keeps
 # ssh_config from adding identities, remapping the host, or reusing a connection
 # something else authenticated; IdentitiesOnly still ignores other agent keys.
 # accept-new records the Proxmox host-key anchor in the fleet known_hosts only
 # when it has none; a key that differs from the anchor fails the probe.
-- name: Test selected identity trust on Proxmox host
+- name: Test fleet key trust on Proxmox host
   ansible.builtin.command:
     argv:
       - ssh

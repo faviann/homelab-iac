@@ -123,7 +123,7 @@
   when: docker_agents_enabled | default(false) and not (traefik_kop_enabled | default(false))
   register: _managed_assets_docker_agents_override_removal
 
-- name: Check whether Docker agents static assets exist on the controller
+- name: Check whether Docker agents static assets exist on the control node
   ansible.builtin.stat:
     path: "{{ lxc_docker_environment_role_path | default(role_path) }}/templates/files/stacks/docker-agents"
   register: _docker_agents_static_assets

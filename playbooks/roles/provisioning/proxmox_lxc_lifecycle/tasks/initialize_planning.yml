@@ -16,7 +16,7 @@
   delegate_facts: true
   run_once: true
 
-- name: Reset target-local lifecycle state before controller selection
+- name: Reset target-local lifecycle state before the control node skip
   ansible.builtin.set_fact:
     proxmox_lifecycle_selected: false
     proxmox_lifecycle_planning_problem: ""
@@ -30,7 +30,7 @@
     proxmox_lxc_lifecycle_observation_after: {}
     lxc_lifecycle_result: {}
 
-- name: Skip if this host is the Ansible controller
+- name: Skip if this host is the control node
   ansible.builtin.meta: end_host
   when:
     - proxmox_skip_self | default(true) | bool

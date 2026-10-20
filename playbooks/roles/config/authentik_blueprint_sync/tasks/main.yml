@@ -3,7 +3,7 @@
   ansible.builtin.debug:
     msg: >-
       Check mode skips Authentik blueprint apply because it requires a live API and
-      controller-side command execution.
+      a command run on the control node.
   when: ansible_check_mode | bool
 
 - name: Assert Authentik blueprint sync inputs are present

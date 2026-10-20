@@ -58,13 +58,13 @@ def ansible_playbook_command(
     return [*ANSIBLE_PLAYBOOK, *arguments]
 
 
-def write_controller_identity(
+def write_fleet_key(
     home: Path,
     *,
     name: str = "proxmox_lxc",
     passphrase: str = "",
 ) -> Path:
-    """Generate a throwaway controller identity under a fixture ``HOME``."""
+    """Generate a throwaway fleet key under a fixture ``HOME``."""
     private_key = home / ".ansible" / "ssh" / name
     private_key.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(

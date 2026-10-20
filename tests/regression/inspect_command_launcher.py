@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from ansible_test_helper import local_ssh_port, local_sshd, write_controller_identity
+from ansible_test_helper import local_ssh_port, local_sshd, write_fleet_key
 from proxmox_api_fixture import (
     COMMON_OBSERVATION,
     LXC_API_PATHS,
@@ -39,7 +39,7 @@ def run_inspect(
     *arguments: str,
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    # Assert completed command behavior, independent of controller scheduling.
+    # Assert completed command behavior, independent of process scheduling.
     return subprocess.run(
         [str(INSPECT), *arguments],
         cwd=REPO_ROOT,
@@ -512,7 +512,7 @@ def assert_exclusive_contention_names_holder() -> None:
 def live_fixture_environment(temp_root: Path, inventory_source: str) -> dict[str, str]:
     home = temp_root / "home"
     home.mkdir()
-    write_controller_identity(home)
+    write_fleet_key(home)
     inventory = temp_root / "inventory.yml"
     inventory.write_text(inventory_source, encoding="utf-8")
     vault_password = temp_root / "vault-pass"
@@ -813,7 +813,7 @@ def assert_public_plan_fails_before_effects_when_proxmox_trust_is_missing() -> N
 
     output = f"{result.stdout}\n{result.stderr}"
     required_fragments = (
-        "selected controller SSH identity is not trusted",
+        "fleet key is not trusted",
         "root@127.0.0.1",
         "./recover.sh proxmox-host-ssh",
         "will not modify authorized_keys",

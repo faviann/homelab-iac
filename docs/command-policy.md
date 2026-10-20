@@ -424,7 +424,7 @@ These are known limits, not defects waiting for a fix.
 - A lifecycle launcher run directly, outside `./validate.sh` and pytest, does
   not get the fixture inventory and vault password (ADR-0008).
 - A playbook is detected as live when a play targets something other than
-  `localhost` or when it imports the Proxmox-host layer. A controller-only
+  `localhost` or when it imports the Proxmox-host layer. A control-node-only
   playbook that delegates to the Proxmox host without importing that layer is
   not detected.
 - A workstation run that cannot read the bootstrap node warns and proceeds,

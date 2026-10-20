@@ -1,5 +1,5 @@
 #!/bin/bash
-# Locked entry point for Manual SSH recovery.
+# Locked entry point for enrollment.
 
 set -euo pipefail
 
@@ -11,9 +11,9 @@ usage() {
 Usage: ./recover.sh <operation> [options]
 
 Operations:
-  proxmox-host-ssh             Enroll the selected controller SSH identity on the Proxmox host
+  proxmox-host-ssh             Enroll the fleet key on the Proxmox host
   ssh-keys [--limit <targets>]
-                              Enroll the selected controller SSH identity in existing LXCs
+                              Enroll the fleet key in existing LXCs
 
 Options:
   --limit <targets>           Select hosts with Ansible limit grammar

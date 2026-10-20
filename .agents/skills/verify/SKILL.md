@@ -39,7 +39,7 @@ getent ahostsv4 <service-hostnames> >> "$ev/doctor.log"
 tail -5 "$ev/doctor.log"
 ```
 
-Run one doctor per run. `<feature-hosts>` lists, comma-separated, the inventory host of every feature this run proves, named in each feature file's preconditions; `<service-hostnames>` lists their public names, space-separated. Exit `0` with `✅ SSH reachable` for each host means the control node is healthy (locked environment, controller SSH identity, Proxmox trust), the lock is free of mutations, and the hosts are up. The `getent` line shows which address the name resolves to: the LAN edge `10.1.0.2` for most names, the WAN address for `*.public.faviann.com`.
+Run one doctor per run. `<feature-hosts>` lists, comma-separated, the inventory host of every feature this run proves, named in each feature file's preconditions; `<service-hostnames>` lists their public names, space-separated. Exit `0` with `✅ SSH reachable` for each host means the control node is healthy (locked environment, fleet key, Proxmox trust), the lock is free of mutations, and the hosts are up. The `getent` line shows which address the name resolves to: the LAN edge `10.1.0.2` for most names, the WAN address for `*.public.faviann.com`.
 
 - `exit=75`: a live mutation holds the lock. Stop and report its holder.
 - `❌ SSH unreachable`: the host is down. Every probe of its services will fail. Report it.

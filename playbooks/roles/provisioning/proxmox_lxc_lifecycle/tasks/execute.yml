@@ -2,7 +2,7 @@
 # Execute one already-valid semantic lifecycle plan. The production facade runs
 # this task file with serial: 1 so a recorded failure suppresses later actions.
 
-- name: Skip execution if this host is the Ansible controller
+- name: Skip execution if this host is the control node
   ansible.builtin.meta: end_host
   when:
     - proxmox_skip_self | default(true) | bool

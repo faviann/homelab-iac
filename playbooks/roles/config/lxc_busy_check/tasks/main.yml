@@ -1,9 +1,9 @@
 ---
 # Busy-check gate. Publishes lxc_busy_check_result:
 #   {deferred_stacks: [{stack, state, reason}], host_reasons: [str], host_deferred: bool}
-# Declarations are read on the controller, so a host without them runs no
+# Declarations are read on the control node, so a host without them runs no
 # remote command. Only idle and not_deployed let a stack proceed. A run that
-# includes its own control node (the controller skip is off) defers that host
+# includes its own control node (the control node skip is off) defers that host
 # whatever its probe and the override say.
 
 - name: Start with no busy-check declarations
