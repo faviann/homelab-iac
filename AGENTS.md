@@ -10,11 +10,11 @@ Issues live in GitHub Issues (faviann/homelab-iac), reached with the `gh` CLI. S
 
 ### Triage labels
 
-The five canonical triage roles use their default label strings. See `docs/agents/triage-labels.md`.
+The five canonical triage roles use their default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`).
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. Use the glossary's terms and avoid the synonyms it lists. Flag any conflict with an ADR instead of silently overriding it.
 
 ## Project Philosophy
 
@@ -37,10 +37,10 @@ Six commands are the whole interface. `<command> --help` lists each one's operat
 | `./inspect.sh credentials\|connectivity\|containers\|plan\|probe <https-url>\|vars <host>` | Read-only checks. `probe` replaces curl for testing a routed service URL |
 | `./validate.sh [lint\|lifecycle [--only <launcher.py>]\|tests [<target>...]]` | Non-live verification. Use `lifecycle` while iterating on LXC lifecycle code |
 | `./vault.sh check\|diff\|merge\|rotate --dry-run` | Vault operations agents may run. `merge` resolves a conflicted `inventory/vault.yml`. `set` and `unset` run only on explicit request. `configure`, `edit`, and `rotate` are human-only |
-| `./recover.sh` | Human-only. Enrolls the controller SSH key |
+| `./recover.sh` | Human-only. Enrolls the fleet key |
 | `./setup.sh sync\|upgrade <package>...` | `sync` is optional, because every command reconciles its own environment. `upgrade` bumps named packages in `uv.lock` |
 
-A live command that cannot take the machine-local lock exits 75 at once and never waits. Exit 3 means deferred, not failed. A run defers a stack whose busy check reports busy, and the workstation while any agent on it is mid-turn, including the agent that started the run. A mutating workstation run also exits 3 while a deploy is in flight on the bootstrap node.
+A live operation that cannot take the machine-local lock exits 75 at once and never waits. Exit 3 means deferred, not failed. A run defers a stack whose busy check reports busy, and the workstation while any agent on it is mid-turn, including the agent that started the run. A mutating workstation run also exits 3 while a deploy is in flight on the bootstrap node.
 
 `./run.sh` against live hosts takes 5 to 10 minutes, less with `--limit` or `--stack`. Wait for it to finish instead of assuming a hang. Redirect live output to a log and read only the summary:
 
