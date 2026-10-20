@@ -64,6 +64,11 @@ CONFIGURE_COLLECTIONS = (
 )
 CONFIGURE_ROLES = ("geerlingguy.docker",)
 
+# Hand-maintained: when a live playbook starts consuming a collection or an
+# external role, add it to that playbook's row in the same change. Nothing
+# detects the omission, and an existing installation masks it. Never widen a
+# row to a whole declaration file; a dependency one operation does not consume
+# must never block it.
 LIVE_OPERATIONS: dict[str, LiveOperation] = {
     "site.yml": LiveOperation(CONFIGURE_COLLECTIONS, CONFIGURE_ROLES, True),
     "playbooks/provision-lxcs.yml": LiveOperation(

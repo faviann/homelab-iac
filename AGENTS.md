@@ -1,145 +1,66 @@
 # Agent Operating Instructions
 
-**Project Type**: Ansible infrastructure-as-code (IaC)  
-**Purpose**: Automate Proxmox LXC provisioning, configuration, and service deployments  
-**Architecture**: Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for the nightly deploy of every other LXC, interrupting workstation changes, and recovery.
+Ansible infrastructure-as-code that provisions and configures Proxmox LXCs and their Docker stacks. Two control nodes live inside the fleet. The `workstation` LXC manages every target. The `bootstrap` LXC runs the nightly deploy of every other LXC, interrupting workstation changes, and recovery.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues (faviann/homelab-iac) via the `gh` CLI; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues (faviann/homelab-iac), reached with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-The five canonical triage roles use their default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+The five canonical triage roles use their default label strings. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created lazily by `/domain-modeling`). See `docs/agents/domain.md`.
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Project Philosophy
 
 **Code is a liability, not an asset.** When two approaches exist, recommend the one with less code and fewer objects.
 
 ## Non-negotiables
-- Never request, paste, or print secrets (API token secret, vault passphrase, private keys). Use placeholders like `<REPLACE_ME>` in docs or examples.
-- Use the repository's Bash commands. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
-- When editing tracked guidance, use supported commands in examples. Never put `-e`, `--extra-vars`, or `--tags` before `--` in a documented `./run.sh` invocation; use named operations instead of `--tags`. Record intentional raw-command exceptions in the command policy.
-- Commands that consume the vault expect its passphrase at `~/.ansible/vault-pass`. `ANSIBLE_VAULT_PASSWORD_FILE` overrides that path for Ansible runs, never for `./vault.sh`.
-- Lifecycle runs skip the host they run on. `./run.sh --include-controller` targets that host and never interrupts it: its interrupting steps wait for a run from the other control node, and the run still exits 0. The workstation is busy while an agent is mid-turn or a run holds its lifecycle lock, so a run from the bootstrap node defers its interrupting changes (exit 3). An interrupting workstation run (`--interrupt-busy`) is only on explicit request and runs from the bootstrap node, never in place; `./run.sh` rejects the pair.
 
-## Standard Paths
+- Never request, paste, print, or commit secrets (API token secret, vault passphrase, private keys). Secrets live only in the encrypted `inventory/vault.yml`. Use placeholders like `<REPLACE_ME>` in docs and examples.
+- Use the repository's commands below, both in what you run and in the command examples you write. Do not invoke Ansible, `uv`, or `pytest` directly. [docs/command-policy.md](docs/command-policy.md) gives the approved exceptions.
+- Lifecycle runs silently skip the control node they run on. `./run.sh --include-controller` targets it, but its interrupting steps wait for a run from the other control node. Run `--interrupt-busy` against the workstation only on explicit request, and only from the bootstrap node.
+- Roles gate on capability flags (`when: docker_enabled | default(false)`), never on group membership (`'cap_docker' in group_names`).
 
-| Item | Location |
-|------|----------|
-| SSH key (private) | `~/.ansible/ssh/proxmox_lxc` (home-dir, machine-local, shared across worktrees) |
-| SSH key (public) | `~/.ansible/ssh/proxmox_lxc.pub` (home-dir, machine-local, shared across worktrees) |
-| Vault password | `~/.ansible/vault-pass` (home-dir, written by chezmoi from Bitwarden; copied to the bootstrap node by its deploy) |
-| Vaulted secrets | `inventory/vault.yml` (encrypted) |
-| Fact cache | `.ansible/cache/` (project-relative, gitignored, 1h TTL) |
-| Venv | `.venv/` (project-relative, gitignored) |
-| External roles | `.ansible/roles/` (project-relative, gitignored, auto-installed) |
+## Commands
 
-Secrets are only in encrypted `inventory/vault.yml` — never commit plaintext credentials. The vault password file is machine-local and should be provisioned outside this repo.
+Six commands are the whole interface. `<command> --help` lists each one's operations. [docs/command-policy.md](docs/command-policy.md) holds the grammar, exit statuses, lock classes, and permitted raw commands.
 
-## Inventory Structure
+| Command | Use |
+|---------|-----|
+| `./run.sh [provision\|configure] [--limit <targets>] [--stack <stack>] [--check]` | Deploy the LXC lifecycle, or dry-run it with `--check`. Low-level Ansible arguments go after `--` |
+| `./inspect.sh credentials\|connectivity\|containers\|plan\|probe <https-url>\|vars <host>` | Read-only checks. `probe` replaces curl for testing a routed service URL |
+| `./validate.sh [lint\|lifecycle [--only <launcher.py>]\|tests [<target>...]]` | Non-live verification. Use `lifecycle` while iterating on LXC lifecycle code |
+| `./vault.sh check\|diff\|merge\|rotate --dry-run` | Vault operations agents may run. `merge` resolves a conflicted `inventory/vault.yml`. `set` and `unset` run only on explicit request. `configure`, `edit`, and `rotate` are human-only |
+| `./recover.sh` | Human-only. Enrolls the controller SSH key |
+| `./setup.sh sync\|upgrade <package>...` | `sync` is optional, because every command reconciles its own environment. `upgrade` bumps named packages in `uv.lock` |
 
-| Type | Groups | Purpose |
-|------|--------|---------|
-| **Tiers** | `tier_tiny`, `tier_small`, `tier_medium`, `tier_large` | Resource allocation (mutually exclusive) |
-| **Capabilities** | `cap_docker`, `cap_gpu`, `cap_wireguard`, `cap_browser_device` | Sets feature flags: `docker_enabled`, `gpu_enabled`, etc. |
-| **Special** | `proxmox_api`, `lxcs` | API controller + all LXC targets |
+A live command that cannot take the machine-local lock exits 75 at once and never waits. Exit 3 means deferred, not failed. A run defers a stack whose busy check reports busy, and the workstation while any agent on it is mid-turn, including the agent that started the run. A mutating workstation run also exits 3 while a deploy is in flight on the bootstrap node.
 
-**Naming**: LXCs resolve as `{{ inventory_hostname }}.faviann.vms`
+`./run.sh` against live hosts takes 5 to 10 minutes, less with `--limit` or `--stack`. Wait for it to finish instead of assuming a hang. Redirect live output to a log and read only the summary:
 
-**Feature Flags**: Capability groups set boolean flags (`docker_enabled: true`) instead of checking group membership. Roles use `when: docker_enabled | default(false)`, never `'cap_docker' in group_names`.
-
-→ [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read for variable precedence order, worked examples, and adding new hosts.
-
-## Deployment Lifecycle
-
-`site.yml` runs three phases in sequence: **validate** → **provision** (LXC create/update via Proxmox API) → **configure** (in-container: packages, Docker, stacks). Two-tier host config: `proxmox_lxc_provision` handles API-allowed settings; `proxmox_lxc_host_config` handles restricted features (`keyctl=1`, `nesting=1`) via `pct` on the Proxmox host.
-
-Run lifecycle operations through `./run.sh`. Live commands share one machine-local lock across every worktree on the control node: mutations take it exclusively, read-only operations take it shared. Across control nodes, a mutating workstation run or `./recover.sh` takes the lock, then reads the bootstrap node, and exits 3 before anything runs while a deploy is in flight there. When it cannot read the bootstrap node, it warns and proceeds.
-
-Roles live in `playbooks/roles/{infrastructure,provisioning,config}/`.
-
-## Docker Stacks
-
-Stacks live in `stacks/<hostname>/<stack-name>/compose.yaml`. Auto-discovered and started with `docker compose up -d` — no registration needed.
-
-→ [stacks/README.md](stacks/README.md) — read for stack contract, Traefik routing, secrets, and full conventions.
-
-## Command Reference
-
-Six commands are the whole interface. Each answers `--help`; [docs/command-policy.md](docs/command-policy.md) holds the grammar, exit statuses, lock classes, and the raw commands that remain permitted, including read-only SSH diagnosis of a named host.
-
-| Command | Purpose |
-|---------|---------|
-| `./run.sh` | Full lifecycle — deploy/update all LXCs. Exclusive lock |
-| `./run.sh provision` / `./run.sh configure` | Provision-only or configure-only lifecycle |
-| `./run.sh --limit <targets>` | Target hosts with Ansible limit grammar |
-| `./run.sh --limit <host> --stack <stack>` | Deploy one stack on a host (skips all others) |
-| `./run.sh --check` | Dry run. Shared lock |
-| `./run.sh --include-controller` | Intentionally manage this host, the control node the run is on |
-| `./run.sh --interrupt-busy` | Skip busy checks and interrupt busy stacks and their hosts deliberately. Never skips the read of the bootstrap node's deploy. Against the workstation only on explicit request; never with `--include-controller` |
-| `./run.sh -- <ansible-arguments>` | Low-level Ansible arguments such as `-e <var>=<value>`; cannot change targets, intent, or check mode, or set `proxmox_skip_self` or `lxc_busy_check_override` |
-| `./inspect.sh credentials` | Walk the Proxmox API credential and permission ladder |
-| `./inspect.sh connectivity [--limit <targets>]` | Check LXC SSH reachability; non-zero when a target is unreachable |
-| `./inspect.sh containers` | List every LXC on the Proxmox node |
-| `./inspect.sh plan [--limit <targets>]` | Report lifecycle planning problems without executing anything |
-| `./inspect.sh probe <https-url>...` | GET routed service URLs through Traefik as a user would, redirects reported not followed; non-zero on no response or a 4xx/5xx |
-| `./inspect.sh vars <host>` / `vars --graph` | Merged variables with vault-derived values masked, or the group tree. No lock |
-| `./recover.sh ssh-keys [--limit <targets>]` | Human-only. Enroll the controller key in existing LXCs |
-| `./recover.sh proxmox-host-ssh` | Human-only. Enroll the controller key on the Proxmox host (prompts for its root password) |
-| `./vault.sh check` | Verify the vault without disclosing its contents |
-| `./vault.sh diff [<git-ref>]` | Name the vault keys added, removed, or changed since a commit (default `HEAD`), never their values |
-| `./vault.sh set <key> --from-file <path> --create\|--replace` | Only on explicit request. Move a secret file into the vault without reading it |
-| `./vault.sh unset <key>` | Only on explicit request. Remove one top-level vault key without printing its value |
-| `./vault.sh merge` | Resolve a conflicted `inventory/vault.yml` mid-merge or mid-rebase by three-way merging top-level keys; names conflicting keys and writes nothing if any conflict. Never stages the result |
-| `./vault.sh rotate --dry-run` | Rehearse passphrase rotation on throwaway copies |
-| `./vault.sh configure` / `edit` / `rotate` | Human-only. Interactive credential, vault, and passphrase changes |
-| `./validate.sh` | Complete non-live verification (~5 min) — lint, full lifecycle regressions, and the pytest suite |
-| `./validate.sh lifecycle` | Fast lifecycle feedback (~1 min) — semantic lifecycle facade matrix + targeted planning barrier, controlled observations only. Run while iterating on LXC lifecycle changes |
-| `./validate.sh lifecycle --only <launcher.py>` | Target one registered lifecycle launcher in the same credential-free fixture environment. Repeat `--only` to run several launchers in the supplied order |
-| `./validate.sh lifecycle --full --fail-fast` | Remediation pass — finish the concurrent fast launchers, then stop scheduling after the first observed failure. Launchers already in flight in the bounded pool still finish and are reported |
-| `./validate.sh lifecycle --full` | Full lifecycle regression set (~6 min) — fast path plus host-config idempotence, real role-composition wiring, fleet preflight, and contract seams. Most full-only launchers run through a bounded pool (2 at a time), so results report in completion order, not registration order. Prefer `./validate.sh` for handoff verification |
-| `./validate.sh lint` | Targeted repo-wide lint feedback (production profile). Prefer `./validate.sh` for handoff verification |
-| `./validate.sh tests [<target>...]` | Run the test suite (~5 min), optionally restricted to targets inside `tests/` (a path, optionally with a `::` node-id suffix). Targets outside the test tree are invalid usage |
-| `./setup.sh sync` | Optionally synchronize the locked Python environment ahead of use (non-interactive; no OS packages, no managed host). Every command reconciles it on its own |
-| `./setup.sh upgrade <package>...` | Upgrade the named packages in `uv.lock` to the newest versions `pyproject.toml` allows |
-
-**Timing**: `./run.sh` against live hosts typically takes 5–10 minutes, and `--limit` or `--stack` shortens it. Live `./inspect.sh` operations take about 10 seconds for `credentials`, `containers`, and `connectivity`, and about half a minute for a fleet-wide `plan`; a first run in a fresh worktree also reconciles dependencies. Do not assume a hang — wait for completion before acting on the result. A live command that cannot take the lock exits 75 at once, naming the holder when it is another live command; it never waits. A `./run.sh` that succeeds but defers a busy stack exits 3, which means deferred, not failed.
-
-For lifecycle-regression remediation, use repeatable `./validate.sh lifecycle --only <launcher.py>` for the shortest targeted loop and add `--fail-fast` when later selected launchers cannot provide useful evidence after a failure. `--only` accepts the registered filenames reported by the runner's actionable error, and cannot be combined with `--full`. Lifecycle launchers are the `tests/regression/*_launcher.py` files, run only by the lifecycle runner; pytest owns the `test_*.py` files under `tests/` and never collects a launcher. A targeted operation never substitutes for the full handoff run: before handoff, always run `./validate.sh` with no arguments so every handoff gate reports a result.
-
-**Live dependencies**: `./run.sh`, live `./inspect.sh`, and `./recover.sh` reconcile their own worktree dependencies. Once the shared boundary holds the lifecycle lock and before it invokes Ansible, it runs `scripts/live_dependencies.py`, which installs and verifies, by name and at its own pin, only the collections and external roles the selected playbook consumes, then creates `.ansible/cp/` for SSH-consuming operations. No supported workflow creates controller identity. An SSH-consuming live operation verifies `~/.ansible/ssh/proxmox_lxc` against its `.pub` and fails before any live effect when the pair is missing or inconsistent; creating or restoring that identity is an explicit human step. Reconciling under the held machine-local lock keeps contention fail-fast: a caller that loses the lock exits 75 without downloading anything. `LIVE_OPERATIONS` is hand-maintained; the reconciler cannot detect a newly consumed dependency omitted from a row, and an existing installation can mask the omission. When a live playbook begins consuming a collection or external role, update its row in the same change. Never widen live reconciliation back to a whole declaration file — a dependency one operation does not consume must never block it.
-
-Run `./validate.sh` for complete deterministic handoff verification. It requires `/usr/sbin/sshd` (`openssh-server`, shipped by the `debian-13-standard` template the `workstation` guest uses) because the Proxmox trust regression runs an unprivileged local `sshd`, and `/usr/sbin/nft` (`nftables`, from the same template) because the origin firewall regression loads its ruleset in an unprivileged network namespace. It also requires `npx` and, on its first run, network access, because the Renovate rule test runs Renovate at the deployed version. It does not load live inventory or acquire the lifecycle lock. Route every operation that contacts managed hosts, including `--check`, through `./run.sh`, `./recover.sh`, or a live `./inspect.sh` operation.
-
-**Long-running output discipline**: For live deploys or other noisy commands, avoid streaming full output into chat context. Prefer redirecting to a temp log and polling only high-signal excerpts:
 ```bash
 ./run.sh --limit <host> > /tmp/<task>.log 2>&1
-tail -40 /tmp/<task>.log
-rg "failed=|unreachable=|FAILED|changed=|<relevant-resource>" /tmp/<task>.log
+rg "failed=|unreachable=|FAILED|changed=" /tmp/<task>.log
 ```
-Only read the full log when the summarized output is insufficient to diagnose a failure. Never print secrets from logs or vault output.
 
-Debug: `./run.sh -vvv` for verbose output, `./inspect.sh vars <name>` for merged vars, `./inspect.sh connectivity` for connectivity, delete `.ansible/cache/` for stale facts.
+Before handoff, always run `./validate.sh` with no arguments (about 5 minutes). A targeted run never substitutes, with one exception. When every path in `git diff --name-only origin/main...HEAD` and `git status --short` ends in `.md`, and none is under `playbooks/`, run only the two tests a Markdown edit can fail:
 
-## Role Design Principles
-
-- One role = one concern; use `meta/main.yml` for dependencies
-- Use feature flags (`docker_enabled`) not group checks (`'cap_docker' in group_names`)
-- Avoid hardcoded values; inject via vars. Ensure idempotency; use `assert` to fail fast
+```bash
+./validate.sh tests tests/unit/test_workstation_mcp_auth_proxy_contract.py tests/regression/test_vault_command.py::test_rotate_publishes_only_after_a_verified_local_rekey
+```
 
 ## Related Documentation
 
-→ [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) — read when adding hosts or debugging variable precedence.
-→ [stacks/README.md](stacks/README.md) — read when creating or modifying Docker stacks.
-→ [docs/workstation-persistent-state.md](docs/workstation-persistent-state.md) — read before any workstation deploy that enables persistent home mounts.
-→ [docs/bootstrap-node.md](docs/bootstrap-node.md) — read before any interrupting workstation change or when the workstation is unreachable.
-→ [docs/lobu-control-plane.md](docs/lobu-control-plane.md) — read before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.
-→ [docs/lobu-browser-device.md](docs/lobu-browser-device.md) — read before touching `lobu-crawler-01` or any `cap_browser_device` host.
-→ [stacks/broodling/broodling/README.md](stacks/broodling/broodling/README.md) — read before touching the `broodling` LXC, its stack, or its initialization.
+- Read [docs/inventory-structure-guide.md](docs/inventory-structure-guide.md) when adding a host or debugging variable precedence.
+- Read [stacks/README.md](stacks/README.md) before creating or modifying a Docker stack. Stacks live at `stacks/<host>/<stack>/compose.yaml` and deploy without registration.
+- Read [docs/workstation-persistent-state.md](docs/workstation-persistent-state.md) before adding a persisted workstation home path or rebuilding the workstation LXC.
+- Read [docs/bootstrap-node.md](docs/bootstrap-node.md) before any interrupting workstation change, or when the workstation is unreachable.
+- Read [docs/lobu-control-plane.md](docs/lobu-control-plane.md) before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.
+- Read [docs/lobu-browser-device.md](docs/lobu-browser-device.md) before touching `lobu-crawler-01` or any `cap_browser_device` host.
+- Read [stacks/broodling/broodling/README.md](stacks/broodling/broodling/README.md) before touching the `broodling` LXC, its stack, or its initialization.

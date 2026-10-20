@@ -14,9 +14,21 @@ Stack portability is explicit. A stack being under `stacks/<host>/<stack>/` does
 
 Foundational stacks are intentionally less portable. Authentik/OIDC has cross-host coupling, `scripts/authentik_blueprint_sync.py` depends on the current auth stack paths, and `portal_instance` controls portal discovery, Traefik KOP behavior, Hawser inclusion, and Dockhand seeding.
 
-Accepted normalization exceptions are indexed in [ADR-006](../docs/decisions/adr-006-stack-normalization-exceptions.md). Stack-local details live in each stack README.
-
 This directory is only for repo-managed stacks that Ansible deploys and reconciles.
+
+### Normalization Exceptions
+
+The stacks below differ from the stack contract on purpose. They preserve upstream vendor shape, own infrastructure behavior, use a VPN network namespace, or protect a special auth boundary. Do not normalize them blindly, and do not copy them as templates for new stacks. Stack-local details live in each stack README.
+
+| Stack | Exception | Local notes |
+| --- | --- | --- |
+| `auth/auth` | Vendor-preserving Authentik base | [`auth/auth/README.md`](auth/auth/README.md) |
+| `seedbox/bittorrent` | VPN namespace routing | [`seedbox/bittorrent/README.md`](seedbox/bittorrent/README.md) |
+| `public/music` | Split native-auth and protected-browser routes | [`public/music/README.md`](public/music/README.md), [ADR-0023](../docs/adr/0023-use-navidrome-native-auth-on-the-public-music-hostname.md) |
+| `portal/traefik3` | Domain-edge reverse proxy infrastructure | [`portal/traefik3/README.md`](portal/traefik3/README.md) |
+| `broodling/broodling` | Broodling-contract topology: target restart `no`, explicit initialization, bootstrap and readiness check on every run | [`broodling/broodling/README.md`](broodling/broodling/README.md) |
+
+Style cleanup is allowed only when it does not change routes, ports, auth boundaries, storage, network namespaces, or secret flow. A behavior-sensitive change needs explicit human approval or a superseding ADR.
 
 ## Stack Contract
 
@@ -377,7 +389,7 @@ HOMEPAGE_FQDN={{ stack_name }}.{{ default_domain }}
 
 ## Normalization Defaults
 
-Ordinary app stacks follow these defaults. Vendor-preserving, foundational, and VPN-namespace stacks, and the exceptions in [ADR-006](../docs/decisions/adr-006-stack-normalization-exceptions.md), may differ intentionally.
+Ordinary app stacks follow these defaults. Vendor-preserving, foundational, and VPN-namespace stacks, and the [normalization exceptions](#normalization-exceptions), may differ intentionally.
 
 | Area | Default |
 | --- | --- |
@@ -405,7 +417,7 @@ Ordinary app stacks follow these defaults. Vendor-preserving, foundational, and 
 12. Stateful databases should not use floating `latest` tags; pin them and give them a realistic `stop_grace_period`.
 13. Portability tier is clear: portable app, host-bound app, or foundational controlled migration.
 14. Stack-local docs contain no plaintext secrets or secret-shaped values.
-15. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans, and ADR-006 exceptions keep their behavior unless the user asks to change it.
+15. Foundational stacks (`auth`, `portal`, Authentik/OIDC-coupled public apps) are changed only through dedicated migration plans, and the [normalization exceptions](#normalization-exceptions) keep their behavior unless the user asks to change it.
 16. A stack whose jobs must not be interrupted declares one `x-busy-check` in a non-templated Compose file, and its command exits `0` only when idle and `1` only when busy.
 17. A vendored `compose.yaml` is upstream byte-for-byte below its `# vendor:` marker, and every local change lives in the override file.
 

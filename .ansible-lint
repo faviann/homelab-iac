@@ -8,11 +8,12 @@ skip_list:
   # renaming public role inputs would break existing inventories/playbooks.
   - var-naming[no-role-prefix]
   # Roles intentionally live in a nested hierarchy under
-  # playbooks/roles/{base,infrastructure,provisioning,config}/ and are
+  # playbooks/roles/{infrastructure,provisioning,config}/ and are
   # imported by path on purpose.
   - role-name[path]
 exclude_paths:
-  - archive/
+  # Claude Code agent worktrees nest full checkouts inside this one.
+  - .claude/worktrees/
   # Installed third-party dependencies (gitignored), not repo code —
   # equivalent to excluding node_modules.
   - collections/ansible_collections/

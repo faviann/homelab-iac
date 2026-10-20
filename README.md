@@ -255,31 +255,21 @@ control nodes.
 
 ```
 .
-|-- ansible.cfg
-|-- collections/
-|   `-- requirements.yml               # Ansible collection dependencies
-|-- docs/
-|   |-- command-policy.md
-|   |-- inventory-structure-guide.md
-|   `-- ssh-key-management.md
-|-- inventory/
-|   |-- hosts.yml                      # Static inventory file
-|   |-- vault.yml                      # Encrypted secrets (loaded explicitly)
-|   |-- vault.yml.example              # Template for vault
-|   |-- group_vars/
-|   |   `-- all/
-|   |       `-- proxmox.yml            # Non-secret Proxmox configuration
-|   `-- host_vars/                     # Host-specific variables
-|       |-- auth.yml
-|       |-- portal.yml
-|       |-- servarr.yml
-|       |-- seedbox.yml
-|       `-- jellyfin.yml
-|-- playbooks/                         # Playbooks and roles behind the commands
-|-- pyproject.toml                     # Python dependency declarations for uv
-|-- uv.lock                            # Locked Python dependency resolution
-|-- site.yml                           # Top-level orchestration playbook
-`-- .ansible-lint                      # Lint gate config: production profile; exemption rationale in comments
+|-- run.sh inspect.sh recover.sh   # The six commands (see docs/command-policy.md)
+|-- vault.sh validate.sh setup.sh
+|-- site.yml                       # Top-level lifecycle playbook
+|-- playbooks/                     # Playbooks and roles behind the commands
+|-- inventory/                     # hosts.yml, group_vars/, host_vars/, encrypted vault.yml
+|-- stacks/<host>/<stack>/         # Docker Compose stacks, discovered per host
+|-- library/                       # Custom Ansible modules (proxmox_pct)
+|-- scripts/                       # Helpers the commands call
+|-- tests/                         # pytest suite and lifecycle regression launchers
+|-- docs/                          # Command policy, guides, and ADRs (docs/adr/)
+|-- CONTEXT.md                     # Domain language
+|-- collections/requirements.yml   # Pinned Ansible collections
+|-- requirements/roles.yml         # Pinned external roles
+|-- pyproject.toml, uv.lock        # Locked Python environment
+`-- .ansible-lint                  # Lint gate config; exemption rationale in comments
 ```
 
 ## Documentation

@@ -35,7 +35,7 @@ migration"), do **not** auto-rename, when any is true:
 - host is `auth` or `portal`.
 - folder is `auth`, `romm`, or `immich`.
 - the stack has a top-level named `volumes:` block (project-prefixed volumes do not follow a rename).
-- the stack is listed in `docs/decisions/adr-006-stack-normalization-exceptions.md`.
+- the stack is listed in `stacks/README.md` → "Normalization Exceptions".
 - the stack is referenced by Authentik blueprints (`rg -n '<old>' stacks/auth/auth/appdata/authentik/`).
 
 These stacks have cross-host coupling (OIDC redirect URIs, hardcoded paths, portal discovery) that a
