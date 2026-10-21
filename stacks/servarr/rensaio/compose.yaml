@@ -5,14 +5,24 @@ x-prereq-dirs:
 
 services:
   rensaio:
-    image: maxpiva/rensaio:latest@sha256:199777c5daf62fb476882ff03914722dc723df619d03c4f61250297651083ffe
+    # Fork build carrying the CEF close fix and upstream PR 97 (bounded latest paging);
+    # return to maxpiva/rensaio once upstream merges both
+    image: ghcr.io/faviann/rensaio:homelab@sha256:2d3a4bc0a2dbbccf4f3c5517172dba183296364f1ffe56620257e5232cc5fb69
     container_name: rensaio
     restart: unless-stopped
+    # The image ships server GC, which grows one heap per core until memory is tight;
+    # workstation GC with ConserveMemory collects early and returns memory
+    deploy:
+      resources:
+        limits:
+          memory: 3G
     environment:
       PUID: ${PUID}
       PGID: ${PGID}
       UMASK: ${UMASK}
       TZ: ${TZ}
+      DOTNET_gcServer: 0
+      DOTNET_GCConserveMemory: 8
     volumes:
       - ./appdata/config:/config
       - /data/media/manga:/series
