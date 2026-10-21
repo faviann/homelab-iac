@@ -322,34 +322,6 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** when SSH fails, report that live data was not collected. Do
   not infer an answer from stale values.
 
-#### CPA/Home maintenance on overmind
-
-- **Trigger:** protected backup or restore, an assisted pair update, or
-  emergency termination of revoked CPA sessions.
-- **Audience:** people only. Agents may change and rehearse the script, but
-  never run it against a managed host.
-- **Scope:** the `cliproxy` Compose project on `overmind`: containers
-  `cliproxy` and `cliproxy-home`, pinned native tools, and the private
-  maintenance paths named in [the procedure](cliproxy-maintenance.md).
-
-  ```bash
-  scripts/cliproxy-maintenance.sh <action> [recovery-name]
-  ```
-
-- **Boundary:** mutating. The script holds the exclusive lifecycle lock for
-  its whole run and exits `75` before SSH when the lock is held. It stops or
-  restarts only the named containers, stops Home before CPA, and aborts if any
-  writer is still running. The script never handles an enrollment carrier.
-  Snapshot and restore write only under the declared runtime and recovery
-  paths. Run `./run.sh` only after the script has exited.
-  A person freezes other control nodes and Home
-  administration for the whole window, including the gaps between runs.
-- **Sensitive output:** no environment dumps, credential contents, or secrets
-  in command arguments, logs or evidence.
-- **Escalation:** on any abort, unknown remote result or failed acceptance,
-  preserve evidence and follow the procedure's recovery branch. Never widen
-  the container scope or restart a writer to get past a failure.
-
 #### Vendor compose sync
 
 - **Trigger:** resyncing a vendored `compose.yaml` with upstream, as written in

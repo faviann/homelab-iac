@@ -4,7 +4,7 @@
 gateway and the pool of record for Claude, Codex, and Gemini subscription OAuth
 accounts
 ([ADR-0017](../../../docs/adr/0017-make-sub2api-the-ai-gateway-pool-of-record.md)).
-`cliproxy` stays deployed on the same LXC but is no longer the pool of record.
+It replaced `cliproxy`, which is no longer deployed.
 
 Portability tier: portable app stack.
 
@@ -44,8 +44,8 @@ All three live under `appdata/` on the shared volume, which is mounted at
 - Root in any LXC can read everything, because every LXC shares the same
   idmap.
 
-Moving the three directories under a root-owned 0700 `/data/overmind/sub2api`,
-as `cliproxy` does with `/data/overmind/cliproxy`, would close the first gap;
+Moving the three directories under a root-owned 0700 `/data/overmind/sub2api`
+would close the first gap;
 that hardening is deferred. There is no backup; losing the database costs
 re-adding the accounts.
 

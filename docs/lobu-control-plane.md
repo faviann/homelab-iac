@@ -258,8 +258,7 @@ the upstream migration runner.
 
 There are none for this stack, on purpose. Backups were removed from this
 milestone; future stack-level backup infrastructure is expected to cover
-persistent `appdata` generically. Do not duplicate or generalize the Overmind
-Postgres backup mechanism here.
+persistent `appdata` generically.
 
 Losing the database loses the workspace, the human account, every registered
 OAuth client, and the device registration — ChatGPT's connector must be re-added

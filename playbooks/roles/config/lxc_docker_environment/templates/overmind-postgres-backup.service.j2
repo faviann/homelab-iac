@@ -1,9 +1,0 @@
-[Unit]
-Description=Overmind Postgres verified logical backup
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-EnvironmentFile=/etc/overmind-postgres-backup.env
-ExecStart=/usr/local/sbin/overmind-postgres-backup

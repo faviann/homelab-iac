@@ -423,16 +423,16 @@
   vars:
     exact_root: "{{ temp_root }}/exact-file-modes"
     exact_source_root: "{{ exact_root }}/source"
-    actual_agent_keys_source: "{{ repo_root }}/stacks/overmind/overmind/agent-keys.yaml.j2"
-    actual_overmind_compose_source: "{{ repo_root }}/stacks/overmind/overmind/compose.yaml"
+    actual_sub2api_env_source: "{{ repo_root }}/stacks/overmind/sub2api/.env.j2"
+    actual_sub2api_compose_source: "{{ repo_root }}/stacks/overmind/sub2api/compose.yaml"
     actual_beets_compose_source: >-
       {{ repo_root }}/stacks/servarr/beets-flask/compose.override.yaml
     actual_startup_source: "{{ repo_root }}/stacks/servarr/beets-flask/appdata/startup.sh"
     actual_lidarr_compose_source: "{{ repo_root }}/stacks/servarr/lidarr/compose.yaml"
     actual_post_import_source: >-
       {{ repo_root }}/stacks/servarr/lidarr/appdata/lidarr/scripts/beets-post-import.sh
-    exact_agent_keys_source: "{{ exact_source_root }}/overmind/overmind/agent-keys.yaml.j2"
-    exact_overmind_compose_source: "{{ exact_source_root }}/overmind/overmind/compose.yaml"
+    exact_sub2api_env_source: "{{ exact_source_root }}/overmind/sub2api/.env.j2"
+    exact_sub2api_compose_source: "{{ exact_source_root }}/overmind/sub2api/compose.yaml"
     exact_beets_compose_source: "{{ exact_source_root }}/servarr/beets-flask/compose.override.yaml"
     exact_startup_source: "{{ exact_source_root }}/servarr/beets-flask/appdata/startup.sh"
     exact_lidarr_compose_source: "{{ exact_source_root }}/servarr/lidarr/compose.yaml"
@@ -445,7 +445,7 @@
         state: directory
         mode: "0755"
       loop:
-        - "{{ exact_source_root }}/overmind/overmind"
+        - "{{ exact_source_root }}/overmind/sub2api"
         - "{{ exact_source_root }}/servarr/beets-flask/appdata"
         - "{{ exact_source_root }}/servarr/lidarr/appdata/lidarr/scripts"
 
@@ -458,8 +458,8 @@
         dest: "{{ item.dest }}"
         mode: "0644"
       loop:
-        - source: "{{ actual_overmind_compose_source }}"
-          dest: "{{ exact_overmind_compose_source }}"
+        - source: "{{ actual_sub2api_compose_source }}"
+          dest: "{{ exact_sub2api_compose_source }}"
         - source: "{{ actual_beets_compose_source }}"
           dest: "{{ exact_beets_compose_source }}"
         - source: "{{ actual_lidarr_compose_source }}"
@@ -473,8 +473,8 @@
         dest: "{{ item.dest }}"
         mode: "preserve"
       loop:
-        - source: "{{ actual_agent_keys_source }}"
-          dest: "{{ exact_agent_keys_source }}"
+        - source: "{{ actual_sub2api_env_source }}"
+          dest: "{{ exact_sub2api_env_source }}"
         - source: "{{ actual_startup_source }}"
           dest: "{{ exact_startup_source }}"
         - source: "{{ actual_post_import_source }}"
@@ -487,8 +487,8 @@
         path: "{{ item }}"
         checksum_algorithm: sha256
       loop:
-        - "{{ actual_agent_keys_source }}"
-        - "{{ exact_agent_keys_source }}"
+        - "{{ actual_sub2api_env_source }}"
+        - "{{ exact_sub2api_env_source }}"
         - "{{ actual_startup_source }}"
         - "{{ exact_startup_source }}"
         - "{{ actual_post_import_source }}"
@@ -506,8 +506,8 @@
             == (lookup('file', item.dest) | from_yaml)['x-managed-files']
           - (lookup('file', item.dest) | from_yaml)['x-prereq-dirs'] == []
       loop:
-        - source: "{{ actual_overmind_compose_source }}"
-          dest: "{{ exact_overmind_compose_source }}"
+        - source: "{{ actual_sub2api_compose_source }}"
+          dest: "{{ exact_sub2api_compose_source }}"
         - source: "{{ actual_beets_compose_source }}"
           dest: "{{ exact_beets_compose_source }}"
         - source: "{{ actual_lidarr_compose_source }}"
@@ -515,7 +515,7 @@
       loop_control:
         label: "{{ item.source }}"
 
-- name: Test exact Overmind artifacts through its production source topology
+- name: Test exact sub2api artifacts through its production source topology
   hosts: localhost
   connection: local
   gather_facts: false
@@ -524,9 +524,9 @@
     ansible_user_gid: "{{ lookup('pipe', 'id -g') | int }}"
     exact_root: "{{ temp_root }}/exact-file-modes"
     exact_source_root: "{{ exact_root }}/source/overmind"
-    exact_agent_keys_source: "{{ exact_source_root }}/overmind/agent-keys.yaml.j2"
-    exact_overmind_compose_source: "{{ exact_source_root }}/overmind/compose.yaml"
-    exact_agent_keys_target: "{{ exact_root }}/shared/stacks/overmind/agent-keys.yaml"
+    exact_sub2api_env_source: "{{ exact_source_root }}/sub2api/.env.j2"
+    exact_sub2api_compose_source: "{{ exact_source_root }}/sub2api/compose.yaml"
+    exact_sub2api_env_target: "{{ exact_root }}/shared/stacks/sub2api/.env"
     lxc_docker_environment_internal:
       shared_mount_source: "{{ exact_root }}/shared"
       stacks_source: "{{ exact_source_root }}"
@@ -536,41 +536,44 @@
       docker_gid: "{{ ansible_user_gid }}"
       path_ownership_overrides: []
     lxc_docker_env_stack_vars:
-      overmind:
-        agent_key: "fixture-agent-key"
+      sub2api:
+        postgres_password: "fixture-postgres-password"
+        jwt_secret: "fixture-jwt-secret"
+        totp_encryption_key: "fixture-totp-encryption-key"
+        oidc_client_secret: "fixture-oidc-client-secret"
     lxc_docker_env_desired_top_level_stack_dirs: []
   tasks:
-    - name: Publish exact Overmind discovery results
+    - name: Publish exact sub2api discovery results
       ansible.builtin.set_fact:
         _per_host_j2_files:
           files:
-            - path: "{{ exact_agent_keys_source }}"
+            - path: "{{ exact_sub2api_env_source }}"
         _per_host_static_files:
           files:
-            - path: "{{ exact_overmind_compose_source }}"
+            - path: "{{ exact_sub2api_compose_source }}"
         _per_host_dirs:
           files:
-            - path: "{{ exact_source_root }}/overmind"
+            - path: "{{ exact_source_root }}/sub2api"
 
-    - name: Materialize exact Overmind artifacts through production tasks
+    - name: Materialize exact sub2api artifacts through production tasks
       ansible.builtin.include_tasks: ../../../playbooks/roles/config/lxc_stack_sync/tasks/materialize.yml
 
-    - name: Inspect exact materialized Overmind artifact
+    - name: Inspect exact materialized sub2api artifact
       ansible.builtin.stat:
-        path: "{{ exact_agent_keys_target }}"
-      register: _exact_agent_keys_stat
+        path: "{{ exact_sub2api_env_target }}"
+      register: _exact_sub2api_env_stat
 
-    - name: Assert exact Overmind artifact retains its production contract
+    - name: Assert exact sub2api artifact retains its production contract
       ansible.builtin.assert:
         that:
-          - _exact_agent_keys_stat.stat.exists
-          - _exact_agent_keys_stat.stat.mode == '0600'
-          - exact_agent_keys_plan.stack_name == 'overmind'
-          - exact_agent_keys_plan.dest_path == exact_agent_keys_target
+          - _exact_sub2api_env_stat.stat.exists
+          - _exact_sub2api_env_stat.stat.mode == '0600'
+          - exact_sub2api_env_plan.stack_name == 'sub2api'
+          - exact_sub2api_env_plan.dest_path == exact_sub2api_env_target
       vars:
-        exact_agent_keys_plan: >-
+        exact_sub2api_env_plan: >-
           {{ lxc_stack_sync_manifest_plan.files_to_render
-             | selectattr('source_path', 'equalto', exact_agent_keys_source)
+             | selectattr('source_path', 'equalto', exact_sub2api_env_source)
              | first }}
 
 - name: Test exact Servarr artifacts through its production source topology
