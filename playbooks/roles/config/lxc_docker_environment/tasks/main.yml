@@ -161,11 +161,29 @@
     - "'broodling' in lxc_docker_env_deployment_report.discovered_stacks"
     - not ansible_check_mode
 
-- name: Configure overmind verified Postgres backups
-  ansible.builtin.include_tasks: overmind_postgres_backup.yml
-  when:
-    - overmind_postgres_backup_enabled | default(false) | bool
-    - stack_filter | default(none) in [none, 'overmind']
+# The Overmind stack is retired; this cleans its backup units off the host.
+- name: Find retired overmind Postgres backup timer
+  ansible.builtin.stat:
+    path: /etc/systemd/system/overmind-postgres-backup.timer
+  register: _retired_overmind_backup_timer
+
+- name: Stop retired overmind Postgres backup timer
+  ansible.builtin.systemd_service:
+    name: overmind-postgres-backup.timer
+    state: stopped
+    enabled: false
+  when: _retired_overmind_backup_timer.stat.exists
+
+- name: Remove retired overmind Postgres backup files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/overmind-postgres-backup.timer
+    - /etc/systemd/system/overmind-postgres-backup.service
+    - /etc/overmind-postgres-backup.env
+    - /usr/local/sbin/overmind-postgres-backup
+    - /usr/local/sbin/overmind-postgres-backup-freshness
 
 - name: Seed Dockhand environments
   ansible.builtin.include_tasks: dockhand_environments.yml

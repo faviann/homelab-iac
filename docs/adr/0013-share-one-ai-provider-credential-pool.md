@@ -3,6 +3,9 @@
 > Narrowed by [ADR-0017](0017-make-sub2api-the-ai-gateway-pool-of-record.md):
 > cliproxy is no longer the pool of record. The rest of this ADR still
 > describes how cliproxy itself is run.
+>
+> cliproxy was removed on 2026-10-21. Its stack and maintenance procedure
+> linked below are in git history from before that date.
 
 CPA on the `overmind` LXC serves every homelab agent from one shared pool of
 Claude and Codex provider credentials. The

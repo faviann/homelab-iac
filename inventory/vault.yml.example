@@ -94,18 +94,6 @@ vault_portal_traefik_dashboard_credentials: "REPLACE_WITH_TRAEFIK_DASHBOARD_CRED
 # Dockhand Hawser Standard pilot token
 vault_dockhand_hawser_token: "REPLACE_ME"
 
-# Overmind Postgres substrate
-vault_overmind_postgres_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
-vault_overmind_memsrv_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
-vault_overmind_homelab_dev_agent_key: "REPLACE_WITH_RANDOM_BEARER_KEY"
-vault_overmind_backup_discord_webhook_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL"
-
-# CLIProxyAPI stack on overmind.
-# Required runtime carrier from native enrollment. Retain it with the matching
-# persistent CPA trust; a consumed carrier cannot recreate a lost cache.
-# See docs/cliproxy-maintenance.md#native-node-enrollment-and-durable-trust
-vault_overmind_cliproxy_home_jwt: "REPLACE_WITH_NATIVE_HOME_ENROLLMENT"
-
 # Renovate on devserver: fine-grained GitHub token scoped to faviann/homelab-iac.
 # See stacks/devserver/renovate/README.md for the permissions.
 vault_renovate_token: "REPLACE_WITH_GITHUB_FINE_GRAINED_TOKEN"

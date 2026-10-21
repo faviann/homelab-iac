@@ -49,7 +49,7 @@ CASES = {
         {"automerge": False},
     ),
     "postgres digest": (
-        "stacks/overmind/overmind/compose.yaml", "docker.io/library/postgres", "digest",
+        "stacks/overmind/sub2api/compose.yaml", "docker.io/library/postgres", "digest",
         {"automerge": False, "groupName": None},
     ),
 }

@@ -155,7 +155,6 @@ def test_filtered_deployment_preserves_managed_host_assets_without_unselected_cr
             "lxc_docker_env_root_docker_conf_path": str(shared),
             "lxc_docker_env_stacks_source": str(source),
             "lxc_docker_env_absent_containers": [],
-            "overmind_postgres_backup_enabled": True,
             "lxc_docker_env_stack_vars": {
                 "selected": {"value": "fixture-selected-value"},
                 "unselected": {"value": "{{ vault_unselected_service_secret }}"},
