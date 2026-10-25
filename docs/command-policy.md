@@ -353,7 +353,7 @@ Agent use of a documented raw command is a separate decision:
   ```bash
   nix shell nixpkgs#chromium -c npx -y -p playwright@1.64.1 \
     node scripts/artifact-render-check.mjs <artifact-id> \
-    --token-file ~/.config/artifact-server/api-key
+    --token-file ~/.agents/artifact-server/api-key
   ```
 
 - **Boundary:** it opens a content session and loads the artifact in a local
