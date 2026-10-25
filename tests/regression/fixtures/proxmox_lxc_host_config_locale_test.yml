@@ -35,6 +35,7 @@
         configure_nvidia_runtime: false
         wireguard_kernel_module_access: false
         lxc_disable_apparmor: false
+        rootfs_size_gb: 16
   tasks:
     - name: Create temp Proxmox config root
       ansible.builtin.file:
@@ -64,7 +65,7 @@
         content: |
           #!/bin/sh
           case "$1" in
-            config) echo "arch: amd64" ;;
+            config) printf 'arch: amd64\nrootfs: local-lvm:vm-4202-disk-0,size=16G\n' ;;
             status) echo "status: stopped" ;;
           esac
           exit 0

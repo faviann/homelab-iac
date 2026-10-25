@@ -119,6 +119,7 @@
           - proxmox_lxc_contract.host_config.wireguard_kernel_module_access
           - proxmox_lxc_contract.host_config.lxc_custom_sysctls == lxc_custom_sysctls
           - proxmox_lxc_contract.host_config.lxc_disable_apparmor
+          - proxmox_lxc_contract.host_config.rootfs_size_gb == 16
         fail_msg: "Host-config slice did not capture all managed host-side desired state"
 
     - name: Assert guest-bootstrap slice and derived metadata

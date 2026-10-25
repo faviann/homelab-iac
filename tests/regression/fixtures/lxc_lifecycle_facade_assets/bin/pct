@@ -22,6 +22,7 @@ case "$1" in
       7202) echo "hostname: wiring-peer" ;;
       *) echo "hostname: lifecycle-$vmid" ;;
     esac
+    echo "rootfs: local-lvm:vm-$vmid-disk-0,size=4G"
     ;;
   exec)
     command=$*

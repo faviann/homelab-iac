@@ -25,6 +25,7 @@
             value: 1
         lxc_disable_apparmor: true
         configure_nvidia_runtime: false
+        rootfs_size_gb: 16
   tasks:
     - name: Create temp Proxmox config root without container config
       ansible.builtin.file:
@@ -99,6 +100,7 @@
               cat <<EOF
           arch: amd64
           features: fuse=1
+          rootfs: local-lvm:vm-4202-disk-0,size=8G
           EOF
               ;;
             *)
@@ -140,6 +142,7 @@
           - proxmox_lxc_host_config_result.components.wireguard.changed
           - proxmox_lxc_host_config_result.components.sysctls.changed
           - proxmox_lxc_host_config_result.components.features.changed
+          - proxmox_lxc_host_config_result.components.rootfs.changed
           - "'memory: 2048' in (_existing_config_after_check.content | b64decode)"
           - "'lxc.idmap: u 0 200000 65536' in (_existing_config_after_check.content | b64decode)"
           - "'mp0: /srv/old-media,mp=/media' in (_existing_config_after_check.content | b64decode)"
@@ -150,4 +153,5 @@
           - "'set 4202' not in (_pct_calls_after_check.content | b64decode)"
           - "'status 4202' not in (_pct_calls_after_check.content | b64decode)"
           - "'reboot 4202' not in (_pct_calls_after_check.content | b64decode)"
+          - "'resize 4202' not in (_pct_calls_after_check.content | b64decode)"
         fail_msg: "Check mode did not make the live semantic decision without mutation"

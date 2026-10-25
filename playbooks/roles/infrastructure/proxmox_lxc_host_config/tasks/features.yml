@@ -4,14 +4,6 @@
 # To keep feature management simple and consistent, we apply ALL features via pct
 # rather than splitting between API and SSH
 
-- name: Get current container features configuration
-  proxmox_pct:
-    vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
-    command: config
-  register: infrastructure_proxmox_lxc_host_config_pct_config
-  delegate_to: "{{ proxmox_host_config_delegate }}"
-  become: "{{ proxmox_lxc_host_config_become }}"
-
 - name: Normalize current features string
   ansible.builtin.set_fact:
     infrastructure_proxmox_lxc_host_config_current_features_string: >-

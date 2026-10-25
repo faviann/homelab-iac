@@ -1,0 +1,73 @@
+---
+# The declared disk size only applies at creation through the API, so an
+# existing container is grown here. Never shrunk: a root disk larger than
+# declared was grown on purpose and pct cannot shrink it anyway.
+
+- name: Parse current root disk size
+  ansible.builtin.set_fact:
+    infrastructure_proxmox_lxc_host_config_rootfs_actual_gb: >-
+      {{
+        (infrastructure_proxmox_lxc_host_config_rootfs_size_match[0] | float)
+        * {'M': 1 / 1024, 'G': 1, 'T': 1024}[infrastructure_proxmox_lxc_host_config_rootfs_size_match[1]]
+        if infrastructure_proxmox_lxc_host_config_rootfs_size_match
+        else none
+      }}
+    infrastructure_proxmox_lxc_host_config_rootfs_declared_gb: >-
+      {{ infrastructure_proxmox_lxc_host_config_spec.rootfs_size_gb | int }}
+  vars:
+    infrastructure_proxmox_lxc_host_config_rootfs_size_match: >-
+      {{
+        infrastructure_proxmox_lxc_host_config_pct_config.config.rootfs | default('')
+        | regex_search('(?:^|,)size=([0-9.]+)([MGT])(?:,|$)', '\1', '\2')
+      }}
+
+- name: Validate current root disk size
+  ansible.builtin.assert:
+    that:
+      - infrastructure_proxmox_lxc_host_config_rootfs_actual_gb is number
+    fail_msg: >-
+      Could not read the root disk size of container
+      {{ infrastructure_proxmox_lxc_host_config_spec.vmid }} from pct config.
+      rootfs: {{ infrastructure_proxmox_lxc_host_config_pct_config.config.rootfs | default('(missing)') }}
+
+- name: Grow root disk via pct resize
+  proxmox_pct:
+    vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
+    command: resize
+    disk: rootfs
+    size: "{{ infrastructure_proxmox_lxc_host_config_rootfs_declared_gb }}G"
+  delegate_to: "{{ proxmox_host_config_delegate }}"
+  become: "{{ proxmox_lxc_host_config_become }}"
+  when: >-
+    infrastructure_proxmox_lxc_host_config_rootfs_declared_gb
+    > infrastructure_proxmox_lxc_host_config_rootfs_actual_gb
+
+- name: Leave a larger root disk alone
+  ansible.builtin.debug:
+    msg: >-
+      Container {{ infrastructure_proxmox_lxc_host_config_spec.vmid }} root disk is
+      {{ infrastructure_proxmox_lxc_host_config_rootfs_actual_gb }}G, larger than the declared
+      {{ infrastructure_proxmox_lxc_host_config_rootfs_declared_gb }}G; left alone, never shrunk.
+  when: >-
+    infrastructure_proxmox_lxc_host_config_rootfs_declared_gb
+    < infrastructure_proxmox_lxc_host_config_rootfs_actual_gb
+
+# A grow is online, so it never asks for a restart.
+- name: Publish root disk reconciliation result
+  ansible.builtin.set_fact:
+    infrastructure_proxmox_lxc_host_config_component_results: >-
+      {{
+        infrastructure_proxmox_lxc_host_config_component_results
+        | combine(
+            {
+              'rootfs': {
+                'changed': (
+                  infrastructure_proxmox_lxc_host_config_rootfs_declared_gb
+                  > infrastructure_proxmox_lxc_host_config_rootfs_actual_gb
+                ),
+                'restart_required': false
+              }
+            },
+            recursive=True
+          )
+      }}
