@@ -72,8 +72,9 @@ other people at `/review/settings/members`.
 
 **API key.** An administrator issues a key at `/review/settings/api-keys`, with
 `artifact:create`, `artifact:read`, `content-session:issue`, `comment:write`,
-and `agent:connect`. Store it outside the repo, for example in
-`~/.config/artifact-server/api-key` with mode `0600`. MCP clients use the same
+and `agent:connect`. On the workstation it lives in
+`~/.agents/artifact-server/api-key` with mode `0600`. `~/.agents` is a
+persisted home path, so the key survives a workstation rebuild. MCP clients use the same
 key as a bearer token on `https://artifact-server.public.faviann.com/mcp`.
 Upstream v0.1.2 cannot finish a publish with an OAuth MCP token.
 
@@ -85,7 +86,7 @@ creation.
 ```bash
 node <extracted>/dist/cli/main.js publish ./dist \
   --server https://artifact-server.public.faviann.com \
-  --token-file ~/.config/artifact-server/api-key
+  --token-file ~/.agents/artifact-server/api-key
 ```
 
 Publish a new version with `--artifact <id> --expected-version <version-id>`.
@@ -99,7 +100,7 @@ opens through a content session.
 ```bash
 nix shell nixpkgs#chromium -c npx -y -p playwright@1.64.1 \
   node scripts/artifact-render-check.mjs <artifact-id> \
-  --token-file ~/.config/artifact-server/api-key --out /tmp/render.png
+  --token-file ~/.agents/artifact-server/api-key --out /tmp/render.png
 ```
 
 The workstation lacks the system libraries for Playwright's own browser, so the
