@@ -78,15 +78,16 @@ FAIL https://nonexistent.invalid/ status=-1 elapsed=0s location=- content_type=-
 ./inspect.sh journey <https-url> [<https-url>...]
 ```
 
-It mints a one-hour Authentik app password for `verify-agent`, signs in through the default authentication flow once, then sends one `GET` per URL, in order, in that one session. It follows each URL's redirects, up to 15, so a native OIDC login completes and a later URL sees the app's session. The app password is deleted at the end of the run. Each URL prints one line in the probe's format, with a `hops` field before `body`. No journey has run yet, so this is the shape, not a captured line:
+It mints an Authentik app password for `verify-agent` that expires after Authentik's default token lifetime (30 minutes on this install), signs in through the default authentication flow once, then sends one `GET` per URL, in order, in that one session. It follows each URL's redirects, up to 15, so a native OIDC login completes and a later URL sees the app's session. The app password is deleted at the end of the run. Each URL prints one line in the probe's format, with a `hops` field before `body`. Unescaped, a forward-auth journey reads:
 
 ```text
-PASS <url> status=200 elapsed=1s location=- content_type=<type> detail="OK" hops=302:<url>,302:https://auth.faviann.com/application/o/authorize/,...,200:<last url> body=<first 160 characters>
+PASS https://homepage.media.faviann.com/api/healthcheck status=200 elapsed=1s location=- content_type=- detail="OK" hops=302:https://homepage.media.faviann.com/api/healthcheck,302:https://auth.faviann.com/application/o/authorize/,302:https://media.faviann.com/outpost.goauthentik.io/callback,200:https://homepage.media.faviann.com/api/healthcheck body=up
 ```
 
 - `hops` lists every request of the chain as `<status>:<URL without query>`, comma-separated. `status`, `content_type`, and `body` describe the last response.
 - `PASS` means the last response is a 2xx that is not the Authentik sign-in flow (`/flows/` or `/if/flow/` on `auth.faviann.com`). Anything else is `FAIL`, including a 3xx, which only a chain longer than 15 redirects ends on.
 - When sign-in stops, every URL prints `FAIL` with `status=-1` and `detail="not walked: sign-in stopped at <stage>"`. The stage names what Authentik asked for instead, for example `ak-stage-captcha` when the request did not come from the LAN.
+- A run that fails before sign-in, when Authentik rejects the API token, lacks `verify-agent`, or refuses the app password, prints no URL line. Its failure message names the cause and Authentik's answer.
 - Exit statuses and usage errors are the probe's: `0`, `1`, `2`, `75`.
 - It reads the vault, because it mints the app password with the Authentik API token, so it runs only where the vault passphrase is. Each run writes a `SECRET_VIEW` event to Authentik's event log when it reads the minted key. That event is expected.
 - It reaches only what plain `GET` redirects reach: forward-auth hosts on a tier bound to `verify-agent`, and native OIDC apps whose login is `GET` redirects, such as RomM, Komga, Calibre-Web Automated, and ReadMeABook. An app whose login takes a `POST` from its own page, such as Immich, is out of its reach.

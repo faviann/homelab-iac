@@ -19,7 +19,7 @@ Preconditions:
 - Doctor passed for `portal,auth,public`. RomM runs on `public`, and the journey signs in on `auth`.
 
 - **Login.** Run RomM's login start signed in. The first URL of the proof below is `https://romm.public.faviann.com/api/login/openid`. `PASS` with `status=200`, and `hops` that start at that URL, pass through `https://auth.faviann.com/application/o/authorize/` and RomM's callback `https://romm.public.faviann.com/api/oauth/openid`, and end on a RomM page.
-- **Signed-in user.** The second URL, `https://romm.public.faviann.com/api/users/me`, reads the user the session belongs to. `PASS` with `status=200 content_type=application/json` and JSON for `verify-agent`, whose email is `verify-agent@faviann.com`.
+- **Signed-in user.** The second URL, `https://romm.public.faviann.com/api/users/me`, reads the user the session belongs to. `PASS` with `status=200 content_type=application/json` and JSON with `"username":"verify-agent"`, `"email":"verify-agent@faviann.com"`, and `"role":"viewer"`.
 - **Proof.** Run both URLs in one journey, login first: `./inspect.sh journey https://romm.public.faviann.com/api/login/openid https://romm.public.faviann.com/api/users/me > "$ev/romm.log" 2>&1; echo "exit=$?" >> "$ev/romm.log"`. Two `PASS` lines and `exit=0`.
 
 ## Gotchas

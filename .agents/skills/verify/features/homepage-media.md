@@ -19,7 +19,7 @@ Preconditions:
 - Doctor passed for `portal,auth`. Homepage runs on `portal`, and the signed-in step signs in on `auth`.
 
 - **Gate.** Open the health endpoint signed out. Run `./inspect.sh probe https://homepage.media.faviann.com/api/healthcheck`. `PASS` with `status=302 location=https://auth.faviann.com/application/o/authorize/`.
-- **Signed in.** Open the same endpoint as `verify-agent`. Run `./inspect.sh journey https://homepage.media.faviann.com/api/healthcheck`. `PASS` with `status=200`, `hops` passing through `https://auth.faviann.com/application/o/authorize/`, and a last hop of `200:https://homepage.media.faviann.com/api/healthcheck`. The body is Homepage's health answer, not an Authentik page.
+- **Signed in.** Open the same endpoint as `verify-agent`. Run `./inspect.sh journey https://homepage.media.faviann.com/api/healthcheck`. `PASS` with `status=200`, `hops` passing through `https://auth.faviann.com/application/o/authorize/`, and a last hop of `200:https://homepage.media.faviann.com/api/healthcheck`. `body=up`, Homepage's health answer, not an Authentik page.
 - **Proof.** Run both into one log: `{ ./inspect.sh probe https://homepage.media.faviann.com/api/healthcheck; echo "exit=$?"; ./inspect.sh journey https://homepage.media.faviann.com/api/healthcheck; echo "exit=$?"; } > "$ev/homepage-media.log" 2>&1`. Two `PASS` lines and two `exit=0`.
 
 ## Gotchas
