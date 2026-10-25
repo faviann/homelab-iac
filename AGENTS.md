@@ -64,3 +64,4 @@ Before handoff, always run `./validate.sh` with no arguments (about 5 minutes). 
 - Read [docs/lobu-control-plane.md](docs/lobu-control-plane.md) before touching the `lobu` LXC, its stack, or the `lobu.admin.faviann.com` routers.
 - Read [docs/lobu-browser-device.md](docs/lobu-browser-device.md) before touching `lobu-crawler-01` or any `cap_browser_device` host.
 - Read [stacks/broodling/broodling/README.md](stacks/broodling/broodling/README.md) before touching the `broodling` LXC, its stack, or its initialization.
+- Read [docs/artifact-server.md](docs/artifact-server.md) before touching the `agent-services` LXC or its `artifact-server` stack, and before publishing to artifact-server.
