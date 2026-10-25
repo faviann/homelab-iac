@@ -221,6 +221,11 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
+      - name: Artifact Server Issuer
+        scope_name: openid
+        description: artifact-server v0.1.2 compares iss to the issuer without its trailing slash; remove once upstream fixes it
+        expression: |-
+          return {"iss": "https://auth.faviann.com/application/o/artifact-server"}
     grant_types:
       - authorization_code
     group: admins

@@ -22,6 +22,14 @@ the `*.faviannusercontent.com` certificate from portal's `traefik.yaml`. There
 is no forwardAuth. The app runs its own login and serves public artifacts to
 anyone.
 
+Authentik's issuer ends in a slash, and artifact-server v0.1.2 checks the ID
+token's `iss` against the issuer with that slash stripped, so login fails. The
+`Artifact Server Issuer` scope mapping in `oidc-apps.yaml` sets `iss` without
+the slash for this provider only. It relies on Authentik letting a mapping
+overwrite standard claims, which Authentik issue 25235 proposes to block, so
+login breaks if an upgrade blocks it. Remove the mapping once an
+artifact-server release accepts the trailing slash.
+
 ## Content domain
 
 Artifact JavaScript runs with full privileges in its own origin, so the
