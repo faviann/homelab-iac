@@ -54,12 +54,12 @@
               intent: app_password
               user: "{{ journey_user_lookup.json.results[0].pk }}"
               expiring: true
+              expires: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime(('%s' | strftime | int) + 600, utc=true) }}"
               description: Signed-in journey from ./inspect.sh journey
             status_code: [-1, 201, 400, 401, 403]
           register: journey_mint
           no_log: true
 
-        # A refused create answers with field errors and no key, so they are safe to show.
         - name: Require the app password to be minted
           ansible.builtin.assert:
             that: journey_mint.status == 201
@@ -104,6 +104,13 @@
           no_log: true
 
       always:
+        - name: Remove the app password file
+          ansible.builtin.file:
+            path: "{{ journey_token_file.path }}"
+            state: absent
+          when: journey_token_file.path is defined
+          changed_when: false
+
         - name: Delete the app password
           ansible.builtin.uri:
             url: "{{ journey_authentik_url }}/api/v3/core/tokens/{{ journey_token_identifier }}/"
@@ -111,13 +118,6 @@
             headers: "{{ journey_api_headers }}"
             status_code: [204, 404]
           no_log: true
-
-        - name: Remove the app password file
-          ansible.builtin.file:
-            path: "{{ journey_token_file.path }}"
-            state: absent
-          when: journey_token_file.path is defined
-          changed_when: false
 
     - name: Fail when the walk output contains the app password
       ansible.builtin.fail:

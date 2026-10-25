@@ -78,7 +78,7 @@ FAIL https://nonexistent.invalid/ status=-1 elapsed=0s location=- content_type=-
 ./inspect.sh journey <https-url> [<https-url>...]
 ```
 
-It mints an Authentik app password for `verify-agent` that expires after Authentik's default token lifetime (30 minutes on this install), signs in through the default authentication flow once, then sends one `GET` per URL, in order, in that one session. It follows each URL's redirects, up to 15, so a native OIDC login completes and a later URL sees the app's session. The app password is deleted at the end of the run. Each URL prints one line in the probe's format, with a `hops` field before `body`. Unescaped, a forward-auth journey reads:
+It mints an Authentik app password for `verify-agent` that expires after 10 minutes, signs in through the default authentication flow once, then sends one `GET` per URL, in order, in that one session. It follows each URL's redirects, up to 15, so a native OIDC login completes and a later URL sees the app's session. The app password is deleted at the end of the run. Each URL prints one line in the probe's format, with a `hops` field before `body`. Unescaped, a forward-auth journey reads:
 
 ```text
 PASS https://homepage.media.faviann.com/api/healthcheck status=200 elapsed=1s location=- content_type=- detail="OK" hops=302:https://homepage.media.faviann.com/api/healthcheck,302:https://auth.faviann.com/application/o/authorize/,302:https://media.faviann.com/outpost.goauthentik.io/callback,200:https://homepage.media.faviann.com/api/healthcheck body=up
