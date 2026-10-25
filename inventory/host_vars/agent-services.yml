@@ -5,6 +5,10 @@
 lxc_hwaddr: "BC:24:11:3F:CE:93"
 default_domain: public.faviann.com
 
+lxc_docker_env_stack_vars:
+  artifact-server:
+    oidc_client_secret: "{{ vault_agent_services_artifact_server_oidc_client_secret }}"
+
 # Container definition for proxmox_lxc_provision role
 proxmox_lxc_overrides:
   vmid: 312

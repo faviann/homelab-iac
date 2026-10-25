@@ -53,6 +53,11 @@
       "automerge": false
     },
     {
+      "description": "artifact-server waits for a person: upstream claims no upgrade compatibility yet, and the Authentik iss mapping depends on v0.1.2's issuer check (docs/artifact-server.md)",
+      "matchPackageNames": ["ghcr.io/plannotator/artifact-server"],
+      "automerge": false
+    },
+    {
       "description": "Database images wait for a person in their own PR, digests included, because a floating tag such as postgres:18 takes new versions as digest updates and a release can need steps such as a reindex; their own PR keeps the app beside them automerging",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["/postgres/", "/pgvector/", "/mariadb/", "/valkey/", "/redis/"],

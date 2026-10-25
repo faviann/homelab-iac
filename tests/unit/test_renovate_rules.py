@@ -48,6 +48,10 @@ CASES = {
         "stacks/devserver/renovate/compose.yaml", "ghcr.io/renovatebot/renovate", "patch",
         {"automerge": False},
     ),
+    "artifact-server patch": (
+        "stacks/agent-services/artifact-server/compose.yaml", "ghcr.io/plannotator/artifact-server", "patch",
+        {"automerge": False},
+    ),
     "postgres digest": (
         "stacks/overmind/sub2api/compose.yaml", "docker.io/library/postgres", "digest",
         {"automerge": False, "groupName": None},
