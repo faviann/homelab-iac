@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -117,6 +118,12 @@ class OidcManifestValidationTests(unittest.TestCase):
             self.mod.validate_oidc_manifest(apps)
         self.assertIn("grant_types", str(cm.exception))
 
+    def test_non_boolean_verify_agent_fails(self):
+        apps = [minimal_app(verify_agent="true")]
+        with self.assertRaises(ValueError) as cm:
+            self.mod.validate_oidc_manifest(apps)
+        self.assertIn("verify_agent", str(cm.exception))
+
     def test_known_grant_types_pass(self):
         self.mod.validate_oidc_manifest(
             [minimal_app(grant_types=["authorization_code", "refresh_token"])]
@@ -209,7 +216,7 @@ class RenderedOidcBlueprint:
         rows = []
         for binding in self.bindings(slug, "present"):
             attrs = binding["attrs"]
-            kind = "group" if "group" in attrs else "policy"
+            (kind,) = {"group", "policy", "user"} & attrs.keys()
             _tag, (_model, (_field, name)) = attrs[kind]
             rows.append((attrs["order"], kind, name, attrs["enabled"], attrs["negate"]))
         return sorted(rows)
@@ -328,28 +335,47 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
         self.assertEqual(blueprint.application("test-app")["attrs"]["policy_engine_mode"], "any")
         self.assertEqual(
             [binding["identifiers"]["order"] for binding in blueprint.bindings("test-app", "absent")],
-            [0],
+            [0, 3],
         )
 
     def test_policy_app_is_admitted_only_by_its_policy(self):
         blueprint = RenderedOidcBlueprint(self.mod, [minimal_app(policy="always-allow")])
 
         self.assertEqual(blueprint.admission("test-app"), [(0, "policy", "always-allow", True, False)])
-        self.assertEqual(blueprint.bindings("test-app", "absent"), [])
+        self.assertEqual(
+            [binding["identifiers"]["order"] for binding in blueprint.bindings("test-app", "absent")],
+            [3],
+        )
+
+    def test_verify_agent_opt_in_admits_the_verify_agent_user(self):
+        blueprint = RenderedOidcBlueprint(self.mod, [minimal_app(group="media", verify_agent=True)])
+
+        self.assertEqual(
+            blueprint.admission("test-app"),
+            [
+                (1, "group", "media", True, False),
+                (2, "group", "admins", True, False),
+                (3, "user", "verify-agent", True, False),
+            ],
+        )
+        self.assertEqual(
+            [binding["identifiers"]["order"] for binding in blueprint.bindings("test-app", "absent")],
+            [0],
+        )
 
     def test_real_manifest_validates_cleanly(self):
         self.mod.validate_oidc_manifest(self.mod.load_oidc_manifest())
 
-    def test_real_manifest_apps_admit_only_their_group_and_admins(self):
+    def test_real_manifest_apps_admit_only_their_group_admins_and_opted_in_verify_agent(self):
         apps = self.mod.load_oidc_manifest()
         blueprint = RenderedOidcBlueprint(self.mod, apps)
 
         for app in apps:
             with self.subTest(slug=app["slug"]):
-                self.assertEqual(
-                    blueprint.admission(app["slug"]),
-                    [(1, "group", app.get("group"), True, False), (2, "group", "admins", True, False)],
-                )
+                expected = [(1, "group", app.get("group"), True, False), (2, "group", "admins", True, False)]
+                if app.get("verify_agent"):
+                    expected.append((3, "user", "verify-agent", True, False))
+                self.assertEqual(blueprint.admission(app["slug"]), expected)
                 self.assertEqual(blueprint.application(app["slug"])["attrs"]["policy_engine_mode"], "any")
 
     def test_committed_oidc_blueprint_matches_generator(self):
@@ -357,6 +383,38 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
         expected = self.mod.generate_oidc_blueprint_content(apps)
         actual = self.mod.OIDC_BLUEPRINT_FILE.read_text(encoding="utf-8")
         self.assertEqual(actual, expected)
+
+
+class ServiceAccountsExportTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def test_export_of_matching_live_state_reproduces_the_committed_file(self):
+        committed_text = self.mod.SERVICE_ACCOUNTS_FILE.read_text(encoding="utf-8")
+        committed = yaml.load(committed_text, Loader=BlueprintLoader)
+        live_users = [
+            {
+                "username": entry["attrs"]["username"],
+                "type": entry["attrs"]["type"],
+                "is_active": entry["attrs"]["is_active"],
+                "name": entry["attrs"].get("name", ""),
+                "email": entry["attrs"].get("email", ""),
+                "groups_obj": [
+                    {"name": name} for _tag, (_model, (_field, name)) in entry["attrs"].get("groups", [])
+                ],
+            }
+            for entry in committed["entries"]
+        ]
+        live_users.append(
+            {"username": "someone", "type": "internal", "is_active": True, "name": "Someone",
+             "email": "someone@example.com", "groups_obj": []}
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exported = Path(temp_dir) / "50-service-accounts.yaml"
+            self.mod.write_yaml(exported, self.mod.build_service_accounts_blueprint({"users": live_users}))
+            self.assertEqual(exported.read_text(encoding="utf-8"), committed_text)
 
 
 class BlueprintPlanTests(unittest.TestCase):
@@ -383,6 +441,8 @@ class BlueprintPlanTests(unittest.TestCase):
             ("repo-auth-navidrome-password-change-sync", "repo-auth-providers"),
             ("repo-auth-notifications", "repo-auth-proxmox-oidc"),
             ("repo-auth-proxmox-oidc", "repo-auth-providers"),
+            ("repo-auth-service-accounts", "repo-auth-applications"),
+            ("repo-auth-service-accounts", "repo-auth-oidc-apps"),
             ("repo-auth-outposts", "repo-auth-oidc-apps"),
         ):
             with self.subTest(before=before, after=after):

@@ -19,6 +19,7 @@ apps:
               "email_verified": True,
           }
     group: media
+    verify_agent: true
     sub_mode: user_email
     issuer_mode: global
 

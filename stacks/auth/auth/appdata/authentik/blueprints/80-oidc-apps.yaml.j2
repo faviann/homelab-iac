@@ -153,6 +153,20 @@ entries:
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
 
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf app-romm-public
+    order: 3
+  attrs:
+    target: !KeyOf app-romm-public
+    order: 3
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    user: !Find [authentik_core.user, [username, verify-agent]]
+
 - id: provider-audiobookshelf-public
   model: authentik_providers_oauth2.oauth2provider
   state: present
@@ -232,6 +246,12 @@ entries:
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
 
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-audiobookshelf-public
+    order: 3
+
 - id: provider-komga-public
   model: authentik_providers_oauth2.oauth2provider
   state: present
@@ -309,6 +329,12 @@ entries:
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
 
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-komga-public
+    order: 3
+
 - id: provider-calibre-web-automated-public
   model: authentik_providers_oauth2.oauth2provider
   state: present
@@ -385,6 +411,12 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
+
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-calibre-web-automated-public
+    order: 3
 
 - id: provider-immich-public
   model: authentik_providers_oauth2.oauth2provider
@@ -467,6 +499,12 @@ entries:
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
 
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-immich-public
+    order: 3
+
 - id: provider-readmeabook-public
   model: authentik_providers_oauth2.oauth2provider
   state: present
@@ -544,6 +582,12 @@ entries:
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
 
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-readmeabook-public
+    order: 3
+
 - id: provider-dockhand-admin
   model: authentik_providers_oauth2.oauth2provider
   state: present
@@ -620,6 +664,12 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
+
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-dockhand-admin
+    order: 3
 
 - id: provider-moraine-mcp
   model: authentik_providers_oauth2.oauth2provider
@@ -700,6 +750,12 @@ entries:
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
 
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-moraine-mcp
+    order: 3
+
 - id: provider-sub2api-local
   model: authentik_providers_oauth2.oauth2provider
   state: present
@@ -778,6 +834,12 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
+
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-sub2api-local
+    order: 3
 
 - id: provider-artifact-server
   model: authentik_providers_oauth2.oauth2provider
@@ -858,3 +920,9 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
+
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-artifact-server
+    order: 3

@@ -46,6 +46,8 @@ NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME = "repo-auth-navidrome-password-ch
 NAVIDROME_PASSWORD_CHANGE_SYNC_POLICY_NAME = "navidrome-registration-sync-policy"
 DEFAULT_PASSWORD_CHANGE_FLOW_SLUG = "default-password-change"
 DEFAULT_PASSWORD_CHANGE_PROMPT_STAGE_NAME = "default-password-change-prompt"
+VERIFY_AGENT_USERNAME = "verify-agent"
+MANAGED_SERVICE_ACCOUNTS = ("ldapservice", VERIFY_AGENT_USERNAME)
 
 CUSTOM_BLUEPRINT_FILES = [
     {
@@ -147,6 +149,8 @@ def validate_oidc_manifest(apps: list[dict[str, Any]]) -> None:
                     raise ValueError(
                         f"Unknown grant type in app {slug!r}: {grant_type!r}"
                     )
+        if not isinstance(app.get("verify_agent", False), bool):
+            raise ValueError(f"App {slug!r} verify_agent must be true or false")
         for uri in app["redirect_uris"]:
             if not uri.startswith("https://"):
                 raise ValueError(
@@ -334,6 +338,34 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
                 "    failure_result: false",
                 "    timeout: 30",
                 f"    policy: !Find [authentik_policies_expression.expressionpolicy, [name, {policy}]]",
+                "",
+            ]
+        # Blueprints never delete an entry dropped from the file, so an app
+        # without the opt-in carries an explicit absent binding.
+        if app.get("verify_agent"):
+            lines += [
+                "- model: authentik_policies.policybinding",
+                "  state: present",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 3",
+                "  attrs:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 3",
+                "    enabled: true",
+                "    negate: false",
+                "    failure_result: false",
+                "    timeout: 30",
+                f"    user: !Find [authentik_core.user, [username, {VERIFY_AGENT_USERNAME}]]",
+                "",
+            ]
+        else:
+            lines += [
+                "- model: authentik_policies.policybinding",
+                "  state: absent",
+                "  identifiers:",
+                f"    target: !KeyOf {app_id}",
+                "    order: 3",
                 "",
             ]
 
@@ -540,9 +572,9 @@ def build_groups_blueprint(state: dict[str, Any]) -> dict[str, Any]:
         for binding in state["bindings"]
         if binding.get("group")
     }
-    ldapservice = next((user for user in state["users"] if user["username"] == "ldapservice"), None)
-    if ldapservice:
-        binding_group_pks.update(ldapservice.get("groups", []))
+    for user in state["users"]:
+        if user["username"] in MANAGED_SERVICE_ACCOUNTS:
+            binding_group_pks.update(user.get("groups", []))
 
     groups_by_pk = {group["pk"]: group for group in state["groups"]}
     selected_groups = [groups_by_pk[pk] for pk in binding_group_pks if pk in groups_by_pk]
@@ -807,35 +839,41 @@ def build_applications_blueprint(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_service_accounts_blueprint(state: dict[str, Any]) -> dict[str, Any]:
-    ldapservice = next((user for user in state["users"] if user["username"] == "ldapservice"), None)
-    if ldapservice is None:
-        raise RuntimeError("ldapservice service account not found in live Authentik state")
+    users_by_name = {user["username"]: user for user in state["users"]}
+    entries = []
+    for username in MANAGED_SERVICE_ACCOUNTS:
+        user = users_by_name.get(username)
+        if user is None:
+            raise RuntimeError(f"{username} service account not found in live Authentik state")
 
-    attrs: dict[str, Any] = {
-        "username": ldapservice["username"],
-        "type": ldapservice["type"],
-        "is_active": ldapservice["is_active"],
-    }
-    if ldapservice.get("name"):
-        attrs["name"] = ldapservice["name"]
-    group_refs = [
-        FindRef("authentik_core.group", "name", group["name"])
-        for group in sorted(ldapservice.get("groups_obj", []), key=lambda item: item["name"])
-    ]
-    if group_refs:
-        attrs["groups"] = group_refs
+        attrs: dict[str, Any] = {
+            "username": user["username"],
+            "type": user["type"],
+            "is_active": user["is_active"],
+        }
+        if user.get("name"):
+            attrs["name"] = user["name"]
+        if user.get("email"):
+            attrs["email"] = user["email"]
+        group_refs = [
+            FindRef("authentik_core.group", "name", group["name"])
+            for group in sorted(user.get("groups_obj", []), key=lambda item: item["name"])
+        ]
+        if group_refs:
+            attrs["groups"] = group_refs
+        entries.append(
+            {
+                "model": "authentik_core.user",
+                "state": "present",
+                "identifiers": {"username": user["username"]},
+                "attrs": attrs,
+            }
+        )
 
     return {
         "version": 1,
         "metadata": blueprint_metadata("repo-auth-service-accounts"),
-        "entries": [
-            {
-                "model": "authentik_core.user",
-                "state": "present",
-                "identifiers": {"username": ldapservice["username"]},
-                "attrs": attrs,
-            }
-        ],
+        "entries": entries,
     }
 
 
@@ -894,8 +932,8 @@ def blueprint_plan(flow_slugs: list[str]) -> list[tuple[str, str]]:
     steps.extend(
         [
             ("repo-auth-providers", "30-providers.yaml"),
-            ("repo-auth-applications", "40-applications.yaml"),
             ("repo-auth-service-accounts", "50-service-accounts.yaml"),
+            ("repo-auth-applications", "40-applications.yaml"),
             ("repo-auth-outposts", "60-outposts.yaml"),
             (OIDC_BLUEPRINT_INSTANCE_NAME, OIDC_BLUEPRINT_DEPLOYED_NAME),
         ]
