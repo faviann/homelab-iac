@@ -1,0 +1,73 @@
+---
+x-managed-files:
+  - path: ./.env
+    mode: "0600"
+
+x-prereq-dirs:
+  - ./appdata/artifact-server
+
+services:
+  # init refuses a data directory that already exists, so this initializes an
+  # empty volume once and is a no-op on every later deploy. The admin email is
+  # read only then; changing it later does nothing.
+  init:
+    image: ghcr.io/plannotator/artifact-server:v0.1.2@sha256:e832267831dddd905d158aeeb6b331ef314c7d4737c8769d7bd335b91bd43055
+    container_name: artifact-server-init
+    restart: "no"
+    user: "${PUID}:${PGID}"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        test -d /var/lib/artifact-server/data ||
+        exec node dist/cli/main.js init --admin-email faviann@gmail.com
+        --data /var/lib/artifact-server/data
+    volumes:
+      - ./appdata/artifact-server:/var/lib/artifact-server
+
+  artifact-server:
+    image: ghcr.io/plannotator/artifact-server:v0.1.2@sha256:e832267831dddd905d158aeeb6b331ef314c7d4737c8769d7bd335b91bd43055
+    container_name: artifact-server
+    restart: unless-stopped
+    command: [start-compact, --data, /var/lib/artifact-server/data, --host, 0.0.0.0, --port, "8787"]
+    environment:
+      ARTIFACT_SERVER_ORIGIN: https://artifact-server.public.faviann.com
+      ARTIFACT_SERVER_CONTENT_DOMAIN: faviannusercontent.com
+      ARTIFACT_SERVER_OIDC_ISSUER: https://auth.faviann.com/application/o/artifact-server/
+      ARTIFACT_SERVER_OIDC_CLIENT_ID: artifact-server
+      ARTIFACT_SERVER_OIDC_CLIENT_SECRET: ${ARTIFACT_SERVER_OIDC_CLIENT_SECRET:?Set ARTIFACT_SERVER_OIDC_CLIENT_SECRET in .env}
+      ARTIFACT_SERVER_REQUEST_LOG_SAMPLE_RATE: "0.01"
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./appdata/artifact-server:/var/lib/artifact-server
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    user: "${PUID}:${PGID}"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    pids_limit: 256
+    stop_grace_period: 15s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    labels:
+      traefik.enable: true
+      traefik.http.routers.artifact-server.rule: Host(`artifact-server.public.faviann.com`)
+      traefik.http.routers.artifact-server.service: artifact-server
+      traefik.http.routers.artifact-server-content.rule: 'HostRegexp(`^[a-z0-9-]+\.faviannusercontent\.com$$`)'
+      traefik.http.routers.artifact-server-content.service: artifact-server
+      traefik.http.services.artifact-server.loadbalancer.server.port: "8787"

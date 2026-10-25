@@ -75,6 +75,9 @@ vault_public_audiobookshelf_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECR
 vault_public_komga_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
 vault_public_calibre_web_automated_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
 
+# artifact-server on agent-services: Authentik OIDC client
+vault_agent_services_artifact_server_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
+
 # Workstation MCP auth proxy
 vault_moraine_mcp_oidc_client_secret: "REPLACE_WITH_RANDOM_CLIENT_SECRET"
 vault_workstation_mcp_auth_proxy_hmac_secret: "REPLACE_WITH_BASE64_32_BYTE_KEY"

@@ -341,6 +341,28 @@ Agent use of a documented raw command is a separate decision:
 - **Escalation:** a download failure leaves the file unchanged. Report it
   rather than editing the vendored file by hand.
 
+#### Artifact render check
+
+- **Trigger:** an agent has published to artifact-server and checks how the
+  artifact renders, as written in
+  [docs/artifact-server.md](artifact-server.md#agent-workflow).
+- **Audience:** agents and people.
+- **Scope:** one artifact, through artifact-server's public HTTPS API and its
+  content domain. It contacts no managed host directly.
+
+  ```bash
+  nix shell nixpkgs#chromium -c npx -y -p playwright@1.64.1 \
+    node scripts/artifact-render-check.mjs <artifact-id> \
+    --token-file ~/.config/artifact-server/api-key
+  ```
+
+- **Boundary:** it opens a content session and loads the artifact in a local
+  headless browser. It changes nothing on the server.
+- **Sensitive output:** none. The API key and the bootstrap token never appear
+  in the report.
+- **Escalation:** a content-session error or a crash before the report means
+  the check did not run. Report that, not a pass.
+
 ## Superseded forms
 
 | Superseded form | Replacement |
