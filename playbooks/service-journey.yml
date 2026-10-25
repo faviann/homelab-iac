@@ -41,7 +41,7 @@
       ansible.builtin.set_fact:
         journey_token_identifier: "verify-agent-journey-{{ '%032x' | format((2**128) | random) }}"
 
-    - name: Walk the URLs with a one-hour app password
+    - name: Walk the URLs with a short-lived app password
       block:
         - name: Mint the app password
           ansible.builtin.uri:
@@ -54,10 +54,19 @@
               intent: app_password
               user: "{{ journey_user_lookup.json.results[0].pk }}"
               expiring: true
-              expires: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime(('%s' | strftime | int) + 3600, utc=true) }}"
               description: Signed-in journey from ./inspect.sh journey
-            status_code: 201
+            status_code: [-1, 201, 400, 401, 403]
+          register: journey_mint
           no_log: true
+
+        # A refused create answers with field errors and no key, so they are safe to show.
+        - name: Require the app password to be minted
+          ansible.builtin.assert:
+            that: journey_mint.status == 201
+            fail_msg: >-
+              Minting the app password answered status {{ journey_mint.status }}:
+              {{ journey_mint.json | default(journey_mint.msg) | to_json }}
+            quiet: true
 
         # The create response omits the key. Reading it records a SECRET_VIEW
         # event in Authentik on every run.

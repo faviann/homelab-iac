@@ -21,8 +21,9 @@ MAX_REDIRECTS = 15
 TIMEOUT_SECONDS = 15
 SIGN_IN_FLOW = "default-authentication-flow"
 SIGNED_IN = "xak-flow-redirect"
+# The live identification stage embeds the password field; a stage without it ignores the password.
 SIGN_IN_ANSWERS = {
-    "ak-stage-identification": lambda username, password: {"uid_field": username},
+    "ak-stage-identification": lambda username, password: {"uid_field": username, "password": password},
     "ak-stage-password": lambda username, password: {"password": password},
 }
 # Short cookie values are flags such as a language, not credentials. Scrubbing
