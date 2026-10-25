@@ -107,9 +107,11 @@ def test_wildcard_certificate_covers_every_access_tier() -> None:
     static = load_yaml(
         TRAEFIK_STACK / "appdata/traefik3/config/traefik.yaml"
     )
-    (certificate,) = static["entryPoints"]["websecure"]["http"]["tls"]["domains"]
-
-    assert certificate["main"] == "faviann.com"
+    (certificate,) = [
+        domain
+        for domain in static["entryPoints"]["websecure"]["http"]["tls"]["domains"]
+        if domain["main"] == "faviann.com"
+    ]
     assert {
         "*.faviann.com",
         "*.admin.faviann.com",
