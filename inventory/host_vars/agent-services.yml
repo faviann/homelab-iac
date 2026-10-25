@@ -1,0 +1,15 @@
+---
+# Host-specific configuration for services agents use (artifact-server)
+# Inherits from: tier_small, cap_docker
+
+lxc_hwaddr: "BC:24:11:3F:CE:93"
+default_domain: public.faviann.com
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 312
+  hostname: agent-services
+  description: "Agent-facing services (artifact-server) managed via Ansible"
+  tags:
+    - ansible
+    - agent-services
