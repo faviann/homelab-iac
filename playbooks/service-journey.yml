@@ -1,0 +1,134 @@
+---
+- name: Validate control node health
+  ansible.builtin.import_playbook: controller-prerequisites.yml
+
+- name: Walk routed service URLs signed in as verify-agent
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    journey_username: verify-agent
+    journey_authentik_url: https://auth.faviann.com
+    journey_api_headers:
+      Authorization: "Bearer {{ vault_auth_blueprint_api_token }}"
+  tasks:
+    - name: Load the Authentik API token from the vault
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir | dirname }}/inventory/vault.yml"
+      no_log: true
+
+    - name: Look up the journey user
+      ansible.builtin.uri:
+        url: "{{ journey_authentik_url }}/api/v3/core/users/?username={{ journey_username }}"
+        headers: "{{ journey_api_headers }}"
+        status_code: [-1, 200, 401, 403]
+      register: journey_user_lookup
+      no_log: true
+
+    - name: Require the journey user in Authentik
+      ansible.builtin.assert:
+        that:
+          - journey_user_lookup.status == 200
+          - journey_user_lookup.json.results | length == 1
+        fail_msg: >-
+          Looking up {{ journey_username }} answered status {{ journey_user_lookup.status }}
+          with {{ journey_user_lookup.json.results | default([]) | length }} match(es).
+          A 401 or 403 means Authentik rejects vault_auth_blueprint_api_token.
+          No match means the auth stack's blueprints have not created the user yet.
+        quiet: true
+
+    - name: Name this run's app password
+      ansible.builtin.set_fact:
+        journey_token_identifier: "verify-agent-journey-{{ '%032x' | format((2**128) | random) }}"
+
+    - name: Walk the URLs with a one-hour app password
+      block:
+        - name: Mint the app password
+          ansible.builtin.uri:
+            url: "{{ journey_authentik_url }}/api/v3/core/tokens/"
+            method: POST
+            headers: "{{ journey_api_headers }}"
+            body_format: json
+            body:
+              identifier: "{{ journey_token_identifier }}"
+              intent: app_password
+              user: "{{ journey_user_lookup.json.results[0].pk }}"
+              expiring: true
+              expires: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime(('%s' | strftime | int) + 3600, utc=true) }}"
+              description: Signed-in journey from ./inspect.sh journey
+            status_code: 201
+          no_log: true
+
+        # The create response omits the key. Reading it records a SECRET_VIEW
+        # event in Authentik on every run.
+        - name: Read the app password
+          ansible.builtin.uri:
+            url: "{{ journey_authentik_url }}/api/v3/core/tokens/{{ journey_token_identifier }}/view_key/"
+            headers: "{{ journey_api_headers }}"
+          register: journey_token
+          no_log: true
+
+        - name: Create the app password file
+          ansible.builtin.tempfile:
+            state: file
+            suffix: .token
+          register: journey_token_file
+          changed_when: false
+
+        - name: Write the app password file
+          ansible.builtin.copy:
+            content: "{{ journey_token.json.key }}"
+            dest: "{{ journey_token_file.path }}"
+            mode: '0600'
+          no_log: true
+          changed_when: false
+
+        - name: Walk each URL in one signed-in session
+          ansible.builtin.command:
+            argv: >-
+              {{ [ansible_playbook_python, playbook_dir | dirname ~ '/scripts/journey_walker.py',
+                  '--auth-url', journey_authentik_url, '--username', journey_username,
+                  '--password-file', journey_token_file.path] + probe_urls.split(',') }}
+          register: journey_walk
+          changed_when: false
+          failed_when: false
+          no_log: true
+
+      always:
+        - name: Delete the app password
+          ansible.builtin.uri:
+            url: "{{ journey_authentik_url }}/api/v3/core/tokens/{{ journey_token_identifier }}/"
+            method: DELETE
+            headers: "{{ journey_api_headers }}"
+            status_code: [204, 404]
+          no_log: true
+
+        - name: Remove the app password file
+          ansible.builtin.file:
+            path: "{{ journey_token_file.path }}"
+            state: absent
+          when: journey_token_file.path is defined
+          changed_when: false
+
+    - name: Fail when the walk output contains the app password
+      ansible.builtin.fail:
+        msg: The walker printed the app password, so its output is withheld.
+      when: journey_token.json.key in (journey_walk.stdout ~ journey_walk.stderr)
+
+    - name: Report each journey
+      ansible.builtin.debug:
+        msg: "{{ item }}"
+      loop: "{{ journey_walk.stdout_lines }}"
+      loop_control:
+        label: "{{ item.split(' ')[1] }}"
+
+    - name: Fail when a journey did not end signed in on a 2xx
+      ansible.builtin.fail:
+        msg: >-
+          {{ 'Journey failed for: ' ~ failed_urls | join(', ') if failed_urls
+             else 'The walker exited ' ~ journey_walk.rc ~ ': ' ~ journey_walk.stderr }}
+      vars:
+        failed_urls: >-
+          {{ journey_walk.stdout_lines | select('match', 'FAIL ')
+             | map('split', ' ') | map(attribute='1') | list }}
+      when: journey_walk.rc != 0

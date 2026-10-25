@@ -19,6 +19,9 @@ Operations:
   vars <host> | vars --graph  Show merged variables masked, or the inventory graph
   probe <https-url>...        GET routed service URLs as a user would, without
                               following redirects; fails on no response or 4xx/5xx
+  journey <https-url>...      Sign in to Authentik as verify-agent, then GET each URL
+                              in that session, following redirects; fails unless
+                              each ends on a 2xx outside the sign-in flow
 
 Options:
   --limit <targets>           Select hosts with Ansible limit grammar
@@ -34,7 +37,8 @@ usage_error() {
 
 requires_check_mode=false
 takes_urls=false
-case "${1:-}" in
+operation="${1:-}"
+case "$operation" in
     --help)
         usage
         exit 0
@@ -62,6 +66,12 @@ case "${1:-}" in
         ;;
     probe)
         playbook="playbooks/service-probe.yml"
+        supports_limit=false
+        takes_urls=true
+        shift
+        ;;
+    journey)
+        playbook="playbooks/service-journey.yml"
         supports_limit=false
         takes_urls=true
         shift
@@ -125,7 +135,7 @@ while (($#)); do
             shift
             ;;
         *)
-            $takes_urls && [[ "$1" != -* ]] && usage_error "probe takes only https:// URLs"
+            $takes_urls && [[ "$1" != -* ]] && usage_error "$operation takes only https:// URLs"
             usage_error "unknown option"
             ;;
     esac
@@ -140,7 +150,7 @@ else
 fi
 $requires_check_mode && arguments+=("--check")
 if $takes_urls; then
-    [[ -n "$probe_urls" ]] || usage_error "probe requires at least one https:// URL"
+    [[ -n "$probe_urls" ]] || usage_error "$operation requires at least one https:// URL"
     arguments+=("-e" "probe_urls=$probe_urls")
 fi
 arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
