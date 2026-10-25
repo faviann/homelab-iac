@@ -61,6 +61,12 @@ class FakeAnsibleModule:
         raise ModuleFail(kwargs)
 
 
+class CheckModeFakeAnsibleModule(FakeAnsibleModule):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.check_mode = True
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location("proxmox_pct_under_test", MODULE_PATH)
     if spec is None or spec.loader is None:
@@ -82,7 +88,7 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         self.module.AnsibleModule = self.original_ansible_module
         self.module.run_pct_command = self.original_run_pct_command
 
-    def run_main(self, params: dict, run_result: dict):
+    def run_main(self, params: dict, run_result: dict, ansible_module=FakeAnsibleModule):
         captured = {"calls": []}
 
         def fake_run_pct_command(module, cmd_args, kill_after):
@@ -91,7 +97,7 @@ class ProxmoxPctModuleTests(unittest.TestCase):
             return run_result
 
         FakeAnsibleModule.params_queue = [params]
-        self.module.AnsibleModule = FakeAnsibleModule
+        self.module.AnsibleModule = ansible_module
         self.module.run_pct_command = fake_run_pct_command
 
         with self.assertRaises((ModuleExit, ModuleFail)) as context:
@@ -133,6 +139,27 @@ class ProxmoxPctModuleTests(unittest.TestCase):
         self.assertEqual(cmd_args, ["reboot", "202"])
         self.assertTrue(payload["changed"])
 
+    def test_resize_command_grows_the_named_disk_and_marks_changed(self) -> None:
+        payload, cmd_args = self.run_main(
+            {"vmid": 304, "command": "resize", "disk": "rootfs", "size": "16G"},
+            {"stdout": "", "stderr": "", "rc": 0, "cmd": "pct resize 304 rootfs 16G"},
+        )
+
+        self.assertEqual(cmd_args, ["resize", "304", "rootfs", "16G"])
+        self.assertTrue(payload["changed"])
+
+    def test_check_mode_resize_reports_the_change_without_running_pct(self) -> None:
+        payload, cmd_args = self.run_main(
+            {"vmid": 304, "command": "resize", "disk": "rootfs", "size": "16G"},
+            {"stdout": "", "stderr": "", "rc": 0, "cmd": "pct resize 304 rootfs 16G"},
+            ansible_module=CheckModeFakeAnsibleModule,
+        )
+
+        self.assertIsNone(cmd_args)
+        self.assertEqual(
+            payload, {"changed": True, "msg": "Would execute: pct resize 304 rootfs 16G"}
+        )
+
     def test_the_adapter_offers_no_uncalled_command_and_no_timeout_option(self) -> None:
         self.run_main(
             {"vmid": 202, "command": "status", "exec_command": None, "config_options": None},
@@ -142,7 +169,7 @@ class ProxmoxPctModuleTests(unittest.TestCase):
 
         self.assertEqual(
             spec["command"]["choices"],
-            ["status", "config", "set", "exec", "reboot", "wait_exec"],
+            ["status", "config", "set", "exec", "reboot", "resize", "wait_exec"],
         )
         self.assertNotIn("timeout", spec)
 
@@ -276,6 +303,11 @@ class ProxmoxPctModuleTests(unittest.TestCase):
                 self.module.PCT_COMMAND_TIMEOUT_SECONDS,
             ),
             "reboot": ({}, ["reboot", "4242"], self.module.PCT_REBOOT_TIMEOUT_SECONDS),
+            "resize": (
+                {"disk": "rootfs", "size": "16G"},
+                ["resize", "4242"],
+                self.module.PCT_RESIZE_TIMEOUT_SECONDS,
+            ),
             # One attempt: the delay leaves no room for a second before the deadline.
             "wait_exec": (
                 {"ready_timeout": 5, "ready_delay": 5, "ready_command_timeout": 2},

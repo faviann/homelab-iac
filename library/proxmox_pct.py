@@ -13,7 +13,7 @@ module: proxmox_pct
 short_description: Manage Proxmox LXC containers via pct command
 description:
     - Execute pct commands against Proxmox LXC containers
-    - "Wraps common pct operations: status, config, set, exec, reboot"
+    - "Wraps common pct operations: status, config, set, exec, reboot, resize"
     - "Adds wait_exec: bounded polling until the container accepts a guest command through the host"
     - Every invocation carries an upper bound; an overrunning pct is killed and reported
 version_added: "1.0.0"
@@ -30,7 +30,7 @@ options:
             - The pct command to execute
         required: true
         type: str
-        choices: ['status', 'config', 'set', 'exec', 'reboot', 'wait_exec']
+        choices: ['status', 'config', 'set', 'exec', 'reboot', 'resize', 'wait_exec']
     exec_command:
         description:
             - Command to execute inside the container (when command=exec)
@@ -64,6 +64,17 @@ options:
             - Dict of key-value pairs
         required: false
         type: dict
+    disk:
+        description:
+            - Volume to resize, such as C(rootfs) or C(mp0) (when command=resize)
+        required: false
+        type: str
+    size:
+        description:
+            - New size passed to C(pct resize), such as C(16G) (when command=resize)
+            - pct refuses to shrink, so callers compare sizes before resizing
+        required: false
+        type: str
 notes:
     - The readiness bounds have no defaults here. Their single source of truth is the
       calling role's defaults/argument_specs pair, which always passes all three
@@ -99,6 +110,13 @@ EXAMPLES = r'''
   proxmox_pct:
     vmid: 100
     command: reboot
+
+- name: Grow the root disk
+  proxmox_pct:
+    vmid: 100
+    command: resize
+    disk: rootfs
+    size: 16G
 
 - name: Wait for a restarted container to accept guest commands
   proxmox_pct:
@@ -167,7 +185,7 @@ MIN_USEFUL_ATTEMPT_SECONDS = 1.0
 # holding them; reading must never outlast the timeout it exists to enforce.
 KILL_GRACE_SECONDS = 5
 
-# Upper bound for every pct command except reboot. status, config, set and exec
+# Upper bound for every pct command except reboot and resize. status, config, set and exec
 # are /etc/pve reads-writes or a trivial guest command: on a healthy host they
 # answer in well under a second. The realistic failure is not slowness but a
 # wedged pmxcfs, where /etc/pve stops answering at all and the call never
@@ -183,6 +201,12 @@ PCT_COMMAND_TIMEOUT_SECONDS = 60
 # reboot finishes far inside it, and readiness after the reboot is proven
 # separately by wait_exec.
 PCT_REBOOT_TIMEOUT_SECONDS = 300
+
+# resize grows the volume and then the filesystem inside it online. On ZFS that
+# is a quota change, but on LVM or directory storage resize2fs walks the new
+# space, so it gets the same room as reboot rather than a bound that could kill
+# a filesystem grow part-way through.
+PCT_RESIZE_TIMEOUT_SECONDS = 300
 
 
 def kill_process_group(proc):
@@ -218,7 +242,7 @@ def run_pct_command(module, cmd_args, kill_after):
             #
             # Deliberate consequence: detaching means Ctrl-C no longer reaches pct.
             # Accepted. No long-running interactive pct command remains in this
-            # adapter -- every command it offers is a short host operation or a
+            # adapter -- every command it offers is a short host operation, a resize, or a
             # reboot -- so the bound above, not the operator's terminal, is what
             # ends a wedged call. Re-coupling Ctrl-C would cost the kill that
             # bounds these calls, which is the more valuable of the two.
@@ -352,10 +376,12 @@ def main():
             command=dict(
                 type='str',
                 required=True,
-                choices=['status', 'config', 'set', 'exec', 'reboot', 'wait_exec']
+                choices=['status', 'config', 'set', 'exec', 'reboot', 'resize', 'wait_exec']
             ),
             exec_command=dict(type='str', required=False),
             config_options=dict(type='dict', required=False),
+            disk=dict(type='str', required=False),
+            size=dict(type='str', required=False),
             # No defaults for the readiness bounds: see the module notes. The
             # calling role owns those numbers and always passes them.
             ready_timeout=dict(type='int', required=False),
@@ -363,7 +389,8 @@ def main():
             ready_command_timeout=dict(type='int', required=False)
         ),
         required_if=[
-            ('command', 'wait_exec', ['ready_timeout', 'ready_delay', 'ready_command_timeout'])
+            ('command', 'wait_exec', ['ready_timeout', 'ready_delay', 'ready_command_timeout']),
+            ('command', 'resize', ['disk', 'size'])
         ],
         supports_check_mode=True
     )
@@ -416,6 +443,9 @@ def main():
     elif command == 'reboot':
         cmd_args = ['reboot', str(vmid)]
         changed = True
+    elif command == 'resize':
+        cmd_args = ['resize', str(vmid), module.params['disk'], module.params['size']]
+        changed = True
     else:
         module.fail_json(msg=f"Unsupported command: {command}")
 
@@ -423,9 +453,10 @@ def main():
     if module.check_mode and changed:
         module.exit_json(changed=True, msg=f"Would execute: pct {' '.join(cmd_args)}")
 
-    kill_after = (
-        PCT_REBOOT_TIMEOUT_SECONDS if command == 'reboot' else PCT_COMMAND_TIMEOUT_SECONDS
-    )
+    kill_after = {
+        'reboot': PCT_REBOOT_TIMEOUT_SECONDS,
+        'resize': PCT_RESIZE_TIMEOUT_SECONDS,
+    }.get(command, PCT_COMMAND_TIMEOUT_SECONDS)
     result = run_pct_command(module, cmd_args, kill_after=kill_after)
 
     # Build response
