@@ -59,6 +59,9 @@
       features:
         changed: false
         restart_required: false
+      rootfs:
+        changed: false
+        restart_required: false
 
 - name: Initialize host reconciliation result
   ansible.builtin.set_fact:
@@ -112,16 +115,31 @@
     - gpu
     - wireguard
 
-- name: Apply LXC feature flags via pct
-  ansible.builtin.include_tasks: features.yml
+- name: Reconcile pct-managed container settings
   when:
     - >-
       not (
         ansible_check_mode | bool
         and not (infrastructure_proxmox_lxc_host_config_file_stat.stat.exists | default(false))
       )
-  tags:
-    - features
+  block:
+    - name: Get current container configuration
+      proxmox_pct:
+        vmid: "{{ infrastructure_proxmox_lxc_host_config_spec.vmid }}"
+        command: config
+      register: infrastructure_proxmox_lxc_host_config_pct_config
+      delegate_to: "{{ proxmox_host_config_delegate }}"
+      become: "{{ proxmox_lxc_host_config_become }}"
+      tags:
+        - features
+
+    - name: Apply LXC feature flags via pct
+      ansible.builtin.include_tasks: features.yml
+      tags:
+        - features
+
+    - name: Grow the root disk to its declared size
+      ansible.builtin.include_tasks: rootfs.yml
 
 - name: Finalize host reconciliation result
   ansible.builtin.set_fact:

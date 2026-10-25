@@ -134,7 +134,8 @@
             'configure_nvidia_runtime': configure_nvidia_runtime | default(false) | bool,
             'wireguard_kernel_module_access': wireguard_kernel_module_access | default(false) | bool,
             'lxc_custom_sysctls': lxc_custom_sysctls | default([]),
-            'lxc_disable_apparmor': lxc_disable_apparmor | default(false) | bool
+            'lxc_disable_apparmor': lxc_disable_apparmor | default(false) | bool,
+            'rootfs_size_gb': (_proxmox_lxc_compiled_spec.disk | default('') | string).split(':') | last | int
           },
           'guest_bootstrap': {
             'vmid': identity.vmid,
@@ -193,6 +194,8 @@
       - proxmox_lxc_contract.host_config.lxc_custom_sysctls is sequence
       - proxmox_lxc_contract.host_config.lxc_custom_sysctls is not string
       - proxmox_lxc_contract.host_config.lxc_disable_apparmor is boolean
+      - proxmox_lxc_contract.host_config.rootfs_size_gb is integer
+      - proxmox_lxc_contract.host_config.rootfs_size_gb > 0
       - proxmox_lxc_contract.guest_bootstrap is mapping
       - proxmox_lxc_contract.guest_bootstrap.vmid is defined
       - proxmox_lxc_contract.guest_bootstrap.vmid | int > 0

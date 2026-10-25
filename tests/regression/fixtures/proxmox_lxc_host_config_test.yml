@@ -35,6 +35,7 @@
           - key: net.ipv6.conf.all.forwarding
             value: 1
         lxc_disable_apparmor: true
+        rootfs_size_gb: 16
     # Conflicting legacy values prove the compiled contract is authoritative.
     wireguard_kernel_module_access: false
     lxc_custom_sysctls:
@@ -87,10 +88,18 @@
               if [ -f "$FEATURES_FILE" ]; then
                 CURRENT_FEATURES=$(cat "$FEATURES_FILE")
               fi
+              ROOTFS_SIZE=8G
+              if [ -f "{{ temp_root }}/pct-rootfs-size.txt" ]; then
+                ROOTFS_SIZE=$(cat "{{ temp_root }}/pct-rootfs-size.txt")
+              fi
               cat <<EOF
           arch: amd64
           features: ${CURRENT_FEATURES}
+          rootfs: local-lvm:vm-4201-disk-0,size=${ROOTFS_SIZE}
           EOF
+              ;;
+            resize)
+              printf '%s\n' "$4" > "{{ temp_root }}/pct-rootfs-size.txt"
               ;;
             status)
               echo "status: running"
@@ -173,7 +182,10 @@
           - proxmox_lxc_host_config_result.components.wireguard.changed
           - proxmox_lxc_host_config_result.components.sysctls.changed
           - proxmox_lxc_host_config_result.components.features.changed
+          - proxmox_lxc_host_config_result.components.rootfs.changed
+          - not proxmox_lxc_host_config_result.components.rootfs.restart_required
           - "'set 4201 --features keyctl=1,nesting=1' in (_pct_calls_initial.content | b64decode)"
+          - "'resize 4201 rootfs 16G' in (_pct_calls_initial.content | b64decode)"
           - "'status 4201' in (_pct_calls_initial.content | b64decode)"
           - "'reboot 4201' in (_pct_calls_initial.content | b64decode)"
           # Immediate guest-command readiness: one probe, no retry, no fixed pause.
@@ -211,7 +223,9 @@
           - not proxmox_lxc_host_config_result.components.nvidia.changed
           - not proxmox_lxc_host_config_result.components.wireguard.changed
           - not proxmox_lxc_host_config_result.components.sysctls.changed
+          - not proxmox_lxc_host_config_result.components.rootfs.changed
           - "'set 4201 --features' not in (_pct_calls_unchanged.content | b64decode)"
+          - "'resize 4201' not in (_pct_calls_unchanged.content | b64decode)"
           - "'status 4201' not in (_pct_calls_unchanged.content | b64decode)"
           - "'reboot 4201' not in (_pct_calls_unchanged.content | b64decode)"
           - "'exec 4201' not in (_pct_calls_unchanged.content | b64decode)"
@@ -245,6 +259,12 @@
         mode: "0644"
         content: "nesting=1,keyctl=1\n"
 
+    - name: Grow the root disk past its declared size out of band
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-rootfs-size.txt"
+        mode: "0644"
+        content: "1T\n"
+
     - name: Reset mock pct call log before reordered reconciliation
       ansible.builtin.copy:
         dest: "{{ temp_root }}/pct-calls.log"
@@ -276,7 +296,9 @@
           - not proxmox_lxc_host_config_result.components.wireguard.changed
           - not proxmox_lxc_host_config_result.components.sysctls.changed
           - not proxmox_lxc_host_config_result.components.features.changed
+          - not proxmox_lxc_host_config_result.components.rootfs.changed
           - "'set 4201 --features' not in (_pct_calls_reordered.content | b64decode)"
+          - "'resize 4201' not in (_pct_calls_reordered.content | b64decode)"
           - "'status 4201' not in (_pct_calls_reordered.content | b64decode)"
           - "'reboot 4201' not in (_pct_calls_reordered.content | b64decode)"
           - "'exec 4201' not in (_pct_calls_reordered.content | b64decode)"
@@ -304,6 +326,12 @@
                 }
               )
           }}
+
+    - name: Report a root disk just under its declared size
+      ansible.builtin.copy:
+        dest: "{{ temp_root }}/pct-rootfs-size.txt"
+        mode: "0644"
+        content: "15872M\n"
 
     - name: Reset mock pct call log before semantic reduction
       ansible.builtin.copy:
@@ -362,7 +390,9 @@
           - proxmox_lxc_host_config_result.components.wireguard.changed
           - proxmox_lxc_host_config_result.components.sysctls.changed
           - proxmox_lxc_host_config_result.components.features.changed
+          - proxmox_lxc_host_config_result.components.rootfs.changed
           - "'set 4201 --delete features' in (_pct_calls_reduced.content | b64decode)"
+          - "'resize 4201 rootfs 16G' in (_pct_calls_reduced.content | b64decode)"
           - "'status 4201' in (_pct_calls_reduced.content | b64decode)"
           - "'reboot 4201' in (_pct_calls_reduced.content | b64decode)"
           # Delayed readiness: the seam retried until the guest command succeeded,
@@ -396,7 +426,9 @@
           - not proxmox_lxc_host_config_result.overall_changed
           - not proxmox_lxc_host_config_result.restart_required
           - not proxmox_lxc_host_config_result.restart_applied
+          - not proxmox_lxc_host_config_result.components.rootfs.changed
           - "'set 4201 --features' not in (_pct_calls_final.content | b64decode)"
+          - "'resize 4201' not in (_pct_calls_final.content | b64decode)"
           - "'status 4201' not in (_pct_calls_final.content | b64decode)"
           - "'reboot 4201' not in (_pct_calls_final.content | b64decode)"
           - "'exec 4201' not in (_pct_calls_final.content | b64decode)"

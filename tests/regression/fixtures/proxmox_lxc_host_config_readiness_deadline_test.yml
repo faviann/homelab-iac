@@ -33,6 +33,7 @@
         wireguard_kernel_module_access: false
         lxc_custom_sysctls: []
         lxc_disable_apparmor: false
+        rootfs_size_gb: 16
   tasks:
     - name: Create temp Proxmox config root
       ansible.builtin.file:
@@ -62,6 +63,7 @@
           case "$1" in
             config)
               echo "arch: amd64"
+              echo "rootfs: local-lvm:vm-4204-disk-0,size=16G"
               ;;
             status)
               echo "status: running"
