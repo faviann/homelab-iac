@@ -21,13 +21,11 @@ MAX_REDIRECTS = 15
 TIMEOUT_SECONDS = 15
 SIGN_IN_FLOW = "default-authentication-flow"
 SIGNED_IN = "xak-flow-redirect"
-# The live identification stage embeds the password field; a stage without it ignores the password.
+# Authentik reads the password here only when the identification stage embeds a password stage.
 SIGN_IN_ANSWERS = {
     "ak-stage-identification": lambda username, password: {"uid_field": username, "password": password},
     "ak-stage-password": lambda username, password: {"password": password},
 }
-# Short cookie values are flags such as a language, not credentials. Scrubbing
-# them would rewrite ordinary text in the line.
 MIN_SECRET_LENGTH = 8
 SIGN_IN_PATHS = ("/flows/", "/if/flow/")
 
@@ -98,8 +96,11 @@ def challenge(opener: request.OpenerDirector, url: str, answer: dict | None = No
     return json.loads(body)
 
 
-def sign_in(opener: request.OpenerDirector, auth_url: str, username: str, password: str) -> str | None:
-    """Return None once signed in, else why the flow stopped."""
+class SignInStopped(Exception):
+    pass
+
+
+def sign_in(opener: request.OpenerDirector, auth_url: str, username: str, password: str) -> None:
     executor = f"{auth_url}/api/v3/flows/executor/{SIGN_IN_FLOW}/?query="
     answered: set[str] = set()
     current = challenge(opener, executor)
@@ -108,10 +109,9 @@ def sign_in(opener: request.OpenerDirector, auth_url: str, username: str, passwo
         answer = SIGN_IN_ANSWERS.get(component)
         if answer is None or component in answered:
             errors = current.get("response_errors")
-            return f"sign-in stopped at {component}" + (f" {json.dumps(errors)}" if errors else "")
+            raise SignInStopped(f"sign-in stopped at {component}" + (f" {json.dumps(errors)}" if errors else ""))
         answered.add(component)
         current = challenge(opener, executor, {"component": component, **answer(username, password)})
-    return None
 
 
 def walk(opener: request.OpenerDirector, url: str) -> Outcome:
@@ -161,8 +161,11 @@ def main(argv: list[str] | None = None) -> int:
     jar = CookieJar()
     opener = request.build_opener(request.HTTPCookieProcessor(jar), _NoRedirects())
 
+    failure = None
     try:
-        failure = sign_in(opener, args.auth_url, args.username, password)
+        sign_in(opener, args.auth_url, args.username, password)
+    except SignInStopped as exc:
+        failure = str(exc)
     except (OSError, http.client.HTTPException, ValueError) as exc:
         failure = f"sign-in failed: {exc}"
     if failure is None:

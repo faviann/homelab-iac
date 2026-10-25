@@ -1,5 +1,3 @@
-"""Report lines the journey walker prints, which the verify skill reads as evidence."""
-
 from pathlib import Path
 import sys
 
