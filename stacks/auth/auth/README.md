@@ -67,6 +67,7 @@ Application bindings follow this order convention:
 | `0` | Per-app group, only when one exists. |
 | `1` | Domain bundle group such as `media`, `reading`, or `storage`. |
 | `2` | `admins`, always present on gated repo-managed apps. |
+| `3` | The `verify-agent` service account, only on apps opted in to signed-in journeys ([docs/stacks-authentik.md](../../../docs/stacks-authentik.md#access-groups)). |
 
 Applications use `policy_engine_mode: any`, so any matching binding grants
 access. Stale order-0 `always-allow` bindings are removed with absent

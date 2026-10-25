@@ -55,9 +55,25 @@ convention:
 | `0` | Per-app group, only when one exists. |
 | `1` | Domain bundle group. |
 | `2` | `admins`. |
+| `3` | The `verify-agent` user, only on applications opted in to signed-in journeys. |
 
 Keep `policy_engine_mode: any` on gated applications so any matching group
 grants access.
+
+`verify-agent` is the service account the [verify skill](../.agents/skills/verify/SKILL.md)
+signs in as for `./inspect.sh journey`. It belongs to no group, so it reaches
+exactly the applications that bind it at order 3:
+
+- A native OIDC app opts in with `verify_agent: true` in the manifest. The
+  generator emits the order-3 binding, and an absent order-3 binding for every
+  app without the line, so removing the line removes the access.
+- A forward-auth tier opts in with an order-3 user binding on the tier's
+  application in `40-applications.yaml`. That admits `verify-agent` to every
+  host on the tier. Only `media-wildcard` has it. The admin tier stays closed,
+  because its hosts are write-capable admin UIs.
+
+Either change reaches Authentik with an auth deploy:
+`./run.sh --limit auth --stack auth`.
 
 ## Native OIDC Pattern
 

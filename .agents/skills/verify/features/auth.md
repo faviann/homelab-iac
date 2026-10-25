@@ -13,10 +13,11 @@ Authentik at `https://auth.faviann.com` is the single sign-on every protected se
 - Open `https://auth.faviann.com/` in a browser.
 - Open any protected route, for example `https://homepage.admin.faviann.com/`, while signed out.
 
-## Driving it with inspect.sh probe
+## Driving it with inspect.sh
 
 Preconditions:
 
+- Runs as anonymous.
 - Doctor passed for `portal,auth`.
 - `auth.faviann.com` resolves (`getent ahostsv4 auth.faviann.com`). On the LAN it resolves to the edge, `10.1.0.2`.
 
@@ -30,4 +31,4 @@ Preconditions:
 - Two Traefik routers match `auth.faviann.com`: the Docker-label route from `stacks/auth/auth/compose.override.yaml.j2` and the file router `authentik` in `stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml`. The file router has priority 1000 and serves the name, so debug routing there first.
 - `ready` returns `503` while Authentik is starting or its database is down. `live` can pass at the same time. Report `ready`, not `live`, as the backend proof.
 - The probe strips the redirect's query. The authorize URL's `state` and `client_id` never reach the evidence. Do not re-fetch them with another client.
-- Completing a sign-in needs a person's credentials. A `302` to the flow proves the login page is served, not that sign-in works.
+- A `302` to the flow proves the login page is served, not that sign-in works. Every signed-in journey signs in before its first URL, so [Homepage media](./homepage-media.md) or [RomM](./romm.md) proves sign-in.

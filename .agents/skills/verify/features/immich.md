@@ -14,10 +14,11 @@ Immich at `https://immich.public.faviann.com` hosts the photo library. An anonym
 - Open `https://immich.public.faviann.com/` in a browser.
 - The Immich mobile app connects to `https://immich.public.faviann.com` and pings the API before sign-in.
 
-## Driving it with inspect.sh probe
+## Driving it with inspect.sh
 
 Preconditions:
 
+- Runs as anonymous.
 - Doctor passed for `portal,public`.
 - The repo pin is `IMMICH_VERSION` in `stacks/public/immich/.env.j2` (`rg -n IMMICH_VERSION stacks/public/immich/.env.j2`).
 
