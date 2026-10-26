@@ -50,7 +50,7 @@ services:
       homepage.description: ROM manager
 
   romm-db:
-    image: mariadb:11.4
+    image: mariadb:11.4@sha256:250e1609e93c0e6aecf64bfbab2d84d5e89d2481540fe77447ff6c855c3b1873
     container_name: romm-db
     restart: unless-stopped
     stop_grace_period: 90s
