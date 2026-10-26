@@ -110,7 +110,7 @@ _Avoid_: Idle gate
 ### Control nodes and trust
 
 **Control node**:
-A managed LXC that holds the fleet key and the vault passphrase and runs live operations against the Proxmox host and the rest of the fleet. There are two, the workstation and the bootstrap node, and a lifecycle run skips the control node it runs on unless told to include it.
+A machine that holds the fleet key and the vault passphrase and runs live operations against the Proxmox host and the fleet. Two are managed LXCs, the workstation and the bootstrap node. The operator's other machines, such as a laptop, can be control nodes too. A lifecycle run skips the control node it runs on unless told to include it.
 _Avoid_: Controller, Ansible controller, controller machine
 
 **Workstation**:
@@ -126,7 +126,7 @@ An operation that reaches managed hosts or the Proxmox API with real credentials
 _Avoid_: Live workflow, deployment, online mode
 
 **Fleet key**:
-The one SSH key pair, shared by both control nodes and every worktree on them, that every managed host trusts. A person restores it from backup or creates it; a run only verifies it.
+The one SSH key pair, shared by every control node and every worktree on them, that every managed host trusts. A person restores it from backup or creates it; a run only verifies it.
 _Avoid_: Controller SSH identity, controller identity, controller key, worktree SSH key
 
 **Enrollment**:
