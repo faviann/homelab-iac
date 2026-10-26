@@ -814,15 +814,37 @@ def test_workstation_fresh_bootstrap_authenticates_git_before_cloning() -> None:
         assert bootstrapped.returncode == 0, bootstrapped.stderr
 
         commands = (root / "commands.log").read_text(encoding="utf-8").splitlines()
-        clone = commands.index("chezmoi init --apply https://github.com/faviann/dotfiles.git")
+        clone = commands.index("chezmoi init https://github.com/faviann/dotfiles.git")
         token_read = commands.index("bw get notes dotfiles/github-cli-token")
         assert token_read < clone, "the clone must be credentialed from the vault"
+        assert "chezmoi apply" in commands[clone + 1 :]
+        assert not any("--apply" in line for line in commands if line.startswith("chezmoi "))
         assert not any(
             line.startswith("gh ") for line in commands[:clone]
         ), "the clone must not depend on gh, which the dotfiles themselves install"
         # gh still gets authenticated once Home Manager has installed it.
         assert "gh auth login --hostname github.com --with-token" in commands
         assert "gh auth setup-git --hostname github.com" in commands
+
+
+def test_workstation_existing_source_regenerates_config_before_applying() -> None:
+    with tempfile.TemporaryDirectory(prefix="workstation-existing-source-") as temp_root:
+        result = _render_setup_artifacts(Path(temp_root))
+        assert result.returncode == 0, result.stdout
+
+        root = Path(temp_root)
+        home, env = _prepare_completed_workstation(root)
+        (home / ".local" / "state" / "workstation-setup" / "complete").unlink()
+        (root / "gh-auth-state").write_text("unauthenticated", encoding="utf-8")
+        _write_executable(home / ".local" / "bin" / "workstation-update", "#!/bin/sh\nexit 0\n")
+        env = env | {"GH_AVAILABLE_FLAG": str(root / "gh-available")}
+
+        refreshed = _run_setup(root, env)
+        assert refreshed.returncode == 0, refreshed.stderr
+
+        commands = (root / "commands.log").read_text(encoding="utf-8").splitlines()
+        chezmoi = [line for line in commands if line.startswith("chezmoi ")]
+        assert chezmoi == ["chezmoi update --apply=false", "chezmoi init", "chezmoi apply"]
 
 
 def test_workstation_first_login_setup_contract() -> None:
