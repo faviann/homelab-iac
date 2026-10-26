@@ -73,9 +73,10 @@ other people at `/review/settings/members`.
 **API key.** An administrator issues a key at `/review/settings/api-keys`, with
 `artifact:create`, `artifact:publish:any`, `artifact:read`,
 `content-session:issue`, `comment:write`, and `artifact:manage:any`. The CLI
-needs `artifact:publish:any` to publish a new version and `artifact:manage:any`
-to change visibility. Both reach every artifact on the server. Leave out
-`agent:connect`, which only the live-notes mailbox uses. On the workstation the
+needs `artifact:publish:any` to publish a new version, and
+`artifact_set_visibility` needs `artifact:manage:any`. Both scopes reach every
+artifact on the server. Leave out `agent:connect`, which only the live-notes
+mailbox uses. On the workstation the
 key lives in `~/.agents/artifact-server/api-key` with mode `0600`. `~/.agents` is a
 persisted home path, so the key survives a workstation rebuild. MCP clients use the same
 key as a bearer token on `https://artifact-server.public.faviann.com/mcp`.
