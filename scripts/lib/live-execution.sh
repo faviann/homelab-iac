@@ -181,13 +181,9 @@ run_live_playbook() {
     export "$LIVE_EXECUTION_WRAPPER_MARKER=1"
     cd "$LIVE_EXECUTION_PROJECT_ROOT"
 
-    # Each control node takes its own lock, then reads the other, so one of two
-    # overlapping runs backs off (ADR-0022). Only the workstation reads: on the
-    # bootstrap node, this would find its own deploy's lock. An unreadable
-    # bootstrap node must not block the run that repairs it. ssh runs without
-    # the lock's fd, so nothing it leaves behind keeps the lock.
+    # ssh runs without the lock's fd, so nothing it leaves behind keeps the lock.
     local status=0
-    if [[ "$lock_class" == exclusive && "$(hostname)" == workstation ]]; then
+    if [[ "$lock_class" == exclusive && "$(hostname)" != bootstrap ]]; then
         local peer_reason peer_status=0
         peer_reason=$(timeout -k 5 30 ssh -l root -i "$HOME/.ansible/ssh/proxmox_lxc" \
             -o IdentitiesOnly=yes -o AddressFamily=inet -o StrictHostKeyChecking=yes \
