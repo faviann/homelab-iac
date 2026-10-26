@@ -71,9 +71,12 @@ other people at `/review/settings/members`.
 ## Agent workflow
 
 **API key.** An administrator issues a key at `/review/settings/api-keys`, with
-`artifact:create`, `artifact:read`, `content-session:issue`, `comment:write`,
-and `agent:connect`. On the workstation it lives in
-`~/.agents/artifact-server/api-key` with mode `0600`. `~/.agents` is a
+`artifact:create`, `artifact:publish:any`, `artifact:read`,
+`content-session:issue`, `comment:write`, and `artifact:manage:any`. The CLI
+needs `artifact:publish:any` to publish a new version and `artifact:manage:any`
+to change visibility. Both reach every artifact on the server. Leave out
+`agent:connect`, which only the live-notes mailbox uses. On the workstation the
+key lives in `~/.agents/artifact-server/api-key` with mode `0600`. `~/.agents` is a
 persisted home path, so the key survives a workstation rebuild. MCP clients use the same
 key as a bearer token on `https://artifact-server.public.faviann.com/mcp`.
 Upstream v0.1.2 cannot finish a publish with an OAuth MCP token.
@@ -91,22 +94,20 @@ node <extracted>/dist/cli/main.js publish ./dist \
 
 Publish a new version with `--artifact <id> --expected-version <version-id>`.
 
-**Render check.** After publishing, render the artifact in headless Chromium.
-The script prints JSON with the main response status, console errors, page
-errors, and failed requests, writes a full-page PNG, and exits 1 on any console
-or page error or a non-2xx response. With `--token-file`, a private artifact
-opens through a content session.
+**Render check.** After publishing, render the artifact in headless Chromium
+with [`render-check.sh`](https://github.com/faviann/agent-skills/blob/main/skills/publish-artifact/scripts/render-check.sh)
+from the `publish-artifact` skill. It prints JSON with the main response
+status, console errors, page errors, and failed requests, writes a full-page
+PNG, and exits 1 on any console or page error or a non-2xx response. Exit 2 or
+3 means the check did not run. A private artifact opens through a content
+session, with the server and key file from
+`~/.config/faviann-skills/artifact-server.json`, or from `--server` and
+`--token-file`.
 
 ```bash
-nix shell nixpkgs#chromium -c npx -y -p playwright@1.64.1 \
-  node scripts/artifact-render-check.mjs <artifact-id> \
-  --token-file ~/.agents/artifact-server/api-key --out /tmp/render.png
+~/.agents/skills/publish-artifact/scripts/render-check.sh <artifact-id> \
+  --out /tmp/render.png
 ```
-
-The workstation lacks the system libraries for Playwright's own browser, so the
-command takes Chromium from nixpkgs. It also has no fonts, so text is invisible
-in the screenshot unless `FONTCONFIG_FILE` points at a fontconfig file that lists
-a font directory. The JSON checks do not depend on fonts.
 
 **Comments.** Read them over MCP with `comment_list`, passing
 `dispatched: "include"`, because the default hides threads already sent to an
