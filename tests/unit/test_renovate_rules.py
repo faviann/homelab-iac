@@ -54,7 +54,7 @@ CASES = {
     ),
     "postgres digest": (
         "stacks/overmind/sub2api/compose.yaml", "docker.io/library/postgres", "digest",
-        {"automerge": False, "groupName": None},
+        {"automerge": True, "groupName": "stack images"},
     ),
 }
 
