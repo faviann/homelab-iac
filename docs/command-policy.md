@@ -352,9 +352,7 @@ Agent use of a documented raw command is a separate decision:
   content domain. It contacts no managed host directly.
 
   ```bash
-  nix shell nixpkgs#chromium -c npx -y -p playwright@1.64.1 \
-    node scripts/artifact-render-check.mjs <artifact-id> \
-    --token-file ~/.agents/artifact-server/api-key
+  ~/.agents/skills/publish-artifact/scripts/render-check.sh <artifact-id>
   ```
 
 - **Boundary:** it opens a content session and loads the artifact in a local
