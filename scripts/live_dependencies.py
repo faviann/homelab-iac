@@ -85,6 +85,7 @@ LIVE_OPERATIONS: dict[str, LiveOperation] = {
     "playbooks/lab-connectivity.yml": LiveOperation((), (), True),
     "playbooks/proxmox_api_check.yml": LiveOperation((), (), False),
     "playbooks/service-probe.yml": LiveOperation((), (), False),
+    "playbooks/service-journey.yml": LiveOperation((), (), False),
 }
 
 

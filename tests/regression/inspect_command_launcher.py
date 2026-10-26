@@ -56,7 +56,7 @@ def assert_explicit_operation_and_help() -> None:
 
     help_result = run_inspect("--help")
     help_output = f"{help_result.stdout}\n{help_result.stderr}"
-    operations = ("credentials", "connectivity", "containers", "plan", "vars", "probe")
+    operations = ("credentials", "connectivity", "containers", "plan", "vars", "probe", "journey")
     if help_result.returncode != 0 or not all(
         operation in help_output for operation in operations
     ):
@@ -425,6 +425,13 @@ def assert_operations_route_through_shared_live_execution() -> None:
             "localhost",
             ("-e", "probe_urls=https://a.example/health,https://b.example/?q=1"),
         ),
+        (
+            "journey",
+            ("https://a.example/start", "https://a.example/me"),
+            "playbooks/service-journey.yml",
+            "localhost",
+            ("-e", "probe_urls=https://a.example/start,https://a.example/me"),
+        ),
     )
     for operation, options, playbook, prerequisite_target, operation_arguments in cases:
         with tempfile.TemporaryDirectory(prefix=f"inspect-{operation}-") as temp_dir:
@@ -465,6 +472,10 @@ def assert_probe_rejects_invalid_urls_before_live_execution() -> None:
         ("probe", "http://a.example/"),
         ("probe", "https://a.example/,https://b.example/"),
         ("probe", "https://a.example/{{x}}"),
+        ("journey",),
+        ("journey", "http://a.example/"),
+        ("journey", "https://a.example/ https://b.example/"),
+        ("journey", "--limit", "auth", "https://a.example/"),
         ("connectivity", "https://a.example/"),
     ):
         with tempfile.TemporaryDirectory(prefix="inspect-probe-usage-") as temp_dir:

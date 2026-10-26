@@ -34,7 +34,7 @@ Six commands are the whole interface. `<command> --help` lists each one's operat
 | Command | Use |
 |---------|-----|
 | `./run.sh [provision\|configure] [--limit <targets>] [--stack <stack>] [--check]` | Deploy the LXC lifecycle, or dry-run it with `--check`. Low-level Ansible arguments go after `--` |
-| `./inspect.sh credentials\|connectivity\|containers\|plan\|probe <https-url>\|vars <host>` | Read-only checks. `probe` replaces curl for testing a routed service URL |
+| `./inspect.sh credentials\|connectivity\|containers\|plan\|probe <https-url>\|journey <https-url>\|vars <host>` | Read-only checks. `probe` replaces curl for testing a routed service URL, and `journey` does the same signed in as `verify-agent` |
 | `./validate.sh [lint\|lifecycle [--only <launcher.py>]\|tests [<target>...]]` | Non-live verification. Use `lifecycle` while iterating on LXC lifecycle code |
 | `./vault.sh check\|diff\|merge\|rotate --dry-run` | Vault operations agents may run. `merge` resolves a conflicted `inventory/vault.yml`. `set` and `unset` run only on explicit request. `configure`, `edit`, and `rotate` are human-only |
 | `./recover.sh` | Human-only. Enrolls the fleet key |

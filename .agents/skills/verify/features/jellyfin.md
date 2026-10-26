@@ -13,10 +13,11 @@ Jellyfin at `https://jellyfin.public.faviann.com` streams the media library. An 
 - Open `https://jellyfin.public.faviann.com/web/` in a browser.
 - Jellyfin apps on phones and TVs connect to `https://jellyfin.public.faviann.com` and read the same public server info first.
 
-## Driving it with inspect.sh probe
+## Driving it with inspect.sh
 
 Preconditions:
 
+- Runs as anonymous.
 - Doctor passed for `portal,jellyfin`.
 - The repo pin is the `image:` tag in `stacks/jellyfin/jellyfin/compose.yaml` (`rg -n "image:" stacks/jellyfin/jellyfin/compose.yaml`).
 

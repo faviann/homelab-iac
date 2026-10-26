@@ -25,6 +25,7 @@ of what the guards enforce.
 | `./inspect.sh` | `credentials`, `containers` | shared | yes |
 | | `connectivity [--limit <targets>]`, `plan [--limit <targets>]` | shared | yes |
 | | `probe <https-url>...` | shared | yes |
+| | `journey <https-url>...` | shared | yes |
 | | `vars <host>`, `vars --graph` | none | yes |
 | `./recover.sh` | `ssh-keys [--limit <targets>]` | exclusive | human-only |
 | | `proxmox-host-ssh` | exclusive | human-only |
@@ -376,6 +377,7 @@ Agent use of a documented raw command is a separate decision:
 | `ansible-playbook` on a repository playbook | the operation that runs it |
 | `ansible -m ping` | `./inspect.sh connectivity` |
 | a `curl` `GET` against a routed service URL | `./inspect.sh probe <https-url>` |
+| a signed-in `curl` or browser session against a routed service URL | `./inspect.sh journey <https-url>...`, signed in as `verify-agent` |
 | `ansible-inventory --host <host>` | `./inspect.sh vars <host>` |
 | `ansible-inventory --list` | none. The whole-inventory dump was removed; `./inspect.sh vars <host>` shows one host |
 | `ansible-inventory --graph` | `./inspect.sh vars --graph` |
@@ -423,6 +425,10 @@ These are known limits, not defects waiting for a fix.
   not detected.
 - A workstation run that cannot read the bootstrap node warns and proceeds,
   so it can run alongside a deploy in flight there.
+- `./inspect.sh journey` redacts only cookie values of 8 characters or more
+  from its lines, so a shorter cookie value can print. It mints its app
+  password with the Authentik bootstrap token from the vault, so it is exactly
+  as protected as the vault passphrase file on the control node.
 - A `workstation-deploy@` unit does not read the workstation, so it can run
   alongside `./run.sh --include-controller` there.
 - `./validate.sh` requires three host tools and installs none of them. The
