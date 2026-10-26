@@ -76,12 +76,15 @@ auto-merge would not wait for lint. A group PR merges only when every update in
 it qualifies. Minors stay PRs for a person, because upstreams ship breaking
 changes in minors, as Seerr did in 3.3.0 and 3.5.0. Renovate's own updates wait
 for a person, because a bad Renovate update stops the run that would fix it.
-Database images wait for a person on every update, digests included, because a
-floating tag such as `postgres:18` takes new versions as digest updates and a
-database release can need steps such as a reindex. Each database update opens
-its own PR, so the app beside it keeps merging. Every other update held for a
-tick, and every other vendor version pin, waits for a person. On 2026-10-18
-this paragraph replaced "Nothing merges automatically".
+Database images follow the same rules. A floating tag such as `postgres:18`
+takes minor releases as digest updates, and those merge too: a minor release
+keeps the on-disk format, and a reindex its notes call for repairs damage the
+old version already did. A tag such as `latest` would take majors the same way,
+so a database image names its major. Every other update held for a tick, and
+every other vendor version pin, waits for a person. On 2026-10-18 this
+paragraph replaced "Nothing merges automatically". On 2026-10-25 database
+digest updates and patches joined the automerge, replacing a hold on every
+database update that a person approved without seeing the version.
 
 **Undated majors.** Application majors open as PRs labelled `major` once the
 release is 14 days old, counted only when the registry reports a release date.
