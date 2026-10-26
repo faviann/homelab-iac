@@ -28,7 +28,7 @@ Host-owned:
 - Authentik 2025.10+ defaults `email_verified` to `false`, so RomM needs a scope mapping that returns `email_verified: True`.
 - `OIDC_SERVER_APPLICATION_URL` should use the Authentik application URL with its trailing slash intact.
 - A user's email in RomM must match the user's email in Authentik.
-- First-time OIDC users are created in RomM with viewer permissions.
+- First-time OIDC users are created in RomM in the default permission group, `Viewer`.
 - If the provider stays on Authentik's symmetric default signing mode, metadata may advertise `HS256` and the JWKS endpoint may return `{}`, which breaks RomM OIDC login.
 - The certificate/keypair referenced by `auth_romm_oidc_signing_certificate_name` must exist in Authentik.
 
