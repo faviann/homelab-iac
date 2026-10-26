@@ -55,7 +55,7 @@ commands that remain permitted.
 
 ## Overview
 
-This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for the nightly deploy of every other LXC, interrupting workstation changes, and recovery ([when both are down](docs/bootstrap-node.md#both-control-nodes-down)). Do not run Ansible from your dev machine.
+This repository provides Ansible playbooks and configuration to manage LXC containers on Proxmox VE using the Proxmox API. Two control nodes inside the fleet: the `workstation` LXC for every target, and the `bootstrap` LXC for the nightly deploy of every other LXC, interrupting workstation changes, and recovery ([when both are down](docs/bootstrap-node.md#both-control-nodes-down)). Another machine of yours, such as a laptop, can also act as a control node. [docs/bootstrap-node.md](docs/bootstrap-node.md) describes how it coordinates with the bootstrap node.
 
 ### Key Features
 

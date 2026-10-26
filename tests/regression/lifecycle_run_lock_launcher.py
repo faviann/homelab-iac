@@ -31,9 +31,11 @@ FIXTURE_COLLECTIONS = (
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
 CONTROL_NODE = "fixture-control-node"
-BOOTSTRAP_BUSY_COMMAND = yaml.safe_load(
+BOOTSTRAP_HOST_VARS = yaml.safe_load(
     (REPO_ROOT / "inventory/host_vars/bootstrap.yml").read_text(encoding="utf-8")
-)["lxc_busy_check_host_command"]
+)
+BOOTSTRAP_BUSY_COMMAND = BOOTSTRAP_HOST_VARS["lxc_busy_check_host_command"]
+BOOTSTRAP_HOSTNAME = BOOTSTRAP_HOST_VARS["proxmox_lxc_overrides"]["hostname"]
 PEER_DEFERRAL = (
     "Deferred by busy checks:\n"
     "bootstrap: busy (a deploy is in flight); this run not started\n"
@@ -714,7 +716,7 @@ def assert_bootstrap_deploy_defers_other_control_node_runs() -> None:
         ("workstation", "busy", ("--check",), 0, "", False),
         ("laptop-test", "busy", (), 3, PEER_DEFERRAL, True),
         ("laptop-test", "idle", (), 0, "", True),
-        ("bootstrap", "busy", (), 0, "", False),
+        (BOOTSTRAP_HOSTNAME, "busy", (), 0, "", False),
     )
     for hostname, peer, arguments, expected_status, expected_stderr, probed in cases:
         with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-peer-") as temp_dir:
