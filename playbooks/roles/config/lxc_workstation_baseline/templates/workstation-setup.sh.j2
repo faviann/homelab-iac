@@ -212,13 +212,16 @@ with_github_token() {
     "$@"
 }
 
+# chezmoi fixes `safe` at process start, so `init --apply` writes with the
+# config that predates `init`. Apply in a separate process.
 ensure_chezmoi() {
   if [ ! -d "$HOME/.local/share/chezmoi/.git" ]; then
-    with_github_token chezmoi init --apply "$DOTFILES_REPO_URL"
-    return
+    with_github_token chezmoi init "$DOTFILES_REPO_URL"
+  else
+    with_github_token chezmoi update --apply=false
+    chezmoi init
   fi
-
-  with_github_token chezmoi update
+  chezmoi apply
 }
 
 update_chezmoi_source_without_secrets() {

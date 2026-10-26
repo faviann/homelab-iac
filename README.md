@@ -145,8 +145,11 @@ On the `workstation` LXC, run `workstation-setup` first so Home Manager provides
    ```bash
    bw login                                  # first time only
    export BW_SESSION=$(bw unlock --raw)
-   chezmoi init --apply https://github.com/faviann/dotfiles.git
+   chezmoi init https://github.com/faviann/dotfiles.git
+   chezmoi apply
    ```
+
+   Run `init` and `apply` as separate commands. chezmoi fixes its `safe` setting at start, so a combined `init --apply` writes files with the old `safe` value.
 
    This writes `~/.ansible/vault-pass` before any command needs the vault.
 
