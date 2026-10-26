@@ -46,13 +46,11 @@ services:
       - TRAEFIK_DASHBOARD_CREDENTIALS="${TRAEFIK_DASHBOARD_CREDENTIALS}"
       - LOBU_CRAWLER_01_SESSION_VIEW_BASIC=${LOBU_CRAWLER_01_SESSION_VIEW_BASIC}
   redis:
-    image: bitnami/redis:latest
+    image: docker.io/library/redis:8.10.2-alpine
     container_name: redis
     restart: unless-stopped
     ports:
       - 6379:6379
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
