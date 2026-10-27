@@ -138,10 +138,7 @@ workstation_setup_bin_path: /usr/local/bin/workstation-setup
 # host_vars/workstation.yml names this path as the workstation's busy probe.
 workstation_busy_probe_path: /usr/local/sbin/workstation-busy-probe
 workstation_setup_profile_hook_path: /etc/profile.d/workstation-setup.sh
-workstation_update_agent_tools_source_path: >-
-  {{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_update-agent-tools
 workstation_update_agent_tools_bin_path: "{{ workstation_home }}/.local/bin/update-agent-tools"
-workstation_update_agent_tools_requires_bitwarden: false
 workstation_update_source_path: >-
   {{ workstation_home }}/.local/share/chezmoi/dot_local/bin/executable_workstation-update
 workstation_update_bin_path: "{{ workstation_home }}/.local/bin/workstation-update"
