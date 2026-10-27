@@ -78,7 +78,10 @@ client CA certificate inline. `collie.admin.faviann.com` keeps the
 LAN and WireGuard allowlist and stays the recovery path.
 
 The CA and the phone credentials live in `~/.ansible/collie-ca/` on the
-workstation. Never commit them. Only `ca.crt` goes into `tls.yaml`.
+workstation. Never commit them. Only `ca.crt` goes into `tls.yaml`. The
+Bitwarden item `dotfiles/collie-ca` is the source of truth for the CA: chezmoi
+renders `ca.key` from its Notes and `ca.crt` from its `certificate` field. The
+`phone.*` files and `ca.srl` stay local and can be regenerated.
 
 ### Reissue the phone certificate
 
@@ -142,10 +145,14 @@ Rotation also revokes every issued certificate. There is no other revocation.
      -addext "keyUsage=critical,keyCertSign,cRLSign" -out ca.crt
    ```
 
-2. Replace the PEM block under `mtls.clientAuth.caFiles` in `conf.d/tls.yaml`
+2. Put the new `ca.key` in the Notes of the `dotfiles/collie-ca` item and the
+   new `ca.crt` in its `certificate` field, then run `bw sync`. Do this before
+   the next `workstation-update`, or its apply restores the old CA and the new
+   key is lost.
+3. Replace the PEM block under `mtls.clientAuth.caFiles` in `conf.d/tls.yaml`
    with the new `ca.crt`.
-3. Deploy with `./run.sh --limit portal --stack traefik3`.
-4. Reissue the phone certificate.
+4. Deploy with `./run.sh --limit portal --stack traefik3`.
+5. Reissue the phone certificate.
 
 ## Deploy
 
