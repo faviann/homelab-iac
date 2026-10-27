@@ -31,7 +31,6 @@ DURABLE_HOME_LINKS = (
     ("codex", "bind_mount", ".codex", "0700", None),
     ("agents", "bind_mount", ".agents", "0700", None),
     ("pi", "bind_mount", ".pi", "0700", None),
-    ("omp", "bind_mount", ".omp", "0700", None),
     ("opencode_config", "bind_mount", ".config/opencode", "0700", None),
     ("opencode_data", "bind_mount", ".local/share/opencode", "0700", None),
     ("opencode_state", "bind_mount", ".local/state/opencode", "0700", None),
