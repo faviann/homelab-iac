@@ -217,6 +217,7 @@ update_chezmoi_source_without_secrets() {
 install_setup_dotfiles_without_secrets() {
   npmrc_source="$HOME/.local/share/chezmoi/dot_npmrc"
 
+  install -d "$(dirname "$UPDATE_AGENT_TOOLS_BIN")"
   chezmoi apply --force "$UPDATE_AGENT_TOOLS_BIN"
 
   if [ -f "$WORKSTATION_UPDATE_SOURCE" ]; then
