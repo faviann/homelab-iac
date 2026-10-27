@@ -293,7 +293,7 @@ authenticate_gh() {
 
 validate_local_tool_readiness() {
   local tool index failed_tool=""
-  local -a managed_tools=(codex claude pi opencode omp)
+  local -a managed_tools=(codex claude pi opencode)
   local -a version_tools=("${managed_tools[@]}" openclaw) probe_pids=()
 
   nix --version >/dev/null || fail "nix missing or not working"
