@@ -117,11 +117,6 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/.pi"
       register: pi_state_dir_stat
 
-    - name: Stat OMP persistent home directory
-      ansible.builtin.stat:
-        path: "{{ temp_root }}/ephemeral/workstation/home/.omp"
-      register: omp_state_dir_stat
-
     - name: Stat OpenCode config persistent home directory
       ansible.builtin.stat:
         path: "{{ temp_root }}/ephemeral/workstation/home/.config/opencode"
@@ -186,11 +181,6 @@
       ansible.builtin.stat:
         path: "{{ workstation_home }}/.pi"
       register: pi_home_path_stat
-
-    - name: Stat OMP home path
-      ansible.builtin.stat:
-        path: "{{ workstation_home }}/.omp"
-      register: omp_home_path_stat
 
     - name: Stat OpenCode config home path
       ansible.builtin.stat:
@@ -264,10 +254,6 @@
           - pi_state_dir_stat.stat.uid == workstation_uid
           - pi_state_dir_stat.stat.gid == workstation_gid
           - pi_state_dir_stat.stat.mode == "0700"
-          - omp_state_dir_stat.stat.isdir
-          - omp_state_dir_stat.stat.uid == workstation_uid
-          - omp_state_dir_stat.stat.gid == workstation_gid
-          - omp_state_dir_stat.stat.mode == "0700"
           - opencode_config_dir_stat.stat.isdir
           - opencode_config_dir_stat.stat.uid == workstation_uid
           - opencode_config_dir_stat.stat.gid == workstation_gid
@@ -312,8 +298,6 @@
           - not (agents_home_path_stat.stat.islnk | default(false))
           - pi_home_path_stat.stat.isdir
           - not (pi_home_path_stat.stat.islnk | default(false))
-          - omp_home_path_stat.stat.isdir
-          - not (omp_home_path_stat.stat.islnk | default(false))
           - opencode_config_home_path_stat.stat.isdir
           - not (opencode_config_home_path_stat.stat.islnk | default(false))
           - opencode_data_home_path_stat.stat.isdir

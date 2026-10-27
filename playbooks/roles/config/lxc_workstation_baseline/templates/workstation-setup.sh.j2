@@ -10,9 +10,7 @@ GITHUB_CLI_TOKEN_ITEM="{{ workstation_github_cli_token_item }}"
 HOME_MANAGER_FLAKE_REF="{{ workstation_home_manager_flake_ref }}"
 WORKSTATION_HOME="{{ workstation_home }}"
 BW_BIN="{{ bitwarden_cli_bin_path }}"
-UPDATE_AGENT_TOOLS_SOURCE="{{ workstation_update_agent_tools_source_path }}"
 UPDATE_AGENT_TOOLS_BIN="{{ workstation_update_agent_tools_bin_path }}"
-UPDATE_AGENT_TOOLS_REQUIRES_BITWARDEN="{{ workstation_update_agent_tools_requires_bitwarden | bool | lower }}"
 WORKSTATION_UPDATE_SOURCE="{{ workstation_update_source_path }}"
 WORKSTATION_UPDATE_BIN="{{ workstation_update_bin_path }}"
 WORKSTATION_UPDATE_REQUIRES_BITWARDEN="{{ workstation_update_requires_bitwarden | bool | lower }}"
@@ -150,22 +148,9 @@ required_managed_commands_ready() {
 }
 
 secret_backed_managed_command_repair_required() {
-  local destination_path remainder requires_bitwarden source_path specification
-
-  for specification in \
-    "$UPDATE_AGENT_TOOLS_SOURCE|$UPDATE_AGENT_TOOLS_BIN|$UPDATE_AGENT_TOOLS_REQUIRES_BITWARDEN" \
-    "$WORKSTATION_UPDATE_SOURCE|$WORKSTATION_UPDATE_BIN|$WORKSTATION_UPDATE_REQUIRES_BITWARDEN"; do
-    source_path="${specification%%|*}"
-    remainder="${specification#*|}"
-    destination_path="${remainder%%|*}"
-    requires_bitwarden="${remainder#*|}"
-    if [ "$requires_bitwarden" = "true" ] \
-      && [ ! -x "$destination_path" ] \
-      && [ -f "$source_path.tmpl" ]; then
-      return 0
-    fi
-  done
-  return 1
+  [ "$WORKSTATION_UPDATE_REQUIRES_BITWARDEN" = "true" ] \
+    && [ ! -x "$WORKSTATION_UPDATE_BIN" ] \
+    && [ -f "$WORKSTATION_UPDATE_SOURCE.tmpl" ]
 }
 
 ensure_bitwarden_unlocked() {
@@ -232,9 +217,8 @@ update_chezmoi_source_without_secrets() {
 install_setup_dotfiles_without_secrets() {
   npmrc_source="$HOME/.local/share/chezmoi/dot_npmrc"
 
-  if [ -f "$UPDATE_AGENT_TOOLS_SOURCE" ]; then
-    install -D -m 0755 "$UPDATE_AGENT_TOOLS_SOURCE" "$UPDATE_AGENT_TOOLS_BIN"
-  fi
+  install -d "$(dirname "$UPDATE_AGENT_TOOLS_BIN")"
+  chezmoi apply --force "$UPDATE_AGENT_TOOLS_BIN"
 
   if [ -f "$WORKSTATION_UPDATE_SOURCE" ]; then
     install -D -m 0755 "$WORKSTATION_UPDATE_SOURCE" "$WORKSTATION_UPDATE_BIN"
@@ -293,7 +277,7 @@ authenticate_gh() {
 
 validate_local_tool_readiness() {
   local tool index failed_tool=""
-  local -a managed_tools=(codex claude pi opencode omp)
+  local -a managed_tools=(codex claude pi opencode)
   local -a version_tools=("${managed_tools[@]}" openclaw) probe_pids=()
 
   nix --version >/dev/null || fail "nix missing or not working"

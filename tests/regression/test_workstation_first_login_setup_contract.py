@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ANSIBLE_PLAYBOOK = ansible_playbook_command()
 # The agent tools a healthy workstation must run, each of which production
 # requires to resolve from the managed bin directory.
-AGENT_TOOLS = ("codex", "claude", "pi", "opencode", "omp")
+AGENT_TOOLS = ("codex", "claude", "pi", "opencode")
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -153,6 +153,14 @@ case "$name:$1" in
     }
     printf '%s\n' "$4" > "$ACTIVE_GENERATION"
     ;;
+  chezmoi:apply)
+    for target in "$@"; do
+      case "$target" in
+        apply|-*) ;;
+        *) printf '#!/bin/sh\nexit 0\n' > "$target"; chmod 755 "$target" ;;
+      esac
+    done
+    ;;
   home-manager:switch)
     cp "$BUILT_GENERATION" "$ACTIVE_GENERATION"
     if [ -n "${GH_AVAILABLE_FLAG:-}" ]; then : > "$GH_AVAILABLE_FLAG"; fi
@@ -177,7 +185,6 @@ exit 0
         "nix-env",
         "node",
         "npm",
-        "omp",
         "openclaw",
         "opencode",
         "pi",
@@ -866,15 +873,6 @@ def test_workstation_first_login_setup_contract() -> None:
             / "executable_workstation-update"
         )
         update_agent_tools = home / ".local" / "bin" / "update-agent-tools"
-        update_agent_tools_source = (
-            home
-            / ".local"
-            / "share"
-            / "chezmoi"
-            / "dot_local"
-            / "bin"
-            / "executable_update-agent-tools"
-        )
 
         marker = home / ".local" / "state" / "workstation-setup" / "complete"
         marker_contents = marker.read_text(encoding="utf-8")
@@ -920,13 +918,26 @@ def test_workstation_first_login_setup_contract() -> None:
         assert "home-manager switch" not in healthy_commands
         assert "bw unlock --raw" not in healthy_commands
 
-        update_agent_tools.unlink()
-        _write_executable(update_agent_tools_source, "#!/bin/sh\nexit 0\n")
-        repaired_agent_tools = _run_setup(root, env)
-        assert repaired_agent_tools.returncode == 0, repaired_agent_tools.stderr
-        assert update_agent_tools.is_file() and os.access(update_agent_tools, os.X_OK)
-        assert "workstation-setup: environment healthy." not in repaired_agent_tools.stdout
-        assert "workstation-setup: environment repaired and ready." in repaired_agent_tools.stdout
+        for updater_source_name in (
+            "executable_update-agent-tools",
+            "executable_update-agent-tools.tmpl",
+        ):
+            updater_source = workstation_update_source.with_name(updater_source_name)
+            _write_executable(updater_source, "#!/bin/sh\nexit 0\n")
+            update_agent_tools.unlink()
+            (root / "commands.log").write_text("", encoding="utf-8")
+            repaired_agent_tools = _run_setup(root, env)
+            assert repaired_agent_tools.returncode == 0, repaired_agent_tools.stderr
+            assert repaired_agent_tools.stdout == (
+                "workstation-setup: environment repaired and ready.\n"
+            )
+            assert update_agent_tools.is_file() and os.access(update_agent_tools, os.X_OK)
+            updater_commands = (root / "commands.log").read_text(encoding="utf-8").splitlines()
+            assert [line for line in updater_commands if line.startswith("chezmoi ")] == [
+                f"chezmoi apply --force {update_agent_tools}"
+            ]
+            assert not any(line.startswith("bw ") for line in updater_commands)
+            updater_source.unlink()
 
         workstation_update.unlink()
         workstation_update_source.unlink()

@@ -14,7 +14,7 @@ with mode `0600`, because an empty file is invalid JSON. Modes and ownership are
 reconciled on both the backing target and mount point, preserving existing file
 contents and modification times.
 
-`~/.pi` remains the Pi harness state root. OMP is a separate harness with separate state under `~/.omp`; neither path replaces or contains the other. OpenCode's three durable XDG roots preserve its configuration, authentication, and session state. Read this runbook before the first `./run.sh` that enables any newly declared path.
+`~/.pi` remains the Pi harness state root. OpenCode's three durable XDG roots preserve its configuration, authentication, and session state. Read this runbook before the first `./run.sh` that enables any newly declared path.
 
 ## The Fail-Closed Assert
 
@@ -185,25 +185,23 @@ mv ~/.moraine ~/.moraine.pre-persist
 Omit the copy and move when `~/.moraine` does not exist; the role creates the
 backing target and mount point during fresh convergence.
 
-Before enabling the OpenCode and OMP mappings, exit every OpenCode and OMP process so their state is not changing during the copy. Copy each existing durable root to the corresponding persistent target, preserving ownership, modes, ACLs, and xattrs:
+Before enabling the OpenCode mappings, exit every OpenCode process so its state is not changing during the copy. Copy each existing durable root to the corresponding persistent target, preserving ownership, modes, ACLs, and xattrs:
 
 ```bash
 mkdir -p /ephemeral/workstation/home/.config \
          /ephemeral/workstation/home/.local/share \
          /ephemeral/workstation/home/.local/state
 
-cp -a ~/.omp /ephemeral/workstation/home/.omp
 cp -a ~/.config/opencode /ephemeral/workstation/home/.config/opencode
 cp -a ~/.local/share/opencode /ephemeral/workstation/home/.local/share/opencode
 cp -a ~/.local/state/opencode /ephemeral/workstation/home/.local/state/opencode
 
-mv ~/.omp ~/.omp.pre-persist
 mv ~/.config/opencode ~/.config/opencode.pre-persist
 mv ~/.local/share/opencode ~/.local/share/opencode.pre-persist
 mv ~/.local/state/opencode ~/.local/state/opencode.pre-persist
 ```
 
-The block assumes all four sources exist. Omit both the `cp` and matching `mv` line for any source that is absent; the role creates its persistent target and mount point. Keep the `.pre-persist` copies until the deploy and post-rebuild validation succeed. Do not copy `~/.cache/opencode`: it is reconstructible cache data and deliberately remains ephemeral.
+The block assumes all three sources exist. Omit both the `cp` and matching `mv` line for any source that is absent; the role creates its persistent target and mount point. Keep the `.pre-persist` copies until the deploy and post-rebuild validation succeed. Do not copy `~/.cache/opencode`: it is reconstructible cache data and deliberately remains ephemeral.
 
 Stop both first. herdr keeps live Unix sockets in `~/.config/herdr` and rewrites `session.json` as panes change; Collie writes into `~/.local/state/collie`. Copying either directory while it is running captures a torn session snapshot, and a graceful stop is what makes herdr write its final one.
 
@@ -274,7 +272,7 @@ A run that includes its own control node never interrupts it: its [interrupting 
 Afterwards, confirm the mounts are actually live rather than trusting the play recap — an unmounted bind mount is an empty directory, not an error:
 
 ```bash
-findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
+findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
         ~/.config/lobu ~/.azure ~/.local/share/tailscale ~/.hermes ~/.openclaw ~/.config/herdr \
         ~/.local/state/collie ~/.tsk ~/repos ~/worktrees
@@ -283,6 +281,8 @@ findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.omp ~/.moraine \
 Every declared path must appear. A missing row is an unmounted bind mount, and the play recap will not have flagged it.
 
 Removing an entry from `workstation_persistent_home_links` does not unmount it. The role only manages the paths it lists, so the mount, its `/etc/fstab` line, and the data under `/ephemeral/workstation/home` stay. Retire a path by hand, as root, in this order: `umount` it, delete its fstab line, run `systemctl daemon-reload` so the generated mount unit is dropped, then delete or archive the data under `/ephemeral/workstation/home` and remove the empty mount point.
+
+Oh My Pi's `~/.omp` left the list without that procedure. The running workstation keeps the mount until its next rebuild, which does not mount it, and the data stays under `/ephemeral/workstation/home/.omp`.
 
 ## Restarting Afterwards
 
@@ -340,10 +340,10 @@ After rebuilding, compare the hash before starting Claude, then confirm onboardi
 is still complete and the same recent projects appear. Keep Claude stopped during
 the hash comparison, since startup can legitimately update the config.
 
-Also capture the file list for each OpenCode and OMP durable root and keep that output on the driving machine. After the rebuild, compare it with a fresh listing to prove that the separate OMP state and all three OpenCode roots returned:
+Also capture the file list for each OpenCode durable root and keep that output on the driving machine. After the rebuild, compare it with a fresh listing to prove that all three OpenCode roots returned:
 
 ```bash
-find ~/.omp ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
+find ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
   -type f -print | sort
 ```
 
@@ -436,8 +436,8 @@ Confirm:
 - Lobu passes its pre-start hash comparison and reconnects as the same registered device after dotfiles convergence (see [Lobu before-manifest](#lobu-before-manifest)).
 - `az account show --query user.name` returns the same account without a new `az login`.
 - `tailscale status` shows the same tailnet device without a new `tailscale up`.
-- The before/after OpenCode and OMP file lists match for `~/.omp` and all three durable OpenCode roots; `~/.pi` remains independently mounted.
-- `opencode --version` and `omp --version` succeed from the managed `~/.local/bin` command surface after `workstation-setup` completes.
+- The before/after OpenCode file lists match for all three durable OpenCode roots; `~/.pi` remains independently mounted.
+- `opencode --version` succeeds from the managed `~/.local/bin` command surface after `workstation-setup` completes.
 - herdr restores its session — `herdr-server.log` reports `session restore evaluated … workspaces=N`.
 - herdr lists the same registered plugins.
 - Collie starts with the same VAPID identity. An unchanged `.env` hash is the proof: had the identity been lost, Collie would have minted a new keypair and rewritten the file.
