@@ -20,24 +20,33 @@ at t3 and reads the workstation at t4. Both proceed only if each read found the
 other free, so t2 < t3 and t4 < t1. With t1 < t2 and t3 < t4, that gives
 t1 < t2 < t3 < t4 < t1, which cannot hold. At least one side always backs off.
 
+Any other control node, such as a laptop, takes the workstation's side: it
+takes its own lifecycle lock, then reads the bootstrap node. The nightly deploy
+reads only the workstation, so for a laptop only the first half holds. A laptop
+run backs off from a deploy in flight, but a deploy that starts during a laptop
+run does not see it.
+
 Both may back off in the same second. That costs one night and one retry, and
 it is safe. No lock is held across SSH, so ADR-0019's rejection of a shared
 lock stands.
 
 ## The two sides
 
-On the workstation, every exclusive live operation reads the bootstrap node
-after it takes the lifecycle lock and before it reconciles dependencies. That
-is every mutating `./run.sh` and every `./recover.sh`. It runs the bootstrap
+On every control node but the bootstrap node, every exclusive live operation
+reads the bootstrap node after it takes the lifecycle lock and before it
+reconciles dependencies. That is every mutating `./run.sh` and every
+`./recover.sh`. It runs the bootstrap
 node's own busy command over SSH with the fleet's trust options. Busy prints
 `bootstrap: busy (a deploy is in flight); this run not started` under the
 busy-check deferral header and exits `3`, and nothing else runs.
 `--interrupt-busy` does not skip the read. It consents to interrupting a busy
 target, never to two control nodes changing one LXC at once.
 
-The read runs only on the host named `workstation`. On the bootstrap node,
-`./run.sh` runs inside a deploy that holds the deploy lock, so the same read
-there would find that lock and refuse every deploy.
+The read runs on every host except the one named `bootstrap`. On the
+bootstrap node, `./run.sh` runs inside a deploy that holds the deploy lock, so
+the same read there would find that lock and refuse every deploy. The read
+first ran only on the host named `workstation`, so a run from a laptop never
+read the bootstrap node.
 
 On the bootstrap node, `homelab-deploy --when-workstation-idle` reads the
 workstation busy probe once it holds the deploy lock, before git touches the
@@ -46,7 +55,7 @@ checkout. Only the nightly unit passes the flag. Its deferral lines and exit
 
 ## Failing open on one side
 
-When the workstation cannot read the bootstrap node, the run prints
+When a control node cannot read the bootstrap node, the run prints
 `bootstrap: check failed (<reason>); this run proceeds` and continues. The
 workstation creates and repairs the bootstrap node with
 `./run.sh --limit bootstrap`, so failing closed would lock out that repair.
@@ -77,11 +86,13 @@ nodes hold their locks.
 
 ## Accepted costs
 
-- `scripts/lib/live-execution.sh` carries the `workstation` hostname and a copy
+- `scripts/lib/live-execution.sh` carries the `bootstrap` hostname and a copy
   of the bootstrap node's busy command. Tests pin that copy to the inventory,
   and the inventory's lock path to `homelab-deploy`.
-- Every mutating workstation run waits up to 10 seconds more while the
-  bootstrap node is down.
+- Every mutating run on a control node but the bootstrap node waits up to 10
+  seconds more while the bootstrap node is down.
+- Lifecycle locks are machine-local, so a laptop run and a workstation run do
+  not see each other and can configure the same LXC at once.
 - `./recover.sh` can now exit `3`.
 - A `workstation-deploy@` unit started during the nightly's read waits one
   second, then exits `75`.

@@ -40,7 +40,7 @@ Six commands are the whole interface. `<command> --help` lists each one's operat
 | `./recover.sh` | Human-only. Enrolls the fleet key |
 | `./setup.sh sync\|upgrade <package>...` | `sync` is optional, because every command reconciles its own environment. `upgrade` bumps named packages in `uv.lock` |
 
-A live operation that cannot take the machine-local lock exits 75 at once and never waits. Exit 3 means deferred, not failed. A run defers a stack whose busy check reports busy, and the workstation while any agent on it is mid-turn, including the agent that started the run. A mutating workstation run also exits 3 while a deploy is in flight on the bootstrap node.
+A live operation that cannot take the machine-local lock exits 75 at once and never waits. Exit 3 means deferred, not failed. A run defers a stack whose busy check reports busy, and the workstation while any agent on it is mid-turn, including the agent that started the run. A mutating run on any control node but the bootstrap node also exits 3 while a deploy is in flight on the bootstrap node.
 
 `./run.sh` against live hosts takes 5 to 10 minutes, less with `--limit` or `--stack`. Wait for it to finish instead of assuming a hang. Redirect live output to a log and read only the summary:
 

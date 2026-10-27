@@ -30,12 +30,12 @@ FIXTURE_COLLECTIONS = (
     REPO_ROOT
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
-# What the stub hostname prints. Not "workstation", the real machine's name:
-# the wrapper reads the bootstrap node there, and only the peer cases want that.
 CONTROL_NODE = "fixture-control-node"
-BOOTSTRAP_BUSY_COMMAND = yaml.safe_load(
+BOOTSTRAP_HOST_VARS = yaml.safe_load(
     (REPO_ROOT / "inventory/host_vars/bootstrap.yml").read_text(encoding="utf-8")
-)["lxc_busy_check_host_command"]
+)
+BOOTSTRAP_BUSY_COMMAND = BOOTSTRAP_HOST_VARS["lxc_busy_check_host_command"]
+BOOTSTRAP_HOSTNAME = BOOTSTRAP_HOST_VARS["proxmox_lxc_overrides"]["hostname"]
 PEER_DEFERRAL = (
     "Deferred by busy checks:\n"
     "bootstrap: busy (a deploy is in flight); this run not started\n"
@@ -145,7 +145,7 @@ def wrapper_environment(
     *,
     mode: str = "success",
     hostname: str = CONTROL_NODE,
-    peer: str | None = None,
+    peer: str = "idle",
 ) -> dict[str, str]:
     home = temp_root / "home"
     bin_dir = temp_root / "bin"
@@ -164,12 +164,11 @@ def wrapper_environment(
             "LIFECYCLE_TEST_MODE": mode,
         }
     )
-    if peer is not None:
-        fake_ssh = bin_dir / "ssh"
-        fake_ssh.write_text(FAKE_SSH, encoding="utf-8")
-        fake_ssh.chmod(0o755)
-        env["LIFECYCLE_TEST_PEER"] = peer
-        env["LIFECYCLE_TEST_SSH_ARGV"] = str(temp_root / "ssh-argv")
+    fake_ssh = bin_dir / "ssh"
+    fake_ssh.write_text(FAKE_SSH, encoding="utf-8")
+    fake_ssh.chmod(0o755)
+    env["LIFECYCLE_TEST_PEER"] = peer
+    env["LIFECYCLE_TEST_SSH_ARGV"] = str(temp_root / "ssh-argv")
     return env
 
 
@@ -705,7 +704,7 @@ def assert_busy_check_deferral_sets_exit_status() -> None:
                 )
 
 
-def assert_bootstrap_deploy_defers_workstation_runs() -> None:
+def assert_bootstrap_deploy_defers_other_control_node_runs() -> None:
     unreadable = (
         "bootstrap: check failed (exit 255: Host key verification failed.); "
         "this run proceeds\n"
@@ -715,7 +714,9 @@ def assert_bootstrap_deploy_defers_workstation_runs() -> None:
         ("workstation", "idle", (), 0, "", True),
         ("workstation", "unreadable", (), 0, unreadable, True),
         ("workstation", "busy", ("--check",), 0, "", False),
-        ("bootstrap", "busy", (), 0, "", False),
+        ("laptop-test", "busy", (), 3, PEER_DEFERRAL, True),
+        ("laptop-test", "idle", (), 0, "", True),
+        (BOOTSTRAP_HOSTNAME, "busy", (), 0, "", False),
     )
     for hostname, peer, arguments, expected_status, expected_stderr, probed in cases:
         with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-peer-") as temp_dir:
@@ -1274,7 +1275,7 @@ def main() -> int:
         assert_command_grammar_reports_help_and_usage_errors()
         assert_wrapper_routes_and_propagates()
         assert_busy_check_deferral_sets_exit_status()
-        assert_bootstrap_deploy_defers_workstation_runs()
+        assert_bootstrap_deploy_defers_other_control_node_runs()
         assert_contention_fails_fast()
         assert_lock_class_follows_operation_class()
         assert_contention_names_a_remaining_shared_holder()

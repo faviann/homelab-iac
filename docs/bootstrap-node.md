@@ -91,19 +91,23 @@ with the fleet's pinned host keys and a 30-second bound:
 A deferred night leaves the checkout untouched and exits `3`, with its line
 under the same `Deferred by busy checks:` header as a run's deferred stacks.
 
-The workstation reads this node in turn. Every mutating `./run.sh` and every
-`./recover.sh` there takes its lifecycle lock, then asks this node's busy
-command whether a deploy is in flight. While one is, the run prints
+Every other control node reads this node in turn: the workstation, and any
+other machine with the fleet key and the vault passphrase, such as a laptop.
+Every mutating `./run.sh` and every `./recover.sh` there takes its lifecycle
+lock, then asks this node's busy command whether a deploy is in flight. While
+one is, the run prints
 `bootstrap: busy (a deploy is in flight); this run not started` under the same
 header and exits `3` before anything runs. `--interrupt-busy` does not skip
-that read. When the workstation cannot read this node, the run prints
+that read. When a run cannot read this node, it prints
 `bootstrap: check failed (<reason>); this run proceeds` and continues, so the
 workstation can still repair this node. Each side takes its own lock before it
 reads the other, so of two overlapping runs that read each other, at least one
 backs off
 ([ADR-0022](adr/0022-take-the-local-lock-then-read-the-other-control-node.md)).
-A `workstation-deploy@` unit started while `./run.sh --include-controller` runs
-on the workstation is still not coordinated.
+The nightly deploy reads only the workstation, so it does not see a laptop run
+already in flight. A `workstation-deploy@` unit started while
+`./run.sh --include-controller` runs on the workstation is still not
+coordinated.
 
 Every night posts one Discord message, `nightly-deploy@main: <outcome>`, with
 the exit status and either the deferred hosts and stacks or the gate's line.

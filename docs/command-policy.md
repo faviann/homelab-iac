@@ -36,7 +36,7 @@ of what the guards enforce.
 `--stack <name>`, `--include-controller`, `--interrupt-busy`, and `-v`, `-vv`,
 or `-vvv`. `--interrupt-busy` skips every declared busy check, so busy stacks
 and their hosts are interrupted as if no check were declared. It does not skip
-the workstation's read of the bootstrap node (ADR-0022).
+the read of the bootstrap node (ADR-0022).
 `--include-controller` targets the host the run is on, and `./run.sh` rejects
 it together with `--interrupt-busy`, so a run with `--interrupt-busy` never
 targets its own control node. Every command answers `--help` with its
@@ -90,8 +90,9 @@ answer, so it does not make the run exit `3`; `./run.sh` notes it instead. A fai
 also deferred something. See
 [stacks/README.md](../stacks/README.md#busy-checks).
 
-On the workstation, every mutating `./run.sh` and every `./recover.sh` also
-exits `3`, before anything runs, while the bootstrap node deploys. It prints
+On every control node but the bootstrap node, every mutating `./run.sh` and
+every `./recover.sh` also exits `3`, before anything runs, while the bootstrap
+node deploys. It prints
 `bootstrap: busy (a deploy is in flight); this run not started` under the same
 header. When it cannot read the bootstrap node, it warns and proceeds. See
 [bootstrap-node.md](bootstrap-node.md#the-nightly-deploy).
@@ -140,7 +141,10 @@ The lock covers every worktree on one machine. Its path is under `$HOME`, so a
 run with a different home directory takes a different lock and is not
 coordinated. Between the two control nodes, each takes its own lock and then
 reads the other, so of two overlapping runs that read each other, at least one
-backs off (ADR-0022). ADR-0009 records the split.
+backs off (ADR-0022). Another control node, such as a laptop, reads the
+bootstrap node the same way, but its lock and the workstation's are on
+different machines, so a laptop run and a workstation run can configure the
+same LXC at once. ADR-0009 records the split.
 
 The lock gates whether a live run may start and is held for its duration.
 Inside one admitted lifecycle run, `playbooks/lifecycle-lxcs.yml` executes
@@ -421,8 +425,10 @@ These are known limits, not defects waiting for a fix.
   `localhost` or when it imports the Proxmox-host layer. A control-node-only
   playbook that delegates to the Proxmox host without importing that layer is
   not detected.
-- A workstation run that cannot read the bootstrap node warns and proceeds,
-  so it can run alongside a deploy in flight there.
+- A run that cannot read the bootstrap node warns and proceeds, so it can run
+  alongside a deploy in flight there.
+- The nightly deploy reads only the workstation, so it can start while a run
+  from another control node, such as a laptop, is in flight.
 - `./inspect.sh journey` redacts only cookie values of 8 characters or more
   from its lines, so a shorter cookie value can print. It mints its app
   password with the Authentik bootstrap token from the vault, so it is exactly
