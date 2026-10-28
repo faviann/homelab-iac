@@ -275,7 +275,7 @@ Afterwards, confirm the mounts are actually live rather than trusting the play r
 findmnt ~/.claude ~/.claude.json ~/.codex ~/.agents ~/.pi ~/.moraine \
         ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode \
         ~/.config/lobu ~/.azure ~/.local/share/tailscale ~/.hermes ~/.openclaw ~/.config/herdr \
-        ~/.local/state/collie ~/.tsk ~/repos ~/worktrees
+        ~/.local/state/collie ~/repos ~/worktrees
 ```
 
 Every declared path must appear. A missing row is an unmounted bind mount, and the play recap will not have flagged it.
