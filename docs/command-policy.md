@@ -28,7 +28,7 @@ of what the guards enforce.
 | | `journey <https-url>...` | shared | yes |
 | | `vars <host>`, `vars --graph` | none | yes |
 | `./recover.sh` | `ssh-keys [--limit <targets>]` | exclusive | human-only |
-| | `proxmox-host-ssh` | exclusive | human-only |
+| | `proxmox-host-ssh` | exclusive-local | human-only |
 | `./run.sh` | *(default)* `full`, `provision`, `configure` | exclusive | yes |
 | | any form with `--check` | shared | yes |
 
@@ -36,7 +36,7 @@ of what the guards enforce.
 `--stack <name>`, `--include-controller`, `--interrupt-busy`, and `-v`, `-vv`,
 or `-vvv`. `--interrupt-busy` skips every declared busy check, so busy stacks
 and their hosts are interrupted as if no check were declared. It does not skip
-the read of the bootstrap node (ADR-0022).
+the fleet lock (ADR-0024).
 `--include-controller` targets the host the run is on, and `./run.sh` rejects
 it together with `--interrupt-busy`, so a run with `--interrupt-busy` never
 targets its own control node. Every command answers `--help` with its
@@ -90,12 +90,12 @@ answer, so it does not make the run exit `3`; `./run.sh` notes it instead. A fai
 also deferred something. See
 [stacks/README.md](../stacks/README.md#busy-checks).
 
-On every control node but the bootstrap node, every mutating `./run.sh` and
-every `./recover.sh` also exits `3`, before anything runs, while the bootstrap
-node deploys. It prints
-`bootstrap: busy (a deploy is in flight); this run not started` under the same
-header. When it cannot read the bootstrap node, it warns and proceeds. See
-[bootstrap-node.md](bootstrap-node.md#the-nightly-deploy).
+An exclusive operation also exits `3`, before anything runs, while another
+exclusive operation on any control node holds the fleet lock. It prints
+`proxmox: busy (a lifecycle run from <holder> is in flight); this run not started`
+under the same header. When it cannot reach or trust the Proxmox host, it
+prints `proxmox: lock check failed (<reason>); this run not started` and exits
+`1`. See [The lock](#the-lock).
 
 Every other non-zero status is a failure, and its value depends on the
 command. Some operations pass the status of the tool they run through
@@ -138,13 +138,19 @@ and any pid and worktree it prints were left in the lock file by an earlier
 lock implementation.
 
 The lock covers every worktree on one machine. Its path is under `$HOME`, so a
-run with a different home directory takes a different lock and is not
-coordinated. Between the two control nodes, each takes its own lock and then
-reads the other, so of two overlapping runs that read each other, at least one
-backs off (ADR-0022). Another control node, such as a laptop, reads the
-bootstrap node the same way, but its lock and the workstation's are on
-different machines, so a laptop run and a workstation run can configure the
-same LXC at once. ADR-0009 records the split.
+run with a different home directory takes a different lock. ADR-0009 records
+the split.
+
+The `exclusive` class also takes the fleet lock, which coordinates every
+control node, the bootstrap node included. After it takes the machine-local
+lock, the operation holds `/run/homelab-lifecycle.lock` on the Proxmox host
+over an SSH session with the fleet key until `ansible-playbook` exits. The
+holder writes `<hostname> pid <pid> since <utc>` to
+`/run/homelab-lifecycle.holder` there. A signal to the wrapper alone, such as
+`kill -9 <pid>`, does not release the fleet lock while `ansible-playbook`
+runs. Ctrl-C reaches the SSH session too and releases it. The `exclusive-local` class takes
+only the machine-local lock, because `./recover.sh proxmox-host-ssh` enrolls
+the trust the fleet lock needs (ADR-0024).
 
 The lock gates whether a live run may start and is held for its duration.
 Inside one admitted lifecycle run, `playbooks/lifecycle-lxcs.yml` executes
@@ -245,13 +251,11 @@ Agent use of a documented raw command is a separate decision:
   `--interrupt-busy`, as written in
   [the nightly deploy](bootstrap-node.md#the-nightly-deploy).
   Reading a run's journal on the node is part of the same permission.
-- **Boundary:** mutating. The deploy lock on the node serializes deploys. They
-  run outside the workstation's machine-local lock. Once the nightly deploy
-  holds the deploy lock, it defers the night unless the workstation busy probe
-  reads idle. A mutating run an agent starts on the workstation while a deploy
-  is in flight exits `3` before anything runs (ADR-0022). A
-  `workstation-deploy@` unit started while `./run.sh --include-controller`
-  runs on the workstation is still not coordinated.
+- **Boundary:** mutating. The deploy lock on the node serializes deploys. Each
+  deploy's run holds the fleet lock, so a mutating run an agent starts on the
+  workstation while a deploy is in flight exits `3` before anything runs, and
+  a deploy started during a run from any control node defers the same way
+  (ADR-0024).
 - **Sensitive output:** the journal only, never secrets.
 - **Escalation:** a failed run goes to a person with the journal excerpt. Do
   not retry it.
@@ -264,10 +268,26 @@ Agent use of a documented raw command is a separate decision:
 - **Scope:** one container VMID, run on the Proxmox host through `pct exec`, as
   written in [ssh-key-management.md](ssh-key-management.md).
 - **Boundary:** mutating. It appends one public key to the container's
-  `/root/.ssh/authorized_keys`. It runs outside the machine-local lock, so
+  `/root/.ssh/authorized_keys`. It runs outside both lifecycle locks, so
   nothing serializes it against a lifecycle run.
 - **Sensitive output:** only the public key moves. Never paste a private key.
 - **Escalation:** when `./recover.sh ssh-keys` can run, use it instead.
+
+#### Breaking a stranded fleet lock
+
+- **Trigger:** every exclusive run reports
+  `proxmox: busy (a lifecycle run from <holder> is in flight)`, and the holder
+  named in `/run/homelab-lifecycle.holder` on the Proxmox host no longer runs.
+  For example, its control node lost power or was suspended.
+- **Audience:** human-only.
+- **Scope:** the Proxmox host. Run `fuser -k /run/homelab-lifecycle.lock`
+  there.
+- **Boundary:** mutating. It kills the process that holds the fleet lock, so
+  the next exclusive run can take it. If the holder still runs, its run
+  continues without the lock.
+- **Sensitive output:** none.
+- **Escalation:** without this step, the lock frees itself within about 7875
+  seconds of the holder vanishing (ADR-0024).
 
 #### Stack-rename remote mutation
 
@@ -425,16 +445,14 @@ These are known limits, not defects waiting for a fix.
   `localhost` or when it imports the Proxmox-host layer. A control-node-only
   playbook that delegates to the Proxmox host without importing that layer is
   not detected.
-- A run that cannot read the bootstrap node warns and proceeds, so it can run
-  alongside a deploy in flight there.
-- The nightly deploy reads only the workstation, so it can start while a run
-  from another control node, such as a laptop, is in flight.
+- A control node that vanishes without closing its SSH session, through a
+  power loss, a network drop, or a suspend, strands the fleet lock for up to
+  about 7875 seconds. A client suspended longer resumes its run without the
+  fleet lock (ADR-0024).
 - `./inspect.sh journey` redacts only cookie values of 8 characters or more
   from its lines, so a shorter cookie value can print. It mints its app
   password with the Authentik bootstrap token from the vault, so it is exactly
   as protected as the vault passphrase file on the control node.
-- A `workstation-deploy@` unit does not read the workstation, so it can run
-  alongside `./run.sh --include-controller` there.
 - `./validate.sh` requires three host tools and installs none of them. The
   `debian-13-standard` template the `workstation` guest uses ships the first two.
   - `/usr/sbin/sshd` (Debian package `openssh-server`). The Proxmox trust

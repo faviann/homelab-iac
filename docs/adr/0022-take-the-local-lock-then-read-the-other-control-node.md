@@ -1,5 +1,9 @@
 # Take the local lock, then read the other control node
 
+> Superseded by [ADR-0024](0024-hold-one-fleet-lock-on-the-proxmox-host.md):
+> every exclusive live operation now holds one lock on the Proxmox host, and
+> the reads below are gone.
+
 Each control node serialized only its own runs. The nightly deploy read the
 workstation busy probe before it took the deploy lock, and a workstation run
 never read the bootstrap node. So a workstation run started after 03:00 could

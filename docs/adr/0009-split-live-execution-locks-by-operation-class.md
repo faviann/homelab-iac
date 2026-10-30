@@ -4,4 +4,6 @@ Live operations take a machine-local lock according to their effect: mutating op
 
 This permits concurrent observations without allowing a read to overlap a mutation. A caller that cannot acquire its lock must fail immediately with status 75 and report the holding process and worktree. The lock deliberately does not coordinate different control nodes, has no waiting mode, and does not encode its class in the wrapper marker.
 
+[ADR-0024](0024-hold-one-fleet-lock-on-the-proxmox-host.md) amends the second paragraph: an exclusive operation now also holds one fleet lock on the Proxmox host, so exclusive runs on different control nodes exclude each other. Shared operations still coordinate only on their own machine.
+
 This decision amends ADR-0001's linear-execution model: linear execution continues to govern mutation, but it no longer serializes audited read-only live work with other readers.
