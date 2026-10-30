@@ -12,8 +12,11 @@ runs from the bootstrap node are no longer `--limit workstation` only, and its
 standing consent through the nightly timer now covers every LXC.
 
 [ADR-0022](0022-take-the-local-lock-then-read-the-other-control-node.md)
-amends this one: the gate now reads the workstation after the deploy lock, and
-the residual window below is closed.
+amended this one: the gate read the workstation after the deploy lock, and
+the residual window below was closed.
+[ADR-0024](0024-hold-one-fleet-lock-on-the-proxmox-host.md) then removed the
+gate. One lock on the Proxmox host now decides whether a control node may run,
+so the gate and the residual window below are history.
 
 ## Standing consent
 
@@ -72,6 +75,10 @@ closes it: each control node takes its own lock, then reads the other.
 - **A lock both control nodes share**: `flock` is safe because the kernel
   releases it when its holder dies, and that does not survive being held across
   SSH. A dead holder strands the lock (#174).
+  [ADR-0024](0024-hold-one-fleet-lock-on-the-proxmox-host.md) adopted one
+  anyway. A holder that dies, even from `kill -9`, closes its SSH connection,
+  and the lock is free within a second. Only a client that vanishes silently
+  strands it, for at most about 7875 seconds.
 - **Proceeding when SSH to the workstation fails**: a gate that cannot read the
   workstation would authorize exactly the run that could collide, and a broken
   gate, such as a changed host key after a rebuild, would go unnoticed.

@@ -11,6 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from ansible_test_helper import fake_proxmox_ssh
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECOVER = REPO_ROOT / "recover.sh"
@@ -47,14 +49,11 @@ def assert_explicit_operation_and_help() -> None:
         raise AssertionError("Proxmox host enrollment unexpectedly accepted --limit")
 
 
-def controlled_environment(temp_root: Path) -> dict[str, str]:
+def controlled_environment(temp_root: Path, proxmox: str = "free") -> dict[str, str]:
     home = temp_root / "home"
     bin_dir = temp_root / "bin"
     home.mkdir()
     bin_dir.mkdir()
-    idle_bootstrap_ssh = bin_dir / "ssh"
-    idle_bootstrap_ssh.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    idle_bootstrap_ssh.chmod(0o755)
     fake_uv = bin_dir / "uv"
     fake_uv.write_text(
         """#!/usr/bin/env python3
@@ -81,12 +80,17 @@ Path(os.environ["RECOVER_TEST_CAPTURE"]).write_text(json.dumps({
             "HOME": str(home),
             "PATH": f"{bin_dir}:{env['PATH']}",
             "RECOVER_TEST_CAPTURE": str(temp_root / "capture.json"),
+            **fake_proxmox_ssh(bin_dir, temp_root / "proxmox-run", proxmox),
         }
     )
     return env
 
 
-def assert_ssh_keys_routes_through_live_execution() -> None:
+def asked_proxmox(env: dict[str, str]) -> bool:
+    return Path(env["FAKE_SSH_ARGV"]).exists()
+
+
+def assert_ssh_keys_routes_through_live_execution_under_the_fleet_lease() -> None:
     cases = (
         ((), "lxcs"),
         (("--limit", "recovery-host"), "recovery-host"),
@@ -112,17 +116,31 @@ def assert_ssh_keys_routes_through_live_execution() -> None:
                 "-e",
                 f"prerequisite_target_pattern={prerequisite_target}",
             ]
-            if capture != {"argv": expected_arguments, "marker": "1"}:
+            if capture != {"argv": expected_arguments, "marker": "1"} or not asked_proxmox(env):
                 raise AssertionError(
-                    "ssh-keys did not use the live boundary with both prerequisite layers:\n"
-                    f"expected={expected_arguments!r}\nactual={capture!r}"
+                    "ssh-keys did not use the live boundary with both prerequisite layers "
+                    f"under the fleet lease:\nexpected={expected_arguments!r}\nactual={capture!r}"
                 )
 
+    with tempfile.TemporaryDirectory(prefix="recover-command-untrusted-") as temp_dir:
+        temp_root = Path(temp_dir)
+        env = controlled_environment(temp_root, proxmox="untrusted")
+        result = run_recover("ssh-keys", env=env)
+        if (
+            result.returncode != 1
+            or "./recover.sh proxmox-host-ssh" not in result.stderr
+            or (temp_root / "capture.json").exists()
+        ):
+            raise AssertionError(
+                "ssh-keys ran without the fleet lease on an untrusted Proxmox host:\n"
+                f"returncode={result.returncode}\n{result.stdout}\n{result.stderr}"
+            )
 
-def assert_proxmox_enrollment_routes_through_live_execution() -> None:
+
+def assert_proxmox_enrollment_runs_without_the_fleet_lease() -> None:
     with tempfile.TemporaryDirectory(prefix="recover-proxmox-command-") as temp_dir:
         temp_root = Path(temp_dir)
-        env = controlled_environment(temp_root)
+        env = controlled_environment(temp_root, proxmox="untrusted")
         result = run_recover("proxmox-host-ssh", env=env)
         if result.returncode != 0:
             raise AssertionError(
@@ -139,10 +157,10 @@ def assert_proxmox_enrollment_routes_through_live_execution() -> None:
             "-e",
             "prerequisite_target_pattern=proxmox_api",
         ]
-        if capture != {"argv": expected_arguments, "marker": "1"}:
+        if capture != {"argv": expected_arguments, "marker": "1"} or asked_proxmox(env):
             raise AssertionError(
-                "Proxmox host enrollment did not use the exclusive live boundary:\n"
-                f"expected={expected_arguments!r}\nactual={capture!r}"
+                "Proxmox host enrollment did not use the machine-local exclusive boundary alone:\n"
+                f"expected={expected_arguments!r}\nactual={capture!r} asked={asked_proxmox(env)}"
             )
 
 
@@ -168,17 +186,18 @@ def assert_ssh_keys_fails_immediately_with_holder_identity() -> None:
             or f"pid={os.getpid()}" not in output
             or "worktree=/controlled/recovery-holder" not in output
             or (temp_root / "capture.json").exists()
+            or asked_proxmox(env)
         ):
             raise AssertionError(
-                "ssh-keys did not fail immediately with holder identity:\n"
+                "ssh-keys did not fail immediately with holder identity, before asking Proxmox:\n"
                 f"{output}"
             )
 
 
 def main() -> int:
     assert_explicit_operation_and_help()
-    assert_ssh_keys_routes_through_live_execution()
-    assert_proxmox_enrollment_routes_through_live_execution()
+    assert_ssh_keys_routes_through_live_execution_under_the_fleet_lease()
+    assert_proxmox_enrollment_runs_without_the_fleet_lease()
     assert_ssh_keys_fails_immediately_with_holder_identity()
     print("ok: recovery command exposes explicit, locked SSH enrollment operations")
     return 0

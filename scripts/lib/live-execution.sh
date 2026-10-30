@@ -7,8 +7,11 @@ readonly LIVE_EXECUTION_HOLDER_DIR="${LIVE_EXECUTION_LOCK_FILE}.holders"
 readonly LIVE_EXECUTION_METADATA_LOCK_FILE="${LIVE_EXECUTION_LOCK_FILE}.metadata"
 readonly LIVE_EXECUTION_METADATA_LOCK_WAIT_SECONDS=0.1
 readonly LIVE_EXECUTION_WRAPPER_MARKER="HOMELAB_IAC_LIFECYCLE_WRAPPER"
-# Must match the bootstrap node's lxc_busy_check_host_command; a test pins it.
-readonly LIVE_EXECUTION_PEER_BUSY_COMMAND='flock --nonblock /run/homelab-deploy.lock true || { echo "a deploy is in flight"; exit 1; }'
+# Must match proxmox_api_host; a test pins it.
+readonly LIVE_EXECUTION_FLEET_LOCK_HOST="proxmox.lan"
+readonly LIVE_EXECUTION_FLEET_LOCK_FILE="/run/homelab-lifecycle.lock"
+readonly LIVE_EXECUTION_FLEET_HOLDER_FILE="/run/homelab-lifecycle.holder"
+readonly LIVE_EXECUTION_FLEET_LOCK_TIMEOUT_SECONDS=30
 
 source "$LIVE_EXECUTION_PROJECT_ROOT/scripts/lib/uv-prerequisite.sh"
 
@@ -135,10 +138,85 @@ report_live_lock_holder() {
     sed -n '1p' "$LIVE_EXECUTION_LOCK_FILE" >&2
 }
 
+acquire_fleet_lease() {
+    local holder remote
+    holder="$(hostname) pid $$ since $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    remote="flock --nonblock --conflict-exit-code 75 $LIVE_EXECUTION_FLEET_LOCK_FILE"
+    remote+=" sh -c 'echo \"\$1\" >$LIVE_EXECUTION_FLEET_HOLDER_FILE; echo acquired; exec cat >/dev/null' sh '$holder'"
+    remote+=" || { s=\$?; cat $LIVE_EXECUTION_FLEET_HOLDER_FILE 2>/dev/null; exit \$s; }"
+    # The coproc drops the machine-local lock's fd, so a hung ssh cannot keep
+    # that lock. Bash drops a coproc's variables and pipe the moment it exits, so the
+    # trailing cat keeps it alive, ssh's exit status reported in-band, until
+    # this shell closes its stdin.
+    coproc fleet_lease {
+        exec {live_execution_lock_fd}>&-
+        ssh_exit=0
+        ssh -F none -i "$HOME/.ansible/ssh/proxmox_lxc" -p 22 \
+            -o BatchMode=yes -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile="$HOME/.ansible/known_hosts" \
+            -o IdentitiesOnly=yes -o PreferredAuthentications=publickey \
+            -o AddressFamily=inet -o LogLevel=ERROR \
+            "root@$LIVE_EXECUTION_FLEET_LOCK_HOST" "$remote" \
+            2>&1 || ssh_exit=$?
+        echo "ssh exited $ssh_exit"
+        exec cat >/dev/null
+    }
+    local lease_in=${fleet_lease[1]} lease_out=${fleet_lease[0]} lease_pid=$fleet_lease_PID
+    local line reason="" ssh_status=""
+    while IFS= read -r -t "$LIVE_EXECUTION_FLEET_LOCK_TIMEOUT_SECONDS" -u "$lease_out" line; do
+        case "$line" in
+            acquired)
+                # A reopen, not a dup: bash marks a dup of a coproc fd close-on-exec.
+                exec {live_execution_lease_fd}>"/proc/self/fd/$lease_in" {lease_in}>&-
+                return 0
+                ;;
+            "ssh exited "*)
+                ssh_status=${line#ssh exited }
+                break
+                ;;
+            *) reason=$line ;;
+        esac
+    done
+    exec {lease_in}>&-
+    case "$ssh_status" in
+        75)
+            echo "Deferred by busy checks:" >&2
+            echo "proxmox: busy (a lifecycle run from ${reason:-an unrecorded holder} is in flight); this run not started" >&2
+            return 3
+            ;;
+        "")
+            kill "$lease_pid" 2>/dev/null
+            reason="no answer within ${LIVE_EXECUTION_FLEET_LOCK_TIMEOUT_SECONDS}s"
+            ;;
+        *)
+            reason="${reason:-ssh exited $ssh_status}"
+            case "$reason" in
+                *"Host key"*|*"HOST IDENTIFICATION"*|*"Permission denied"*)
+                    reason+="; run ./recover.sh proxmox-host-ssh"
+                    ;;
+            esac
+            ;;
+    esac
+    echo "proxmox: lock check failed ($reason); this run not started" >&2
+    return 1
+}
+
 run_live_playbook() {
     local lock_class="$1"
     local playbook="$2"
     shift 2
+
+    local flock_mode use_fleet_lease
+    case "$lock_class" in
+        shared) flock_mode=--shared use_fleet_lease=false ;;
+        exclusive) flock_mode=--exclusive use_fleet_lease=true ;;
+        exclusive-local) flock_mode=--exclusive use_fleet_lease=false ;;
+        *)
+            echo "Unsupported live lock class: $lock_class" >&2
+            return 2
+            ;;
+    esac
 
     require_uv || return 1
     mkdir -p "$(dirname "$LIVE_EXECUTION_LOCK_FILE")" "$LIVE_EXECUTION_HOLDER_DIR"
@@ -148,32 +226,13 @@ run_live_playbook() {
         return 75
     fi
     exec {live_execution_lock_fd}>>"$LIVE_EXECUTION_LOCK_FILE"
-    case "$lock_class" in
-        shared)
-            if ! flock --shared --nonblock "$live_execution_lock_fd"; then
-                echo "Another machine-local live operation holds $LIVE_EXECUTION_LOCK_FILE:" >&2
-                report_live_lock_holder
-                exec {live_execution_lock_fd}>&-
-                exec {live_execution_metadata_lock_fd}>&-
-                return 75
-            fi
-            ;;
-        exclusive)
-            if ! flock --exclusive --nonblock "$live_execution_lock_fd"; then
-                echo "Another machine-local live operation holds $LIVE_EXECUTION_LOCK_FILE:" >&2
-                report_live_lock_holder
-                exec {live_execution_lock_fd}>&-
-                exec {live_execution_metadata_lock_fd}>&-
-                return 75
-            fi
-            ;;
-        *)
-            echo "Unsupported live lock class: $lock_class" >&2
-            exec {live_execution_lock_fd}>&-
-            exec {live_execution_metadata_lock_fd}>&-
-            return 2
-            ;;
-    esac
+    if ! flock "$flock_mode" --nonblock "$live_execution_lock_fd"; then
+        echo "Another machine-local live operation holds $LIVE_EXECUTION_LOCK_FILE:" >&2
+        report_live_lock_holder
+        exec {live_execution_lock_fd}>&-
+        exec {live_execution_metadata_lock_fd}>&-
+        return 75
+    fi
 
     local holder_file="${LIVE_EXECUTION_HOLDER_DIR}/$$.holder"
     write_live_holder_record "$holder_file" "$$"
@@ -181,31 +240,13 @@ run_live_playbook() {
     export "$LIVE_EXECUTION_WRAPPER_MARKER=1"
     cd "$LIVE_EXECUTION_PROJECT_ROOT"
 
-    # ssh runs without the lock's fd, so nothing it leaves behind keeps the lock.
     local status=0
-    if [[ "$lock_class" == exclusive && "$(hostname)" != bootstrap ]]; then
-        local peer_reason peer_status=0
-        peer_reason=$(timeout -k 5 30 ssh -l root -i "$HOME/.ansible/ssh/proxmox_lxc" \
-            -o IdentitiesOnly=yes -o AddressFamily=inet -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ansible/known_hosts" \
-            -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR \
-            bootstrap.faviann.vms "$LIVE_EXECUTION_PEER_BUSY_COMMAND" \
-            2>&1 {live_execution_lock_fd}>&-) || peer_status=$?
-        case $peer_status in
-            0) ;;
-            1)
-                echo "Deferred by busy checks:" >&2
-                echo "bootstrap: busy ($peer_reason); this run not started" >&2
-                status=3
-                ;;
-            *)
-                echo "bootstrap: check failed (exit $peer_status${peer_reason:+: $(tail -n 1 <<<"$peer_reason")}); this run proceeds" >&2
-                ;;
-        esac
+    if $use_fleet_lease; then
+        acquire_fleet_lease || status=$?
     fi
 
-    # Reconciling under the held lock keeps contention fail-fast: a caller that
-    # cannot run must not spend a download first.
+    # Reconciling under the held locks keeps contention fail-fast: a caller
+    # that cannot run must not spend a download first.
     if ((status == 0)); then
         uv run --locked python -m scripts.live_dependencies \
             --playbook "$playbook" || status=$?
@@ -225,15 +266,14 @@ run_live_playbook() {
         ) || status=1
     fi
     exec {live_execution_metadata_lock_fd}>>"$LIVE_EXECUTION_METADATA_LOCK_FILE"
-    if ! flock --exclusive \
+    if flock --exclusive \
         --wait "$LIVE_EXECUTION_METADATA_LOCK_WAIT_SECONDS" \
         "$live_execution_metadata_lock_fd"; then
-        exec {live_execution_lock_fd}>&-
-        rm -f -- "$holder_file"
-        exec {live_execution_metadata_lock_fd}>&-
-        return "$status"
+        write_live_metadata_holder_record
     fi
-    write_live_metadata_holder_record
+    if [[ -n "${live_execution_lease_fd:-}" ]]; then
+        exec {live_execution_lease_fd}>&-
+    fi
     exec {live_execution_lock_fd}>&-
     rm -f -- "$holder_file"
     exec {live_execution_metadata_lock_fd}>&-

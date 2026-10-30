@@ -39,11 +39,14 @@ case "$operation" in
     ssh-keys)
         supports_limit=true
         playbook="playbooks/add-ssh-keys-to-lxcs.yml"
+        lock_class="exclusive"
         shift
         ;;
     proxmox-host-ssh)
+        # Enrollment runs before Proxmox trusts the fleet key the fleet lease needs.
         supports_limit=false
         playbook="playbooks/enroll-proxmox-host-ssh.yml"
+        lock_class="exclusive-local"
         shift
         ;;
     *)
@@ -83,6 +86,6 @@ fi
 arguments+=("-e" "prerequisite_target_pattern=$prerequisite_target_pattern")
 
 run_live_playbook \
-    exclusive \
+    "$lock_class" \
     "$playbook" \
     "${arguments[@]}"
