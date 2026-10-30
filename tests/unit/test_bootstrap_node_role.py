@@ -49,11 +49,11 @@ def test_both_deploy_units_target_workstation_and_only_one_interrupts() -> None:
     ]
 
 
-def test_the_nightly_deploy_runs_behind_the_gate_and_never_interrupts() -> None:
+def test_the_nightly_deploy_never_interrupts() -> None:
     nightly = unit_settings("nightly-deploy@.service")
 
     assert nightly["ExecStopPost"]
-    assert nightly["ExecStart"] == ["/usr/local/sbin/homelab-deploy --when-workstation-idle %i"]
+    assert nightly["ExecStart"] == ["/usr/local/sbin/homelab-deploy %i"]
 
 
 def test_the_nightly_timer_starts_the_nightly_deploy_without_catching_up() -> None:
