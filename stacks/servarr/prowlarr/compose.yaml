@@ -13,7 +13,8 @@ services:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
-      - PROWLARR__SERVER__ALLOWEDHOSTS=prowlarr,${HOMEPAGE_FQDN}
+      - PROWLARR__SERVER__ALLOWEDHOSTS=prowlarr,servarr.faviann.vms,${HOMEPAGE_FQDN}
+      - PROWLARR__AUTH__APIKEY=${PROWLARR_API_KEY}
     volumes:
       - ./appdata/prowlarr:/config
       - /data:/data
