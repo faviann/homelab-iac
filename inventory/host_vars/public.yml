@@ -10,6 +10,7 @@ lxc_docker_env_stack_vars:
     secret_key: "{{ vault_public_storyteller_secret_key }}"
   mealie:
     smtp_password: "{{ vault_public_mealie_smtp_password }}"
+    oidc_client_secret: "{{ vault_public_mealie_oidc_client_secret }}"
   readmeabook:
     jwt_secret: "{{ vault_public_readmeabook_jwt_secret }}"
     jwt_refresh_secret: "{{ vault_public_readmeabook_jwt_refresh_secret }}"

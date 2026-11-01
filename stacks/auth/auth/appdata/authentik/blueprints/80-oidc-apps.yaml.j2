@@ -76,6 +76,21 @@ entries:
     expression: |-
       return {"iss": "https://auth.faviann.com/application/o/artifact-server"}
 
+- id: scope-mealie-email-verification
+  model: authentik_providers_oauth2.scopemapping
+  state: present
+  identifiers:
+    name: Mealie Email Verification
+  attrs:
+    name: Mealie Email Verification
+    scope_name: email
+    description: Ensures Mealie receives a verified email claim
+    expression: |-
+      return {
+          "email": user.email,
+          "email_verified": True,
+      }
+
 - id: provider-romm-public
   model: authentik_providers_oauth2.oauth2provider
   state: present
@@ -925,4 +940,89 @@ entries:
   state: absent
   identifiers:
     target: !KeyOf app-artifact-server
+    order: 3
+
+- id: provider-mealie-public
+  model: authentik_providers_oauth2.oauth2provider
+  state: present
+  identifiers:
+    name: mealie-public-oidc
+  attrs:
+    name: mealie-public-oidc
+    authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+    invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+    property_mappings:
+    - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+    - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+    - !KeyOf scope-mealie-email-verification
+    client_type: confidential
+    grant_types:
+    - authorization_code
+    client_id: mealie-public
+    client_secret: "{{ stack_vars.mealie_oidc_client_secret | required_credential }}"
+    access_code_validity: minutes=1
+    access_token_validity: hours=24
+    refresh_token_validity: days=30
+    include_claims_in_id_token: true
+    signing_key: !Find [authentik_crypto.certificatekeypair, [name, {{ stack_vars.public_oidc_signing_certificate_name | tojson }}]]
+    redirect_uris:
+    - matching_mode: strict
+      url: https://mealie.public.faviann.com/login
+    sub_mode: user_email
+    issuer_mode: global
+
+- id: app-mealie-public
+  model: authentik_core.application
+  state: present
+  identifiers:
+    slug: mealie-public
+  attrs:
+    name: Mealie
+    slug: mealie-public
+    provider: !KeyOf provider-mealie-public
+    policy_engine_mode: any
+    launch_url: https://mealie.public.faviann.com
+    open_in_new_tab: false
+    meta_launch_url: ''
+    meta_publisher: ''
+    meta_description: ''
+
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-mealie-public
+    order: 0
+
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf app-mealie-public
+    order: 1
+  attrs:
+    target: !KeyOf app-mealie-public
+    order: 1
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, media]]
+
+- model: authentik_policies.policybinding
+  state: present
+  identifiers:
+    target: !KeyOf app-mealie-public
+    order: 2
+  attrs:
+    target: !KeyOf app-mealie-public
+    order: 2
+    enabled: true
+    negate: false
+    failure_result: false
+    timeout: 30
+    group: !Find [authentik_core.group, [name, admins]]
+
+- model: authentik_policies.policybinding
+  state: absent
+  identifiers:
+    target: !KeyOf app-mealie-public
     order: 3
