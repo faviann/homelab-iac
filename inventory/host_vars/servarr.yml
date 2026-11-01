@@ -31,6 +31,8 @@ lxc_docker_env_stack_vars:
   beets-flask:
     acoustid_apikey: "{{ vault_beets_acoustid_apikey }}"
     discogs_token: "{{ vault_beets_discogs_token }}"
+  prowlarr:
+    api_key: "{{ vault_servarr_prowlarr_api_key }}"
   komf:
     komga_user: "{{ vault_servarr_komf_komga_user }}"
     komga_password: "{{ vault_servarr_komf_komga_password }}"
