@@ -15,6 +15,9 @@ services:
     environment:
       RENOVATE_PLATFORM: github
       RENOVATE_REPOSITORIES: faviann/homelab-iac
+      # Set here, not in renovate.json: Renovate warns about the default
+      # author before it reads the repository config.
+      RENOVATE_GIT_AUTHOR: Renovate Bot <4932538+faviann@users.noreply.github.com>
       # Renovate runs no post-upgrade task unless it matches this list. The
       # vendor sync is the only task renovate.json declares.
       RENOVATE_ALLOWED_COMMANDS: >-
