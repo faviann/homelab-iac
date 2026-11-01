@@ -4,7 +4,7 @@ x-prereq-dirs:
 
 services:
   jackett:
-    image: linuxserver/jackett:0.24.2867@sha256:94ee04d06870b7204533dd93da093004f70b1b33eb1cab2822b3f921fd7c4a44
+    image: linuxserver/jackett:0.24.2981@sha256:4c57c16b629f16a90059e8cdeb0ea878509281ab8360b33c0ea8802d65ab4481
     container_name: jackett
     restart: unless-stopped
     environment:
