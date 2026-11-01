@@ -56,7 +56,7 @@ A lifecycle run that reconciles guest configuration without creating or starting
 _Avoid_: Best-effort configuration
 
 **Nightly deploy**:
-The bootstrap node's scheduled full lifecycle run, at the latest merged revision, against the fleet except itself. It runs only when the workstation's busy probe answers idle; otherwise the whole night defers.
+The bootstrap node's scheduled full lifecycle run, at the latest merged revision, against the fleet except itself. It holds the fleet lock like any mutating run, so the whole night defers while a run from another control node is in flight.
 _Avoid_: Nightly timer, fleet deploy, fleet run
 
 ### Planning
@@ -104,13 +104,13 @@ A question declared in the repository and asked before a lifecycle run takes an 
 _Avoid_: Health check, readiness probe
 
 **Busy probe**:
-A host's own busy check, which defers that host's interrupting steps but not its stacks. The workstation's probe reports busy while an agent is mid-turn or a lifecycle run holds its lock, and the bootstrap node's while it is running any deploy.
+A host's own busy check, which defers that host's interrupting steps but not its stacks. The workstation's probe reports busy while an agent is mid-turn or a lifecycle run holds its machine-local lock, and the bootstrap node's while it is running any deploy.
 _Avoid_: Idle gate
 
 ### Control nodes and trust
 
 **Control node**:
-A machine that holds the fleet key and the vault passphrase and runs live operations against the Proxmox host and the fleet. Two are managed LXCs, the workstation and the bootstrap node. The operator's other machines, such as a laptop, can be control nodes too. A lifecycle run skips the control node it runs on unless told to include it.
+A machine that holds the fleet key and the vault passphrase and runs live operations against the Proxmox host and the fleet. Two are managed LXCs, the workstation and the bootstrap node. The operator's other machines, such as a laptop, can be control nodes too, but are never managed targets. A lifecycle run skips the control node it runs on unless told to include it.
 _Avoid_: Controller, Ansible controller, controller machine
 
 **Workstation**:
@@ -128,6 +128,10 @@ _Avoid_: Live workflow, deployment, online mode
 **Fleet key**:
 The one SSH key pair, shared by every control node and every worktree on them, that every managed host trusts. A person restores it from backup or creates it; a run only verifies it.
 _Avoid_: Controller SSH identity, controller identity, controller key, worktree SSH key
+
+**Fleet lock**:
+The one lock, kept on the Proxmox host, that every mutating run from any control node holds for its whole run, so no two control nodes change the fleet at once. A run that finds it held defers and does not start.
+_Avoid_: Global lock, Proxmox lock
 
 **Enrollment**:
 A person's explicit step that makes the Proxmox host or existing LXCs trust the fleet key, without reading any LXC contract, so invalid desired state elsewhere cannot block it. Lifecycle runs never enroll the Proxmox host; they reinstall the fleet key in every guest they prepare.

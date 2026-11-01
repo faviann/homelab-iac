@@ -252,8 +252,9 @@ Live commands share one machine-local lock across every worktree on the
 control node. A mutating run takes it exclusively; `--check` and the live
 `./inspect.sh` operations take it shared. `./inspect.sh vars` reads only local
 inventory and takes no lock. A command that cannot take the lock exits 75 at
-once, and names the holder when it is another live command. The lock does not coordinate two
-control nodes.
+once, and names the holder when it is another live command. A mutating run
+also holds one fleet lock on the Proxmox host, so mutating runs from different
+control nodes never overlap.
 
 ## Repository Structure
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression for the machine-local lifecycle wrapper lock and marker guard."""
+"""Regression for the lifecycle wrapper's locks and marker guard."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import fcntl
 from io import StringIO
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -18,7 +19,7 @@ from pathlib import Path
 from ansible.cli.playbook import PlaybookCLI
 import yaml
 
-from ansible_test_helper import ansible_playbook_command
+from ansible_test_helper import ansible_playbook_command, fake_proxmox_ssh
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,24 +32,15 @@ FIXTURE_COLLECTIONS = (
     / "tests/regression/fixtures/lxc_lifecycle_facade_assets/collections"
 )
 CONTROL_NODE = "fixture-control-node"
-BOOTSTRAP_HOST_VARS = yaml.safe_load(
+BOOTSTRAP_HOSTNAME = yaml.safe_load(
     (REPO_ROOT / "inventory/host_vars/bootstrap.yml").read_text(encoding="utf-8")
-)
-BOOTSTRAP_BUSY_COMMAND = BOOTSTRAP_HOST_VARS["lxc_busy_check_host_command"]
-BOOTSTRAP_HOSTNAME = BOOTSTRAP_HOST_VARS["proxmox_lxc_overrides"]["hostname"]
-PEER_DEFERRAL = (
-    "Deferred by busy checks:\n"
-    "bootstrap: busy (a deploy is in flight); this run not started\n"
-)
-FAKE_SSH = """#!/bin/bash
-lock="$HOME/.ansible/homelab-iac-lifecycle.lock"
-flock --nonblock "$lock" true && { echo "probe ran without the lifecycle lock" >&2; exit 99; }
-printf '%s\\n' "$@" >"$LIFECYCLE_TEST_SSH_ARGV"
-case "$LIFECYCLE_TEST_PEER" in
-    busy) echo "a deploy is in flight"; exit 1 ;;
-    unreadable) echo "Host key verification failed." >&2; exit 255 ;;
-esac
-"""
+)["proxmox_lxc_overrides"]["hostname"]
+PROXMOX_API_HOST = yaml.safe_load(
+    (REPO_ROOT / "inventory/group_vars/all/proxmox.yml").read_text(encoding="utf-8")
+)["proxmox_api_host"]
+FLEET_LOCK = "homelab-lifecycle.lock"
+FLEET_HOLDER = "homelab-lifecycle.holder"
+HOLDER_RECORD = re.compile(r"^(\S+) pid (\d+) since \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
 
 
 def busy_check_defaults(override: str = "false") -> tuple[str, ...]:
@@ -145,7 +137,7 @@ def wrapper_environment(
     *,
     mode: str = "success",
     hostname: str = CONTROL_NODE,
-    peer: str = "idle",
+    proxmox: str = "free",
 ) -> dict[str, str]:
     home = temp_root / "home"
     bin_dir = temp_root / "bin"
@@ -162,14 +154,43 @@ def wrapper_environment(
             "PATH": f"{bin_dir}:{env['PATH']}",
             "LIFECYCLE_TEST_CAPTURE": str(temp_root / "capture.json"),
             "LIFECYCLE_TEST_MODE": mode,
+            **fake_proxmox_ssh(bin_dir, temp_root / "proxmox-run", proxmox),
         }
     )
-    fake_ssh = bin_dir / "ssh"
-    fake_ssh.write_text(FAKE_SSH, encoding="utf-8")
-    fake_ssh.chmod(0o755)
-    env["LIFECYCLE_TEST_PEER"] = peer
-    env["LIFECYCLE_TEST_SSH_ARGV"] = str(temp_root / "ssh-argv")
     return env
+
+
+def fleet_lock_is_free(env: dict[str, str]) -> bool:
+    lock_path = Path(env["FAKE_SSH_FLEET_DIR"]) / FLEET_LOCK
+    with lock_path.open("a", encoding="utf-8") as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+    return True
+
+
+def local_lock_is_free(env: dict[str, str]) -> bool:
+    lock_path = Path(env["HOME"]) / LOCK_RELATIVE_PATH
+    with lock_path.open("a", encoding="utf-8") as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+    return True
+
+
+def fleet_holder(env: dict[str, str]) -> str:
+    return (Path(env["FAKE_SSH_FLEET_DIR"]) / FLEET_HOLDER).read_text(encoding="utf-8").strip()
+
+
+def wait_until(predicate, *, seconds: float = 10) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return predicate()
 
 
 def run_wrapper(env: dict[str, str], *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -704,52 +725,89 @@ def assert_busy_check_deferral_sets_exit_status() -> None:
                 )
 
 
-def assert_bootstrap_deploy_defers_other_control_node_runs() -> None:
-    unreadable = (
-        "bootstrap: check failed (exit 255: Host key verification failed.); "
-        "this run proceeds\n"
+def assert_fleet_lease_serializes_every_control_node() -> None:
+    other_holder = "laptop pid 4242 since 2026-10-30T01:02:03Z"
+    deferral = (
+        "Deferred by busy checks:\n"
+        f"proxmox: busy (a lifecycle run from {other_holder} is in flight); "
+        "this run not started\n"
+    )
+    unreachable = (
+        "proxmox: lock check failed (ssh: connect to host proxmox.lan port 22: "
+        "No route to host); this run not started\n"
+    )
+    untrusted = (
+        "proxmox: lock check failed (Host key verification failed.; "
+        "run ./recover.sh proxmox-host-ssh); this run not started\n"
     )
     cases = (
-        ("workstation", "busy", (), 3, PEER_DEFERRAL, True),
-        ("workstation", "idle", (), 0, "", True),
-        ("workstation", "unreadable", (), 0, unreadable, True),
-        ("workstation", "busy", ("--check",), 0, "", False),
-        ("laptop-test", "busy", (), 3, PEER_DEFERRAL, True),
-        ("laptop-test", "idle", (), 0, "", True),
-        (BOOTSTRAP_HOSTNAME, "busy", (), 0, "", False),
+        # hostname, Proxmox answers as, arguments, lock held by another node,
+        # expected status, expected stderr, the lease is asked for
+        ("workstation", "free", (), False, 0, "", True),
+        (BOOTSTRAP_HOSTNAME, "free", (), False, 0, "", True),
+        ("laptop-test", "free", (), False, 0, "", True),
+        ("workstation", "free", (), True, 3, deferral, True),
+        ("workstation", "free", ("--check",), True, 0, "", False),
+        ("workstation", "unreachable", (), False, 1, unreachable, True),
+        ("workstation", "untrusted", (), False, 1, untrusted, True),
     )
-    for hostname, peer, arguments, expected_status, expected_stderr, probed in cases:
-        with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-peer-") as temp_dir:
+    for hostname, proxmox, arguments, held, expected_status, expected_stderr, leased in cases:
+        with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-fleet-") as temp_dir:
             temp_root = Path(temp_dir)
-            env = wrapper_environment(temp_root, hostname=hostname, peer=peer)
-            proc = run_wrapper(env, *arguments)
+            env = wrapper_environment(temp_root, hostname=hostname, proxmox=proxmox)
+            fleet_dir = Path(env["FAKE_SSH_FLEET_DIR"])
+            with (fleet_dir / FLEET_LOCK).open("a", encoding="utf-8") as other_node:
+                if held:
+                    fcntl.flock(other_node, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    (fleet_dir / FLEET_HOLDER).write_text(f"{other_holder}\n", encoding="utf-8")
+                proc = run_wrapper(env, *arguments)
             ran = expected_status == 0
-            ssh_argv = temp_root / "ssh-argv"
+            ssh_argv = Path(env["FAKE_SSH_ARGV"])
             if (
                 proc.returncode != expected_status
                 or proc.stderr != expected_stderr
-                or ssh_argv.exists() != probed
+                or ssh_argv.exists() != leased
                 or (temp_root / "capture.json.uv-calls").exists() != ran
                 or (temp_root / "capture.json").exists() != ran
+                or not fleet_lock_is_free(env)
             ):
                 raise AssertionError(
-                    f"{hostname} with bootstrap {peer} and {arguments!r} did not "
-                    f"exit {expected_status}, probe={probed}, playbook ran={ran}: "
-                    f"returncode={proc.returncode} probed={ssh_argv.exists()}\n"
+                    f"{hostname} with Proxmox {proxmox}, held={held} and {arguments!r} did not "
+                    f"exit {expected_status}, leased={leased}, playbook ran={ran}: "
+                    f"returncode={proc.returncode} leased={ssh_argv.exists()}\n"
                     f"{proc.stdout}\n{proc.stderr}"
                 )
-            if not probed:
+            if not leased:
                 continue
+            if ran:
+                record = HOLDER_RECORD.match(fleet_holder(env))
+                if record is None or record.group(1) != hostname:
+                    raise AssertionError(
+                        "the lease did not record this run as '<hostname> pid <pid> since <utc>': "
+                        f"{fleet_holder(env)!r}"
+                    )
             argv = ssh_argv.read_text(encoding="utf-8").splitlines()
-            trust = {
-                "AddressFamily=inet",
-                "StrictHostKeyChecking=yes",
+            options = {
+                "BatchMode=yes",
+                "ConnectTimeout=10",
+                "StrictHostKeyChecking=accept-new",
                 f"UserKnownHostsFile={env['HOME']}/.ansible/known_hosts",
+                "IdentitiesOnly=yes",
+                "PreferredAuthentications=publickey",
+                "AddressFamily=inet",
+                "LogLevel=ERROR",
             }
-            if argv[-2:] != ["bootstrap.faviann.vms", BOOTSTRAP_BUSY_COMMAND] or not trust <= set(argv):
+            if (
+                argv[:2] != ["-F", "none"]
+                or argv[argv.index("-i") + 1] != f"{env['HOME']}/.ansible/ssh/proxmox_lxc"
+                or argv[argv.index("-p") + 1] != "22"
+                or not options <= set(argv)
+                or argv[-2] != f"root@{PROXMOX_API_HOST}"
+                or f"/run/{FLEET_LOCK}" not in argv[-1]
+            ):
                 raise AssertionError(
-                    "the bootstrap probe did not run its inventory busy command over "
-                    f"the fleet's SSH trust:\n{argv!r}"
+                    "the lease did not use the lifecycle's own Proxmox trust probe "
+                    f"against proxmox_api_host:\n{argv!r}"
                 )
 
 
@@ -1173,14 +1231,10 @@ def assert_interrupt_releases_lock() -> None:
         os.killpg(proc.pid, signal.SIGINT)
         stdout, stderr = proc.communicate(timeout=10)
 
-        lock_path = Path(env["HOME"]) / LOCK_RELATIVE_PATH
-        with lock_path.open("a", encoding="utf-8") as lock_file:
-            try:
-                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as error:
-                raise AssertionError(
-                    f"lock remained held after interrupt:\n{stdout}\n{stderr}"
-                ) from error
+        if not local_lock_is_free(env):
+            raise AssertionError(f"lock remained held after interrupt:\n{stdout}\n{stderr}")
+        if not wait_until(lambda: fleet_lock_is_free(env)):
+            raise AssertionError(f"fleet lock remained held after interrupt:\n{stdout}\n{stderr}")
         env["LIFECYCLE_TEST_MODE"] = "success"
         subsequent = run_wrapper(env)
         if subsequent.returncode != 0:
@@ -1190,7 +1244,7 @@ def assert_interrupt_releases_lock() -> None:
             )
 
 
-def assert_wrapper_crash_keeps_child_lock() -> None:
+def assert_wrapper_crash_keeps_child_locks() -> None:
     with tempfile.TemporaryDirectory(prefix="lifecycle-wrapper-crash-") as temp_dir:
         temp_root = Path(temp_dir)
         env = wrapper_environment(temp_root, mode="sleep")
@@ -1203,40 +1257,32 @@ def assert_wrapper_crash_keeps_child_lock() -> None:
             env=env,
         )
         capture_path = temp_root / "capture.json"
-        deadline = time.monotonic() + 10
-        while not capture_path.exists() and time.monotonic() < deadline:
-            time.sleep(0.05)
-        if not capture_path.exists():
+        if not wait_until(capture_path.exists):
             proc.kill()
             raise AssertionError("wrapper never launched the controlled playbook process")
         child_pid = json.loads(capture_path.read_text(encoding="utf-8"))["pid"]
         proc.kill()
         proc.wait(timeout=10)
 
-        lock_path = Path(env["HOME"]) / LOCK_RELATIVE_PATH
-        with lock_path.open("a", encoding="utf-8") as lock_file:
-            try:
-                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                pass
-            else:
-                os.kill(child_pid, signal.SIGKILL)
+        try:
+            if local_lock_is_free(env):
                 raise AssertionError(
                     "lock was released while the lifecycle child was still running"
                 )
+            if fleet_lock_is_free(env):
+                raise AssertionError(
+                    "fleet lock was released while the lifecycle child was still running"
+                )
+            holder = fleet_holder(env)
+            if not holder.startswith(f"{CONTROL_NODE} pid {proc.pid} since "):
+                raise AssertionError(f"fleet holder does not name the killed wrapper: {holder!r}")
+        finally:
+            os.kill(child_pid, signal.SIGKILL)
 
-        os.kill(child_pid, signal.SIGKILL)
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
-            with lock_path.open("a", encoding="utf-8") as lock_file:
-                try:
-                    fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    time.sleep(0.05)
-                else:
-                    break
-        else:
+        if not wait_until(lambda: local_lock_is_free(env)):
             raise AssertionError("lock remained held after the lifecycle child exited")
+        if not wait_until(lambda: fleet_lock_is_free(env)):
+            raise AssertionError("fleet lock remained held after the lifecycle child exited")
 
 
 def assert_direct_lifecycle_run_is_rejected() -> None:
@@ -1275,7 +1321,7 @@ def main() -> int:
         assert_command_grammar_reports_help_and_usage_errors()
         assert_wrapper_routes_and_propagates()
         assert_busy_check_deferral_sets_exit_status()
-        assert_bootstrap_deploy_defers_other_control_node_runs()
+        assert_fleet_lease_serializes_every_control_node()
         assert_contention_fails_fast()
         assert_lock_class_follows_operation_class()
         assert_contention_names_a_remaining_shared_holder()
@@ -1285,12 +1331,12 @@ def main() -> int:
         assert_metadata_coordination_has_a_bounded_failure()
         assert_holder_metadata_covers_lock_lifetime()
         assert_interrupt_releases_lock()
-        assert_wrapper_crash_keeps_child_lock()
+        assert_wrapper_crash_keeps_child_locks()
         assert_direct_lifecycle_run_is_rejected()
     except (AssertionError, subprocess.TimeoutExpired) as error:
         print(error, file=sys.stderr)
         return 1
-    print("ok: lifecycle wrapper serializes machine-local lifecycle mutation")
+    print("ok: lifecycle wrapper serializes lifecycle mutation on this machine and across control nodes")
     return 0
 
 

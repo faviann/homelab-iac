@@ -75,45 +75,24 @@ hosts defer as in any run, and the workstation's
 [interrupting steps](../stacks/README.md#busy-checks) land only when its busy
 probe reports idle.
 
-The lifecycle lock is machine-local, so a run on the workstation and this
-deploy could configure the same LXC at once. The unit runs
-`homelab-deploy --when-workstation-idle`. Once it holds the deploy lock, and
-before it touches the checkout, it asks the workstation busy probe over SSH
-with the fleet's pinned host keys and a 30-second bound:
-
-- idle: the deploy runs.
-- busy: an agent is mid-turn or a run holds the workstation's lock. The
-  night defers with `workstation: busy (<reason>); nightly deploy not started`.
-- anything else, an SSH failure included: the night defers with
-  `workstation: check failed (<reason>); nightly deploy not started`. A gate
-  that cannot read the workstation never lets the night run.
-
-A deferred night leaves the checkout untouched and exits `3`, with its line
-under the same `Deferred by busy checks:` header as a run's deferred stacks.
-
-Every other control node reads this node in turn: the workstation, and any
-other machine with the fleet key and the vault passphrase, such as a laptop.
-Every mutating `./run.sh` and every `./recover.sh` there takes its lifecycle
-lock, then asks this node's busy command whether a deploy is in flight. While
-one is, the run prints
-`bootstrap: busy (a deploy is in flight); this run not started` under the same
-header and exits `3` before anything runs. `--interrupt-busy` does not skip
-that read. When a run cannot read this node, it prints
-`bootstrap: check failed (<reason>); this run proceeds` and continues, so the
-workstation can still repair this node. Each side takes its own lock before it
-reads the other, so of two overlapping runs that read each other, at least one
-backs off
-([ADR-0022](adr/0022-take-the-local-lock-then-read-the-other-control-node.md)).
-The nightly deploy reads only the workstation, so it does not see a laptop run
-already in flight. A `workstation-deploy@` unit started while
-`./run.sh --include-controller` runs on the workstation is still not
-coordinated.
+Every mutating lifecycle run, from any control node, holds one fleet lock on
+the Proxmox host
+([ADR-0024](adr/0024-hold-one-fleet-lock-on-the-proxmox-host.md)). When a
+run from the workstation or another control node, such as a laptop, holds it
+at 03:00, the night defers with
+`proxmox: busy (a lifecycle run from <holder> is in flight); this run not started`
+under the same `Deferred by busy checks:` header as a run's deferred stacks
+and exits `3`. The checkout has already moved by then, so the notification
+names a commit the night did not deploy. While the nightly deploy runs, a
+mutating `./run.sh` on any other control node exits `3` the same way before
+anything runs. An agent mid-turn defers only the workstation's interrupting
+steps, not the night.
 
 Every night posts one Discord message, `nightly-deploy@main: <outcome>`, with
-the exit status and either the deferred hosts and stacks or the gate's line.
-A streak of deferred nights or a 03:00 failure shows up there. A run stops at
-the first failing host, as any lifecycle run does. A missed night is not
-caught up, so a node restart during the day never starts a deploy.
+the exit status and either the deferred hosts and stacks or the `proxmox:`
+line. A streak of deferred nights or a 03:00 failure shows up there. A run
+stops at the first failing host, as any lifecycle run does. A missed night is
+not caught up, so a node restart during the day never starts a deploy.
 
 Read last night's run:
 
@@ -163,9 +142,9 @@ deploy once the workstation's busy probe reports idle.
 [ADR-0018](adr/0018-run-interrupting-workstation-changes-from-the-bootstrap-node.md)
 records the consent rule and the alternatives it rejected;
 [ADR-0019](adr/0019-deploy-every-lxc-nightly-from-the-bootstrap-node.md)
-records the nightly deploy and its gate;
-[ADR-0022](adr/0022-take-the-local-lock-then-read-the-other-control-node.md)
-records why each control node takes its own lock before it reads the other.
+records the nightly deploy;
+[ADR-0024](adr/0024-hold-one-fleet-lock-on-the-proxmox-host.md)
+records why every control node holds one lock on the Proxmox host.
 
 ## Setting up the node
 

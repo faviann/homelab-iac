@@ -1,16 +1,3 @@
-"""homelab-deploy serializes this node's deploys, and gates the nightly deploy on
-the workstation reading idle.
-
-The nightly deploy must read the workstation only while it holds the deploy
-lock: a workstation run that read this node first then still finds the lock
-held, so the two never run together. Reading busy or an SSH failure as idle
-would let two control nodes collide; a deferral without the busy-check header
-and exit 3 would reach Discord as a failure with no reason. A busy probe that
-makes a starting deploy exit 75 loses the night, so a deploy waits a second for
-its lock. Each case runs a deploy unit's ExecStart against a stub ssh, git, and
-./run.sh.
-"""
-
 from __future__ import annotations
 
 import fcntl
@@ -30,13 +17,6 @@ FILES = REPO_ROOT / "playbooks/roles/config/lxc_bootstrap_node/files"
 BUSY_COMMAND = yaml.safe_load(
     (REPO_ROOT / "inventory/host_vars/bootstrap.yml").read_text(encoding="utf-8")
 )["lxc_busy_check_host_command"]
-STUB_SSH = """#!/bin/bash
-flock --nonblock "$HOMELAB_DEPLOY_LOCK" true && { echo "probe ran without the deploy lock" >&2; exit 99; }
-printf '%s\\n' "$@" >"$TEST_ROOT/ssh-argv"
-cat "$TEST_ROOT/stdout"
-cat "$TEST_ROOT/stderr" >&2
-exit "$(cat "$TEST_ROOT/status")"
-"""
 RECORD = '#!/bin/sh\necho "$(basename "$0") $*" >>"$TEST_ROOT/calls"\n'
 DEPLOYED = ["git fetch origin main", "git checkout --detach FETCH_HEAD"]
 
@@ -64,16 +44,13 @@ def write_executable(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def world(tmp_path: Path, status: int = 0, stdout: str = "", stderr: str = "") -> dict[str, str]:
+def world(tmp_path: Path) -> dict[str, str]:
     bin_dir, checkout = tmp_path / "bin", tmp_path / "checkout"
     bin_dir.mkdir()
     checkout.mkdir()
-    write_executable(bin_dir / "ssh", STUB_SSH)
+    write_executable(bin_dir / "ssh", RECORD + "exit 99\n")
     write_executable(bin_dir / "git", RECORD)
     write_executable(checkout / "run.sh", RECORD)
-    (tmp_path / "status").write_text(str(status), encoding="utf-8")
-    (tmp_path / "stdout").write_text(stdout, encoding="utf-8")
-    (tmp_path / "stderr").write_text(stderr, encoding="utf-8")
     return {
         **os.environ,
         "HOME": str(tmp_path / "home"),
@@ -99,63 +76,24 @@ def calls(tmp_path: Path) -> list[str]:
     return record.read_text(encoding="utf-8").splitlines() if record.exists() else []
 
 
-def test_idle_reads_the_workstation_under_the_lock_then_deploys(tmp_path: Path) -> None:
-    env = world(tmp_path, 0, stdout="no herdr agent is working\n")
-
-    result = deploy(tmp_path, env, "nightly-deploy@.service")
-
-    assert result.returncode == 0, result
-    assert calls(tmp_path) == [*DEPLOYED, "run.sh "]
-    argv = (tmp_path / "ssh-argv").read_text(encoding="utf-8").splitlines()
-    assert argv[-2:] == ["workstation.faviann.vms", "/usr/local/sbin/workstation-busy-probe"]
-    assert {
-        "AddressFamily=inet",
-        "StrictHostKeyChecking=yes",
-        f"UserKnownHostsFile={env['HOME']}/.ansible/known_hosts",
-    } <= set(argv)
-
-
-@pytest.mark.parametrize(
-    ("answer", "line"),
-    [
-        (
-            {"status": 1, "stdout": "1 herdr agent(s) working\n"},
-            "workstation: busy (1 herdr agent(s) working); nightly deploy not started",
-        ),
-        (
-            {"status": 255, "stderr": "Host key verification failed.\n"},
-            "workstation: check failed (exit 255: Host key verification failed.); nightly deploy not started",
-        ),
-    ],
-    ids=["busy", "ssh-failure"],
-)
-def test_any_answer_but_idle_defers_the_night_before_the_checkout(
-    tmp_path: Path, answer: dict, line: str
-) -> None:
-    result = deploy(tmp_path, world(tmp_path, **answer), "nightly-deploy@.service")
-
-    assert result.returncode == 3, result
-    assert result.stderr == f"Deferred by busy checks:\n{line}\n"
-    assert calls(tmp_path) == []
-
-
 @pytest.mark.parametrize(
     ("unit", "arguments"),
     [
+        ("nightly-deploy@.service", ""),
+        ("workstation-deploy@.service", "--limit workstation"),
         ("workstation-deploy-interrupt@.service", "--limit workstation --interrupt-busy"),
     ],
 )
-def test_workstation_deploys_never_read_the_workstation(
+def test_each_unit_checks_out_the_ref_then_runs_the_lifecycle_without_reading_anything(
     tmp_path: Path, unit: str, arguments: str
 ) -> None:
-    result = deploy(tmp_path, world(tmp_path, 1, stdout="1 herdr agent(s) working\n"), unit)
+    result = deploy(tmp_path, world(tmp_path), unit)
 
     assert result.returncode == 0, result
     assert calls(tmp_path) == [*DEPLOYED, f"run.sh {arguments}"]
-    assert not (tmp_path / "ssh-argv").exists()
 
 
-def test_a_second_deploy_waits_a_second_then_exits_75_without_reading(tmp_path: Path) -> None:
+def test_a_second_deploy_waits_a_second_then_exits_75(tmp_path: Path) -> None:
     env = world(tmp_path)
     with open(env["HOMELAB_DEPLOY_LOCK"], "a", encoding="utf-8") as holder:
         fcntl.flock(holder, fcntl.LOCK_EX)
@@ -167,7 +105,6 @@ def test_a_second_deploy_waits_a_second_then_exits_75_without_reading(tmp_path: 
     assert result.stderr == "homelab-deploy: another deploy is in flight\n"
     assert elapsed >= 0.9
     assert calls(tmp_path) == []
-    assert not (tmp_path / "ssh-argv").exists()
 
 
 def test_the_busy_command_reads_the_lock_homelab_deploy_takes() -> None:

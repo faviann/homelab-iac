@@ -15,7 +15,7 @@ LXC containers created outside of Ansible (manually or by other tools) won't tru
 ./recover.sh ssh-keys --limit portal,seedbox
 ```
 
-`./recover.sh` is the only supported entry point for enrollment. It holds the machine-local lifecycle lock for the duration and reconciles the dependencies the playbook consumes before Ansible starts. Running `playbooks/add-ssh-keys-to-lxcs.yml` directly fails the control-node prerequisite, which requires the wrapper.
+`./recover.sh` is the only supported entry point for enrollment. `./recover.sh ssh-keys` holds the machine-local lifecycle lock and the fleet lock for the duration and reconciles the dependencies the playbook consumes before Ansible starts. Running `playbooks/add-ssh-keys-to-lxcs.yml` directly fails the control-node prerequisite, which requires the wrapper.
 
 Enrollment reaches the guests with `pct exec` on the Proxmox host, so containers do not need to be SSH-accessible beforehand. It is idempotent and non-destructive: it only adds keys, never removes them.
 

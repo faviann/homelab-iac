@@ -22,6 +22,36 @@ FIXTURE_VAULT_PASSWORD_FILE = FIXTURE_ROOT / "vault-pass"
 ANSIBLE_PLAYBOOK = ["setpriv", "--pdeathsig", "TERM", "uv", "run", "--locked", "ansible-playbook"]
 SSHD = Path("/usr/sbin/sshd")
 
+# Runs the fleet lease's remote command locally with /run rewritten to a temp
+# dir, so no test reaches the real Proxmox host.
+FAKE_PROXMOX_SSH = """#!/bin/bash
+printf '%s\\n' "$@" >"$FAKE_SSH_ARGV"
+lock="$HOME/.ansible/homelab-iac-lifecycle.lock"
+flock --nonblock "$lock" true && { echo "ssh ran without the machine-local lock" >&2; exit 99; }
+for fd in /proc/$$/fd/* /proc/$PPID/fd/*; do
+    [[ "$(readlink "$fd")" == "$lock" ]] && { echo "ssh or its coproc inherited the machine-local lock" >&2; exit 98; }
+done
+case "${FAKE_SSH_PROXMOX:-free}" in
+    unreachable) echo "ssh: connect to host proxmox.lan port 22: No route to host" >&2; exit 255 ;;
+    untrusted) echo "Host key verification failed." >&2; exit 255 ;;
+esac
+remote=${!#}
+exec bash -c "${remote//\\/run\\//$FAKE_SSH_FLEET_DIR/}"
+"""
+
+
+def fake_proxmox_ssh(bin_dir: Path, fleet_dir: Path, proxmox: str = "free") -> dict[str, str]:
+    fleet_dir.mkdir(parents=True, exist_ok=True)
+    fake_ssh = bin_dir / "ssh"
+    fake_ssh.write_text(FAKE_PROXMOX_SSH, encoding="utf-8")
+    fake_ssh.chmod(0o755)
+    return {
+        "FAKE_SSH_ARGV": str(fleet_dir / "ssh-argv"),
+        "FAKE_SSH_FLEET_DIR": str(fleet_dir),
+        "FAKE_SSH_PROXMOX": proxmox,
+    }
+
+
 SSHD_CONFIG = """
 Port {port}
 ListenAddress 127.0.0.1
