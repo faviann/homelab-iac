@@ -1,0 +1,25 @@
+---
+# Self-hosted GitHub Actions runners. A personal account registers a runner to
+# one repository, so each repository gets its own service. Add a repository by
+# copying a service, setting its REPO_URL, and granting the token access to it.
+# Replicas take parallel jobs; their names get a random suffix.
+x-runner: &runner
+  image: myoung34/github-runner:2.338.2-ubuntu-noble@sha256:23e3a4a1da30de5b462ad0ae13d901288e803a688075c3b9b5bb79b7148c07fa
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment: &runner-env
+    # Jobs run as the image's unprivileged runner user, without a Docker socket.
+    RUN_AS_ROOT: "false"
+    # Keep the token out of the job environment.
+    UNSET_CONFIG_VARS: "true"
+
+services:
+  kn-test:
+    <<: *runner
+    environment:
+      <<: *runner-env
+      REPO_URL: https://github.com/faviann/kn-test
+      RUNNER_NAME_PREFIX: kn-test
+    deploy:
+      replicas: 4
