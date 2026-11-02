@@ -1,0 +1,23 @@
+---
+# Host-specific configuration for self-hosted GitHub Actions runners
+# Inherits from: tier_small, cap_docker
+
+lxc_hwaddr: "BC:24:11:41:6C:65"
+default_domain: admin.faviann.com
+
+lxc_docker_env_stack_vars:
+  runners:
+    # Fine-grained GitHub token, resource owner faviann, limited to the repos
+    # the stack registers runners for, with repository permission
+    # "Administration: Read and write". Each runner uses it at start to fetch
+    # its own short-lived registration token.
+    token: "{{ vault_ci_runner_token }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 314
+  hostname: ci-runner
+  description: "Self-hosted GitHub Actions runners managed via Ansible"
+  tags:
+    - ansible
+    - ci-runner
