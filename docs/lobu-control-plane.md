@@ -19,7 +19,7 @@ The workstation daemon polls outward. It is never exposed through Traefik.
 | Piece | Where |
 | --- | --- |
 | LXC | `lobu`, vmid 308, `tier_medium` + `cap_docker`, 16 GB root disk |
-| Stack | `stacks/lobu/lobu/` — `pgvector/pgvector:pg18-trixie` + `ghcr.io/lobu-ai/lobu-app:19.2.0`, both digest-pinned |
+| Stack | `stacks/lobu/lobu/` — `pgvector/pgvector:pg18-trixie` + `ghcr.io/lobu-ai/lobu-app`, both digest-pinned |
 | Durable state | `./appdata/postgres` and `./appdata/workspaces` |
 | Public origin | `https://lobu.admin.faviann.com` → `http://lobu.faviann.vms:8787` |
 | Admin UI | `https://lobu.admin.faviann.com`, protected by Lobu's native authentication |

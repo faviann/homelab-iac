@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   lobu:
-    image: ghcr.io/lobu-ai/lobu-app:19.2.0@sha256:0b9d6e43ad1926896697a0cfcc1f2875aa0c55cd175706c208629bf1ab0113f3
+    image: ghcr.io/lobu-ai/lobu-app:24.4.0@sha256:3601f581ddf6dfda595a930170d078ee112182bd30a80ec3769faac8f4efc681
     container_name: lobu-app
     environment:
       DATABASE_URL: postgresql://lobu:${LOBU_POSTGRES_PASSWORD:?Set LOBU_POSTGRES_PASSWORD in .env}@postgres:5432/lobu?sslmode=disable
