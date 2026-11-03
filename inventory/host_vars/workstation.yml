@@ -36,8 +36,8 @@ proxmox_lxc_bind_mounts_overrides:
 proxmox_lxc_overrides:
   vmid: 306
   hostname: workstation
-  cores: 16
-  memory: 32768
+  cores: 32
+  memory: 65536
   disk: "128"
   description: "Persistent remote coding workstation managed via Ansible"
   tags:
