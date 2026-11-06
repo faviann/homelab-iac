@@ -1,0 +1,33 @@
+---
+x-prereq-dirs:
+  - ./appdata/data
+
+# Busy while any player is connected, so a lifecycle run never restarts a game.
+# A server that does not answer has no players, so it reads as idle and a run
+# can still repair it.
+x-busy-check:
+  service: foundry
+  command: ["sh", "-c", "{ curl -fs --max-time 5 http://localhost:30000/api/status || echo '{}'; } | jq -e '(.users // 0) == 0'"]
+  timeout: 10
+
+services:
+  foundry:
+    image: ghcr.io/felddy/foundryvtt:14.369.0@sha256:76497e09a7eeae769359eebdaae3bbcf39c9c826068f7dcc061b8b7e9bffaec8
+    container_name: foundry
+    # Foundry binds its license to the hostname, so it must not change on recreate.
+    hostname: foundry
+    restart: unless-stopped
+    ports:
+      - "30000:30000"
+    env_file:
+      - .env
+    volumes:
+      - ./appdata/data:/data
+    labels:
+      traefik.enable: true
+      traefik.http.services.foundry.loadbalancer.server.port: "30000"
+      homepage.group: Gaming
+      homepage.name: ${COMPOSE_PROJECT_NAME}
+      homepage.icon: foundry-vtt
+      homepage.href: https://${HOMEPAGE_FQDN}
+      homepage.description: Virtual tabletop

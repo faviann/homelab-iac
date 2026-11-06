@@ -1,0 +1,23 @@
+---
+# Host-specific configuration for Foundry VTT
+# Inherits from: tier_small, cap_docker
+
+lxc_hwaddr: "BC:24:11:0A:6C:72"
+default_domain: public.faviann.com
+
+lxc_docker_env_stack_vars:
+  foundry:
+    # foundryvtt.com account: the image downloads the release and fetches the
+    # license with it.
+    username: "{{ vault_foundry_username }}"
+    password: "{{ vault_foundry_password }}"
+    admin_key: "{{ vault_foundry_admin_key }}"
+
+# Container definition for proxmox_lxc_provision role
+proxmox_lxc_overrides:
+  vmid: 315
+  hostname: foundry
+  description: "Foundry VTT virtual tabletop managed via Ansible"
+  tags:
+    - ansible
+    - foundry
