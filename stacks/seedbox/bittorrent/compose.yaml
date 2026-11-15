@@ -40,6 +40,7 @@ services:
     restart: unless-stopped
     labels:
       traefik.enable: true
+      traefik.http.routers.bittorrent.middlewares: protected-edge-auth@file
       traefik.http.services.gluetun.loadbalancer.server.port: $QBIT_WEBUI_PORT
       homepage.instance.admin.group: Downloads
       homepage.instance.admin.name: qBittorrent
