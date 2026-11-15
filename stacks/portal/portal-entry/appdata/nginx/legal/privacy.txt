@@ -1,0 +1,57 @@
+Privacy Policy - faviann.com
+Last updated: 2026-11-14
+
+faviann.com is a private, non-commercial home server run by one person (the
+"administrator") for family and friends. This policy covers the sign-in service
+at auth.faviann.com and the applications you reach through it.
+
+WHAT WE COLLECT
+
+When you create an account, directly or with Discord, Google, or Apple:
+- your username, display name, and email address;
+- a password you choose, stored only as a one-way hash;
+- if you sign in with Discord, Google, or Apple: the account identifier,
+  name, and email address that provider shares with us. We never receive
+  your password for those services.
+
+When you use the service:
+- sign-in events with their date, IP address, and browser details, kept in
+  the sign-in service's logs;
+- whatever you choose to store in the applications themselves, such as
+  watch history, reading progress, or uploaded files.
+
+HOW WE USE IT
+
+- To sign you in and decide which applications you can reach.
+- To let the administrator review and approve new accounts. A sign-up
+  notification with your username, display name, email address, and IP
+  address is sent to the administrator's private Discord channel.
+- To send account emails, such as address verification, through an email
+  delivery provider.
+- To set up your account in applications that need their own login, such as
+  the music server, which receives your username and password.
+
+We do not sell, rent, or share your information for advertising or any other
+purpose. We use no analytics or advertising trackers.
+
+WHERE IT IS STORED
+
+On hardware the administrator owns and operates. Only the administrator has
+access.
+
+YOUR CHOICES
+
+- You can connect or disconnect Discord, Google, or Apple sign-in from your
+  account settings at any time.
+- You can ask the administrator to show, correct, or delete your account and
+  its data. Deleting your account removes your sign-in data. Data inside
+  individual applications is deleted on request.
+
+CONTACT
+
+Contact the administrator, the person who approved your account, for any
+question or request about your data.
+
+CHANGES
+
+If this policy changes, the date above changes with it.

@@ -1,0 +1,44 @@
+Terms of Service - faviann.com
+Last updated: 2026-11-14
+
+faviann.com is a private, non-commercial home server run by one person (the
+"administrator") for family and friends. By creating an account or using it,
+you agree to these terms.
+
+ACCOUNTS
+
+- Accounts are by approval only. The administrator may approve, limit,
+  suspend, or delete any account at any time, with or without notice.
+- Keep your sign-in details to yourself. You are responsible for what happens
+  under your account.
+- Signing in with Discord, Google, or Apple is optional and is also subject to
+  that provider's own terms.
+
+ACCEPTABLE USE
+
+Do not:
+- try to access accounts, data, or systems you were not given;
+- disrupt, overload, or probe the service;
+- use it for anything illegal;
+- share access or content from it outside the service without permission.
+
+NO WARRANTY
+
+The service is provided free, as is, and as available. It may change, break,
+lose data, or shut down at any time. Keep your own copies of anything that
+matters to you. To the extent the law allows, the administrator is not liable
+for any loss or damage from using or being unable to use the service.
+
+PRIVACY
+
+How your information is handled is described in the Privacy Policy:
+https://faviann.com/privacy
+
+CHANGES
+
+These terms may change. If they do, the date above changes with it.
+Continuing to use the service means you accept the updated terms.
+
+CONTACT
+
+Contact the administrator, the person who approved your account.
