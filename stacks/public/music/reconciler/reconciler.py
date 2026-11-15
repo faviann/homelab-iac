@@ -87,6 +87,33 @@ def _authentik_media_user(user: dict[str, Any]) -> bool:
     return any(group.get("name") == "media" for group in user.get("groups_obj", []))
 
 
+def _with_inherited_groups(
+    users: list[dict[str, Any]],
+    groups: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return users whose groups_obj also lists every ancestor group.
+
+    Authentik's users API lists direct groups only, while its access checks
+    count a member of a group as a member of all the group's parents.
+    """
+    groups_by_pk = {group["pk"]: group for group in groups}
+    expanded = []
+    for user in users:
+        direct = user.get("groups_obj", [])
+        seen = {group["pk"] for group in direct}
+        pending = [parent for group in direct for parent in groups_by_pk.get(group["pk"], {}).get("parents", [])]
+        inherited = []
+        while pending:
+            pk = pending.pop()
+            if pk in seen or pk not in groups_by_pk:
+                continue
+            seen.add(pk)
+            inherited.append(groups_by_pk[pk])
+            pending.extend(groups_by_pk[pk].get("parents", []))
+        expanded.append({**user, "groups_obj": [*direct, *inherited]})
+    return expanded
+
+
 def _resolve_disabled_field(user: dict[str, Any]) -> tuple[str, bool]:
     if "isDisabled" in user:
         return "isDisabled", bool(user.get("isDisabled", False))
@@ -203,7 +230,12 @@ class AuthentikClient:
         self.headers = _bearer_auth_header(token)
 
     def list_users(self) -> list[dict[str, Any]]:
-        return _paginated_get(f"{self.base_url}/api/v3/core/users/?page_size=200", headers=self.headers)
+        users = _paginated_get(f"{self.base_url}/api/v3/core/users/?page_size=200", headers=self.headers)
+        groups = _paginated_get(
+            f"{self.base_url}/api/v3/core/groups/?page_size=200&include_users=false",
+            headers=self.headers,
+        )
+        return _with_inherited_groups(users, groups)
 
 
 class NavidromeClient:

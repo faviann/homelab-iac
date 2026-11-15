@@ -61,3 +61,15 @@ entries:
   state: absent
   identifiers:
     name: storage
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: family
+  attrs:
+    name: family
+    parents:
+    - !Find [authentik_core.group, [name, games]]
+    - !Find [authentik_core.group, [name, household]]
+    - !Find [authentik_core.group, [name, media]]
+    - !Find [authentik_core.group, [name, photos]]
+    - !Find [authentik_core.group, [name, reading]]
