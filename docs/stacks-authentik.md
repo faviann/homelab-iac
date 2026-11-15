@@ -110,6 +110,28 @@ rebuild, sign in once through a recovery link from
 `ak create_recovery_key 1 faviann` in the server container, then register a
 passkey.
 
+## Blueprint API Token
+
+`vault_auth_blueprint_api_token` authenticates the blueprint sync and
+`./inspect.sh journey`. The auth stack also passes it to Authentik as
+`AUTHENTIK_BOOTSTRAP_TOKEN`. On a fresh install, Authentik's
+`system/bootstrap.yaml` creates `authentik-bootstrap-token` with that key. That
+entry has `state: created`, so Authentik never updates the key afterwards.
+
+To rotate the token:
+
+1. In `ak shell` on the auth server, set `authentik-bootstrap-token`'s key to
+   the new value, or add a second token with it until step 3 succeeds.
+2. Store the new value with `./vault.sh set vault_auth_blueprint_api_token
+   --from-file <path> --replace`, and merge.
+3. Run `./run.sh configure --limit auth --stack auth` and
+   `./inspect.sh journey <url>`.
+4. Delete any token that still holds the old key.
+
+Before you delete any Authentik API token, compare its key with the values
+the fleet renders. Authentik's event log does not record API calls, so an
+absent recent event does not prove that a token is unused.
+
 ## Native OIDC Pattern
 
 For public apps that should stay edge-open and handle login themselves:
