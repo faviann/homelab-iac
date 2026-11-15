@@ -10,11 +10,6 @@ metadata:
   ('discord', 'Discord', stack_vars.discord_source_client_id, stack_vars.discord_source_client_secret),
   ('google', 'Google', stack_vars.google_source_client_id, stack_vars.google_source_client_secret),
 ] %}
-{% if stack_vars.apple_source_consumer_key %}
-{% set sources = sources + [
-  ('apple', 'Apple', stack_vars.apple_source_consumer_key, stack_vars.apple_source_private_key),
-] %}
-{% endif %}
 entries:
 {% for slug, name, key, secret in sources %}
 - id: source-{{ slug }}
@@ -42,6 +37,10 @@ entries:
     - email
     - username
     enrollment_flow: !Find [authentik_flows.flow, [slug, self-service-registration-approval]]
+    # Adds the security key button; its flow validates a WebAuthn device.
+    passwordless_flow: !Find [authentik_flows.flow, [slug, default-passwordless-flow]]
+    # Logo plus name; the brand CSS in 24-brand-flows styles the buttons.
+    show_source_labels: true
     sources:
 {% for slug, _name, _key, _secret in sources %}
     - !KeyOf source-{{ slug }}

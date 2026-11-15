@@ -122,21 +122,10 @@ class SocialLoginBlueprintTests(unittest.TestCase):
         ids = {entry["id"]: slug for slug, entry in sources.items()}
         return sources, [ids[ref] for _tag, ref in stage["attrs"]["sources"]]
 
-    def test_apple_deploys_only_with_its_vault_keys(self):
-        pem = "-----BEGIN PRIVATE KEY-----\nabc+/=\n-----END PRIVATE KEY-----\n"
-        for apple, expected in (
-            ({"apple_source_consumer_key": "", "apple_source_private_key": ""}, ["discord", "google"]),
-            (
-                {"apple_source_consumer_key": "svc;team;key", "apple_source_private_key": pem},
-                ["discord", "google", "apple"],
-            ),
-        ):
-            with self.subTest(apple=bool(apple["apple_source_consumer_key"])):
-                sources, shown = self.login_page(render_social_login(**self.REQUIRED, **apple))
-                self.assertEqual(sorted(sources), sorted(expected))
-                self.assertEqual(shown, expected)
-                if "apple" in sources:
-                    self.assertEqual(sources["apple"]["attrs"]["consumer_secret"], pem)
+    def test_login_page_shows_every_deployed_source(self):
+        sources, shown = self.login_page(render_social_login(**self.REQUIRED))
+        self.assertEqual(sorted(sources), ["discord", "google"])
+        self.assertEqual(sorted(shown), ["discord", "google"])
 
 
 if __name__ == "__main__":

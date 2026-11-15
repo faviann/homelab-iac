@@ -102,7 +102,7 @@ entries:
     initial_value: |-
       Thanks. Your email address has been verified and your account is now awaiting admin approval.
       We will keep the account inactive until an admin reviews it.
-      Press Continue to finish. If you signed up with Discord, Google, or Apple, this links that account.
+      Press Continue to finish. If you signed up with Discord or Google, this links that account.
     order: 10
 
 - id: self-service-registration-details-stage

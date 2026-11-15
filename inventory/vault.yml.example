@@ -52,13 +52,11 @@ vault_authentik_reconciler_token: "REPLACE_WITH_AUTHENTIK_RECONCILER_TOKEN"
 vault_auth_blueprint_api_token: "REPLACE_WITH_AUTHENTIK_BLUEPRINT_API_TOKEN"
 vault_navidrome_automation_password: "REPLACE_WITH_NAVIDROME_AUTOMATION_PASSWORD"
 
-# Authentik social login sources. Delete both Apple keys to deploy without Apple.
+# Authentik social login sources.
 vault_auth_discord_source_client_id: "REPLACE_WITH_DISCORD_CLIENT_ID"
 vault_auth_discord_source_client_secret: "REPLACE_WITH_DISCORD_CLIENT_SECRET"
 vault_auth_google_source_client_id: "REPLACE_WITH_GOOGLE_CLIENT_ID"
 vault_auth_google_source_client_secret: "REPLACE_WITH_GOOGLE_CLIENT_SECRET"
-vault_auth_apple_source_consumer_key: "REPLACE_WITH_SERVICES_ID;TEAM_ID;KEY_ID"
-vault_auth_apple_source_private_key: "REPLACE_WITH_APPLE_P8_PEM"
 
 # Authentik stack runtime environment
 vault_auth_postgres_password: "REPLACE_WITH_RANDOM_DATABASE_PASSWORD"
