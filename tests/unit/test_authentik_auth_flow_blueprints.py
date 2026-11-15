@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
 
+import jinja2
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +21,8 @@ DEFAULT_AUTH_POLICIES_FILE = (
     / "blueprints"
     / "25-default-auth-policies.yaml"
 )
+SOCIAL_LOGIN_TEMPLATE_FILE = DEFAULT_AUTH_POLICIES_FILE.with_name("28-social-login.yaml.j2")
+FILTER_PLUGIN_PATH = REPO_ROOT / "playbooks" / "filter_plugins" / "compose_env.py"
 
 
 class BlueprintLoader(yaml.SafeLoader):
@@ -84,6 +88,55 @@ class DefaultAuthPoliciesBlueprintTests(unittest.TestCase):
 
         self.assertEqual(len(stale_identification_bindings), 0)
         self.assertEqual(len(replacement_login_bindings), 1)
+
+
+def render_social_login(**stack_vars: str) -> list[dict]:
+    spec = importlib.util.spec_from_file_location("compose_env_filters", FILTER_PLUGIN_PATH)
+    filters = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(filters)
+    environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    environment.filters.update(filters.FilterModule().filters())
+    template = environment.from_string(SOCIAL_LOGIN_TEMPLATE_FILE.read_text(encoding="utf-8"))
+    rendered = template.render(stack_vars=stack_vars)
+    return yaml.load(rendered, Loader=BlueprintLoader)["entries"]
+
+
+class SocialLoginBlueprintTests(unittest.TestCase):
+    REQUIRED = {
+        "discord_source_client_id": "discord-id",
+        "discord_source_client_secret": "discord-secret",
+        "google_source_client_id": "google-id",
+        "google_source_client_secret": "google-secret",
+    }
+
+    def login_page(self, entries: list[dict]) -> tuple[dict[str, dict], list[str]]:
+        sources = {
+            entry["attrs"]["slug"]: entry
+            for entry in entries
+            if entry["model"] == "authentik_sources_oauth.oauthsource"
+        }
+        (stage,) = [
+            entry for entry in entries
+            if entry["model"] == "authentik_stages_identification.identificationstage"
+        ]
+        ids = {entry["id"]: slug for slug, entry in sources.items()}
+        return sources, [ids[ref] for _tag, ref in stage["attrs"]["sources"]]
+
+    def test_apple_deploys_only_with_its_vault_keys(self):
+        pem = "-----BEGIN PRIVATE KEY-----\nabc+/=\n-----END PRIVATE KEY-----\n"
+        for apple, expected in (
+            ({"apple_source_consumer_key": "", "apple_source_private_key": ""}, ["discord", "google"]),
+            (
+                {"apple_source_consumer_key": "svc;team;key", "apple_source_private_key": pem},
+                ["discord", "google", "apple"],
+            ),
+        ):
+            with self.subTest(apple=bool(apple["apple_source_consumer_key"])):
+                sources, shown = self.login_page(render_social_login(**self.REQUIRED, **apple))
+                self.assertEqual(sorted(sources), sorted(expected))
+                self.assertEqual(shown, expected)
+                if "apple" in sources:
+                    self.assertEqual(sources["apple"]["attrs"]["consumer_secret"], pem)
 
 
 if __name__ == "__main__":

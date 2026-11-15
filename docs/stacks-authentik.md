@@ -104,6 +104,40 @@ the manifest leaves their live grant sets untouched.
 
 RomM is the current concrete native OIDC example. Its app-specific notes live in [stacks/public/romm/README.md](../stacks/public/romm/README.md).
 
+## Social Login Sources
+
+Discord, Google, and Apple sign-in are OAuth sources in
+`stacks/auth/auth/appdata/authentik/blueprints/28-social-login.yaml.j2`. That
+file also owns the `default-authentication-identification` stage, which shows
+the source buttons on the login page. Credentials come from the
+`vault_auth_*_source_*` keys mapped in `inventory/host_vars/auth.yml`. The
+Apple source deploys only when its vault keys exist.
+
+The source slugs `discord`, `google`, and `apple` are fixed. Each provider
+console registers `https://auth.faviann.com/source/oauth/callback/<slug>/` as
+its callback.
+
+A first sign-in through a source runs the `self-service-registration-approval`
+enrollment flow, so the account is created inactive with no groups and waits
+for admin approval, like a form sign-up. A returning user signs in through the
+built-in `default-source-authentication` flow.
+
+Sources never link to an existing account by themselves
+(`user_matching_mode: identifier`). An existing user connects a source from
+their user settings while signed in. Automatic linking by email works only when
+the provider proves the address belongs to the person signing in. It breaks
+when anyone can register your email address at a provider that doesn't verify
+it: that person then signs in to your account. Keep `identifier` and link
+manually.
+
+`default-source-authentication` has no MFA stage, so a source sign-in skips the
+MFA that password sign-in requires of `admins`. Never connect a source to an
+admin account.
+
+Removing a source's vault keys hides its button but leaves the source in
+Authentik, because a blueprint never deletes an entry dropped from its file.
+Delete the source in the admin UI as well.
+
 ## Blueprint `!Find` Lookups
 
 Read when a blueprint must reference an Authentik object without hardcoding an
@@ -117,6 +151,11 @@ source in April 2026:
   as `stage__name`, `flow__slug`, and `target__slug` work.
 - The condition list alternates fields and values,
   `[field1, value1, field2, value2]`. All conditions are ANDed.
+- A lookup whose target does not exist yet resolves to null without an
+  error. The sync applies blueprints in the order of `blueprint_plan()` in
+  `scripts/authentik_blueprint_sync.py`, not by filename number, and does not
+  re-apply a file until its content changes. Put an object in a file that
+  applies after everything it finds.
 - The lookup uses `.first()`, not `.get()`. When several objects match, it
   returns the first without an error, so make each lookup unambiguous.
 - The model is `app_label.model_name`, with the Django app label rather than

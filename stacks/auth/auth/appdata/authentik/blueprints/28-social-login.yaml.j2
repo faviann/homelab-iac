@@ -1,0 +1,48 @@
+version: 1
+metadata:
+  name: repo-auth-social-login
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+# docs/stacks-authentik.md "Social Login Sources" explains the fixed slugs,
+# manual linking, and why the login page stage lives in this file.
+{% set sources = [
+  ('discord', 'Discord', stack_vars.discord_source_client_id, stack_vars.discord_source_client_secret),
+  ('google', 'Google', stack_vars.google_source_client_id, stack_vars.google_source_client_secret),
+] %}
+{% if stack_vars.apple_source_consumer_key %}
+{% set sources = sources + [
+  ('apple', 'Apple', stack_vars.apple_source_consumer_key, stack_vars.apple_source_private_key),
+] %}
+{% endif %}
+entries:
+{% for slug, name, key, secret in sources %}
+- id: source-{{ slug }}
+  model: authentik_sources_oauth.oauthsource
+  state: present
+  identifiers:
+    slug: {{ slug }}
+  attrs:
+    name: {{ name }}
+    slug: {{ slug }}
+    provider_type: {{ slug }}
+    consumer_key: {{ key | required_credential | tojson }}
+    consumer_secret: {{ secret | required_credential | tojson }}
+    authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+    enrollment_flow: !Find [authentik_flows.flow, [slug, self-service-registration-approval]]
+    user_matching_mode: identifier
+
+{% endfor %}
+- model: authentik_stages_identification.identificationstage
+  state: present
+  identifiers:
+    name: default-authentication-identification
+  attrs:
+    user_fields:
+    - email
+    - username
+    enrollment_flow: !Find [authentik_flows.flow, [slug, self-service-registration-approval]]
+    sources:
+{% for slug, _name, _key, _secret in sources %}
+    - !KeyOf source-{{ slug }}
+{% endfor %}
