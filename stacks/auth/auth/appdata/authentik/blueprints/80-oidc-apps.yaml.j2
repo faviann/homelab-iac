@@ -152,7 +152,7 @@ entries:
     negate: false
     failure_result: false
     timeout: 30
-    group: !Find [authentik_core.group, [name, media]]
+    group: !Find [authentik_core.group, [name, games]]
 
 - model: authentik_policies.policybinding
   state: present
@@ -498,7 +498,7 @@ entries:
     negate: false
     failure_result: false
     timeout: 30
-    group: !Find [authentik_core.group, [name, media]]
+    group: !Find [authentik_core.group, [name, photos]]
 
 - model: authentik_policies.policybinding
   state: present
@@ -1005,7 +1005,7 @@ entries:
     negate: false
     failure_result: false
     timeout: 30
-    group: !Find [authentik_core.group, [name, media]]
+    group: !Find [authentik_core.group, [name, household]]
 
 - model: authentik_policies.policybinding
   state: present

@@ -41,14 +41,9 @@ Repo-owned Authentik behavior is managed through blueprints under
 `appdata/authentik/blueprints/`. The blueprints define groups, roles, flows,
 providers, applications, service accounts, outposts, and native OIDC apps.
 
-Core access groups:
-
-| Group | Purpose |
-| --- | --- |
-| `admins` | Admin bundle. Bound to every gated repo-managed application. |
-| `media` | Media bundle for media applications and forward-auth tiers. |
-| `reading` | Reading bundle for Audiobookshelf, Komga, Calibre-Web Automated, ReadMeABook, and similar apps. |
-| `storage` | Storage/files bundle for home-tier file and document services. |
+Access bundles and the audiences that receive them are listed in
+[docs/stacks-authentik.md](../../../docs/stacks-authentik.md#access-groups).
+`admins` is bound to every gated repo-managed application.
 
 Integration groups:
 
@@ -65,7 +60,7 @@ Application bindings follow this order convention:
 | Order | Binding |
 | --- | --- |
 | `0` | Per-app group, only when one exists. |
-| `1` | Domain bundle group such as `media`, `reading`, or `storage`. |
+| `1` | Domain bundle group such as `media` or `reading`. |
 | `2` | `admins`, always present on gated repo-managed apps. |
 | `3` | The `verify-agent` service account, only on apps opted in to signed-in journeys ([docs/stacks-authentik.md](../../../docs/stacks-authentik.md#access-groups)). |
 
