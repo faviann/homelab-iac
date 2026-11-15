@@ -33,10 +33,6 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
-- model: authentik_core.application
-  state: absent
-  identifiers:
-    slug: authentik-ui
 - id: app-faviann-domain
   model: authentik_core.application
   state: present
@@ -90,11 +86,6 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
-- id: app-homepage-media
-  model: authentik_core.application
-  state: absent
-  identifiers:
-    slug: homepage-media
 - id: app-openclaw-ai
   model: authentik_core.application
   state: present
