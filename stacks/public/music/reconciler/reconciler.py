@@ -99,17 +99,18 @@ def _with_inherited_groups(
     groups_by_pk = {group["pk"]: group for group in groups}
     expanded = []
     for user in users:
-        pending = [group["pk"] for group in user.get("groups_obj", [])]
-        seen: set[str] = set()
+        direct = user.get("groups_obj", [])
+        seen = {group["pk"] for group in direct}
+        pending = [parent for group in direct for parent in groups_by_pk.get(group["pk"], {}).get("parents", [])]
+        inherited = []
         while pending:
             pk = pending.pop()
-            if pk in seen:
+            if pk in seen or pk not in groups_by_pk:
                 continue
             seen.add(pk)
-            pending.extend(groups_by_pk.get(pk, {}).get("parents", []))
-        expanded.append(
-            {**user, "groups_obj": [groups_by_pk[pk] for pk in sorted(seen) if pk in groups_by_pk]}
-        )
+            inherited.append(groups_by_pk[pk])
+            pending.extend(groups_by_pk[pk].get("parents", []))
+        expanded.append({**user, "groups_obj": [*direct, *inherited]})
     return expanded
 
 

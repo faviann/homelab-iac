@@ -140,6 +140,23 @@ class NavidromeReconcilerPlanTests(unittest.TestCase):
 
         self.assertEqual([op["action"] for op in operations], ["create"])
 
+    def test_direct_media_member_stays_media_when_groups_list_is_incomplete(self):
+        users = self.mod._with_inherited_groups(
+            [
+                {
+                    "username": "alice",
+                    "email": "alice@example.com",
+                    "is_active": True,
+                    "groups_obj": [{"pk": "g-media", "name": "media"}],
+                }
+            ],
+            [],
+        )
+
+        operations = self.mod.plan_reconciliation(users, [])
+
+        self.assertEqual([op["action"] for op in operations], ["create"])
+
     def test_is_active_field_is_supported_for_navidrome_updates(self):
         payload = self.mod._build_update_payload(
             {
