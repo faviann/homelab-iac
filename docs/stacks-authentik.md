@@ -236,6 +236,3 @@ flow, because `Flow` extends `PolicyBindingModel`:
 ```yaml
 !Find [authentik_flows.flow, [slug, default-password-change]]
 ```
-
-[ADR-0023](adr/0023-use-navidrome-native-auth-on-the-public-music-hostname.md)
-uses the first lookup in the password-change blueprint.

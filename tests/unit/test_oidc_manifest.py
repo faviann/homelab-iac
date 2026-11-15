@@ -437,9 +437,7 @@ class BlueprintPlanTests(unittest.TestCase):
         for before, after in (
             ("repo-auth-groups", "repo-auth-roles"),
             ("repo-auth-roles", "repo-auth-flow-default-authentication-flow"),
-            ("repo-auth-registration-approval-flow", "repo-auth-navidrome-password-change-sync"),
             ("repo-auth-registration-approval-flow", "repo-auth-social-login"),
-            ("repo-auth-navidrome-password-change-sync", "repo-auth-providers"),
             ("repo-auth-notifications", "repo-auth-proxmox-oidc"),
             ("repo-auth-proxmox-oidc", "repo-auth-providers"),
             ("repo-auth-service-accounts", "repo-auth-applications"),

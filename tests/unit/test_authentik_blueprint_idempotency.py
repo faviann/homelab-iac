@@ -44,7 +44,6 @@ class FakeBlueprintClient:
         self.created: list[dict[str, Any]] = []
         self.updated: list[tuple[str, dict[str, Any]]] = []
         self.applied: list[str] = []
-        self.deleted: list[str] = []
         self.requested: list[tuple[str, str, dict[str, Any] | None]] = []
 
     def get_paginated(self, path: str) -> list[dict[str, Any]]:
@@ -98,11 +97,6 @@ class FakeBlueprintClient:
         if method == "GET" and path_or_url.startswith("/api/v3/managed/blueprints/"):
             pk = path_or_url.removeprefix("/api/v3/managed/blueprints/").removesuffix("/")
             return next(item for item in self.instances if item["pk"] == pk)
-        if method == "DELETE" and path_or_url.startswith("/api/v3/managed/blueprints/"):
-            pk = path_or_url.removeprefix("/api/v3/managed/blueprints/").removesuffix("/")
-            self.deleted.append(pk)
-            self.instances = [item for item in self.instances if item["pk"] != pk]
-            return None
         raise AssertionError(f"Unexpected request: {method} {path_or_url}")
 
 
@@ -137,12 +131,10 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
 
     def setUp(self):
         self.original_plan = self.mod.blueprint_plan
-        self.original_navidrome = self.mod.ensure_navidrome_password_change_sync_binding
         self.mod.blueprint_plan = lambda flow_slugs: [("repo-auth-groups", "10-groups.yaml")]
 
     def tearDown(self):
         self.mod.blueprint_plan = self.original_plan
-        self.mod.ensure_navidrome_password_change_sync_binding = self.original_navidrome
 
     def test_matching_hash_skips_apply_and_reports_unchanged(self):
         client = groups_client("abc", groups_instance())
@@ -359,74 +351,6 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         }])
         self.assertEqual(client.applied, ["groups-pk", "created-pk"])
         self.assertEqual({item["name"] for item in result["applied"]}, {"repo-auth-groups", "repo-auth-roles"})
-
-    def test_navidrome_unchanged_binding_reports_unchanged(self):
-        self.mod.blueprint_plan = lambda flow_slugs: [
-            (self.mod.NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME, "27-navidrome-password-change-sync.yaml")
-        ]
-        self.mod.ensure_navidrome_password_change_sync_binding = lambda client: {
-            "status": "successful",
-            "changed": False,
-            "action": "unchanged",
-            "binding_pk": "binding-pk",
-            "target_pk": "target-pk",
-        }
-        client = FakeBlueprintClient(available=[], instances=[])
-
-        result = self.mod.reconcile_blueprint_instances(client, [])
-
-        self.assertFalse(result["changed"])
-        self.assertEqual(result["applied"][0]["action"], "unchanged")
-
-    def test_navidrome_changed_binding_reports_changed(self):
-        self.mod.blueprint_plan = lambda flow_slugs: [
-            (self.mod.NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME, "27-navidrome-password-change-sync.yaml")
-        ]
-        self.mod.ensure_navidrome_password_change_sync_binding = lambda client: {
-            "status": "successful",
-            "changed": True,
-            "action": "updated-binding",
-            "binding_pk": "binding-pk",
-            "target_pk": "target-pk",
-        }
-        client = FakeBlueprintClient(available=[], instances=[])
-
-        result = self.mod.reconcile_blueprint_instances(client, [])
-
-        self.assertTrue(result["changed"])
-        self.assertEqual(result["applied"][0]["action"], "updated-binding")
-
-    def test_navidrome_stale_blueprint_instance_delete_reports_changed(self):
-        self.mod.blueprint_plan = lambda flow_slugs: [
-            (self.mod.NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME, "27-navidrome-password-change-sync.yaml")
-        ]
-        self.mod.ensure_navidrome_password_change_sync_binding = lambda client: {
-            "status": "successful",
-            "changed": False,
-            "action": "unchanged",
-            "binding_pk": "binding-pk",
-            "target_pk": "target-pk",
-        }
-        client = FakeBlueprintClient(
-            available=[],
-            instances=[
-                {
-                    "pk": "stale-pk",
-                    "name": self.mod.NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME,
-                    "path": "custom/27-navidrome-password-change-sync.yaml",
-                    "enabled": True,
-                    "status": "successful",
-                    "last_applied": "earlier",
-                    "last_applied_hash": "abc",
-                }
-            ],
-        )
-
-        result = self.mod.reconcile_blueprint_instances(client, [])
-
-        self.assertTrue(result["changed"])
-        self.assertEqual(client.deleted, ["stale-pk"])
-        self.assertEqual(result["applied"][0]["action"], "deleted-stale-instance")
 
 
 class ScriptCliOutputTests(unittest.TestCase):
