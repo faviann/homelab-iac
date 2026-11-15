@@ -41,7 +41,7 @@ Use domain bundle groups for ordinary application access:
 | --- | --- |
 | `games` | RomM. |
 | `household` | Mealie. |
-| `media` | The media protected tier, and a Navidrome account through the music reconciler. |
+| `media` | Jellyfin and Seerr through Authentik LDAP, the media protected tier, and a Navidrome account through the music reconciler. |
 | `photos` | Immich. |
 | `reading` | Reading applications such as Audiobookshelf, Komga, Calibre-Web Automated, and ReadMeABook. |
 
@@ -59,9 +59,9 @@ Approve each new account with the bundles of its audience:
 | Audience | Bundles |
 | --- | --- |
 | Foundry players | None. Foundry has its own accounts. |
-| Friends | `games`, and `media` for friends who get music. |
+| Friends | `games`, and `media` for friends who get Jellyfin and music. |
 | Family | `games`, `household`, `media`, `photos`, and `reading`. |
-| Owner | `admins`. |
+| Owner | `admins`, and `media`, because the Jellyfin and Navidrome filters check `media` itself. |
 
 What a user can change inside an application, such as editing recipes in
 Mealie, is set in that application.
