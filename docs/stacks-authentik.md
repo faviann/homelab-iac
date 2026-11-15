@@ -106,14 +106,15 @@ RomM is the current concrete native OIDC example. Its app-specific notes live in
 
 ## Social Login Sources
 
-Discord, Google, and Apple sign-in are OAuth sources in
+Discord and Google sign-in are OAuth sources in
 `stacks/auth/auth/appdata/authentik/blueprints/28-social-login.yaml.j2`. That
 file also owns the `default-authentication-identification` stage, which shows
-the source buttons on the login page. Credentials come from the
-`vault_auth_*_source_*` keys mapped in `inventory/host_vars/auth.yml`. The
-Apple source deploys only when its vault keys exist.
+the source buttons and the security key button on the login page. Credentials
+come from the `vault_auth_*_source_*` keys mapped in
+`inventory/host_vars/auth.yml`. The button styling lives in the brand CSS in
+`24-brand-flows.yaml`.
 
-The source slugs `discord`, `google`, and `apple` are fixed. Each provider
+The source slugs `discord` and `google` are fixed. Each provider
 console registers `https://auth.faviann.com/source/oauth/callback/<slug>/` as
 its callback.
 
@@ -134,7 +135,7 @@ manually.
 MFA that password sign-in requires of `admins`. Never connect a source to an
 admin account.
 
-Removing a source's vault keys hides its button but leaves the source in
+Removing a source from the blueprint hides its button but leaves the source in
 Authentik, because a blueprint never deletes an entry dropped from its file.
 Delete the source in the admin UI as well.
 

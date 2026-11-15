@@ -11,7 +11,7 @@ ACCOUNTS
   suspend, or delete any account at any time, with or without notice.
 - Keep your sign-in details to yourself. You are responsible for what happens
   under your account.
-- Signing in with Discord, Google, or Apple is optional and is also subject to
+- Signing in with Discord or Google is optional and is also subject to
   that provider's own terms.
 
 ACCEPTABLE USE
