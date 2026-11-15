@@ -21,7 +21,7 @@ services:
 {% if lxc_docker_env_hawser_enabled | default(false) %}
   hawser:
     container_name: hawser
-    image: ghcr.io/finsys/hawser:0.2.50
+    image: ghcr.io/finsys/hawser:0.2.53
     restart: unless-stopped
     ports:
       - 2376:2376
