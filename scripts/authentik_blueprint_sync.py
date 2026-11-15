@@ -24,6 +24,7 @@ BLUEPRINT_ROOT = REPO_ROOT / "stacks" / "auth" / "auth" / "appdata" / "authentik
 FLOW_ROOT = BLUEPRINT_ROOT / "20-flows"
 
 GROUPS_FILE = BLUEPRINT_ROOT / "10-groups.yaml"
+OWNER_FILE = BLUEPRINT_ROOT / "12-owner.yaml"
 ROLES_FILE = BLUEPRINT_ROOT / "15-roles.yaml"
 ROLES_BLUEPRINT_INSTANCE_NAME = "repo-auth-roles"
 ROLES_BLUEPRINT_DEPLOYED_NAME = str(ROLES_FILE.relative_to(BLUEPRINT_ROOT))
@@ -51,6 +52,11 @@ VERIFY_AGENT_USERNAME = "verify-agent"
 MANAGED_SERVICE_ACCOUNTS = ("ldapservice", VERIFY_AGENT_USERNAME)
 
 CUSTOM_BLUEPRINT_FILES = [
+    {
+        "name": "repo-auth-owner",
+        "source_path": OWNER_FILE,
+        "deployed_relative_path": "12-owner.yaml",
+    },
     {
         "name": "repo-auth-brand-flows",
         "source_path": BRAND_FLOWS_FILE,
