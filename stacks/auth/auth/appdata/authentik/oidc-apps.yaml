@@ -18,7 +18,7 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    group: media
+    group: games
     verify_agent: true
     sub_mode: user_email
     issuer_mode: global
@@ -107,7 +107,7 @@ apps:
               "email": user.email,
               "email_verified": True,
           }
-    group: media
+    group: photos
     sub_mode: user_email
     issuer_mode: global
 
@@ -253,6 +253,6 @@ apps:
           }
     grant_types:
       - authorization_code
-    group: media
+    group: household
     sub_mode: user_email
     issuer_mode: global

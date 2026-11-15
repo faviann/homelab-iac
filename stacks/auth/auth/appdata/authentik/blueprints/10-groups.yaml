@@ -20,9 +20,27 @@ entries:
 - model: authentik_core.group
   state: present
   identifiers:
+    name: games
+  attrs:
+    name: games
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: household
+  attrs:
+    name: household
+- model: authentik_core.group
+  state: present
+  identifiers:
     name: media
   attrs:
     name: media
+- model: authentik_core.group
+  state: present
+  identifiers:
+    name: photos
+  attrs:
+    name: photos
 - model: authentik_core.group
   state: present
   identifiers:
@@ -36,8 +54,6 @@ entries:
   attrs:
     name: reading
 - model: authentik_core.group
-  state: present
+  state: absent
   identifiers:
-    name: storage
-  attrs:
     name: storage
