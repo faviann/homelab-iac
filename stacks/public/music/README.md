@@ -16,6 +16,9 @@ Preserve:
 
 - Do not collapse the public and protected Traefik routers into one route.
 - Do not add forwardAuth to the public music router.
+- Keep `strip-authentik-identity@file` on the public music router. Navidrome
+  trusts `X-authentik-username` from Traefik, so without it a client could
+  sign in as any user by sending that header.
 - Do not remove the protected media router.
 - Do not force `container_name: reconciler` solely for style;
   `navidrome-reconciler` is operationally clearer.

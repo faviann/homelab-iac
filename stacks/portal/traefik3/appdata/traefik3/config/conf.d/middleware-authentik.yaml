@@ -15,6 +15,12 @@ http:
             chain:
                 middlewares:
                     - forwardAuth-authentik
+        # Navidrome trusts this header from Traefik, so a router without
+        # forwardAuth must drop any value the client sent.
+        strip-authentik-identity:
+            headers:
+                customRequestHeaders:
+                    X-authentik-username: ""
         forwardAuth-authentik:
             forwardAuth:
                 address: http://auth.faviann.vms:9000/outpost.goauthentik.io/auth/traefik

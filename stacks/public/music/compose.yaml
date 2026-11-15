@@ -30,6 +30,7 @@ services:
       traefik.enable: true
       traefik.http.routers.music-public.rule: Host(`music.public.faviann.com`)
       traefik.http.routers.music-public.service: music
+      traefik.http.routers.music-public.middlewares: strip-authentik-identity@file
       traefik.http.routers.music-browser.rule: Host(`music.media.faviann.com`)
       traefik.http.routers.music-browser.middlewares: protected-edge-auth@file
       traefik.http.routers.music-browser.service: music
