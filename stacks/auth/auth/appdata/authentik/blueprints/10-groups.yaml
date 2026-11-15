@@ -6,6 +6,10 @@ metadata:
     blueprints.goauthentik.io/description: Managed from ServerManagementScripts
 entries:
 - model: authentik_core.group
+  state: absent
+  identifiers:
+    name: admin
+- model: authentik_core.group
   state: present
   identifiers:
     name: admins
