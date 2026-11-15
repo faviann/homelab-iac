@@ -178,12 +178,11 @@ def synthetic_values(apps: list[dict]) -> dict:
 class RenderedOidcBlueprint:
     """The generated blueprint as Authentik sees it after Ansible templating."""
 
-    def __init__(self, mod, apps: list[dict]):
+    def __init__(self, mod, apps: list[dict], retired_scope_mappings: list[str] = ()):
         environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
         environment.filters.update(credential_filters())
-        rendered = environment.from_string(mod.generate_oidc_blueprint_content(apps)).render(
-            synthetic_values(apps)
-        )
+        content = mod.generate_oidc_blueprint_content(apps, retired_scope_mappings)
+        rendered = environment.from_string(content).render(synthetic_values(apps))
         self.entries = yaml.load(rendered, Loader=BlueprintLoader)["entries"]
 
     def of_model(self, model: str) -> list[dict]:
@@ -292,6 +291,26 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
                 (scope,) = blueprint.of_model("authentik_providers_oauth2.scopemapping")
                 self.assertEqual(scope["attrs"].get("description"), description)
 
+    def test_retired_scope_mapping_is_deleted(self):
+        mapping = {"name": "Email Verify", "scope_name": "email", "expression": "return {}"}
+        blueprint = RenderedOidcBlueprint(
+            self.mod, [minimal_app(custom_scope_mappings=[mapping])], ["Old Email Verify"]
+        )
+
+        states = {
+            entry["identifiers"]["name"]: entry["state"]
+            for entry in blueprint.of_model("authentik_providers_oauth2.scopemapping")
+        }
+        self.assertEqual(states, {"Email Verify": "present", "Old Email Verify": "absent"})
+
+    def test_retiring_a_scope_mapping_an_app_still_uses_fails(self):
+        mapping = {"name": "Email Verify", "scope_name": "email", "expression": "return {}"}
+        with self.assertRaises(ValueError) as cm:
+            self.mod.generate_oidc_blueprint_content(
+                [minimal_app(custom_scope_mappings=[mapping])], ["Email Verify"]
+            )
+        self.assertIn("Email Verify", str(cm.exception))
+
     def test_grant_types_are_managed_only_when_declared(self):
         # Providers created before Authentik 2026.5 were backfilled by migration;
         # omitting the key keeps the blueprint from narrowing their live grants.
@@ -364,11 +383,12 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
         )
 
     def test_real_manifest_validates_cleanly(self):
-        self.mod.validate_oidc_manifest(self.mod.load_oidc_manifest())
+        self.mod.validate_oidc_manifest(self.mod.load_oidc_manifest()["apps"])
 
     def test_real_manifest_apps_admit_only_their_group_admins_and_opted_in_verify_agent(self):
-        apps = self.mod.load_oidc_manifest()
-        blueprint = RenderedOidcBlueprint(self.mod, apps)
+        manifest = self.mod.load_oidc_manifest()
+        apps = manifest["apps"]
+        blueprint = RenderedOidcBlueprint(self.mod, apps, manifest["retired_scope_mappings"])
 
         for app in apps:
             with self.subTest(slug=app["slug"]):
@@ -379,8 +399,7 @@ class OidcBlueprintGenerationTests(unittest.TestCase):
                 self.assertEqual(blueprint.application(app["slug"])["attrs"]["policy_engine_mode"], "any")
 
     def test_committed_oidc_blueprint_matches_generator(self):
-        apps = self.mod.load_oidc_manifest()
-        expected = self.mod.generate_oidc_blueprint_content(apps)
+        expected = self.mod.render_oidc_manifest()
         actual = self.mod.OIDC_BLUEPRINT_FILE.read_text(encoding="utf-8")
         self.assertEqual(actual, expected)
 

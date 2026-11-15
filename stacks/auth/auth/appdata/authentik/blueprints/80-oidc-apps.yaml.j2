@@ -5,59 +5,15 @@ metadata:
     blueprints.goauthentik.io/instantiate: 'false'
     blueprints.goauthentik.io/description: Managed from ServerManagementScripts
 entries:
-- id: scope-romm-email-verification
+- id: scope-verified-email
   model: authentik_providers_oauth2.scopemapping
   state: present
   identifiers:
-    name: RomM Email Verification
+    name: Verified Email
   attrs:
-    name: RomM Email Verification
+    name: Verified Email
     scope_name: email
-    description: Ensures RomM receives a verified email claim
-    expression: |-
-      return {
-          "email": user.email,
-          "email_verified": True,
-      }
-
-- id: scope-reading-apps-email-verification
-  model: authentik_providers_oauth2.scopemapping
-  state: present
-  identifiers:
-    name: Reading Apps Email Verification
-  attrs:
-    name: Reading Apps Email Verification
-    scope_name: email
-    expression: |-
-      return {
-          "email": user.email,
-          "email_verified": True,
-      }
-
-- id: scope-immich-email-verification
-  model: authentik_providers_oauth2.scopemapping
-  state: present
-  identifiers:
-    name: Immich Email Verification
-  attrs:
-    name: Immich Email Verification
-    scope_name: email
-    description: Ensures Immich receives a verified email claim
-    expression: |-
-      return {
-          "email": user.email,
-          "email_verified": True,
-      }
-
-- id: scope-admin-apps-email-verification
-  model: authentik_providers_oauth2.scopemapping
-  state: present
-  identifiers:
-    name: Admin Apps Email Verification
-  attrs:
-    name: Admin Apps Email Verification
-    scope_name: email
-    description: Ensures admin apps receive a verified email claim
+    description: Marks the email claim verified so apps accept it for account matching
     expression: |-
       return {
           "email": user.email,
@@ -76,20 +32,30 @@ entries:
     expression: |-
       return {"iss": "https://auth.faviann.com/application/o/artifact-server"}
 
-- id: scope-mealie-email-verification
-  model: authentik_providers_oauth2.scopemapping
-  state: present
+- model: authentik_providers_oauth2.scopemapping
+  state: absent
+  identifiers:
+    name: RomM Email Verification
+
+- model: authentik_providers_oauth2.scopemapping
+  state: absent
+  identifiers:
+    name: Reading Apps Email Verification
+
+- model: authentik_providers_oauth2.scopemapping
+  state: absent
+  identifiers:
+    name: Immich Email Verification
+
+- model: authentik_providers_oauth2.scopemapping
+  state: absent
+  identifiers:
+    name: Admin Apps Email Verification
+
+- model: authentik_providers_oauth2.scopemapping
+  state: absent
   identifiers:
     name: Mealie Email Verification
-  attrs:
-    name: Mealie Email Verification
-    scope_name: email
-    description: Ensures Mealie receives a verified email claim
-    expression: |-
-      return {
-          "email": user.email,
-          "email_verified": True,
-      }
 
 - id: provider-romm-public
   model: authentik_providers_oauth2.oauth2provider
@@ -103,7 +69,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-romm-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     client_id: romm-public
     client_secret: "{{ stack_vars.romm_oidc_client_secret | required_credential }}"
@@ -194,7 +160,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-reading-apps-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     client_id: audiobookshelf-public
     client_secret: "{{ stack_vars.audiobookshelf_oidc_client_secret | required_credential }}"
@@ -279,7 +245,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-reading-apps-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     client_id: komga-public
     client_secret: "{{ stack_vars.komga_oidc_client_secret | required_credential }}"
@@ -362,7 +328,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-reading-apps-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     client_id: calibre-web-automated-public
     client_secret: "{{ stack_vars.calibre_web_automated_oidc_client_secret | required_credential }}"
@@ -445,7 +411,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-immich-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     client_id: immich-public
     client_secret: "{{ stack_vars.immich_oidc_client_secret | required_credential }}"
@@ -532,7 +498,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-reading-apps-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     client_id: readmeabook-public
     client_secret: "{{ stack_vars.readmeabook_oidc_client_secret | required_credential }}"
@@ -615,7 +581,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-admin-apps-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     client_id: dockhand-admin
     client_secret: "{{ stack_vars.dockhand_oidc_client_secret | required_credential }}"
@@ -698,7 +664,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-admin-apps-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     grant_types:
     - authorization_code
@@ -783,7 +749,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-admin-apps-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     grant_types:
     - authorization_code
@@ -868,7 +834,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-admin-apps-email-verification
+    - !KeyOf scope-verified-email
     - !KeyOf scope-artifact-server-issuer
     client_type: confidential
     grant_types:
@@ -954,7 +920,7 @@ entries:
     property_mappings:
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
     - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
-    - !KeyOf scope-mealie-email-verification
+    - !KeyOf scope-verified-email
     client_type: confidential
     grant_types:
     - authorization_code
