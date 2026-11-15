@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -115,9 +116,8 @@ class KeyOfRef:
     identifier: str
 
 
-def load_oidc_manifest() -> list[dict[str, Any]]:
-    data = yaml.safe_load(OIDC_MANIFEST_FILE.read_text(encoding="utf-8"))
-    return data.get("apps", [])
+def load_oidc_manifest() -> dict[str, Any]:
+    return yaml.safe_load(OIDC_MANIFEST_FILE.read_text(encoding="utf-8"))
 
 
 def validate_oidc_manifest(apps: list[dict[str, Any]]) -> None:
@@ -178,7 +178,9 @@ def _expr_block(expression: str, indent: int) -> list[str]:
     return lines
 
 
-def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
+def generate_oidc_blueprint_content(
+    apps: list[dict[str, Any]], retired_scope_mappings: Sequence[str] = ()
+) -> str:
     lines = [
         "version: 1",
         "metadata:",
@@ -219,6 +221,17 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
             lines.append(f"    description: {mapping['description']}")
         lines += _expr_block(mapping["expression"], 4)
         lines.append("")
+
+    for name in retired_scope_mappings:
+        if name in seen_scope_mappings:
+            raise ValueError(f"Scope mapping {name!r} is retired but an app still uses it")
+        lines += [
+            "- model: authentik_providers_oauth2.scopemapping",
+            "  state: absent",
+            "  identifiers:",
+            f"    name: {name}",
+            "",
+        ]
 
     for app in apps:
         slug = app["slug"]
@@ -376,10 +389,15 @@ def generate_oidc_blueprint_content(apps: list[dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def generate_oidc_blueprint_file() -> Path:
-    apps = load_oidc_manifest()
+def render_oidc_manifest() -> str:
+    manifest = load_oidc_manifest()
+    apps = manifest.get("apps", [])
     validate_oidc_manifest(apps)
-    content = generate_oidc_blueprint_content(apps)
+    return generate_oidc_blueprint_content(apps, manifest.get("retired_scope_mappings", []))
+
+
+def generate_oidc_blueprint_file() -> Path:
+    content = render_oidc_manifest()
     OIDC_BLUEPRINT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OIDC_BLUEPRINT_FILE.write_text(content, encoding="utf-8")
     return OIDC_BLUEPRINT_FILE
