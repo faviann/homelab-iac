@@ -47,11 +47,6 @@ never changes `music.public.faviann.com`. The protected
   attempt added a dedicated Authentik proxy provider, an application, outpost
   wiring, and portal callback routers. It destabilized routing again and again,
   and it mixed two incompatible auth models on one hostname.
-- **Copying plaintext passwords from Authentik into Navidrome**: Authentik
-  expression policies sent the password to Navidrome's admin API from the
-  sign-up and password-change flows. Authentik sees the plaintext nowhere else,
-  so social sign-ins, email recovery, and admin-set passwords left Navidrome
-  with a password the user did not know.
 
 ## When to revisit
 
