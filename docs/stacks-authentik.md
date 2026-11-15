@@ -41,7 +41,7 @@ Use domain bundle groups for ordinary application access:
 | --- | --- |
 | `games` | RomM. |
 | `household` | Mealie. |
-| `media` | Jellyfin and Seerr through Authentik LDAP, the media protected tier, and a Navidrome account through the music reconciler. |
+| `media` | Jellyfin and Seerr through Authentik LDAP, and the media protected tier, which includes Navidrome on `music.media`. |
 | `photos` | Immich. |
 | `reading` | Reading applications such as Audiobookshelf, Komga, Calibre-Web Automated, and ReadMeABook. |
 
@@ -61,14 +61,14 @@ Approve each new account with the bundles of its audience:
 | Foundry players | None. Foundry has its own accounts. |
 | Friends | `games`, and `media` for friends who get Jellyfin and music. |
 | Family | `family`. |
-| Owner | `admins`, and `media`, because Jellyfin and Navidrome check `media`, not `admins`. |
+| Owner | `admins`, and `media`, because Jellyfin's LDAP filter checks `media`, not `admins`. |
 
 `family` has the parents `games`, `household`, `media`, `photos`, and
 `reading`. Authentik counts a member of a group as a member of each of its
-parents, so application bindings and the Navidrome reconciler admit `family`
-members. Authentik LDAP `memberOf` lists direct groups only. Jellyfin's LDAP
-search filter therefore names `media` and `family`, and any new child group of
-`media` must be added to that filter in the plugin settings.
+parents, so application bindings admit `family` members. Authentik LDAP
+`memberOf` lists direct groups only. Jellyfin's LDAP search filter therefore
+names `media` and `family`, and any new child group of `media` must be added to
+that filter in the plugin settings.
 
 What a user can change inside an application, such as editing recipes in
 Mealie, is set in that application.

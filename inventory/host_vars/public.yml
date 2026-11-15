@@ -25,9 +25,6 @@ lxc_docker_env_stack_vars:
     igdb_client_secret: "{{ vault_public_romm_igdb_client_secret }}"
     retroachievements_api_key: "{{ vault_public_romm_retroachievements_api_key }}"
     steamgriddb_api_key: "{{ vault_public_romm_steamgriddb_api_key }}"
-  music:
-    authentik_token: "{{ vault_authentik_reconciler_token }}"
-    navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
   immich:
     db_password: "{{ vault_public_immich_db_password }}"
 

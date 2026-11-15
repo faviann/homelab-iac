@@ -21,11 +21,12 @@ never changes `music.public.faviann.com`. The protected
   password. A user signs in on `music.media.faviann.com` through Authentik and
   creates one key per player under Settings, Players. Keys ship in the first
   Navidrome release after 0.64.2.
-- A periodic reconciler creates, enables, and disables Navidrome users and
-  updates their email. It never sets passwords. Disabling a user ends their
-  access once Authentik removes them from `media`.
-- Navidrome admin API calls log in with `POST /auth/login` and send
-  `X-ND-Authorization: Bearer <token>`. The API does not take HTTP Basic auth.
+- Navidrome creates a user on their first sign-in through
+  `music.media.faviann.com`. Nothing removes a Navidrome user who leaves
+  `media`, so their password and API keys keep working on the public hostname
+  until an admin deletes the user. The periodic reconciler that claimed to
+  disable such users was removed: Navidrome has no disabled flag, so its
+  disable call did nothing. Issue #743 tracks revoking access.
 - The stack exports its public route with the minimal contract:
   `traefik.enable=true` plus
   `traefik.http.services.music.loadbalancer.server.port=4533`.

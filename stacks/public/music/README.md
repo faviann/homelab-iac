@@ -20,10 +20,6 @@ Preserve:
   trusts `X-authentik-username` from Traefik, so without it a client could
   sign in as any user by sending that header.
 - Do not remove the protected media router.
-- Do not force `container_name: reconciler` solely for style;
-  `navidrome-reconciler` is operationally clearer.
-- Do not change reconciler secret flow or Authentik/Navidrome integration during
-  stack style cleanup.
 
 Do not use this stack as a template for normal application stacks.
 
@@ -33,12 +29,11 @@ Stack-owned:
 
 - `compose.yaml`
 - `.env.j2`
-- `reconciler/`
-- Navidrome routing and reconciler wiring
+- Navidrome routing
 
 Auth-owned:
 
-- the Authentik `media` group, which the reconciler reads
+- the Authentik `media-wildcard` application, which gates `music.media`
 
 Host-owned:
 
