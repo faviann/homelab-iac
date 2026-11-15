@@ -19,6 +19,9 @@ Preserve:
 - Keep `strip-authentik-identity@file` on the public music router. Navidrome
   trusts `X-authentik-username` from Traefik, so without it a client could
   sign in as any user by sending that header.
+- Keep `ND_EXTAUTH_TRUSTEDSOURCES` limited to the portal's Traefik address.
+  Navidrome publishes port 4533, so a wider range would let any host in it
+  send `X-authentik-username` directly and sign in as any user.
 - Do not remove the protected media router.
 
 Do not use this stack as a template for normal application stacks.
