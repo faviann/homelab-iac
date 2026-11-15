@@ -223,9 +223,15 @@ entries:
           outline: none !important;
       }
 
-      /* 8. Buttons */
+      /* 8. Buttons
+         Each stage selector appears twice. :host(ak-stage-x) reaches flows that
+         render real shadow roots; plain ak-stage-x reaches flows in compatibility
+         mode, where authentik forces the ShadyDOM polyfill and :host never
+         matches (default-authentication-flow, default-passwordless-flow). */
       :host(ak-stage-identification) .pf-c-button.pf-m-primary,
-      :host(ak-stage-password) .pf-c-button.pf-m-primary {
+      ak-stage-identification .pf-c-button.pf-m-primary,
+      :host(ak-stage-password) .pf-c-button.pf-m-primary,
+      ak-stage-password .pf-c-button.pf-m-primary {
           background: rgba(0, 229, 255, 0.15) !important;
           border: 1px solid rgba(0, 229, 255, 0.4) !important;
           color: #ffffff !important;
@@ -236,17 +242,24 @@ entries:
       }
 
       :host(ak-stage-identification) .pf-c-button.pf-m-primary:hover,
-      :host(ak-stage-password) .pf-c-button.pf-m-primary:hover {
+      ak-stage-identification .pf-c-button.pf-m-primary:hover,
+      :host(ak-stage-password) .pf-c-button.pf-m-primary:hover,
+      ak-stage-password .pf-c-button.pf-m-primary:hover {
           background: rgba(0, 229, 255, 0.25) !important;
           border-color: rgba(0, 229, 255, 0.6) !important;
           transform: translateY(-1px) !important;
       }
 
       :host(ak-stage-user-login) .pf-c-button.pf-m-primary,
+      ak-stage-user-login .pf-c-button.pf-m-primary,
       :host(ak-stage-user-login) .pf-c-button.pf-m-secondary,
+      ak-stage-user-login .pf-c-button.pf-m-secondary,
       :host(ak-stage-authenticator-totp) .pf-c-button.pf-m-secondary,
+      ak-stage-authenticator-totp .pf-c-button.pf-m-secondary,
       :host(ak-stage-identification) .source-button,
-      :host(ak-stage-identification) [data-ouia-component-id="passwordless"] {
+      ak-stage-identification .source-button,
+      :host(ak-stage-identification) [data-ouia-component-id="passwordless"],
+      ak-stage-identification [data-ouia-component-id="passwordless"] {
           background: rgba(255, 255, 255, 0.08) !important;
           border: 1px solid rgba(255, 255, 255, 0.18) !important;
           color: #ffffff !important;
@@ -256,9 +269,13 @@ entries:
       }
 
       :host(ak-stage-user-login) .pf-c-button:hover,
+      ak-stage-user-login .pf-c-button:hover,
       :host(ak-stage-authenticator-totp) .pf-c-button.pf-m-secondary:hover,
+      ak-stage-authenticator-totp .pf-c-button.pf-m-secondary:hover,
       :host(ak-stage-identification) .source-button:hover,
-      :host(ak-stage-identification) [data-ouia-component-id="passwordless"]:hover {
+      ak-stage-identification .source-button:hover,
+      :host(ak-stage-identification) [data-ouia-component-id="passwordless"]:hover,
+      ak-stage-identification [data-ouia-component-id="passwordless"]:hover {
           background: rgba(255, 255, 255, 0.16) !important;
           border-color: rgba(255, 255, 255, 0.3) !important;
           transform: translateY(-1px) !important;
@@ -266,14 +283,17 @@ entries:
 
       /* Social login and security key: full-width "<logo> Sign in with ..."
          rows. authentik renders each source's logo span, then its name. */
-      :host(ak-stage-identification) [part="source-list"] {
+      :host(ak-stage-identification) [part="source-list"],
+      ak-stage-identification [part="source-list"] {
           display: flex !important;
           flex-direction: column !important;
           gap: 0.6rem !important;
       }
 
       :host(ak-stage-identification) .source-button,
-      :host(ak-stage-identification) [data-ouia-component-id="passwordless"] {
+      ak-stage-identification .source-button,
+      :host(ak-stage-identification) [data-ouia-component-id="passwordless"],
+      ak-stage-identification [data-ouia-component-id="passwordless"] {
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -281,34 +301,40 @@ entries:
           padding: 0.65rem 1rem !important;
       }
 
-      :host(ak-stage-identification) .source-button .pf-c-button__icon {
+      :host(ak-stage-identification) .source-button .pf-c-button__icon,
+      ak-stage-identification .source-button .pf-c-button__icon {
           display: inline-flex !important;
           align-items: center !important;
           gap: 0.75rem !important;
           margin-right: 0.3em !important;
       }
 
-      :host(ak-stage-identification) .source-button .pf-c-button__icon::after {
+      :host(ak-stage-identification) .source-button .pf-c-button__icon::after,
+      ak-stage-identification .source-button .pf-c-button__icon::after {
           content: "Sign in with";
       }
 
-      :host(ak-stage-identification) .source-button img {
+      :host(ak-stage-identification) .source-button img,
+      ak-stage-identification .source-button img {
           width: 20px !important;
           height: 20px !important;
       }
 
       /* The stock Google logo is a black G, invisible on the dark card. */
-      :host(ak-stage-identification) .source-button[name="source-google"] img {
+      :host(ak-stage-identification) .source-button[name="source-google"] img,
+      ak-stage-identification .source-button[name="source-google"] img {
           content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%23EA4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'/%3E%3Cpath fill='%234285F4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'/%3E%3Cpath fill='%23FBBC05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'/%3E%3Cpath fill='%2334A853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'/%3E%3C/svg%3E") !important;
       }
 
       /* authentik's link reads "Use a security key" with no icon: hide that
          text and draw a key and matching wording instead. */
-      :host(ak-stage-identification) [data-ouia-component-id="passwordless"] {
+      :host(ak-stage-identification) [data-ouia-component-id="passwordless"],
+      ak-stage-identification [data-ouia-component-id="passwordless"] {
           font-size: 0 !important;
       }
 
-      :host(ak-stage-identification) [data-ouia-component-id="passwordless"]::before {
+      :host(ak-stage-identification) [data-ouia-component-id="passwordless"]::before,
+      ak-stage-identification [data-ouia-component-id="passwordless"]::before {
           content: "";
           width: 20px;
           height: 20px;
@@ -318,7 +344,8 @@ entries:
 
       /* PatternFly draws the secondary border with an absolute ::after; reset
          it so ::after holds the label inline. */
-      :host(ak-stage-identification) [data-ouia-component-id="passwordless"]::after {
+      :host(ak-stage-identification) [data-ouia-component-id="passwordless"]::after,
+      ak-stage-identification [data-ouia-component-id="passwordless"]::after {
           content: "Sign in with a security key";
           font-size: 1rem;
           position: static !important;
@@ -326,13 +353,15 @@ entries:
       }
 
       /* 9. TOTP QR */
-      :host(ak-stage-authenticator-totp) .qr-container {
+      :host(ak-stage-authenticator-totp) .qr-container,
+      ak-stage-authenticator-totp .qr-container {
           display: flex !important;
           flex-direction: column !important;
           align-items: center !important;
       }
 
-      :host(ak-stage-authenticator-totp) qr-code {
+      :host(ak-stage-authenticator-totp) qr-code,
+      ak-stage-authenticator-totp qr-code {
           width: 150px !important;
           height: 150px !important;
           max-width: 150px !important;
@@ -344,7 +373,8 @@ entries:
           justify-content: center !important;
       }
 
-      :host(ak-stage-authenticator-totp) qr-code svg {
+      :host(ak-stage-authenticator-totp) qr-code svg,
+      ak-stage-authenticator-totp qr-code svg {
           width: 100% !important;
           height: 100% !important;
       }
