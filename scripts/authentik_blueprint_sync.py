@@ -31,7 +31,6 @@ ROLES_BLUEPRINT_DEPLOYED_NAME = str(ROLES_FILE.relative_to(BLUEPRINT_ROOT))
 BRAND_FLOWS_FILE = BLUEPRINT_ROOT / "24-brand-flows.yaml"
 DEFAULT_AUTH_POLICIES_FILE = BLUEPRINT_ROOT / "25-default-auth-policies.yaml"
 REGISTRATION_APPROVAL_FILE = BLUEPRINT_ROOT / "26-registration-approval-flow.yaml"
-NAVIDROME_PASSWORD_CHANGE_SYNC_FILE = BLUEPRINT_ROOT / "27-navidrome-password-change-sync.yaml"
 SOCIAL_LOGIN_TEMPLATE_FILE = BLUEPRINT_ROOT / "28-social-login.yaml.j2"
 PROVIDERS_FILE = BLUEPRINT_ROOT / "30-providers.yaml"
 APPLICATIONS_FILE = BLUEPRINT_ROOT / "40-applications.yaml"
@@ -44,10 +43,6 @@ OIDC_MANIFEST_FILE = REPO_ROOT / "stacks" / "auth" / "auth" / "appdata" / "authe
 OIDC_BLUEPRINT_FILE = BLUEPRINT_ROOT / "80-oidc-apps.yaml.j2"
 OIDC_BLUEPRINT_DEPLOYED_NAME = "80-oidc-apps.yaml"
 OIDC_BLUEPRINT_INSTANCE_NAME = "repo-auth-oidc-apps"
-NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME = "repo-auth-navidrome-password-change-sync"
-NAVIDROME_PASSWORD_CHANGE_SYNC_POLICY_NAME = "navidrome-registration-sync-policy"
-DEFAULT_PASSWORD_CHANGE_FLOW_SLUG = "default-password-change"
-DEFAULT_PASSWORD_CHANGE_PROMPT_STAGE_NAME = "default-password-change-prompt"
 VERIFY_AGENT_USERNAME = "verify-agent"
 MANAGED_SERVICE_ACCOUNTS = ("ldapservice", VERIFY_AGENT_USERNAME)
 
@@ -71,11 +66,6 @@ CUSTOM_BLUEPRINT_FILES = [
         "name": "repo-auth-registration-approval-flow",
         "source_path": REGISTRATION_APPROVAL_FILE,
         "deployed_relative_path": "26-registration-approval-flow.yaml",
-    },
-    {
-        "name": "repo-auth-navidrome-password-change-sync",
-        "source_path": NAVIDROME_PASSWORD_CHANGE_SYNC_FILE,
-        "deployed_relative_path": "27-navidrome-password-change-sync.yaml",
     },
     {
         "name": "repo-auth-social-login",
@@ -1006,127 +996,6 @@ def apply_instance(client: AuthentikClient, instance_pk: str) -> None:
     client.request_json("POST", f"/api/v3/managed/blueprints/{instance_pk}/apply/")
 
 
-def delete_instance(client: AuthentikClient, instance_pk: str) -> None:
-    client.request_json("DELETE", f"/api/v3/managed/blueprints/{instance_pk}/")
-
-
-def desired_navidrome_password_change_target_pk(client: AuthentikClient) -> str:
-    export = yaml.safe_load(
-        client.request_text("GET", f"/api/v3/flows/instances/{DEFAULT_PASSWORD_CHANGE_FLOW_SLUG}/export/")
-    )
-    entries = export.get("entries", [])
-
-    flow = next(
-        (
-            entry for entry in entries
-            if entry.get("model") == "authentik_flows.flow"
-            and entry.get("identifiers", {}).get("slug") == DEFAULT_PASSWORD_CHANGE_FLOW_SLUG
-        ),
-        None,
-    )
-    if flow is None:
-        raise RuntimeError(f"Export for {DEFAULT_PASSWORD_CHANGE_FLOW_SLUG} did not include the flow entry")
-    flow_pk = flow["identifiers"]["pk"]
-
-    prompt_stage = next(
-        (
-            entry for entry in entries
-            if entry.get("model") == "authentik_stages_prompt.promptstage"
-            and entry.get("identifiers", {}).get("name") == DEFAULT_PASSWORD_CHANGE_PROMPT_STAGE_NAME
-        ),
-        None,
-    )
-    if prompt_stage is None:
-        raise RuntimeError(
-            f"Export for {DEFAULT_PASSWORD_CHANGE_FLOW_SLUG} did not include prompt stage "
-            f"{DEFAULT_PASSWORD_CHANGE_PROMPT_STAGE_NAME}"
-        )
-    prompt_stage_pk = prompt_stage["identifiers"]["pk"]
-
-    flow_stage_binding = next(
-        (
-            entry for entry in entries
-            if entry.get("model") == "authentik_flows.flowstagebinding"
-            and entry.get("identifiers", {}).get("stage") == prompt_stage_pk
-            and entry.get("identifiers", {}).get("target") == flow_pk
-            and entry.get("identifiers", {}).get("order") == 0
-        ),
-        None,
-    )
-    if flow_stage_binding is None:
-        raise RuntimeError(
-            f"Export for {DEFAULT_PASSWORD_CHANGE_FLOW_SLUG} did not include the order 0 flow-stage binding "
-            f"for prompt stage {DEFAULT_PASSWORD_CHANGE_PROMPT_STAGE_NAME}"
-        )
-    return flow_stage_binding["identifiers"]["pk"]
-
-
-def ensure_navidrome_password_change_sync_binding(client: AuthentikClient) -> dict[str, Any]:
-    policies = client.get_paginated("/api/v3/policies/all/?page_size=200")
-    policy = next(
-        (
-            item for item in policies
-            if item.get("name") == NAVIDROME_PASSWORD_CHANGE_SYNC_POLICY_NAME
-        ),
-        None,
-    )
-    if policy is None:
-        raise RuntimeError(f"Unable to find policy {NAVIDROME_PASSWORD_CHANGE_SYNC_POLICY_NAME}")
-
-    target_pk = desired_navidrome_password_change_target_pk(client)
-    desired_payload = {
-        "policy": policy["pk"],
-        "target": target_pk,
-        "order": 0,
-        "enabled": True,
-        "negate": False,
-        "failure_result": False,
-        "timeout": 10,
-    }
-    bindings = client.get_paginated("/api/v3/policies/bindings/?page_size=500")
-    existing = next(
-        (
-            item for item in bindings
-            if item.get("policy") == policy["pk"]
-            and item.get("target") == target_pk
-        ),
-        None,
-    )
-    if existing is not None:
-        needs_update = any(existing.get(field) != value for field, value in desired_payload.items())
-        if needs_update:
-            existing = client.request_json(
-                "PATCH",
-                f"/api/v3/policies/bindings/{existing['pk']}/",
-                payload=desired_payload,
-            )
-            return {
-                "status": "successful",
-                "changed": True,
-                "action": "updated-binding",
-                "binding_pk": existing["pk"],
-                "target_pk": target_pk,
-            }
-        return {
-            "status": "successful",
-            "changed": False,
-            "action": "unchanged",
-            "binding_pk": existing["pk"],
-            "target_pk": target_pk,
-        }
-
-    created = client.request_json(
-        "POST",
-        "/api/v3/policies/bindings/",
-        payload=desired_payload,
-    )
-    return {
-        "status": "successful",
-        "changed": True,
-        "action": "created-binding",
-        "binding_pk": created["pk"],
-        "target_pk": target_pk,
-    }
 
 
 def wait_for_instance(
@@ -1184,7 +1053,6 @@ def wait_for_instance(
 def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]) -> dict[str, Any]:
     plan = blueprint_plan(flow_slugs)
     plan_names = {name for name, _ in plan}
-    expected_instance_names = plan_names - {NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME}
     available = find_available_paths(client)
     available_by_suffix = {item["path"]: item for item in available}
     instances = get_instances(client)
@@ -1195,30 +1063,6 @@ def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]
     expected_hashes_by_name: dict[str, str] = {}
 
     for name, relative_path in plan:
-        if name == NAVIDROME_PASSWORD_CHANGE_SYNC_BLUEPRINT_NAME:
-            navidrome_result = ensure_navidrome_password_change_sync_binding(client)
-            stale_instance = instances_by_name.get(name)
-            action_parts = []
-            if navidrome_result.get("changed"):
-                changed = True
-                action_parts.append(navidrome_result.get("action", "updated-binding"))
-            if stale_instance is not None:
-                delete_instance(client, stale_instance["pk"])
-                changed = True
-                action_parts.append("deleted-stale-instance")
-                instances_by_name.pop(name, None)
-                if stale_instance.get("path"):
-                    instances_by_path.pop(stale_instance["path"], None)
-            applied.append(
-                {
-                    "name": name,
-                    "path": relative_path,
-                    "status": navidrome_result["status"],
-                    "action": "+".join(action_parts) if action_parts else "unchanged",
-                }
-            )
-            continue
-
         matched = [item for item in available_by_suffix.values() if item["path"].endswith(relative_path)]
         if len(matched) != 1:
             raise RuntimeError(f"Expected exactly one available blueprint for {relative_path}, found {len(matched)}")
@@ -1290,8 +1134,8 @@ def reconcile_blueprint_instances(client: AuthentikClient, flow_slugs: list[str]
         instances_by_path[instance.get("path")] = instance
 
     final_instances = get_instances(client)
-    repo_instances = [item for item in final_instances if item["name"] in expected_instance_names]
-    missing_names = sorted(expected_instance_names - {item["name"] for item in repo_instances})
+    repo_instances = [item for item in final_instances if item["name"] in plan_names]
+    missing_names = sorted(plan_names - {item["name"] for item in repo_instances})
     if missing_names:
         raise RuntimeError(
             "Repo-managed blueprint instances missing after reconcile: " + ", ".join(missing_names)

@@ -35,8 +35,7 @@ Stack-owned:
 
 Auth-owned:
 
-- Authentik policies, flows, and OIDC/provider behavior that feed Navidrome
-  account lifecycle sync
+- the Authentik `media` group, which the reconciler reads
 
 Host-owned:
 

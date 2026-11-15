@@ -14,29 +14,21 @@ never changes `music.public.faviann.com`. The protected
 
 ## How Authentik stays the identity source
 
-- Authentik expression policies mirror plaintext passwords into Navidrome. They
-  run only in flows where the plaintext is available.
+- Navidrome cannot check a Subsonic login against Authentik. Subsonic token
+  auth sends a hash of the password and a salt, so the server must hold the
+  plaintext password itself.
+- Mobile clients authenticate with OpenSubsonic API keys instead of a
+  password. A user signs in on `music.media.faviann.com` through Authentik and
+  creates one key per player under Settings, Players. Keys ship in the first
+  Navidrome release after 0.64.2.
 - A periodic reconciler creates, enables, and disables Navidrome users and
-  updates their email. It never sets passwords.
-- Authentik reaches Navidrome at the internal URL
-  `http://public.faviann.vms:4533`, not the public hostname.
+  updates their email. It never sets passwords. Disabling a user ends their
+  access once Authentik removes them from `media`.
 - Navidrome admin API calls log in with `POST /auth/login` and send
   `X-ND-Authorization: Bearer <token>`. The API does not take HTTP Basic auth.
 - The stack exports its public route with the minimal contract:
   `traefik.enable=true` plus
   `traefik.http.services.music.loadbalancer.server.port=4533`.
-
-The password-change blueprint, blueprint 27, finds its policy binding target
-by the managed stage's stable name instead of a hardcoded `pbm_uuid`:
-
-```yaml
-target: !Find [authentik_flows.flowstagebinding, [stage__name, default-password-change-prompt]]
-```
-
-`default-password-change-prompt` is an Authentik managed stage. It exists under
-that name on every instance from first startup, so no manual bootstrap step is
-needed. [Blueprint `!Find` lookups](../stacks-authentik.md#blueprint-find-lookups)
-explains the `__` traversal.
 
 ## Accepted costs
 
@@ -46,8 +38,8 @@ explains the `__` traversal.
   route-export drift.
 - Resetting the automation user's password non-interactively needed a
   TTY-backed Navidrome CLI session.
-- Re-applying the password-change blueprint can hit duplicate binding
-  collisions on `policy,target,order`.
+- A client without API-key support can send the username and the key as a
+  plain password. Clients that send only a hashed token cannot connect.
 
 ## Rejected
 
@@ -55,6 +47,11 @@ explains the `__` traversal.
   attempt added a dedicated Authentik proxy provider, an application, outpost
   wiring, and portal callback routers. It destabilized routing again and again,
   and it mixed two incompatible auth models on one hostname.
+- **Copying plaintext passwords from Authentik into Navidrome**: Authentik
+  expression policies sent the password to Navidrome's admin API from the
+  sign-up and password-change flows. Authentik sees the plaintext nowhere else,
+  so social sign-ins, email recovery, and admin-set passwords left Navidrome
+  with a password the user did not know.
 
 ## When to revisit
 

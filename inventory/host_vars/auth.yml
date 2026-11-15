@@ -11,7 +11,6 @@ lxc_docker_env_stack_vars:
   auth:
     blueprint_api_token: "{{ vault_auth_blueprint_api_token }}"
     discord_approval_webhook_url: "{{ vault_authentik_discord_approval_webhook_url }}"
-    navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
     discord_source_client_id: "{{ vault_auth_discord_source_client_id }}"
     discord_source_client_secret: "{{ vault_auth_discord_source_client_secret }}"
     google_source_client_id: "{{ vault_auth_google_source_client_id }}"
