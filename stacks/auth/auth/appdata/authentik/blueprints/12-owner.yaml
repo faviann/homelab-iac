@@ -1,0 +1,21 @@
+version: 1
+metadata:
+  name: repo-auth-owner
+  labels:
+    blueprints.goauthentik.io/instantiate: 'false'
+    blueprints.goauthentik.io/description: Managed from ServerManagementScripts
+entries:
+- model: authentik_core.user
+  state: present
+  identifiers:
+    username: faviann
+  attrs:
+    username: faviann
+    email: faviann@gmail.com
+    type: internal
+    is_active: true
+    groups:
+    - !Find [authentik_core.group, [name, admins]]
+    - !Find [authentik_core.group, [name, authentik Admins]]
+    - !Find [authentik_core.group, [name, media]]
+    - !Find [authentik_core.group, [name, PVEAdmins]]

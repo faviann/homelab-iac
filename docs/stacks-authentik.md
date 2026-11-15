@@ -75,6 +75,15 @@ exactly the applications that bind it at order 3:
 Either change reaches Authentik with an auth deploy:
 `./run.sh --limit auth --stack auth`.
 
+## Owner Account
+
+`blueprints/12-owner.yaml` declares the owner account `faviann` and its groups,
+so a rebuilt Authentik recreates it. Every deploy resets those groups to the
+file, so change them there. The blueprint holds no credentials. After a
+rebuild, sign in once through a recovery link from
+`ak create_recovery_key 1 faviann` in the server container, then register a
+passkey.
+
 ## Native OIDC Pattern
 
 For public apps that should stay edge-open and handle login themselves:
