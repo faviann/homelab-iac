@@ -31,6 +31,7 @@ BRAND_FLOWS_FILE = BLUEPRINT_ROOT / "24-brand-flows.yaml"
 DEFAULT_AUTH_POLICIES_FILE = BLUEPRINT_ROOT / "25-default-auth-policies.yaml"
 REGISTRATION_APPROVAL_FILE = BLUEPRINT_ROOT / "26-registration-approval-flow.yaml"
 NAVIDROME_PASSWORD_CHANGE_SYNC_FILE = BLUEPRINT_ROOT / "27-navidrome-password-change-sync.yaml"
+SOCIAL_LOGIN_TEMPLATE_FILE = BLUEPRINT_ROOT / "28-social-login.yaml.j2"
 PROVIDERS_FILE = BLUEPRINT_ROOT / "30-providers.yaml"
 APPLICATIONS_FILE = BLUEPRINT_ROOT / "40-applications.yaml"
 SERVICE_ACCOUNTS_FILE = BLUEPRINT_ROOT / "50-service-accounts.yaml"
@@ -69,6 +70,11 @@ CUSTOM_BLUEPRINT_FILES = [
         "name": "repo-auth-navidrome-password-change-sync",
         "source_path": NAVIDROME_PASSWORD_CHANGE_SYNC_FILE,
         "deployed_relative_path": "27-navidrome-password-change-sync.yaml",
+    },
+    {
+        "name": "repo-auth-social-login",
+        "source_path": SOCIAL_LOGIN_TEMPLATE_FILE,
+        "deployed_relative_path": "28-social-login.yaml",
     },
     {
         "name": "repo-auth-notifications",

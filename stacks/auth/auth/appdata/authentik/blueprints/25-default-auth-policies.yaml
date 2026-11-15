@@ -17,15 +17,6 @@ entries:
           or ak_client_ip in ip_network("10.0.0.0/24")
           or ak_client_ip in ip_network("10.200.196.0/24")
       )
-- model: authentik_stages_identification.identificationstage
-  state: present
-  identifiers:
-    name: default-authentication-identification
-  attrs:
-    user_fields:
-    - email
-    - username
-    enrollment_flow: !Find [authentik_flows.flow, [slug, self-service-registration-approval]]
 - model: authentik_stages_user_login.userloginstage
   state: present
   identifiers:

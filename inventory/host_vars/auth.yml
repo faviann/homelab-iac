@@ -12,6 +12,13 @@ lxc_docker_env_stack_vars:
     blueprint_api_token: "{{ vault_auth_blueprint_api_token }}"
     discord_approval_webhook_url: "{{ vault_authentik_discord_approval_webhook_url }}"
     navidrome_automation_password: "{{ vault_navidrome_automation_password }}"
+    discord_source_client_id: "{{ vault_auth_discord_source_client_id }}"
+    discord_source_client_secret: "{{ vault_auth_discord_source_client_secret }}"
+    google_source_client_id: "{{ vault_auth_google_source_client_id }}"
+    google_source_client_secret: "{{ vault_auth_google_source_client_secret }}"
+    # Optional: without these vault keys the Apple source is not deployed.
+    apple_source_consumer_key: "{{ vault_auth_apple_source_consumer_key | default('') }}"
+    apple_source_private_key: "{{ vault_auth_apple_source_private_key | default('') }}"
     romm_oidc_client_secret: "{{ vault_public_romm_oidc_client_secret }}"
     romm_oidc_signing_certificate_name: "authentik Self-signed Certificate"
     audiobookshelf_oidc_client_secret: "{{ vault_public_audiobookshelf_oidc_client_secret }}"

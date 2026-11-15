@@ -11,12 +11,15 @@ services:
     restart: unless-stopped
     volumes:
       - ./appdata/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./appdata/nginx/legal:/usr/share/nginx/legal:ro
     networks:
       - shared
     labels:
       traefik.enable: true
       traefik.http.routers.portal-entry.rule: Host(`faviann.com`)
       traefik.http.routers.portal-entry.middlewares: protected-edge-auth@file
+      # Public: the longer rule outranks portal-entry, so these skip edge auth.
+      traefik.http.routers.portal-entry-legal.rule: Host(`faviann.com`) && (Path(`/about`) || Path(`/privacy`) || Path(`/terms`))
 networks:
   shared:
     external: true
