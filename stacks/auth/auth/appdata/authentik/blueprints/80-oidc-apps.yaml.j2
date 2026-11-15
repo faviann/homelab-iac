@@ -32,31 +32,6 @@ entries:
     expression: |-
       return {"iss": "https://auth.faviann.com/application/o/artifact-server"}
 
-- model: authentik_providers_oauth2.scopemapping
-  state: absent
-  identifiers:
-    name: RomM Email Verification
-
-- model: authentik_providers_oauth2.scopemapping
-  state: absent
-  identifiers:
-    name: Reading Apps Email Verification
-
-- model: authentik_providers_oauth2.scopemapping
-  state: absent
-  identifiers:
-    name: Immich Email Verification
-
-- model: authentik_providers_oauth2.scopemapping
-  state: absent
-  identifiers:
-    name: Admin Apps Email Verification
-
-- model: authentik_providers_oauth2.scopemapping
-  state: absent
-  identifiers:
-    name: Mealie Email Verification
-
 - id: provider-romm-public
   model: authentik_providers_oauth2.oauth2provider
   state: present

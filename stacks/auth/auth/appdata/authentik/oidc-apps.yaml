@@ -11,13 +11,8 @@ verified_email: &verified_email
     }
 
 # Blueprints never delete what a file stops declaring, so a mapping no app
-# uses any more is listed here and deleted.
-retired_scope_mappings:
-  - RomM Email Verification
-  - Reading Apps Email Verification
-  - Immich Email Verification
-  - Admin Apps Email Verification
-  - Mealie Email Verification
+# uses any more is listed here and deleted. Drop a name once a deploy applied it.
+retired_scope_mappings: []
 
 apps:
   - name: RomM
