@@ -347,7 +347,7 @@ entries:
          it so ::after holds the label inline. */
       :host(ak-stage-identification) [data-ouia-component-id="passwordless"]::after,
       ak-stage-identification [data-ouia-component-id="passwordless"]::after {
-          content: "Sign in with a security key" !important;
+          content: "Sign in with a passkey" !important;
           font-size: 1rem !important;
           position: static !important;
           border: 0 !important;
