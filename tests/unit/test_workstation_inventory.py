@@ -34,8 +34,6 @@ DURABLE_HOME_LINKS = (
     ("opencode_config", "bind_mount", ".config/opencode", "0700", None),
     ("opencode_data", "bind_mount", ".local/share/opencode", "0700", None),
     ("opencode_state", "bind_mount", ".local/state/opencode", "0700", None),
-    ("hermes", "bind_mount", ".hermes", "0700", None),
-    ("openclaw", "bind_mount", ".openclaw", "0700", None),
     ("moraine", "bind_mount", ".moraine", "0700", None),
     ("lobu", "bind_mount", ".config/lobu", "0700", None),
     ("azure", "bind_mount", ".azure", "0700", None),

@@ -137,16 +137,6 @@
         path: "{{ temp_root }}/ephemeral/workstation/home/repos"
       register: repos_dir_stat
 
-    - name: Stat Hermes persistent home directory
-      ansible.builtin.stat:
-        path: "{{ temp_root }}/ephemeral/workstation/home/.hermes"
-      register: hermes_state_dir_stat
-
-    - name: Stat OpenClaw persistent home directory
-      ansible.builtin.stat:
-        path: "{{ temp_root }}/ephemeral/workstation/home/.openclaw"
-      register: openclaw_state_dir_stat
-
     - name: Stat Moraine persistent home directory
       ansible.builtin.stat:
         path: "{{ temp_root }}/ephemeral/workstation/home/.moraine"
@@ -201,16 +191,6 @@
       ansible.builtin.stat:
         path: "{{ workstation_home }}/repos"
       register: repos_home_path_stat
-
-    - name: Stat Hermes home path
-      ansible.builtin.stat:
-        path: "{{ workstation_home }}/.hermes"
-      register: hermes_home_path_stat
-
-    - name: Stat OpenClaw home path
-      ansible.builtin.stat:
-        path: "{{ workstation_home }}/.openclaw"
-      register: openclaw_home_path_stat
 
     - name: Stat Moraine home path
       ansible.builtin.stat:
@@ -270,14 +250,6 @@
           - repos_dir_stat.stat.uid == workstation_uid
           - repos_dir_stat.stat.gid == workstation_gid
           - repos_dir_stat.stat.mode == "0755"
-          - hermes_state_dir_stat.stat.isdir
-          - hermes_state_dir_stat.stat.uid == workstation_uid
-          - hermes_state_dir_stat.stat.gid == workstation_gid
-          - hermes_state_dir_stat.stat.mode == "0700"
-          - openclaw_state_dir_stat.stat.isdir
-          - openclaw_state_dir_stat.stat.uid == workstation_uid
-          - openclaw_state_dir_stat.stat.gid == workstation_gid
-          - openclaw_state_dir_stat.stat.mode == "0700"
           - moraine_state_dir_stat.stat.isdir
           - moraine_state_dir_stat.stat.uid == workstation_uid
           - moraine_state_dir_stat.stat.gid == workstation_gid
@@ -304,10 +276,6 @@
           - not (opencode_data_home_path_stat.stat.islnk | default(false))
           - opencode_state_home_path_stat.stat.isdir
           - not (opencode_state_home_path_stat.stat.islnk | default(false))
-          - hermes_home_path_stat.stat.isdir
-          - not (hermes_home_path_stat.stat.islnk | default(false))
-          - openclaw_home_path_stat.stat.isdir
-          - not (openclaw_home_path_stat.stat.islnk | default(false))
           - moraine_home_path_stat.stat.isdir
           - not (moraine_home_path_stat.stat.islnk | default(false))
           - herdr_home_path_stat.stat.isdir

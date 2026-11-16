@@ -62,42 +62,6 @@ def assert_route(
 
 
 class PortalExternalServiceConfigTests(unittest.TestCase):
-    def test_openclaw_external_route_contract(self) -> None:
-        config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
-        routers = config["http"]["routers"]
-
-        assert_route(
-            self,
-            config,
-            "authentik-outpost-ai",
-            host_rule="Host(`ai.local.faviann.com`) && PathPrefix(`/outpost.goauthentik.io`)",
-            service="authentik",
-            middlewares=["sslheader"],
-        )
-        assert_route(
-            self,
-            config,
-            "ai",
-            host_rule="Host(`ai.local.faviann.com`)",
-            service="openclaw-dashboard",
-            middlewares=["local-ip-restriction", "protected-edge-auth@file", "openclaw-operator-scopes"],
-            backend="http://workstation.faviann.vms:18789",
-        )
-        # The outpost callback path must win over the protected host route.
-        self.assertGreater(
-            routers["authentik-outpost-ai"]["priority"], routers["ai"]["priority"]
-        )
-        self.assertEqual(
-            config["http"]["middlewares"]["openclaw-operator-scopes"],
-            {
-                "headers": {
-                    "customRequestHeaders": {
-                        "X-OpenClaw-Scopes": "operator.read,operator.write,operator.admin",
-                    }
-                }
-            },
-        )
-
     def test_collie_external_route_contract(self) -> None:
         config = yaml.safe_load(EXTERNALSERVICE_PATH.read_text(encoding="utf-8"))
         auth_config = yaml.safe_load(
