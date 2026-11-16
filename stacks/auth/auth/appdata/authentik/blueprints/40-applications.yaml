@@ -86,10 +86,6 @@ entries:
     failure_result: false
     timeout: 30
     group: !Find [authentik_core.group, [name, admins]]
-- model: authentik_core.application
-  state: absent
-  identifiers:
-    slug: openclaw-ai
 - id: app-ldap
   model: authentik_core.application
   state: present
