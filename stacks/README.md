@@ -319,9 +319,10 @@ Set `default_domain` per host in `inventory/host_vars/<host>.yml`. The docker-ag
 
 | Host | `default_domain` | Example |
 | --- | --- | --- |
-| `portal` | `faviann.com` | `media.faviann.com` |
 | `seedbox` | `admin.faviann.com` | `bittorrent.admin.faviann.com` |
 | `jellyfin` | `public.faviann.com` | `jellyfin.public.faviann.com` |
+
+`portal` runs no traefik-kop. Its local Docker provider ignores `default_domain` and falls back to `local.faviann.com`, so give every portal stack an explicit rule or `traefik.domain`.
 
 `*.ai.faviann.com` and `*.local.faviann.com` are LAN/VPN-only tiers with no Docker-label host: Firewalla overrides each wildcard to `10.1.0.2`, while public DNS sends them to the WAN through `*.faviann.com`. The name protects nothing; each router on these tiers must carry `local-ip-restriction`.
 

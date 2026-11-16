@@ -101,11 +101,6 @@ certificatesResolvers:
           # the TXT record is ready before verification is attempted.
           # delayBeforeCheck: 60s
 
-# --> (Optional) Disable TLS Cert verification check
-# serversTransport:
-#   insecureSkipVerify: true
-# <--
-
 providers:
   docker:
     # Default rule dynamically gets DOMAIN from labels

@@ -13,7 +13,6 @@ lxc_docker_env_stack_vars:
     encryption_key: "{{ vault_portal_dockhand_encryption_key }}"
   traefik3:
     cloudflare_dns_api_token: "{{ vault_portal_traefik_cloudflare_dns_api_token }}"
-    dashboard_credentials: "{{ vault_portal_traefik_dashboard_credentials }}"
     lobu_crawler_01_session_view_credential: "{{ vault_lobu_crawler_01_session_view_credential }}"
 
 dockhand_api_token: "{{ vault_dockhand_api_token }}"

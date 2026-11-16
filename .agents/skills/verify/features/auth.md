@@ -28,7 +28,7 @@ Preconditions:
 
 ## Gotchas
 
-- Two Traefik routers match `auth.faviann.com`: the Docker-label route from `stacks/auth/auth/compose.override.yaml.j2` and the file router `authentik` in `stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml`. The file router has priority 1000 and serves the name, so debug routing there first.
+- The file router `authentik` in `stacks/portal/traefik3/appdata/traefik3/config/conf.d/externalservice.yaml` serves `auth.faviann.com`. The auth stack has no Traefik labels, so debug routing there.
 - `ready` returns `503` while Authentik is starting or its database is down. `live` can pass at the same time. Report `ready`, not `live`, as the backend proof.
 - The probe strips the redirect's query. The authorize URL's `state` and `client_id` never reach the evidence. Do not re-fetch them with another client.
 - A `302` to the flow proves the login page is served, not that sign-in works. Every signed-in journey signs in before its first URL, so [Homepage media](./homepage-media.md) or [RomM](./romm.md) proves sign-in.

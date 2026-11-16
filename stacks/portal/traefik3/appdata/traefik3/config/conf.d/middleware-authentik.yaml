@@ -8,9 +8,6 @@
 ################################################################
 http:
     middlewares:
-        no-auth:
-            chain:
-                middlewares: []
         protected-edge-auth:
             chain:
                 middlewares:

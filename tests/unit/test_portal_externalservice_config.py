@@ -87,23 +87,19 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             service="authentik",
             middlewares=["local-ip-restriction", "collie-auth-recovery"],
         )
-        assert_route(
-            self,
-            config,
-            "authentik-outpost-admin-subdomains",
-            host_rule=(
-                "HostRegexp(`^[a-z0-9-]+\\.admin\\.faviann\\.com$`) "
-                "&& PathPrefix(`/outpost.goauthentik.io`)"
-            ),
-            service="authentik",
-            middlewares=["sslheader"],
+        outpost = routers["authentik-outpost"]
+        self.assertIn(
+            "HostRegexp(`^[a-z0-9-]+\\.admin\\.faviann\\.com$`)", outpost["rule"]
         )
+        self.assertIn("PathPrefix(`/outpost.goauthentik.io`)", outpost["rule"])
+        self.assertEqual(outpost["service"], "authentik")
+        self.assertEqual(outpost["middlewares"], ["sslheader"])
         # Both path-specific routes must win over the protected host route.
         self.assertGreater(
             routers["collie-auth-recovery"]["priority"], routers["collie"]["priority"]
         )
         self.assertGreater(
-            routers["authentik-outpost-admin-subdomains"]["priority"],
+            routers["authentik-outpost"]["priority"],
             routers["collie"]["priority"],
         )
         self.assertEqual(
@@ -273,7 +269,7 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
         # host, Traefik would answer 421 for the SNI/Host options mismatch.
         self.assertGreater(
             routers["collie-mobile-outpost"]["priority"],
-            routers["authentik-outpost-admin-subdomains"]["priority"],
+            routers["authentik-outpost"]["priority"],
         )
         self.assertEqual(
             config["http"]["middlewares"]["collie-mobile-auth-recovery"],

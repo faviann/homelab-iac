@@ -97,7 +97,6 @@ vault_dockhand_api_token: "REPLACE_ME"
 
 # Portal Traefik
 vault_portal_traefik_cloudflare_dns_api_token: "REPLACE_WITH_CLOUDFLARE_DNS_API_TOKEN"
-vault_portal_traefik_dashboard_credentials: "REPLACE_WITH_TRAEFIK_DASHBOARD_CREDENTIALS"
 
 # Dockhand Hawser Standard pilot token
 vault_dockhand_hawser_token: "REPLACE_ME"

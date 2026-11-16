@@ -38,6 +38,23 @@ Host-owned:
 - portal vault-backed variable bindings in `inventory/host_vars/portal.yml`
 - domain-edge exposure and certificate DNS credentials
 
+## Where Routing Lives
+
+Docker stacks route through their own labels, as
+[the stack contract](../../README.md) describes. The file provider (`conf.d/`)
+holds what labels cannot carry:
+
+- Backends that are not Docker containers: workstation services, Proxmox, and
+  the `lobu-crawler-01` session view.
+- Shared edge-auth: the `protected-edge-auth` middleware that label routers
+  reference as `@file`, and the Authentik outpost callback routers.
+- The `authentik` router for `auth.faviann.com`. Redis has no volume, so
+  recreating it drops every traefik-kop route until each host's next poll
+  (`KOP_POLL_INTERVAL`). Sign-in must stay up through that gap.
+
+The `lobu`, `sub2api`, and `mcp-auth-proxy` routes are Docker-backed but stay
+here because their hosts set `traefik_kop_enabled: false`.
+
 ## Config Changes
 
 Traefik reads `appdata/traefik3/config/traefik.yaml` only at startup, and the
