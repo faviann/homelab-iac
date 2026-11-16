@@ -90,10 +90,16 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
         assert_route(
             self,
             config,
-            "authentik-outpost-admin-subdomains",
+            "authentik-outpost",
             host_rule=(
-                "HostRegexp(`^[a-z0-9-]+\\.admin\\.faviann\\.com$`) "
-                "&& PathPrefix(`/outpost.goauthentik.io`)"
+                "(Host(`faviann.com`)"
+                " || Host(`admin.faviann.com`)"
+                " || HostRegexp(`^[a-z0-9-]+\\.admin\\.faviann\\.com$`)"
+                " || Host(`home.faviann.com`)"
+                " || HostRegexp(`^[a-z0-9-]+\\.home\\.faviann\\.com$`)"
+                " || Host(`media.faviann.com`)"
+                " || HostRegexp(`^[a-z0-9-]+\\.media\\.faviann\\.com$`))"
+                " && PathPrefix(`/outpost.goauthentik.io`)"
             ),
             service="authentik",
             middlewares=["sslheader"],
@@ -103,7 +109,7 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             routers["collie-auth-recovery"]["priority"], routers["collie"]["priority"]
         )
         self.assertGreater(
-            routers["authentik-outpost-admin-subdomains"]["priority"],
+            routers["authentik-outpost"]["priority"],
             routers["collie"]["priority"],
         )
         self.assertEqual(
@@ -273,7 +279,7 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
         # host, Traefik would answer 421 for the SNI/Host options mismatch.
         self.assertGreater(
             routers["collie-mobile-outpost"]["priority"],
-            routers["authentik-outpost-admin-subdomains"]["priority"],
+            routers["authentik-outpost"]["priority"],
         )
         self.assertEqual(
             config["http"]["middlewares"]["collie-mobile-auth-recovery"],
