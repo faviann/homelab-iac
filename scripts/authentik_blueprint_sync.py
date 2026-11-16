@@ -20,6 +20,8 @@ PREFERRED_BASE_URLS = [
 ]
 
 DESCRIPTION_LABEL = "Managed from ServerManagementScripts"
+WORKER_TASK_ATTEMPTS = 30
+WORKER_TASK_RETRY_DELAY_SECONDS = 10
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BLUEPRINT_ROOT = REPO_ROOT / "stacks" / "auth" / "auth" / "appdata" / "authentik" / "blueprints"
 FLOW_ROOT = BLUEPRINT_ROOT / "20-flows"
@@ -424,6 +426,12 @@ BlueprintDumper.add_representer(FindRef, _represent_find)
 BlueprintDumper.add_representer(KeyOfRef, _represent_keyof)
 
 
+class AuthentikHTTPError(RuntimeError):
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
 class AuthentikClient:
     def __init__(self, token: str, base_url: str):
         self.token = token
@@ -458,7 +466,7 @@ class AuthentikClient:
                 return response.status, response.headers, response.read()
         except error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"{method} {url} failed with {exc.code}: {body}") from exc
+            raise AuthentikHTTPError(f"{method} {url} failed with {exc.code}: {body}", exc.code) from exc
 
     def request_json(
         self,
@@ -989,8 +997,29 @@ def export_blueprints(client: AuthentikClient) -> dict[str, Any]:
     }
 
 
+def request_worker_json(
+    client: AuthentikClient,
+    method: str,
+    path: str,
+    *,
+    payload: dict[str, Any] | None = None,
+) -> Any:
+    # Authentik serves this request by waiting up to 10 seconds for a worker task and
+    # answers 500 when the wait runs out. Any backlog in the worker's queue, such as
+    # the tasks a restarted server enqueues once it finishes starting, can cause that
+    # at any moment, so an earlier readiness check cannot rule it out.
+    for _ in range(WORKER_TASK_ATTEMPTS - 1):
+        try:
+            return client.request_json(method, path, payload=payload)
+        except AuthentikHTTPError as exc:
+            if exc.status != 500:
+                raise
+        time.sleep(WORKER_TASK_RETRY_DELAY_SECONDS)
+    return client.request_json(method, path, payload=payload)
+
+
 def find_available_paths(client: AuthentikClient) -> list[dict[str, Any]]:
-    available = client.request_json("GET", "/api/v3/managed/blueprints/available/")
+    available = request_worker_json(client, "GET", "/api/v3/managed/blueprints/available/")
     if isinstance(available, dict) and "results" in available:
         return available["results"]
     if isinstance(available, list):
@@ -1002,12 +1031,13 @@ def get_instances(client: AuthentikClient) -> list[dict[str, Any]]:
     return client.get_paginated("/api/v3/managed/blueprints/?page_size=200")
 
 
+# Creating or updating an instance validates its path through the same worker task as available/.
 def update_instance(client: AuthentikClient, instance_pk: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return client.request_json("PATCH", f"/api/v3/managed/blueprints/{instance_pk}/", payload=payload)
+    return request_worker_json(client, "PATCH", f"/api/v3/managed/blueprints/{instance_pk}/", payload=payload)
 
 
 def create_instance(client: AuthentikClient, payload: dict[str, Any]) -> dict[str, Any]:
-    return client.request_json("POST", "/api/v3/managed/blueprints/", payload=payload)
+    return request_worker_json(client, "POST", "/api/v3/managed/blueprints/", payload=payload)
 
 
 def apply_instance(client: AuthentikClient, instance_pk: str) -> None:
