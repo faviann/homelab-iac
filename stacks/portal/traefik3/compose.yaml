@@ -43,7 +43,6 @@ services:
       - ./appdata/traefik3/logs/:/logs/
     environment:
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
-      - TRAEFIK_DASHBOARD_CREDENTIALS="${TRAEFIK_DASHBOARD_CREDENTIALS}"
       - LOBU_CRAWLER_01_SESSION_VIEW_BASIC=${LOBU_CRAWLER_01_SESSION_VIEW_BASIC}
   redis:
     image: docker.io/library/redis:8.10.2-alpine

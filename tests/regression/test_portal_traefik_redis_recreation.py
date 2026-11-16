@@ -64,7 +64,6 @@ def _run(command: list[str], timeout: int = 90) -> str:
         env={
             **os.environ,
             "CF_DNS_API_TOKEN": "<REPLACE_ME>",
-            "TRAEFIK_DASHBOARD_CREDENTIALS": "<REPLACE_ME>",
         },
     )
     if result.returncode != 0:
@@ -350,6 +349,5 @@ def test_compose_recovers_redis_routes_after_redis_recreation(
             env={
                 **os.environ,
                 "CF_DNS_API_TOKEN": "<REPLACE_ME>",
-                "TRAEFIK_DASHBOARD_CREDENTIALS": "<REPLACE_ME>",
             },
         )
