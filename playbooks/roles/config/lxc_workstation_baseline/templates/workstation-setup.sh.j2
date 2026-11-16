@@ -277,8 +277,7 @@ authenticate_gh() {
 
 validate_local_tool_readiness() {
   local tool index failed_tool=""
-  local -a managed_tools=(codex claude pi opencode)
-  local -a version_tools=("${managed_tools[@]}" openclaw) probe_pids=()
+  local -a managed_tools=(codex claude pi opencode) probe_pids=()
 
   nix --version >/dev/null || fail "nix missing or not working"
   home-manager --version >/dev/null || fail "home-manager missing or not working"
@@ -295,16 +294,15 @@ validate_local_tool_readiness() {
       || fail "$tool must resolve from $WORKSTATION_HOME/.local/bin"
   done
   required_managed_commands_ready || fail "$required_managed_command_error"
-  hermes version >/dev/null || fail "hermes missing or not working"
 
   # These independent startup checks dominate readiness time; run them together.
-  for tool in "${version_tools[@]}"; do
+  for tool in "${managed_tools[@]}"; do
     "$tool" --version >/dev/null &
     probe_pids+=("$!")
   done
   for index in "${!probe_pids[@]}"; do
     if ! wait "${probe_pids[$index]}"; then
-      failed_tool="${failed_tool:-${version_tools[$index]}}"
+      failed_tool="${failed_tool:-${managed_tools[$index]}}"
     fi
   done
   test -z "$failed_tool" || fail "$failed_tool missing or not working"

@@ -49,16 +49,6 @@ workstation_persistent_home_links:
     path: "{{ workstation_home }}/.local/state/opencode"
     target: "{{ workstation_persistent_home_root }}/.local/state/opencode"
     mode: "0700"
-  - name: hermes
-    type: bind_mount
-    path: "{{ workstation_home }}/.hermes"
-    target: "{{ workstation_persistent_home_root }}/.hermes"
-    mode: "0700"
-  - name: openclaw
-    type: bind_mount
-    path: "{{ workstation_home }}/.openclaw"
-    target: "{{ workstation_persistent_home_root }}/.openclaw"
-    mode: "0700"
   - name: moraine
     type: bind_mount
     path: "{{ workstation_home }}/.moraine"
