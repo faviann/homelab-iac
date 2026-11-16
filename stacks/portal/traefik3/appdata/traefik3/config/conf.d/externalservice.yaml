@@ -146,6 +146,7 @@ http:
       loadBalancer:
         servers:
           - url: "https://proxmox.lan:8006"
+        serversTransport: proxmox-self-signed
     mcp-auth-proxy-workstation:
       loadBalancer:
         servers:
@@ -202,6 +203,11 @@ http:
           - "10.1.0.1/18"
           - "10.0.0.1/24"
           - "10.200.196.0/24"
+
+  # Proxmox serves its UI with a self-signed certificate.
+  serversTransports:
+    proxmox-self-signed:
+      insecureSkipVerify: true
 
 tcp:
   routers:

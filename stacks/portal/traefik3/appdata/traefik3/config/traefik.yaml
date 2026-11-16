@@ -76,9 +76,6 @@ entryPoints:
   spice:
     address: ":3128/tcp"
 
-serversTransport:
-  insecureSkipVerify: true
-
 # -- Configure your CertificateResolver here...
 certificatesResolvers:
   cloudflare:
