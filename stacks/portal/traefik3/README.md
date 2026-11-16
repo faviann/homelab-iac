@@ -40,29 +40,20 @@ Host-owned:
 
 ## Where Routing Lives
 
-A Docker stack routes through labels in its own compose file. Traefik reads
-portal's stacks through its local Docker provider, and other hosts' stacks
-through traefik-kop, which copies their labels into Redis.
-
-The file provider (`conf.d/`) holds only what labels cannot:
+Docker stacks route through their own labels, as
+[the stack contract](../../README.md) describes. The file provider (`conf.d/`)
+holds what labels cannot carry:
 
 - Backends that are not Docker containers: workstation services, Proxmox, and
   the `lobu-crawler-01` session view.
-- Shared edge-auth pieces that label routers reference as `@file`:
-  `protected-edge-auth`, `forwardAuth-authentik`, `local-ip-restriction`,
-  `sslheader`, the TLS options, and the Authentik outpost callback routers.
+- Shared edge-auth: the `protected-edge-auth` middleware that label routers
+  reference as `@file`, and the Authentik outpost callback routers.
 - The `authentik` router for `auth.faviann.com`. Redis has no volume, so
   recreating it drops every traefik-kop route until each host's next poll
   (`KOP_POLL_INTERVAL`). Sign-in must stay up through that gap.
 
-Three Docker-backed routes stay in the file because their hosts publish no
-labels:
-
-- `lobu` and `lobu-signup-denied`: `traefik_kop_enabled: false` in
-  `inventory/host_vars/lobu.yml`.
-- `sub2api`: `traefik_kop_enabled: false` in
-  `inventory/host_vars/overmind.yml`.
-- `mcp-auth-proxy`: the workstation runs no docker-agents, so no traefik-kop.
+The `lobu`, `sub2api`, and `mcp-auth-proxy` routes are Docker-backed but stay
+here because their hosts set `traefik_kop_enabled: false`.
 
 ## Config Changes
 

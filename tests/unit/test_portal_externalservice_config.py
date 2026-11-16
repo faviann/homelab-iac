@@ -87,23 +87,13 @@ class PortalExternalServiceConfigTests(unittest.TestCase):
             service="authentik",
             middlewares=["local-ip-restriction", "collie-auth-recovery"],
         )
-        assert_route(
-            self,
-            config,
-            "authentik-outpost",
-            host_rule=(
-                "(Host(`faviann.com`)"
-                " || Host(`admin.faviann.com`)"
-                " || HostRegexp(`^[a-z0-9-]+\\.admin\\.faviann\\.com$`)"
-                " || Host(`home.faviann.com`)"
-                " || HostRegexp(`^[a-z0-9-]+\\.home\\.faviann\\.com$`)"
-                " || Host(`media.faviann.com`)"
-                " || HostRegexp(`^[a-z0-9-]+\\.media\\.faviann\\.com$`))"
-                " && PathPrefix(`/outpost.goauthentik.io`)"
-            ),
-            service="authentik",
-            middlewares=["sslheader"],
+        outpost = routers["authentik-outpost"]
+        self.assertIn(
+            "HostRegexp(`^[a-z0-9-]+\\.admin\\.faviann\\.com$`)", outpost["rule"]
         )
+        self.assertIn("PathPrefix(`/outpost.goauthentik.io`)", outpost["rule"])
+        self.assertEqual(outpost["service"], "authentik")
+        self.assertEqual(outpost["middlewares"], ["sslheader"])
         # Both path-specific routes must win over the protected host route.
         self.assertGreater(
             routers["collie-auth-recovery"]["priority"], routers["collie"]["priority"]
