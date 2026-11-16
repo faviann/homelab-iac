@@ -9,8 +9,12 @@ import re
 import sys
 import types
 import unittest
+import urllib.error
+import urllib.request
+from email.message import Message
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -351,6 +355,45 @@ class AuthentikBlueprintIdempotencyTests(unittest.TestCase):
         }])
         self.assertEqual(client.applied, ["groups-pk", "created-pk"])
         self.assertEqual({item["name"] for item in result["applied"]}, {"repo-auth-groups", "repo-auth-roles"})
+
+
+class AvailableBlueprintsWorkerTimeoutTests(unittest.TestCase):
+    """Authentik answers 500 when the worker task behind available/ outlasts its 10-second wait."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load_script()
+
+    def find_available_paths(self, *statuses: int) -> tuple[list[dict[str, Any]], int]:
+        replies = iter(statuses)
+        calls = 0
+
+        def urlopen(req: urllib.request.Request, timeout: int) -> io.BytesIO:
+            nonlocal calls
+            calls += 1
+            status = next(replies)
+            if status != 200:
+                raise urllib.error.HTTPError(req.full_url, status, "error", Message(), io.BytesIO(b"Server Error"))
+            response = io.BytesIO(json.dumps([{"path": GROUPS_PATH, "hash": "abc"}]).encode())
+            response.status = 200
+            response.headers = Message()
+            return response
+
+        client = self.mod.AuthentikClient(token="<token>", base_url="https://auth.example")
+        with mock.patch.object(self.mod.request, "urlopen", urlopen), mock.patch.object(self.mod.time, "sleep"):
+            return self.mod.find_available_paths(client), calls
+
+    def test_retries_until_the_worker_answers(self):
+        available, calls = self.find_available_paths(500, 500, 200)
+
+        self.assertEqual(available, [{"path": GROUPS_PATH, "hash": "abc"}])
+        self.assertEqual(calls, 3)
+
+    def test_gives_up_after_the_attempt_budget(self):
+        statuses = [500] * self.mod.WORKER_TASK_ATTEMPTS
+
+        with self.assertRaisesRegex(RuntimeError, "available/ failed with 500"):
+            self.find_available_paths(*statuses)
 
 
 class ScriptCliOutputTests(unittest.TestCase):
