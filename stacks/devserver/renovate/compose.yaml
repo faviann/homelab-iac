@@ -6,7 +6,7 @@
 # loop. A start or restart runs immediately.
 services:
   renovate:
-    image: ghcr.io/renovatebot/renovate:44.167.5@sha256:c33150ec6407624a9399a2d827fd125becafdbe4519d7584488cbdd17f99081e
+    image: ghcr.io/renovatebot/renovate:44.257.9@sha256:d6b65ff3562dd499240b23d34ef806ec7e5fd2675e4236a027dfb36774f2aa75
     container_name: renovate
     restart: unless-stopped
     command: ["bash", "-c", "while :; do renovate; sleep 6h; done"]
