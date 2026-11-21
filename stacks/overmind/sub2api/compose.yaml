@@ -10,7 +10,7 @@ x-prereq-dirs:
 
 services:
   sub2api:
-    image: weishaw/sub2api:0.2.21@sha256:868c15f3c729af05896c94b3456d91a68bc81dce50c4d7b4557682df7ca92c13
+    image: weishaw/sub2api:0.2.24@sha256:c1acdd4cd1c328e6df20e513944d72fff641d4ae8c07d207458156c97c74784a
     container_name: sub2api
     restart: unless-stopped
     security_opt:
@@ -45,7 +45,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: docker.io/library/postgres:18@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
+    image: docker.io/library/postgres:18@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a
     container_name: sub2api-postgres
     restart: unless-stopped
     environment:
