@@ -7,7 +7,7 @@ entries:
     layout: stacked
     name: Authorize Application
     policy_engine_mode: any
-    title: Redirecting to %(app)s
+    title: Engaging warp to %(app)s
   conditions: []
   identifiers:
     pk: b1dcc775-a290-48f7-b31b-2f8ec224e6e0
