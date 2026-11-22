@@ -17,6 +17,18 @@ entries:
           or ak_client_ip in ip_network("10.0.0.0/24")
           or ak_client_ip in ip_network("10.200.196.0/24")
       )
+- model: authentik_flows.flow
+  state: present
+  identifiers:
+    slug: default-authentication-flow
+  attrs:
+    title: Welcome back, traveler.
+- model: authentik_flows.flow
+  state: present
+  identifiers:
+    slug: default-passwordless-flow
+  attrs:
+    title: Scanning biometric signature…
 - model: authentik_stages_user_login.userloginstage
   state: present
   identifiers:
