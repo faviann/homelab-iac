@@ -10,7 +10,7 @@ x-prereq-dirs:
 
 services:
   sub2api:
-    image: weishaw/sub2api:0.2.21@sha256:868c15f3c729af05896c94b3456d91a68bc81dce50c4d7b4557682df7ca92c13
+    image: weishaw/sub2api:0.2.25@sha256:f4dcb7e9cc0f0d4006abb425391c9521331013764720f08b0f111059d6a78e18
     container_name: sub2api
     restart: unless-stopped
     security_opt:
@@ -45,7 +45,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: docker.io/library/postgres:18@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
+    image: docker.io/library/postgres:18@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b
     container_name: sub2api-postgres
     restart: unless-stopped
     environment:
@@ -63,7 +63,7 @@ services:
     stop_grace_period: 60s
 
   redis:
-    image: docker.io/library/redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    image: docker.io/library/redis:8-alpine@sha256:5af80107c1eeecb484a2269b80a26d12bfa6521787da4663bd9f19f60a163483
     container_name: sub2api-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
