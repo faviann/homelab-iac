@@ -6,7 +6,7 @@ This directory is the maintained source for verifying what the fleet serves to i
 
 - Run from a checkout of this repository on a control node (the `workstation` LXC normally).
 - The doctor in [the skill](../SKILL.md#doctor) passed in this run, for `portal` and the feature's host.
-- An evidence directory exists for this run under `~/.ansible/verify-evidence/`.
+- An evidence directory exists for this run under `/tmp/verify-evidence/`.
 - The [rules](../SKILL.md#rules) hold for every journey.
 
 ## Driving conventions
