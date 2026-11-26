@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Prove, read-only and against the live fleet, the HTTPS services the homelab serves to its users, such as Authentik, Jellyfin, Immich, and RomM, reached by name through the edge and Traefik on portal, anonymously or signed in as verify-agent. Evidence outlives the run. Use after a change lands on the fleet, when a service looks down, or when asked to prove a service works. Not for proving playbook logic, which ./validate.sh owns.
+description: Prove, read-only and against the live fleet, the HTTPS services the homelab serves to its users, such as Authentik, Jellyfin, Immich, and RomM, reached by name through the edge and Traefik on portal, anonymously or signed in as verify-agent. Use after a change lands on the fleet, when a service looks down, or when asked to prove a service works. Not for proving playbook logic, which ./validate.sh owns.
 ---
 
 # Verify the fleet's services
@@ -26,7 +26,7 @@ Playbook behavior is proven by `./validate.sh`, never by this skill.
 Nothing is launched. The fleet is already running and the skill never starts, restarts, or deploys it. A run starts by creating its evidence directory, from the repository root:
 
 ```bash
-ev=~/.ansible/verify-evidence/$(date -u +%Y%m%dT%H%M%SZ)-<slug>
+ev=/tmp/verify-evidence/$(date -u +%Y%m%dT%H%M%SZ)-<slug>
 mkdir -p "$ev"
 git rev-parse HEAD > "$ev/commit"
 git status --short >> "$ev/commit"
@@ -119,7 +119,7 @@ What `--check` still executes, audited from the roles: tasks marked `check_mode:
 
 ## Evidence
 
-Everything goes in `$ev` (`~/.ansible/verify-evidence/<UTC timestamp>-<slug>/`): machine-local, outside every worktree, so it survives worktree removal and cleanup. One proof holds:
+Everything goes in `$ev` (`/tmp/verify-evidence/<UTC timestamp>-<slug>/`). It lives as long as `/tmp` does, a reboot at most: the verdict that matters goes in the reply, and a later question is answered by proving again. One proof holds:
 
 - `commit`: the commit under test and any uncommitted changes.
 - `doctor.log`: the doctor output, its exit status, and DNS answers.
