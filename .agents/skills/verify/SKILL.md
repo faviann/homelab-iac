@@ -78,10 +78,10 @@ FAIL https://nonexistent.invalid/ status=-1 elapsed=0s location=- content_type=-
 ./inspect.sh journey <https-url> [<https-url>...]
 ```
 
-It mints an Authentik app password for `verify-agent` that expires after 10 minutes, signs in through the default authentication flow once, then sends one `GET` per URL, in order, in that one session. It follows each URL's redirects, up to 15, so a native OIDC login completes and a later URL sees the app's session. The app password is deleted at the end of the run. Each URL prints one line in the probe's format, with a `hops` field before `body`. Unescaped, a forward-auth journey reads:
+It mints an Authentik app password for `verify-agent` that expires after 10 minutes, signs in through the default authentication flow once, then sends one `GET` per URL, in order, in that one session. It follows each URL's redirects, up to 15, so a native OIDC login completes and a later URL sees the app's session. The app password is deleted at the end of the run. Each URL prints one line in the probe's format, with a `hops` field before `body`. Unescaped, a native OIDC journey reads:
 
 ```text
-PASS https://homepage.media.faviann.com/api/healthcheck status=200 elapsed=1s location=- content_type=- detail="OK" hops=302:https://homepage.media.faviann.com/api/healthcheck,302:https://auth.faviann.com/application/o/authorize/,302:https://media.faviann.com/outpost.goauthentik.io/callback,200:https://homepage.media.faviann.com/api/healthcheck body=up
+PASS https://romm.public.faviann.com/api/login/openid status=200 elapsed=4s location=- content_type=text/html detail="OK" hops=302:https://romm.public.faviann.com/api/login/openid,302:https://auth.faviann.com/application/o/authorize/,307:https://romm.public.faviann.com/api/oauth/openid,200:https://romm.public.faviann.com/ body=<!doctype html> <html lang="en"> <head> <meta charset="UTF-8" /> <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" /> <link rel="icon" t
 ```
 
 - `hops` lists every request of the chain as `<status>:<URL without query>`, comma-separated. `status`, `content_type`, and `body` describe the last response.
