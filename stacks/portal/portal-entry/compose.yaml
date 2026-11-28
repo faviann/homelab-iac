@@ -12,6 +12,7 @@ services:
     volumes:
       - ./appdata/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./appdata/nginx/legal:/usr/share/nginx/legal:ro
+      - ./appdata/nginx/site:/usr/share/nginx/site:ro
     networks:
       - shared
     labels:

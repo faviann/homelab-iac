@@ -34,5 +34,5 @@ The preconditions start with a `Runs as` line naming the identity: `anonymous` f
 - [Authentik sign-in](./auth.md) covers the SSO login page, its health, and the forward-auth redirect protected routes send.
 - [Jellyfin](./jellyfin.md) covers the media server's web UI, health, and public server info with its version.
 - [Immich](./immich.md) covers the photo library's web UI, API ping, version, and enabled features.
-- [Homepage media](./homepage-media.md) covers the media-tier dashboard behind forward auth, signed out and signed in as `verify-agent`.
+- [Landing page](./landing.md) covers the `faviann.com` front door behind forward auth and its public legal pages.
 - [RomM](./romm.md) covers the game library's native OIDC sign-in and its signed-in user, as `verify-agent`.
